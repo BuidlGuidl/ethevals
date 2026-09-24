@@ -74,7 +74,7 @@
       const empty = `<tr><td colspan="${1 + E.agents.length * (layout === "split" ? 2 : 1)}" class="muted">No Vanilla-capable evals in this pillar.</td></tr>`;
       return `<tbody>${heading}</tbody><tbody id="${key}" ${open ? "" : "hidden"}>${rows || empty}</tbody>`;
     }).join("");
-    return `<div class="table-shell"><div class="table-scroll" tabindex="0" role="region" aria-label="${layout === "grouped" ? "All modes" : layout === "split" ? "Internet and Skills" : modeName(mode)} scores. Scroll horizontally for all agents."><table class="board ${layout}"><caption hidden>${titles[view]} · agents by pillar and eval</caption><thead><tr><th scope="col" class="row-label" ${layout === "split" ? 'rowspan="2"' : ""}>Pillar / eval<span class="subline">Click a pillar to unfold</span></th>${head}</tr>${subhead}</thead>${body}</table></div><div class="table-note"><span>Click a score for runs · – not applicable · <em>no run yet</em> supported, unrun</span><span>${layout === "split" ? "Lift uses matched evals · * coverage differs" : "Pillar score = mean of completed eval scores"}</span></div></div>`;
+    return `<div class="table-shell"><div class="table-scroll" tabindex="0" role="region" aria-label="${layout === "grouped" ? "All modes" : layout === "split" ? "Internet and Skills" : modeName(mode)} scores. Scroll horizontally for all agents."><table class="board ${layout}"><caption hidden>${titles[view]} · agents by pillar and eval</caption><thead><tr><th scope="col" class="row-label" ${layout === "split" ? 'rowspan="2"' : ""}>Pillar / eval<span class="subline">Click a pillar to unfold</span></th>${head}</tr>${subhead}</thead>${body}</table></div><div class="table-note"><span>Click a score for runs · – not applicable · <em>no run yet</em> supported, unrun</span><span>${layout === "split" ? "Lift compares only evals that ran in both modes. * means the two modes cover different evals." : "A pillar score is the average of the evals that ran."}</span></div></div>`;
   }
   function nav() {
     const base = view === "index" ? "" : "../";
@@ -118,9 +118,9 @@
   }
   function indexPage() {
     const descriptions = {
-      "1": ["One mode at a time. Seven agent columns stay in place.", "Switch modes to compare scores and coverage."],
-      "2": ["Internet and Skills sit side by side, with the lift below.", "Vanilla has a separate table beneath the main board."],
-      "3": ["Every cell holds V / I / S. All modes share one table.", "Read across agents or compare modes within a cell."],
+      "1": ["Pick a mode and the whole table redraws for it.", "Switch modes to compare scores and coverage."],
+      "2": ["Each agent has an Internet column and a Skills column, with the lift below.", "Vanilla has a separate table beneath the main board."],
+      "3": ["Each cell shows Vanilla, Internet and Skills as V, I and S.", "Compare agents across a row, or modes inside one cell."],
       "4": ["Toggle skills on the main board. One score per cell.", "Open the pre-training tab to see Vanilla alone."]
     };
     return `<div class="view-list">${Object.entries(titles).map(([id, title]) => `<a class="view-link" href="${id}/index.html"><span class="view-number">0${id}</span><strong>${title}</strong><p>${descriptions[id][0]}<br>${descriptions[id][1]}</p><span class="arrow" aria-hidden="true">↗</span></a>`).join("")}</div>`;
