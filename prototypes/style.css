@@ -88,7 +88,6 @@ main { padding: 30px 26px 60px; max-width: 1920px; margin: auto; display: grid; 
 .score { font-size: 15px; color: var(--score-color); }
 .scorebar { display: block; width: 43px; height: 3px; background: #ffffff0b; border-radius: 4px; overflow: hidden; }
 .scorebar i { display: block; height: 100%; width: var(--value); background: var(--score-color); opacity: .55; }
-.coverage { display: block; font: 9px var(--mono); color: #a8a8a8; white-space: nowrap; }
 .na { display: block; color: #bdbdbd80; padding: 14px 2px; }
 .pending { color: var(--muted); font-size: 10px; font-style: italic; border: 1px dotted #555; padding: 5px; border-radius: 4px; }
 .lift { display: block; font: 10px var(--mono); margin: 2px 0 5px; }
@@ -100,7 +99,6 @@ main { padding: 30px 26px 60px; max-width: 1920px; margin: auto; display: grid; 
 .mode-group .scorebar { width: 30px; }
 .mode-letter { font: 9px var(--mono); color: #aaa; }
 .mode-group .pending { font-size: 9px; padding: 2px; }
-.mode-group .coverage { font-size: 8px; }
 .table-note { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 11px 16px; background: var(--strip); font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); }
 .footer-note { font-size: 11px; color: #999; }
 .view-list { display: grid; border-top: 1px solid var(--border); }

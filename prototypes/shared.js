@@ -41,8 +41,7 @@
     if (stats.state === "na") return `<span class="na" title="${escape(`${label} · ${modeName(mode)}: not applicable`)}">${prefix}<span aria-label="Not applicable">–</span></span>`;
     const content = stats.state === "pending" ? '<span class="pending">no run yet</span>' : `<span class="score">${percent(stats.score)}</span><span class="scorebar" aria-hidden="true"><i></i></span>`;
     const tooltip = stats.state === "pending" ? "Supported, no run yet" : `${passText(stats)} · ${stats.count} eval${stats.count === 1 ? "" : "s"}`;
-    const coverage = kind === "pillar" ? `<span class="coverage">${compact ? `${stats.count}/${stats.total}` : `${stats.count} of ${stats.total} evals`}</span>` : "";
-    return `<button class="cell" data-detail="${kind}" data-id="${id}" data-agent="${agent.id}" data-mode="${mode}" style="--score-color:${color(stats.score || 0)};--value:${stats.score || 0}%" title="${tooltip}" aria-label="${escape(`${label}, ${agent.name}, ${modeName(mode)}, ${stats.state === "score" ? percent(stats.score) : "no run yet"}. Open details`)}">${prefix}${content}${coverage}</button>`;
+    return `<button class="cell" data-detail="${kind}" data-id="${id}" data-agent="${agent.id}" data-mode="${mode}" style="--score-color:${color(stats.score || 0)};--value:${stats.score || 0}%" title="${tooltip}" aria-label="${escape(`${label}, ${agent.name}, ${modeName(mode)}, ${stats.state === "score" ? percent(stats.score) : "no run yet"}. Open details`)}">${prefix}${content}</button>`;
   }
   function liftMarkup(kind, id, agent) {
     const internet = statsFor(kind, id, agent, "internet");
@@ -118,7 +117,7 @@
   }
   function indexPage() {
     const descriptions = {
-      "1": ["Pick a mode and the whole table redraws for it.", "Switch modes to compare scores and coverage."],
+      "1": ["Pick a mode and the whole table redraws for it.", "Switch modes to compare scores."],
       "2": ["Each agent has an Internet column and a Skills column, with the lift below.", "Vanilla has a separate table beneath the main board."],
       "3": ["Each cell shows Vanilla, Internet and Skills as V, I and S.", "Compare agents across a row, or modes inside one cell."],
       "4": ["Toggle skills on the main board. One score per cell.", "Open the pre-training tab to see Vanilla alone."]
