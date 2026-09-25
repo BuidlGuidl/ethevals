@@ -4,7 +4,7 @@
   const view = document.body.dataset.view;
   const root = document.getElementById("app");
   const expanded = new Set();
-  const titles = { "1": "Mode tabs", "2": "Split columns", "3": "Grouped modes", "4": "Skills toggle" };
+  const titles = { "1": "Mode tabs", "2": "Split columns", "3": "Grouped modes", "4": "Skills toggle", "5": "Report" };
   const escape = value => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const mean = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
   const percent = value => `${Math.round(value)}%`;
@@ -120,11 +120,12 @@
       "1": ["Pick a mode and the whole table redraws for it.", "Switch modes to compare scores."],
       "2": ["Each agent has an Internet column and a Skills column, with the lift below.", "Vanilla has a separate table beneath the main board."],
       "3": ["Each cell shows Vanilla, Internet and Skills as V, I and S.", "Compare agents across a row, or modes inside one cell."],
-      "4": ["Toggle skills on the main board. One score per cell.", "Open the pre-training tab to see Vanilla alone."]
+      "4": ["Toggle skills on the main board. One score per cell.", "Open the pre-training tab to see Vanilla alone."],
+      "5": ["View 4 as a ranking: configurations as rows, one tab per pillar, plus Lift, Matrix and Pareto views.", "Compare up to 5 configurations; pre-training (Vanilla) on its own page."]
     };
     return `<div class="view-list">${Object.entries(titles).map(([id, title]) => `<a class="view-link" href="${id}/index.html"><span class="view-number">0${id}</span><strong>${title}</strong><p>${descriptions[id][0]}<br>${descriptions[id][1]}</p><span class="arrow" aria-hidden="true">↗</span></a>`).join("")}</div>`;
   }
-  root.innerHTML = `${nav()}<main><header class="page-heading"><div><p class="eyebrow">Throwaway prototype · fake results</p><h1>${view === "index" ? "Same results, four views" : `${view} / ${titles[view]}`}</h1></div><span class="muted mono">${E.evals.length} evals · ${E.agents.length} agents · 3 modes</span></header>${strip()}${view === "index" ? indexPage() : '<div id="boards" class="board-section"></div>'}<p class="footer-note">Synthetic data. Scores average runs, then evals. Missing runs never count as zero. Prototype pass cutoff: ${E.passThreshold}%.</p></main><dialog id="detail" aria-labelledby="detail-title"><div id="detail-content"></div></dialog>`;
+  root.innerHTML = `${nav()}<main><header class="page-heading"><div><p class="eyebrow">Throwaway prototype · fake results</p><h1>${view === "index" ? "Same results, five views" : `${view} / ${titles[view]}`}</h1></div><span class="muted mono">${E.evals.length} evals · ${E.agents.length} agents · 3 modes</span></header>${strip()}${view === "index" ? indexPage() : '<div id="boards" class="board-section"></div>'}<p class="footer-note">Synthetic data. Scores average runs, then evals. Missing runs never count as zero. Prototype pass cutoff: ${E.passThreshold}%.</p></main><dialog id="detail" aria-labelledby="detail-title"><div id="detail-content"></div></dialog>`;
   if (view !== "index") renderBoard();
   const dialog = document.getElementById("detail");
   const detailContent = document.getElementById("detail-content");
