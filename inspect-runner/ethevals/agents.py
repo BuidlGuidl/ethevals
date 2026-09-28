@@ -1,7 +1,9 @@
 from inspect_ai.agent import as_solver
+from inspect_ai.model import Model
 from inspect_ai.solver import multiple_choice, solver
 from inspect_ai.tool import MCPServerConfigHTTP
-from inspect_swe import claude_code
+from inspect_swe import claude_code, codex_cli, opencode
+import json
 from dataclasses import dataclass
 from typing import Callable
 
@@ -21,8 +23,44 @@ def claude(config, model):
     ))
 
 
-# Step 3 adds Codex CLI and OpenCode factories here.
-AGENTS = {"claude_code": Harness(claude, "2.1.274")}
+def codex(config, model):
+    servers = [MCPServerConfigHTTP(type="http", name="exa", url=config.search_provider)] if config.search_provider else []
+    return as_solver(codex_cli(
+        cwd="/workspace", model_config=model.agent_model_config,
+        version=AGENTS["codex_cli"].version, web_search="disabled", mcp_servers=servers,
+        config_overrides={"model_reasoning_effort": json.dumps(model.effort)},
+        filter=codex_tool_types,
+    ))
+
+
+async def codex_tool_types(model: Model, messages, tools, tool_choice, config):
+    # OpenRouter returns JSON function calls. Codex expects custom calls for
+    # code-mode exec. Restore the type from the CLI's own tool declarations.
+    output = await model.generate(messages, tools=tools, tool_choice=tool_choice, config=config)
+    custom = {tool.name for tool in tools if tool.options and "custom_format" in tool.options}
+    for choice in output.choices:
+        for call in choice.message.tool_calls or []:
+            if call.function in custom:
+                call.type = "custom"
+    return output
+
+
+def open_code(config, model):
+    servers = [MCPServerConfigHTTP(type="http", name="exa", url=config.search_provider)] if config.search_provider else []
+    return as_solver(opencode(
+        cwd="/workspace", version=AGENTS["opencode"].version, mcp_servers=servers,
+        # This identifier selects the wire protocol. Inspect selects the real model
+        # and supplies its configured reasoning effort through the bridge.
+        opencode_model="anthropic/claude-sonnet-4-5",
+        env={"OPENCODE_CONFIG_CONTENT": json.dumps({"tools": {"websearch": False}})},
+    ))
+
+
+AGENTS = {
+    "claude_code": Harness(claude, "2.1.274"),
+    "codex_cli": Harness(codex, "0.158.0"),
+    "opencode": Harness(open_code, "1.18.33"),
+}
 
 
 @solver

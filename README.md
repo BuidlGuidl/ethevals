@@ -3,7 +3,8 @@
 ETH Evals measures what bare models know about Ethereum and how well agents do Ethereum work.
 
 The runner uses Inspect for quizzes and Solidity builds.
-Claude Code runs in Docker in the internet mode. A separate container grades its code with Forge.
+Claude Code, Codex CLI, and OpenCode run in Docker in the internet mode.
+A separate container grades their code with Forge.
 
 ## Install
 
@@ -23,6 +24,7 @@ docker compose -f inspect-runner/ethevals/images/stock.compose.yaml build defaul
 
 The image includes Foundry 1.5.1, Solidity 0.8.30, OpenZeppelin 5.4.0, and forge-std 1.9.7.
 The last two dependencies live in a root-owned directory. Submitted copies cannot replace them during grading.
+It also supplies Node 20.11.0 and ripgrep for OpenCode. Rebuild the image after pulling runner changes.
 
 ## Run without a key
 
@@ -67,6 +69,33 @@ uv run ethevals run --output results/paid
 The default selects all four configured models and three epochs for every quiz in the vanilla mode.
 To select a subset, use `--evals`, `--models opus codex`, `--modes vanilla`, or `--epochs 1`.
 Use `--config path/to/config.yaml` for a separate configuration.
+
+To run all four agents on the ERC-20 build and both quizzes in the internet mode:
+
+```sh
+uv run ethevals run --evals evals/building/erc20-points-token evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes internet --epochs 1 --output results/four-agents
+```
+
+To run all four bare models on both quizzes in the vanilla mode:
+
+```sh
+uv run ethevals run --evals evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes vanilla --epochs 1 --output results/four-models
+```
+
+Guess: these commands together cost $5 to $20, including build rubric grading.
+This guess is not a spending cap. Actual slugs, prices, and paid model behavior remain untested.
+
+The agents use Claude Code 2.1.274, Codex CLI 0.158.0, and OpenCode 1.18.33.
+Kimi and GLM share OpenCode. All four models default to high effort in the configuration.
+Claude Code receives its `effort` option. Codex receives `model_reasoning_effort`.
+Codex uses code mode. Its factory converts JSON tool replies into the custom call type that Codex expects.
+Inspect applies the configured reasoning effort to every bridged model request, including OpenCode requests.
+OpenCode uses an Anthropic protocol identifier to reach the bridge, which selects the configured Kimi or GLM model.
+That identifier also affects OpenCode's prompt and tools. It does not select the paid model.
+
+Each agent gets the Exa HTTP MCP server from `search_provider`.
+Claude Code disallows `WebSearch`, Codex sets `web_search="disabled"`, and OpenCode disables `websearch` in its configuration.
+Exa's keyless endpoint can rate-limit concurrent agents. The containers also permit shell commands and page fetches.
 
 Inspect also accepts `ANTHROPIC_AUTH_TOKEN`, including a subscription token from `claude setup-token`.
 Using that token this way is against Anthropic's terms.
@@ -152,16 +181,17 @@ ADR 0002 remains proposed until this paid test succeeds.
 
 ## Prove the agent path without a key
 
-These scripts run the real Claude Code binary with scripted `mockllm` responses:
+These scripts run a real agent binary with scripted `mockllm` responses:
 
 ```sh
-env -u OPENROUTER_API_KEY uv run python inspect-runner/tests/prove_agent.py reference --output results/agent-reference
-env -u OPENROUTER_API_KEY uv run python inspect-runner/tests/prove_agent.py empty --output results/agent-empty
+env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN uv run python inspect-runner/tests/prove_agent.py reference --model codex --output results/codex-reference
+env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN uv run python inspect-runner/tests/prove_agent.py empty --model codex --output results/codex-empty
 ```
 
-The reference script sends a Bash tool call that writes the reference solution.
+Select `opus`, `codex`, `kimi`, or `glm` with `--model`. The default is `opus`.
+The reference script sends a shell tool call that writes the reference solution.
 The empty script leaves the workspace untouched. Both run Forge and the scripted rubric grader.
-The scripts assert the expected row status and named checks.
+The scripts assert the expected row status, named checks, effort, Exa tools, and absence of built-in search.
 The Docker regression tests also cover hostile Compose environments and workspace contents:
 
 ```sh

@@ -243,4 +243,11 @@ The proofs cover Compose normalization, collection, compiled evidence, library o
 Step 4 can add chain images and private services without changing the agent solver.
 It still needs service setup and act reference preparation. No setup script runs in this step.
 
+The agent registry includes Claude Code, Codex CLI, and OpenCode, with pinned versions beside their factories.
+Kimi and GLM use the same OpenCode factory. The player supplies the real model and effort to Inspect.
+Codex's factory restores custom tool-call types from the CLI's declarations because OpenRouter returns JSON function calls.
+All three factories configure Exa HTTP MCP tools and disable built-in web search.
+The stock image includes Node 20.11.0 and ripgrep for OpenCode.
+The bridge downloads and stages the pinned agent binaries at runtime.
+
 The [paid ADR test](../README.md#run-the-paid-adr-0002-test) gives exact commands and expected row fields.
