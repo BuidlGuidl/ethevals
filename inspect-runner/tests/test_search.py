@@ -1,5 +1,6 @@
 """Host-side search limits and credential handling without network."""
 import json
+import zipfile
 
 import httpx
 from inspect_ai import Task, eval
@@ -41,3 +42,9 @@ def test_host_search_caps_requests_and_redacts_credentials(tmp_path, monkeypatch
         "Search failed: epoch search rate limit exceeded."]
     assert requests == [(key, {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
         "name": "web_search_exa", "arguments": {"query": "Ethereum", "numResults": 5, "type": "auto"}}})] * 2
+    archives = list(tmp_path.glob("*.eval"))
+    assert len(archives) == 1
+    for path in archives:
+        with zipfile.ZipFile(path) as archive:
+            for name in archive.namelist():
+                assert key.encode() not in archive.read(name), name
