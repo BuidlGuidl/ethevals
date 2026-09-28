@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from inspect_ai.model import ModelCost, ModelInfo, get_model_info, set_model_info
@@ -39,19 +40,16 @@ class Prices(Declaration):
 
 class ModelConfig(Declaration):
     model: str
-    effort: str
+    effort: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
     harness: str
     price_source: str
     prices: Prices
 
 
-class Modes(Declaration):
-    plain: str
-    agent: str
+Mode = Literal["vanilla", "internet", "skills"]
 
 
 class Config(Declaration):
-    modes: Modes
     epochs: int = Field(gt=0)
     time_limit: int = Field(gt=0)
     grader: str
@@ -62,8 +60,6 @@ class Config(Declaration):
     def check_grader(self):
         if self.grader not in self.models:
             raise ValueError("grader must name a configured model")
-        if self.modes.plain == self.modes.agent:
-            raise ValueError("modes must have distinct names")
         return self
 
 

@@ -6,7 +6,7 @@ from typing import Literal
 from inspect_ai.dataset import Sample
 from pydantic import Field
 
-from .config import Config, Declaration, parse_file, read_yaml
+from .config import Config, Declaration, Mode, parse_file, read_yaml
 from .scorers import SCORERS, TargetScorer
 
 PILLARS = {"concepts", "transactions", "building", "security"}
@@ -16,16 +16,29 @@ class EvalDeclaration(Declaration):
     prompt: str = Field(min_length=1)
     motivation: str = Field(min_length=1)
     type: Literal["quiz", "scenario", "build", "act"]
-    modes: list[str] = Field(min_length=1)
+    modes: list[Mode] = Field(min_length=1)
     choices: list[str] | None = Field(default=None, min_length=2, max_length=26)
-    addresses: dict[str, str] = Field(default_factory=dict)
+
+
+# These local artifacts never form part of an eval, including before git add.
+IGNORED_NAMES = {".DS_Store", "out", "cache", "lib", "__pycache__", ".pytest_cache"}
+
+
+def eval_files(folder: Path):
+    for path in sorted(folder.iterdir()):
+        if path.name in IGNORED_NAMES:
+            continue
+        if path.is_symlink():
+            raise ValueError(f"{path}: symlinks are not allowed in an eval folder")
+        if path.is_dir():
+            yield from eval_files(path)
+        elif path.is_file():
+            yield path
 
 
 def eval_hash(folder: Path) -> str:
     digest = hashlib.sha256()
-    for path in sorted(folder.rglob("*")):
-        if path.is_symlink():
-            raise ValueError(f"{path}: symlinks are not allowed in an eval folder")
+    for path in eval_files(folder):
         if path.is_file():
             name = path.relative_to(folder).as_posix().encode()
             data = path.read_bytes()
@@ -47,7 +60,7 @@ class Eval:
         # Only workspace files are eligible for copying into a future sandbox.
         files = {
             f"/workspace/{path.relative_to(self.folder / 'workspace').as_posix()}": str(path)
-            for path in sorted((self.folder / "workspace").rglob("*")) if path.is_file()
+            for path in eval_files(self.folder / "workspace")
         }
         return Sample(
             id=self.id, input=self.declaration.prompt,
@@ -62,9 +75,6 @@ def load_eval(folder: Path, config: Config) -> Eval:
     declaration = parse_file(EvalDeclaration, folder / "eval.yaml")
     if folder.parent.name not in PILLARS:
         raise ValueError(f"{folder / 'eval.yaml'}: pillar must be one of {sorted(PILLARS)}")
-    unknown_modes = set(declaration.modes) - {config.modes.plain, config.modes.agent}
-    if unknown_modes:
-        raise ValueError(f"{folder / 'eval.yaml'}: modes: unknown names {sorted(unknown_modes)}")
     for name in ("workspace", "scorer"):
         if not (folder / name).is_dir():
             raise ValueError(f"{folder / name}: {name}: required directory is missing")

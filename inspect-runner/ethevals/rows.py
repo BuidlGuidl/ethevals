@@ -2,7 +2,13 @@ import json
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from inspect_ai.log import EvalLog, EvalSample, read_eval_log
+from inspect_ai.log import EvalLog, EvalSample, list_eval_logs, read_eval_log
+
+
+def epoch_identity(metadata: dict, epoch: int) -> tuple:
+    return tuple(metadata.get(key) for key in (
+        "eval_id", "eval_hash", "harness", "model", "effort", "mode", "answer_kind",
+    )) + (epoch,)
 
 
 def results_rows(log: EvalLog) -> list[dict]:
@@ -26,40 +32,55 @@ def results_rows(log: EvalLog) -> list[dict]:
         error = sample.error.message if sample.error else None
         error_kind = "execution" if error else None
         if sample.limit:
-            error_kind = f"{sample.limit.type}_limit"
-            error = sample.limit.reason or f"Epoch reached {sample.limit.type} limit {sample.limit.limit}."
+            checks[f"runner_{sample.limit.type}_limit"] = {
+                "passed": False,
+                "reason": " ".join((f"Epoch reached {sample.limit.type} limit {sample.limit.limit}. "
+                                    + (sample.limit.reason or "")).split()),
+            }
         if not checks and not error:
             error_kind, error = "scoring", "The epoch produced no named checks."
         usage = list(sample.model_usage.values())
         total_tokens = sum(item.total_tokens for item in usage)
         grader = sample.role_usage.get("grader")
         grader_tokens = grader.total_tokens if grader else 0
-        cost = sum(item.total_cost for item in usage) if all(item.total_cost is not None for item in usage) else None
-        if metadata.get("answer_kind"):
-            cost, cost_source = 0.0, "mock"
+        total_cost = sum(item.total_cost for item in usage) if usage and all(item.total_cost is not None for item in usage) else None
+        grader_cost = grader.total_cost if grader else 0.0 if usage else None
+        model_cost = total_cost - grader_cost if total_cost is not None and grader_cost is not None else None
+        # A grader with unknown prices must not erase a separately metered model.
+        if grader and grader.total_cost is None and metadata.get("grader_model") != metadata.get("model"):
+            model_usage = sample.model_usage.get(metadata.get("model"))
+            model_cost = model_usage.total_cost if model_usage else None
+        if metadata.get("answer_kind") and usage:
+            model_cost, grader_cost = 0.0, 0.0
+            model_source, grader_source = "mock", "mock"
         else:
-            cost_source = metadata["cost_source"] if cost is not None else "unavailable"
+            model_source = metadata.get("cost_source", "unavailable") if model_cost is not None else "unavailable"
+            grader_source = metadata.get("grader_cost_source", "unavailable") if grader_cost is not None else "unavailable"
+            if usage and not grader:
+                grader_source = "no_usage"
         passed = None if error else all(check["passed"] for check in checks.values())
         rows.append({
-            "schema_version": 1,
+            "schema_version": 2,
             **{key: metadata.get(key) for key in (
                 "eval_id", "eval_hash", "pillar", "type", "mode", "harness", "model", "effort", "answer_kind",
                 "grader_model", "grader_effort",
             )},
-            "epoch": sample.epoch,
+            "epoch": metadata.get("epoch", sample.epoch),
             "status": "error" if error else "passed" if passed else "failed",
             "passed": passed,
-            "checks_json": json.dumps(checks, sort_keys=True),
+            "checks": checks,
             "error_kind": error_kind,
             "error_reason": " ".join(error.split()) if error else None,
             "model_tokens": total_tokens - grader_tokens,
             "grader_tokens": grader_tokens,
             "total_tokens": total_tokens,
             "token_source": "mock" if metadata.get("answer_kind") else "provider",
-            "cost_usd": cost,
-            "cost_source": cost_source,
-            "prices_json": json.dumps(metadata.get("prices", {}), sort_keys=True),
-            "grader_prices_json": json.dumps(metadata.get("grader_prices", {}), sort_keys=True),
+            "model_cost_usd": model_cost,
+            "model_cost_source": model_source,
+            "grader_cost_usd": grader_cost,
+            "grader_cost_source": grader_source,
+            "prices": metadata.get("prices", {}),
+            "grader_prices": metadata.get("grader_prices", {}),
             "working_seconds": sample.working_time,
             "total_seconds": sample.total_time,
             "log_file": location,
@@ -70,9 +91,28 @@ def results_rows(log: EvalLog) -> list[dict]:
     return rows
 
 
-def export_rows(logs: list[EvalLog], destination: Path) -> list[dict]:
-    rows = [row for log in logs for row in results_rows(read_eval_log(log.location))]
-    rows.sort(key=lambda row: (row["eval_id"], row["model"], row["mode"], row["epoch"]))
+def store_rows(output: Path) -> list[dict]:
+    latest = {}
+    logs = [read_eval_log(info.name) for info in list_eval_logs(str(output / "logs"))]
+    # Inspect's log creation time has only second precision. Samples retain
+    # microseconds; task metadata supplies that precision for setup failures.
+    def created(log):
+        return max([(log.eval.metadata or {}).get("created_at", log.eval.created)] + [
+            sample.completed_at or sample.started_at or log.eval.created for sample in log.samples or []
+        ])
+
+    for log in sorted(logs, key=lambda log: (created(log), log.location)):
+        for row in results_rows(log):
+            row["log_file"] = Path(row["log_file"]).resolve().relative_to(output.resolve()).as_posix()
+            latest[epoch_identity(row, row["epoch"])] = row
+    return sorted(latest.values(), key=lambda row: (
+        row["eval_id"], row["eval_hash"], row["model"], row["mode"], row["effort"] or "", row["epoch"],
+    ))
+
+
+def export_rows(output: Path) -> list[dict]:
+    rows = store_rows(output)
+    destination = output / "rows.jsonl"
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(".tmp")
     temporary.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows))

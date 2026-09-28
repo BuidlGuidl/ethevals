@@ -19,7 +19,7 @@ def main() -> int:
     parser.add_argument("command", choices=["run", "check", "validate"])
     parser.add_argument("--evals", nargs="+", help="Eval folders. Defaults to evals/*/*.")
     parser.add_argument("--models", nargs="+", help="Model names from config.yaml. Defaults to all four.")
-    parser.add_argument("--modes", nargs="+", help="Defaults to the plain mode in config.yaml.")
+    parser.add_argument("--modes", nargs="+", help="Select vanilla, internet, or skills. Run defaults to vanilla; check selects by type.")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--epochs", type=positive)
     parser.add_argument("--output", type=Path, default=Path("results"))
@@ -52,7 +52,7 @@ def main() -> int:
         for answer in answers:
             output = args.output / answer if args.command == "check" else args.output
             success, rows = run(evals, config, output, models=args.models, modes=args.modes,
-                                answer=answer, epochs=args.epochs, delay=args.mock_delay)
+                                answer=answer, epochs=args.epochs, delay=args.mock_delay, fresh=args.command == "check")
             if args.command == "check":
                 success = success and bool(rows) and all(row["passed"] is (answer == "reference") for row in rows)
             passed = passed and success

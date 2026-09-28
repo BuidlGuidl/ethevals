@@ -1,7 +1,3 @@
-# Rename a mode here. Eval declarations use these public names.
-modes:
-  plain: vanilla
-  agent: internet
 epochs: 3
 time_limit: 300
 grader: opus

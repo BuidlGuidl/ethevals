@@ -17,6 +17,7 @@ class TargetScorer(Declaration):
     ignore_case: bool = True
     numeric: bool = False
     pattern: str | None = None
+    reference: str | None = None
 
     @model_validator(mode="after")
     def check_target(self):

@@ -2,3 +2,7 @@
 __pycache__/
 .pytest_cache/
 results/
+.DS_Store
+out/
+cache/
+lib/

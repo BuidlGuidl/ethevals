@@ -26,6 +26,9 @@ env -u OPENROUTER_API_KEY uv run pytest
 `check` sends each quiz's reference answer through Inspect's mock model, solver, and scorer for three epochs.
 It repeats the pipeline with empty answers. The command succeeds only when every reference passes and every empty answer fails.
 It makes no paid call, including to the grader.
+Every invocation runs fresh, including when its output folder already contains logs.
+For `match` and `choice`, the reference check only proves that the target matches itself.
+Pattern quizzes can declare a formatted `reference` reply in `scorer/scorer.yaml`.
 
 Results go to `results/reference/rows.jsonl` and `results/empty/rows.jsonl`.
 Their `logs/` folders hold the full Inspect logs.
@@ -63,13 +66,16 @@ This runner uses OpenRouter for paid calls and has no code path that uses a subs
 ## Resume an interrupted command
 
 Repeat the same command with the same output directory.
-Inspect's `eval_set` reuses completed epochs and retries unfinished or errored epochs.
+The runner reuses completed epochs and retries unfinished or errored epochs through Inspect.
 The runner flushes each completed epoch to its log.
-A changed eval hash, selection, or model configuration needs a new output directory.
-Keep old directories if their results must remain available.
+The same directory accepts changed evals and selections. Earlier logs remain available.
+Each epoch is identified by its eval hash, agent, mode, and epoch number.
+Price or grader changes never repeat completed agent work.
+Rows retain the prices and grader used at execution time.
 
 Each epoch has a 300-second limit from the configuration.
-A crash, a setup failure, or a limit produces `status: error`, with `passed: null`.
+A crash or setup failure produces `status: error`, with `passed: null`, and runs again on the next invocation.
+A time or token limit produces a named failed check and a final `status: failed` result.
 An incorrect answer produces `status: failed`, with `passed: false`.
 
 ## Read the runner contracts
