@@ -7,4 +7,4 @@ ffi = false
 fs_permissions = []
 auto_detect_remappings = false
 auto_detect_solc = true
-offline = false
+offline = true

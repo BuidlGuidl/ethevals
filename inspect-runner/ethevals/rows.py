@@ -39,6 +39,7 @@ def results_rows(log: EvalLog) -> list[dict]:
             for name in metadata.get("check_names", []):
                 checks.setdefault(name, {"passed": False, "reason": " ".join(f"No verdict: {error}".split())})
         if sample.limit:
+            error = error_kind = None
             reason = " ".join((f"Epoch reached {sample.limit.type} limit {sample.limit.limit}. "
                                + (sample.limit.reason or "")).split())
             checks = {name: {"passed": False, "reason": reason} for name in metadata.get("check_names", checks)}

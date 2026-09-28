@@ -16,7 +16,7 @@ from ethevals.config import load_config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.sandboxes import IMAGES, runner_exec, validate_compose, workspace_files
-from ethevals.scorers import compiled_sources, forge, prepare_forge, rubric_evidence
+from ethevals.scorers import compiled_sources, forge, forge_checks, prepare_forge, rubric_evidence
 from prove_scoring import run_proof
 
 pytestmark = pytest.mark.docker
@@ -135,3 +135,25 @@ def test_unused_library_does_not_change_compiled_rubric_evidence(tmp_path):
 
 def test_reference_failures_owned_libraries_and_frozen_writer(tmp_path):
     run_proof(tmp_path / "proof")
+
+
+def test_unavailable_compiler_fails_offline_and_names_available_versions(tmp_path):
+    with containers(tmp_path) as boxes:
+        box = boxes["scorer"]
+        details = json.loads(command(["docker", "inspect", box.container]).stdout)[0]
+        networks = list(details["NetworkSettings"]["Networks"])
+        assert len(networks) == 1
+        assert json.loads(command(["docker", "network", "inspect", networks[0]]).stdout)[0]["Internal"] is True
+
+        async def proof():
+            installed = await runner_exec(box, ["/bin/sh", "-c", "ls /home/agent/.svm/*/solc-*"])
+            assert installed.stdout.strip() == "/home/agent/.svm/0.8.30/solc-0.8.30"
+            await prepare_forge(box, {"src/Token.sol": b"pragma solidity =0.8.29; contract Token {}"}, {
+                "scorer/tests/Token.t.sol": b'pragma solidity ^0.8.0; import "../src/Token.sol"; contract Tests { function testToken() public { new Token(); } }'})
+            result = await forge(box)
+            checks = forge_checks(result.stdout, result.stderr, result.returncode, ["forge:test/Token.t.sol:Tests:testToken()"])
+            assert checks["forge:compile"]["passed"] is False
+            assert "Available solc versions: 0.8.30" in checks["forge:compile"]["reason"]
+            assert "No solc version installed that matches" in result.stderr
+            assert "https://" not in result.stderr
+        anyio.run(proof)

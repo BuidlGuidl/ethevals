@@ -9,6 +9,7 @@ from inspect_ai.util import sandbox
 from .config import read_yaml
 
 IMAGES = Path(__file__).with_name("images")
+SOLC_VERSIONS = ("0.8.30",)
 MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
 
 
@@ -63,8 +64,8 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
             runner_image = read_yaml(IMAGES / "stock.compose.yaml")["services"]["default"]["image"]
             if service.get("image") != runner_image or service.get("user", "agent") != "agent":
                 reject(f"service {name}: requires the runner image and the agent user")
-        if service.get("networks") != (["private", "internet"] if name in {"default", "scorer"} else ["private"]):
-            reject(f"service {name}: only default and scorer can join internet; all services must join private")
+        if service.get("networks") != (["private", "internet"] if name == "default" else ["private"]):
+            reject(f"service {name}: only default can join internet; all services must join private")
         for volume in service.get("volumes", []):
             if name in {"default", "scorer"}:
                 reject(f"service {name}: volumes are forbidden to keep agent and scorer files separate")
@@ -115,13 +116,13 @@ async def workspace_files() -> dict[str, bytes]:
     stopped = await runner_exec(agent, ["/bin/sh", "-c", """
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
     /usr/bin/pkill -STOP -u agent
-    /usr/bin/ps -u agent -o pid=,stat= | /usr/bin/awk '$1 != 1 && $2 !~ /^[TZ]/ {bad=1} END {exit bad}' && exit 0
+    /usr/bin/ps -u agent -o pid=,stat= | /usr/bin/awk '$1 != 1 && $2 !~ /^[TtZ]/ {bad=1} END {exit bad}' && exit 0
     /usr/bin/sleep 0.05
 done
 exit 1
 """], user="root", cwd="/", timeout=10)
     if not stopped.success:
-        raise RuntimeError(f"Cannot stop agent processes: {stopped.stderr}")
+        raise ValueError(f"Cannot stop agent processes: {stopped.stderr}")
     temporary = await runner_exec(agent, ["/usr/bin/mktemp", "-d", "/tmp/ethevals.XXXXXXXXXX"], user="root", cwd="/")
     if not temporary.success:
         raise RuntimeError(f"Cannot allocate snapshot: {temporary.stderr}")

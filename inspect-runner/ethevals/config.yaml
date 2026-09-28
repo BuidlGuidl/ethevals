@@ -2,7 +2,6 @@ epochs: 3
 time_limit: 300
 time_limits: {build: 1200, act: 1200, scenario: 900}
 cost_limit: 5.0
-grader_cost_limit: 0.5
 max_attempts: 2
 max_tasks: 4
 max_samples: 4

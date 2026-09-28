@@ -7,7 +7,7 @@ services:
   scorer:
     image: ethevals-solidity:foundry-1.5.1-solc-0.8.30-std-1.9.7
     init: true
-    networks: [private, internet]
+    networks: [private]
 networks:
   private:
     internal: true

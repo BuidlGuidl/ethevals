@@ -32,10 +32,8 @@ def test_forge_names_and_reasons():
 
 def test_compiler_error_is_a_failed_check():
     assert forge_checks("", 'Error (2314): Expected semicolon.\n --> src/Token.sol:4:1', 1, []) == {
-        "forge:compile": {"passed": False, "reason": "Error (2314): Expected semicolon."},
+        "forge:compile": {"passed": False, "reason": "Error (2314): Expected semicolon. Scoring is offline. Available solc versions: 0.8.30."},
     }
-    assert forge_checks("", "Could not resolve host: binaries.soliditylang.org", 1, []) == {
-        "forge:compile": {"passed": False, "reason": "Could not resolve host: binaries.soliditylang.org"}}
 
 
 def test_rubric_boolean_and_reason():
@@ -88,7 +86,7 @@ def test_services_cannot_join_internet(tmp_path):
     data["services"]["chain"] = {"image": "chain:test", "networks": ["private", "internet"]}
     path = tmp_path / "compose.yaml"
     path.write_text(yaml.safe_dump(data))
-    with pytest.raises(ValueError, match="only default and scorer can join internet"):
+    with pytest.raises(ValueError, match="only default can join internet"):
         validate_compose(path)
 
 

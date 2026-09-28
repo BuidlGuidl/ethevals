@@ -86,8 +86,12 @@ Rows retain the prices and grader used at execution time.
 
 Quizzes have a 300-second limit. Builds have a 1,200-second limit.
 The configuration gives the player a $5 cost budget.
-The grader has separate model, effort, output, and price settings.
-Its epoch budget covers two full-evidence calls per question, with `grader_cost_limit` as a minimum.
+The grader has separate model, effort, and output settings. Each model ID has one price schedule across both roles.
+Config loading rejects conflicting prices for the same model ID.
+Each grader request caps its serialized messages and generation settings at 300,000 bytes, including filenames and omission counts.
+Its epoch allowance prices two calls per question at three bytes per input token and maximum output, without cache discounts.
+At the configured prices, the two-question build allows $2.9096 for grading. Rows record this as `grader_cost_limit_usd`.
+This allowance estimates input tokens. Inspect enforces it against reported usage, with no provider retries.
 Inspect meters configured prices, including the lower price for cached reads. These prices are estimates until checked.
 Limits stop further calls after usage arrives. An in-flight call can exceed its remaining budget.
 Rows record each role's metered dollars and budget. The runner runs up to four tasks and samples at once.
@@ -95,6 +99,7 @@ An eval can override its time limit with `time_limit` in `eval.yaml`.
 A runner, Docker, or grader failure produces `status: error`, with `passed: null`, and retries within the execution cap.
 Grader errors include provider failures, exhausted budgets, and invalid replies after two calls.
 Player time or cost limits fail the eval's checks and produce a final `status: failed` result.
+These limits take precedence over scoring errors. The runner skips the snapshot and grader after a player limit.
 An incorrect answer produces `status: failed`, with `passed: false`.
 
 ## Read the runner contracts
@@ -127,13 +132,20 @@ The build row has `harness: claude_code`, eight `forge:` checks, and two `rubric
 The rubric's tokens and cost appear in `grader_tokens` and `grader_cost_usd`.
 Rows with `status: error` need diagnosis. An agent's incorrect code has `status: failed`.
 Before player epochs start, a key-free reference run discovers the seven test functions.
-The runner caches them by eval hash under `inputs/<hash>/checks.json`. `forge:compile` completes the Forge check set.
+The cache includes the eval hash, image tag, Dockerfile, Foundry config, and check-naming version.
+Names live under `inputs/<eval_hash>/<scoring_hash>/checks.json`. `forge:compile` completes the Forge check set.
+Missing expected names after compilation are runner errors unless that suite's setup failed.
+Discovery runs only for evals with missing epochs. Failures enter `discovery-errors.json`; other evals continue.
 Compilation and setup failures retain that check set. Agent-added tests cannot add checks.
 Forge and the rubric read one workspace snapshot after the runner stops the agent's processes.
 The supplied `foundry.toml` defines grading settings and dependency remappings. Agent edits to it do not affect grading.
+Scoring is offline with solc 0.8.30. The prompt and compilation failures list that available compiler.
+The scorer container has no internet network. Compiler downloads happen only when the image builds.
 The rubric reads Forge's compiled source records, with the agent's `src/` files first.
 It excludes unused libraries, private tests, and the runner's libraries.
-The grader receives the files that fit the evidence cap and a list of omitted files.
+The grader receives the files that fit the request cap and a count of omitted files.
+The evidence block carries Inspect's cache marker and stays identical across the rubric questions.
+The parser accepts one JSON verdict, with optional Markdown fences. Prose or quoted verdicts count as invalid replies.
 Missing evidence does not replace the grader's verdict.
 
 The `tests` scorer supplies Foundry files and the build prompt note. Internet quizzes receive neither.

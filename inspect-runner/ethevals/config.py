@@ -61,7 +61,6 @@ class Config(Declaration):
     time_limit: int = Field(gt=0)
     time_limits: dict[str, int] = Field(default_factory=dict)
     cost_limit: float = Field(gt=0)
-    grader_cost_limit: float = Field(gt=0)
     max_attempts: int = Field(gt=0)
     max_tasks: int = Field(default=4, gt=0)
     max_samples: int = Field(default=4, gt=0)
@@ -77,6 +76,11 @@ class Config(Declaration):
         for key, model in self.models.items():
             if model.harness is not None and model.harness not in AGENTS:
                 raise ValueError(f"models.{key}.harness: unknown harness {model.harness!r}")
+        prices = {}
+        for item in [self.grader, *self.models.values()]:
+            if item.model in prices and prices[item.model] != item.prices:
+                raise ValueError(f"Conflicting prices for model {item.model}")
+            prices[item.model] = item.prices
         return self
 
 

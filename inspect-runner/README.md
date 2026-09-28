@@ -150,19 +150,24 @@ It also rejects harness names absent from `AGENTS`. A null harness supports vani
 Only Opus currently declares a harness. The other configured models remain available for vanilla quizzes.
 `agent_model_config` supplies the harness's model description.
 Actor construction registers prices once, including names absent from Inspect's database.
+Each model ID has one price schedule across both roles. Config loading rejects conflicting schedules.
 `search_provider` holds the Exa MCP URL. A null value disables that MCP server.
 `time_limit` supplies the fallback limit. `time_limits` sets limits by eval type.
 An eval's `time_limit` takes precedence. It remains the main bound on a hung agent.
-`cost_limit` gives the player $5. `grader_cost_limit` sets a $0.50 minimum for the separate grader budget.
-The runner raises that budget to cover every question at the full evidence cap, including two calls and maximum output.
-The estimate assumes one token per escaped input byte and no cache discount.
+`cost_limit` gives the player $5. The grader has a computed allowance instead of a configurable minimum.
+Each request caps serialized messages and generation settings at 300,000 bytes, including filenames and omission counts.
+The allowance covers two calls per question, with maximum output and three serialized bytes per input token.
+The estimate assumes no cache discount.
 It uses the higher input or cache-write price, plus the output price.
-The recorded `grader_cost_limit_usd` is the resulting epoch budget. This is a spending guard, not an expected cost.
+Rows record the allowance as `grader_cost_limit_usd`. The configured two-question build allows $2.9096.
+Three bytes per token is a planning estimate. Inspect enforces the allowance against reported usage.
 These settings live in `config.yaml`, alongside `max_attempts: 2`.
 Inspect uses the configured prices for uncached input, cache reads, cache writes, and output.
 It checks cost after each call. An in-flight call can exceed its remaining budget.
 The grader defaults to effort `none`, 4,096 output tokens, and a 60-second attempt timeout.
-Inspect retains its provider retries and backoff. Invalid reply shapes permit at most two generation calls per question.
+Grader calls set `max_retries=0`. Invalid replies permit at most two generation calls per question.
+Player limits take precedence over scoring errors and produce a final failed row.
+After a player limit, scoring skips the snapshot and grader.
 `max_tasks` and `max_samples` control concurrency. Both default to four.
 
 ## Build scoring
@@ -170,6 +175,7 @@ Inspect retains its provider retries and backoff. Invalid reply shapes permit at
 Tests live in `scorer/tests/`. Build and act evals require `scorer/solution/`.
 The runner stops the agent user's processes with SIGSTOP before collecting one snapshot into a fresh root-owned path.
 It checks that those processes have stopped. PID 1 remains available to reap processes during container cleanup.
+States `T`, `t`, and `Z` count as stopped. A failure to stop agent processes fails the eval's checks.
 Forge and the rubric receive the same captured files. Neither scorer reads the live workspace again.
 The snapshot contains only `src/` and `lib/`, excluding the runner-owned library paths before archiving.
 Files outside those trees, including a `.venv`, cannot fail collection.
@@ -184,18 +190,26 @@ The runner adds the eval's tests and its own `images/foundry.toml` there.
 It also supplies that configuration to the agent and states the grading rule in the prompt.
 Authors can use the `@openzeppelin/contracts/` and `forge-std/` remappings.
 Other dependencies require relative imports under `src/` or `lib/`. Grading ignores submitted remappings and compiler settings.
-The config uses automatic compiler selection with network access, FFI disabled, and no filesystem permissions.
+The config selects from installed compilers with `offline = true`, FFI disabled, and no filesystem permissions.
+The image supplies solc 0.8.30. The prompt and compilation failures list that available compiler.
+An unavailable compiler fails compilation without a download attempt. Compiler downloads happen only when the image builds.
 Agent test directories and cached output do not enter the scorer workspace.
 Forge runs with a clean environment, `ffi = false`, and no filesystem cheatcode permissions.
 The agent and scorer have separate filesystems with no shared volumes.
 
 Before any player epoch, the runner discovers checks with a key-free reference run in the scorer container.
-It caches the names once per eval hash in `inputs/<hash>/checks.json` and reuses them across epochs.
+It caches names under `inputs/<eval_hash>/<scoring_hash>/checks.json` and reuses them across epochs.
+The scoring hash includes the eval hash, image tag, Dockerfile, Foundry config, and check-naming version.
+Cache hits do not rewrite existing files.
 Its test functions define `forge:<test path>:<suite>:<function signature>` checks. `forge:compile` always accompanies them.
-The reference must pass. A broken reference stops preparation before player work starts and requires an eval fix.
+The reference must pass. Discovery runs only for evals with missing epochs and permits one infrastructure retry.
+A discovery failure enters `discovery-errors.json` and skips that eval. Other evals continue.
+Discovery failures consume no player attempts. A later invocation can retry discovery.
 Forge runs only tests under `test/`. Agent functions outside that expected set cannot add checks.
 Compilation or submission output-limit failure fills every eval check with its reason.
 A setup failure fills that suite's missing tests.
+After compilation, missing expected names without a failed suite setup produce `status: error`.
+Scorer-side Forge output enters log events as byte counts. Compilation reasons exclude private source lines and code frames.
 Workspace failures fail all the eval's Forge and rubric checks with the snapshot reason.
 The fixed set keeps the same denominator across successful and failed submissions.
 Free checks omit rubric questions; paid epochs include them.
@@ -206,12 +220,15 @@ The grader receives source contents from Forge's build info, with the agent's `s
 Imported dependencies under `lib/` follow. Unused libraries and private tests never enter the evidence.
 It excludes the image's runner-owned dependencies and tells the grader where those dependencies come from.
 It skips files above 100,000 bytes or beyond a 300,000-byte total, then considers smaller later files.
-Every omitted file appears in the grader request. The grader decides from the available evidence and reports uncertainty.
+The request cap also counts escaped contents, filenames, and JSON structure. Files that fit retain their source-first order.
+Omissions appear as `omitted_file_count`, never a list of paths.
+The grader decides from the available evidence and reports uncertainty.
 The runner retains that verdict even when files exceed the cap.
-Files precede the question in the request, so later questions share a cacheable prefix.
+Files precede the question in a text block that carries Inspect's cache marker.
+The runner sizes evidence against the longest question, so every question shares that evidence block.
 It receives no tools and must return a boolean `passed` and a one-line `reason` in JSON.
-The request uses a structured response schema. The parser also accepts JSON inside prose or Markdown fences.
-The parser searches JSON objects for the expected keys, including inside wrappers or after unrelated braces.
+The request uses a structured response schema. The parser requires one JSON object, with optional Markdown fences.
+Prose, wrappers, or quoted objects before a verdict count as invalid replies.
 Provider failures, exhausted grader budgets, and two invalid replies produce `status: error`.
 Verdicts completed before a later grader error remain in the row.
 An error can repeat the player epoch within the retry cap. Snapshot persistence and regrading remain deferred.
@@ -224,7 +241,7 @@ Custom compose files use prebuilt images and declare `default` and `scorer` serv
 Those two services require the stock runner image and its unprivileged `agent` user.
 Other services can choose their own images. This keeps process control and runner-owned dependencies outside the eval author's control.
 All services join the `private` network with `internal: true`.
-Only `default` and `scorer` also join the `internet` network.
+Only `default` also joins the `internet` network. The scorer has no internet access.
 No service publishes host ports. Privileged mode, host namespaces, host paths, and external volumes are rejected.
 The agent and scorer cannot mount volumes. Other services can use declared private named volumes.
 Custom Docker builds are rejected because their contexts can include scorer files.

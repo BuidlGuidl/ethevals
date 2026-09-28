@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, get_args
 
 from inspect_ai.model import GenerateConfig, Model, ModelInfo, ModelCost, get_model, get_model_info, set_model_info
 from inspect_ai.solver import generate, multiple_choice
 
 from .agents import AGENTS, internet_solver
+from .config import Mode
 
 
 def quiz_solver(evaluation):
@@ -29,7 +30,8 @@ class Grader:
 def model_actor(item, prefix=""):
     info = get_model_info(item.model) or ModelInfo()
     set_model_info(item.model, info.model_copy(update={"cost": ModelCost(**item.prices.model_dump())}))
-    model = get_model(item.model, config=GenerateConfig(reasoning_effort=item.effort))
+    model = get_model(item.model, config=GenerateConfig(reasoning_effort=item.effort,
+                                                       max_tokens=getattr(item, "max_tokens", None)))
     return model, {prefix + key: value for key, value in {
         "model": str(model), "effort": item.effort, "prices": item.prices.model_dump(),
         "cost_source": f"computed:{item.price_source}",
@@ -59,7 +61,7 @@ def grader(config):
 
 def select_actors(config, models=None, modes=None, answer=None, delay=0):
     from .checks import CHECK_MODES, check_player, check_grader
-    if modes and set(modes) - {"vanilla", "internet", "skills"}:
+    if modes and set(modes) - set(get_args(Mode)):
         raise ValueError(f"Unknown modes: {modes}")
     if answer:
         grade = check_grader()

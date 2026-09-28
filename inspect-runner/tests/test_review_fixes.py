@@ -82,9 +82,10 @@ def test_eval_root_cannot_be_a_symlink(tmp_path):
     "CompilerError: Stack too deep. Try compiling with --via-ir.",
 ])
 def test_submission_compile_errors_fill_the_fixed_check_set(diagnostic):
+    reason = diagnostic + " Scoring is offline. Available solc versions: 0.8.30."
     assert forge_checks("", diagnostic, 1, [CHECK]) == {
-        "forge:compile": {"passed": False, "reason": diagnostic},
-        CHECK: {"passed": False, "reason": diagnostic},
+        "forge:compile": {"passed": False, "reason": reason},
+        CHECK: {"passed": False, "reason": reason},
     }
 
 
@@ -95,8 +96,8 @@ def test_pass_compile_and_setup_failure_have_the_same_checks():
         "forge:compile": {"passed": True, "reason": "Compilation passed."},
         CHECK: {"passed": True, "reason": "Test passed."}}
     assert forge_checks("", "CompilerError: Stack too deep", 1, [CHECK]) == {
-        "forge:compile": {"passed": False, "reason": "CompilerError: Stack too deep"},
-        CHECK: {"passed": False, "reason": "CompilerError: Stack too deep"}}
+        "forge:compile": {"passed": False, "reason": "CompilerError: Stack too deep Scoring is offline. Available solc versions: 0.8.30."},
+        CHECK: {"passed": False, "reason": "CompilerError: Stack too deep Scoring is offline. Available solc versions: 0.8.30."}}
     assert forge_checks(setup, "", 1, [CHECK]) == {
         "forge:compile": {"passed": True, "reason": "Compilation passed."},
         CHECK: {"passed": False, "reason": "EvmError: Revert"}}
