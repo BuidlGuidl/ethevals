@@ -55,7 +55,28 @@ def test_agent_sample_contains_only_workspace_files():
         "/workspace/foundry.toml": inline_file((IMAGES / "foundry.toml").read_bytes()),
         "/workspace/src/BuilderPoints.sol": inline_file((BUILD / "workspace/src/BuilderPoints.sol").read_bytes()),
     }
-    assert (sample.sandbox.type, Path(sample.sandbox.config).name) == ("docker", "stock.compose.yaml")
+    assert (sample.sandbox.type, Path(sample.sandbox.config).name) == ("ethevals_docker", "stock.compose.yaml")
+
+
+@pytest.mark.parametrize("service", ["default", "scorer"])
+@pytest.mark.parametrize("limit", [None, "2g"])
+def test_custom_compose_requires_bounded_memory(tmp_path, service, limit):
+    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_bytes())
+    data["services"]["default"].pop("build")
+    data["services"][service]["mem_limit"] = limit
+    with pytest.raises(ValueError, match="requires mem_limit: 1g"):
+        validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump(data).encode())
+
+
+def test_concurrency_must_fit_docker_memory(monkeypatch):
+    from types import SimpleNamespace
+    from ethevals.preparation import check_capacity
+    monkeypatch.setattr("ethevals.preparation.docker_command", lambda args: SimpleNamespace(stdout=str(8 * 1024**3)))
+    config = load_config()
+    check_capacity(config)
+    config.max_tasks = config.max_samples = 3
+    with pytest.raises(ValueError, match="3 GiB per concurrent epoch plus 1 GiB for the host"):
+        check_capacity(config)
 
 
 @pytest.mark.parametrize("extra,reason", [

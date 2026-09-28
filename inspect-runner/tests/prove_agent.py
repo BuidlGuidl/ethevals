@@ -35,8 +35,48 @@ def main():
         import ethevals.search as search
         os.environ["EXA_API_KEY"] = "inert-offline-exa-canary"
 
-        async def offline_exa(url, arguments, key):
+        async def offline_exa(url, name, arguments, key):
             assert key == "inert-offline-exa-canary"
+            import hashlib
+            from inspect_ai.util import sandbox
+            from ethevals.sandboxes import runner_exec
+            # Pass a digest, never the canary itself, into the live agent container.
+            scan = '''import os, glob, hashlib, json
+matches, files, environments = [], 0, 0
+def check(path):
+    global files
+    try:
+        with open(path, "rb") as source:
+            tail = b""
+            while chunk := source.read(1048576):
+                chunk = tail + chunk
+                start = 0
+                while (start := chunk.find(b"inert-", start)) >= 0:
+                    if hashlib.sha256(chunk[start:start+SIZE]).hexdigest() == DIGEST:
+                        matches.append(path)
+                    start += 1
+                tail = chunk[-SIZE:]
+        files += 1
+    except (OSError, PermissionError):
+        pass
+for root, dirs, names in os.walk("/", followlinks=False):
+    if root == "/":
+        dirs[:] = [name for name in dirs if name not in {"proc", "sys", "dev"}]
+    for name in names:
+        path = os.path.join(root, name)
+        if os.path.isfile(path) and not os.path.islink(path):
+            check(path)
+for path in glob.glob("/proc/[0-9]*/environ"):
+    environments += 1
+    check(path)
+print(json.dumps({"matches": matches, "files": files, "environments": environments}))
+'''
+            scan = "SIZE=" + str(len(key)) + "; DIGEST=" + repr(hashlib.sha256(key.encode()).hexdigest()) + "\n" + scan
+            result = await runner_exec(sandbox(), ["/usr/bin/python3", "-c", scan], user="root", timeout=90)
+            assert result.success, result.stderr
+            scanned = json.loads(result.stdout)
+            assert scanned["matches"] == [] and scanned["files"] > 100 and scanned["environments"] > 1, scanned
+            print(json.dumps({"container_canary_scan": scanned}), flush=True)
             return {"content": [{"type": "text", "text": "Title: ERC-20\nURL: https://ethereum.org\nContent: Test search. " + key}]}
 
         search.exa_request = offline_exa
@@ -86,7 +126,8 @@ def main():
                 "input": "text(ALL_TOOLS.map(tool => tool.name));",
             })
         if calls == search_call:
-            arguments = {"query": "site:ethereum.org ERC-20 token standard", "numResults": 1}
+            arguments = {"query": "site:ethereum.org ERC-20 token standard", "numResults": 1,
+                         "objective": "Find the official ERC-20 token standard and its methods."}
             if harness == "codex_cli":
                 name, arguments = "exec", {"input": "text(await tools.mcp__exa__web_search_exa(" + json.dumps(arguments) + "));"}
             else:

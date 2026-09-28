@@ -79,12 +79,12 @@ def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path
     config = load_config()
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
     players, grade = select_actors(config, answer="reference")
-    success, initial = run([quiz], config, tmp_path / "seed", players=players, grade=grade, epochs=1)
+    success, initial = run([quiz], config, tmp_path / "seed", answer="reference", epochs=1)
     assert success and initial[0]["status"] == "passed"
     rows = tmp_path / "committed/rows.jsonl"
     write_rows(rows, initial)
     output = tmp_path / "fresh"
-    success, complete = run([quiz], config, output, players=players, grade=grade, rows_file=rows, epochs=3)
+    success, complete = run([quiz], config, output, answer="reference", rows_file=rows, epochs=3)
     assert success
     assert [r["epoch"] for r in complete] == [1, 2, 3]
     assert complete[0] == initial[0]
@@ -97,7 +97,7 @@ def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path
 
     monkeypatch.setattr("ethevals.runner.eval", forbidden)
     monkeypatch.setattr("ethevals.runner.prepare_eval", forbidden)
-    success, repeated = run([quiz], config, tmp_path / "second", players=players, grade=grade, rows_file=rows, epochs=3)
+    success, repeated = run([quiz], config, tmp_path / "second", answer="reference", rows_file=rows, epochs=3)
     assert (success, repeated) == (True, complete)
     assert rows.read_bytes() == saved
 
@@ -158,8 +158,6 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path):
 
 
 def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows(tmp_path, monkeypatch):
-    monkeypatch.setattr(ci, "RECEIPTS", tmp_path / "runs.json")
-    monkeypatch.setattr(ci, "restore_results", lambda rows: None)
     monkeypatch.setattr(ci, "export_rows", lambda output: read_rows(output / "rows.jsonl"))
     monkeypatch.setattr(ci, "store_rows", lambda output: read_rows(output / "rows.jsonl"))
     config = load_config()
@@ -173,6 +171,10 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     write_rows(output / "rows.jsonl", [new, error])
     (output / "logs").mkdir()
     (output / "logs/new.eval").write_bytes(b"fixture log")
+    (output / "paid-started.json").write_text(json.dumps({"run_id": "1", "commit": "a" * 40}))
+    records = []
+    monkeypatch.setattr(ci, "stored_file", lambda ref, path: json.dumps(previous) + "\n" if str(path).endswith("rows.jsonl") else "{}")
+    monkeypatch.setattr(ci, "commit_results", lambda rows, saved, *args: records.append((rows, saved)))
     args = argparse.Namespace(output=output, rows=rows, repo="owner/repo", run_id="1", commit="a" * 40,
                               publish=True, open_pr=False)
 
@@ -181,11 +183,11 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
 
     monkeypatch.setattr("ethevals.publish.subprocess.run", fail)
     with pytest.raises(subprocess.CalledProcessError):
-        ci.publish_results(args, [quiz])
-    assert [(r["status"], r.get("attempt")) for r in read_rows(rows)] == [("passed", None), ("error", 2), ("passed", None)]
+        ci.publish_results(args)
+    assert [(r["status"], r.get("attempt")) for r in records[0][0]] == [("passed", None), ("error", 2), ("passed", None)]
     monkeypatch.setattr("ethevals.publish.subprocess.run", lambda *a, **kw: subprocess.CompletedProcess(a, 0))
-    assert ci.publish_results(args, [quiz]) == 0
-    assert sorted((r["status"], r["log_file"]) for r in read_rows(rows)) == [
+    assert ci.publish_results(args) == 0
+    assert sorted((r["status"], r["log_file"]) for r in records[-1][0]) == [
         ("error", "logs/new.eval"), ("passed", "results-1/new.eval"), ("passed", "results-old/old.eval")]
 
 
@@ -206,7 +208,7 @@ def test_failed_discovery_stays_missing_without_using_attempts(tmp_path, monkeyp
         raise RuntimeError("Reference compilation failed")
 
     monkeypatch.setattr("ethevals.runner.prepare_eval", failed)
-    success, rows = run([build], config, tmp_path, players=players, grade=grade, epochs=1)
+    success, rows = run([build], config, tmp_path, answer="reference", epochs=1)
     assert (success, rows) == (False, [])
     assert json.loads((tmp_path / "discovery-errors.json").read_text())[0]["error"] == "Reference compilation failed"
     report = plan([build], config, players, read_rows(tmp_path / "rows.jsonl"), epochs=1)
@@ -245,7 +247,7 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
         return real_command(*args, **kwargs)
 
     monkeypatch.setattr(ci, "command", local_only)
-    ci.results_pr(rows, "owner/repo", publish=True)
+    ci.commit_results(*ci.result_record(read_rows(rows)), "owner/repo", publish=True)
     assert remote[0][:3] == ["git", "push", "origin"]
     assert remote[0][3].endswith(":refs/heads/ci/results")
     commit = remote[0][3].split(":")[0]

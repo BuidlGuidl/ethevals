@@ -116,16 +116,17 @@ Codex uses code mode. A model adapter repairs Inspect 0.3.271's custom-call conv
 It converts only declared custom calls with exactly one string `input` and no parse error.
 All agent factories set refusal retries to zero. Inspect's provider retries remain separate.
 
-Each agent gets the Exa HTTP MCP server from `search_provider`.
+Each agent gets Exa's tools through the host-side Inspect bridge.
 Claude Code disallows `WebSearch`, and Codex sets `web_search="disabled"`.
 These settings keep search on Exa instead of each provider's hosted search API.
 OpenCode 1.18.33 does not register `websearch` for OpenRouter unless its optional search flags are enabled.
 Its built-in search also calls keyless Exa. The runner leaves its optional search flags unset.
 Claude Code retains `WebFetch`; OpenCode retains `webfetch`. Codex has no native page-fetch tool.
-All four agents retain Exa search and a shell with network access for fetching pages.
+All four agents get `web_search_exa` and `web_fetch_exa`, plus a shell with network access.
 Exa's keyless endpoint can rate-limit concurrent agents.
-Set `EXA_API_KEY` to authenticate the configured `mcp.exa.ai` endpoint.
-Rows count search calls, failed results, and rate-limited results in `search_calls`, `search_failed`, and `search_rate_limited`.
+The host alone reads the optional `EXA_API_KEY`. Keyed search remains unverified until the first keyed run.
+Rows count calls, failures, and Exa throttling in `search_calls`, `search_failed`, and `search_rate_limited`.
+`search_capped` counts refusals from our per-epoch cap.
 
 Inspect also accepts `ANTHROPIC_AUTH_TOKEN`, including a subscription token from `claude setup-token`.
 Using that token this way is against Anthropic's terms.
@@ -162,7 +163,7 @@ Act scoring has a 240-second total deadline, including its 120-second check scri
 Task creation rejects scoring bounds that cannot fit inside Inspect's scoring window, half the wall-clock backstop.
 Inspect meters configured prices, including the lower price for cached reads. These prices are estimates until checked.
 Limits stop further calls after usage arrives. An in-flight call can exceed its remaining budget.
-Rows record each role's metered dollars and budget. The runner runs up to four tasks and samples at once.
+Rows record each role's metered dollars and budget. The runner runs up to two tasks and samples at once.
 An eval can override its time limit with `time_limit` in `eval.yaml`.
 A runner, Docker, or grader failure produces `status: error`, with `passed: null`, and retries within the execution cap.
 Grader errors include provider failures, exhausted budgets, and invalid replies after two calls.
@@ -240,7 +241,9 @@ All three harnesses use a host-side Exa search tool through Inspect's bridge. Cl
 `search_provider` accepts `https://mcp.exa.ai/mcp` or null. Null disables search.
 The host sends optional `EXA_API_KEY` in an HTTP header. The container sees only the bridge address.
 Keyed and keyless requests share this path. Neither agent configuration nor published logs contain the key.
-Each epoch permits `search_limit` requests, currently 20, with at most five results per request.
+Each epoch permits `search_limit` requests, currently 20, shared across search and fetch.
+The bridge preserves Exa's tool descriptions and input schemas, captured in `inspect-runner/ethevals/exa-tools.json`.
+The keyless parity test compares that snapshot with the hosted tool list.
 Failed requests consume a slot. The plan reserves `search_price_usd`, currently a guessed $0.05, for each slot.
 The reserve also applies to keyless runs. Check the configured price before funding a run.
 The Exa endpoint can rate-limit requests. Agents can also fetch pages and install packages from their containers.
@@ -263,7 +266,13 @@ Discovery errors name failed tests and compiler diagnostics.
 Compilation and suite lifecycle failures retain that check set. Agent-added tests cannot add checks.
 Docker exec failures and capture timeouts are runner errors. Unknown Forge exits remain errors.
 Invalid Solidity bytes and confirmed scorer OOM kills fail the fixed checks.
-Both stock scorer containers and the stock chain have a 2 GiB memory limit.
+Every stock container has a 1 GiB memory limit. Custom Compose files must use the same limits.
+At most three containers run per epoch. Two concurrent epochs reserve at most 6 GiB.
+The private GitHub runner has 2 CPUs, 8 GB of RAM, and 14 GB of disk.
+Local runs also check Docker's memory capacity before preparation, with at least 1 GiB left for the host.
+Reduce `max_tasks` or `max_samples` when the Docker VM has less memory.
+The cgroup's `oom` and `oom_kill` counters must both increase above zero to classify a scorer memory failure.
+An external kill without a local memory-limit event remains an error.
 A schema-valid grader reply without a reason fails that rubric check. Transport and invalid-JSON failures remain errors.
 Forge streams through capped readers. The wrapper waits for both reader processes before the scorer reads their files.
 The cap is 10 MiB per stream, with one extra byte to detect overflow.
@@ -292,6 +301,28 @@ uv run ethevals run --evals evals/building/erc20-points-token --models opus --mo
 The finished quiz keeps its sample UUID. The unfinished build runs again if its execution cap allows it.
 Repeating either finished command reuses its row, including a final failed result.
 ADR 0002 remains proposed until this paid test succeeds.
+
+## Failure classification
+
+| Cause | Row result |
+| --- | --- |
+| Incorrect answer, compiler diagnostic, or failing test | Failed checks |
+| Invalid source bytes, unsafe archive, or excessive workspace | Failed checks |
+| Agent processes escape the bounded stop loop | Failed checks |
+| Scorer or chain exceeds its own cgroup memory limit | Failed checks |
+| In-container scoring timeout or output overflow | Failed checks |
+| Author check script crashes or returns a malformed verdict | Failed checks, the one deliberate fail-closed exception |
+| Grader returns a schema-valid verdict with an empty reason | That rubric check fails |
+| Player reaches its working-time or cost limit | Failed checks |
+| Missing script, wrapper exit 125, or host exec or file-copy failure | Error |
+| Host kill without a local memory-limit event | Error |
+| Setup or reference discovery fails | Error, with no paid attempt for failed discovery |
+| Unknown Forge exit or unexplained missing test | Error |
+| Grader transport failure, exhausted budget, or two invalid replies | Error |
+| Operator stop or wall-clock stop before the working limit | Error |
+
+Author scripts must return a verdict for any chain state.
+Their crashes fail closed so an agent cannot evade a failed check by crashing the checker.
 
 ## Prove the agent path without a key
 
@@ -357,8 +388,15 @@ The plan lists errors that exhausted their attempts. A discovery failure leaves 
 Each epoch reserves player, grader, and search costs for every remaining attempt.
 `run()` owns this gate. Missing paid epochs require `--budget` and a key before it builds a provider.
 `plan` reads the same rows and local logs and uses the same budget check.
-CI reserves 270 minutes for epochs in its 330-minute job. The other 60 minutes cover preparation and artifact upload.
-The plan sums each epoch's wall limit, scoring limit, and 150-second setup allowance without assuming parallel speedups.
+CI gives preparation and epochs 16,200 seconds within its 330-minute job.
+The execution step stops at 310 minutes, which leaves 20 minutes for artifact upload before the job deadline.
+Preparation runs first. Final admission deducts the measured preparation time, including image builds and discovery.
+Image builds stop after 1,800 seconds. Each discovery scorer has a 600-second deadline and no retry.
+Sandbox epochs include 600 seconds for startup and 60 for cleanup. Act setup adds another 150 seconds.
+The bound is `preparation + sum(durations) / m + (1 - 1/m) * longest_duration`, with `m = 2` in CI.
+Inspect refills vacant task slots. The runner uses the same concurrency for tasks, samples, and sandboxes.
+Admission interleaves models. Execution uses the admitted items without selecting epochs again.
+The standalone plan admits 8 of 72 epochs before preparation time is known. The run saves its final count in `plan.json`.
 Epochs that do not fit remain missing for the next run. `--wall-seconds` sets this reserve locally.
 The current build reserves $29.7288 per attempt, or $59.4576 with both attempts left, including the search reserve.
 The gate uses this worst-case estimate. Prices remain guesses, and an in-flight player call can exceed its cost limit.
@@ -373,31 +411,46 @@ If the estimate exceeds the budget, inspect the saved `plan.json` artifact.
 Then dispatch `Eval results` on `main` with a higher `budget` input.
 Each invocation runs at most one attempt per missing identity. The estimate reserves every remaining attempt.
 
-The publisher runs even when execution fails or times out, provided checkout recorded the source commit.
+The publisher runs after failed or timed-out execution and downloads all artifacts from that workflow run.
 It rebuilds the run's own rows from its logs, then commits those rows and the artifact receipt before uploading logs.
 Release links arrive in a later commit. A failed upload cannot erase recorded attempts.
 The publisher builds its commit from current `main` and folds current results into it.
 Higher attempt counts win, followed by the row's completion time. Argument order cannot change the result.
 Retried old publications preserve newer rows and source. Epoch numbers sort numerically.
-Each paid CI run checks earlier workflow attempts against the receipts before constructing providers.
-It reads job steps to distinguish cancelled queues and setup failures from attempts that reached execution.
+The execution process writes `paid-started.json` immediately before it starts paid tasks.
+That marker holds the executing run ID, attempt, and source commit.
+The publisher takes receipt keys and release names from the marker, including on a publish-only retry.
+Gated runs and runs with no paid work create no receipt or results PR.
+The recovery check runs in its own step. Only that step receives its read token.
+It scans recent artifacts, independent of workflow step names, and checks markers against committed receipts.
 If an artifact remains unrecorded, the run stops and names the run to recover.
-Artifacts retain logs and discovery reports for 14 days. A missing or damaged artifact blocks further paid work.
+Artifacts retain logs and discovery reports for 14 days. The recovery scan stops at that retention boundary.
+An unreadable artifact within the scan blocks paid work. Recover it or record an accepted loss before funding another run.
 
-To recover a failed run, download its `eval-run` artifact before it expires.
-Fetch current `main` and `ci/results` into a checkout, then run the publisher with that artifact's identity:
+To recover a failed run, download its `eval-run-RUN_ID-ATTEMPT` artifact before it expires.
+Fetch current `main` and `ci/results` into a checkout.
+Run the publisher on the extracted artifact:
 
 ```sh
 uv run python scripts/ci.py publish-results --output recovered/results/ci-run \
-  --repo BuidlGuidl/ethevals --run-id RUN_ID-ATTEMPT \
-  --commit "$(cat recovered/source-sha.txt)" --publish --open-pr
+  --repo BuidlGuidl/ethevals --publish --open-pr
 ```
 
 This command writes GitHub results and requires `GH_TOKEN`. Retrying the publication job performs the same recovery.
-Keep the original run ID and attempt. Existing release assets can be uploaded again without repeating any player call.
+The artifact preserves the original run ID and attempt. Existing assets can be uploaded again without repeating player calls.
+If recovery is impossible, record the executing identity and the reason for accepting lost spend:
+
+```sh
+uv run python scripts/ci.py accept-loss --repo BuidlGuidl/ethevals \
+  --run-id RUN_ID-ATTEMPT --reason 'Artifact expired; accept the lost spend' --publish
+```
+
+This command records `accepted_loss` in `results/runs.json` and opens a results PR.
+It cannot reconstruct missing rows. Future runs can repeat those epochs and spend again.
+Omit `--publish` to inspect the proposed command without a remote write.
 Locally, rerun `ethevals run` with the same output folder. Its logs restore completed epochs and attempt counts.
 
-The job appends a commit to `ci/results` and opens a results PR against `main`.
+The job appends changed records to `ci/results` and opens a results PR against `main`.
 It retains the previous results branch as a parent, so it never needs a force push.
 Merge that PR to put the rows on the board. A merge with no missing epochs makes no model calls.
 The built-in token's PR checks wait for a maintainer to approve them.

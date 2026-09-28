@@ -2,21 +2,29 @@
 import json
 import re
 import os
+import logging
+from pathlib import Path
 
 import anyio
 import httpx
-from inspect_ai.tool import tool
+from inspect_ai.tool import ToolDef, ToolParams
 from inspect_ai.util import store
 
 
-async def exa_request(url, arguments, key):
+TOOLS = json.loads(Path(__file__).with_name("exa-tools.json").read_text())
+CAP_MESSAGE = "Search failed: epoch search cap reached."
+
+
+async def exa_request(url, name, arguments, key):
     """Call hosted MCP from the host. Credentials never enter tool arguments."""
     headers = {"Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-03-26"}
     if key:
         headers["x-api-key"] = key
     async with httpx.AsyncClient(headers=headers, timeout=30, follow_redirects=False) as client:
         response = await client.post(url, json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                                               "params": {"name": "web_search_exa", "arguments": arguments}})
+                                               "params": {"name": name, "arguments": arguments}})
+        if response.is_error:
+            logging.getLogger(__name__).warning("Exa HTTP status %s", response.status_code)
         response.raise_for_status()
         if response.headers.get("content-type", "").startswith("text/event-stream"):
             messages = [json.loads(line[5:].strip()) for line in response.text.splitlines() if line.startswith("data:")]
@@ -28,33 +36,31 @@ async def exa_request(url, arguments, key):
         return payload["result"]
 
 
-@tool
-def web_search_exa(url: str, limit: int):
-    async def execute(query: str, numResults: int = 5) -> str:
-        """Search the web using Exa.
-
-        Args:
-            query: Search query.
-            numResults: Number of results, from one to five.
-        """
+def exa_tool(definition, url, limit):
+    async def execute(**arguments) -> str:
         used = store().get("exa_calls", 0)
         if used >= limit:
-            return "Search failed: epoch search rate limit exceeded."
-        if not 1 <= numResults <= 5:
-            return "Search failed: numResults must be between one and five."
+            return CAP_MESSAGE
         # Reserve before the await. Failed or cancelled requests also consume a slot.
         store().set("exa_calls", used + 1)
         key = os.environ.get("EXA_API_KEY", "")
         try:
             with anyio.fail_after(30):
-                result = await exa_request(url, {"query": query, "numResults": numResults, "type": "auto"}, key)
+                result = await exa_request(url, definition["name"], arguments, key)
             text, error = search_text(result)
             if error:
                 text = "Search failed: " + text
             return text.replace(key, "[redacted]") if key else text
+        except httpx.HTTPStatusError as error:
+            return "Search failed: Exa rate limit exceeded." if error.response.status_code == 429 else "Search failed: Exa request failed."
         except Exception:
             return "Search failed: Exa request failed."
-    return execute
+    return ToolDef(execute, name=definition["name"], description=definition["description"],
+                   parameters=ToolParams.model_validate(definition["inputSchema"])).as_tool()
+
+
+def exa_tools(url, limit):
+    return [exa_tool(definition, url, limit) for definition in TOOLS]
 
 
 def search_text(result):

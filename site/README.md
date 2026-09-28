@@ -76,6 +76,11 @@ It adds release links afterward. Failed publication leaves scores and attempt co
 The publisher rebuilds rows from the run artifact's logs, including interrupted attempts.
 An unrecorded earlier artifact blocks paid CI work. Retry its publication job before the 14-day artifact expires.
 The root README gives the local recovery command.
+Receipt and release identities come from the artifact's executing run and attempt, even after a publish-only retry.
+Only runs that began paid work need receipts. Gated and zero-work runs open no results PR.
+Recovery scans the 14-day artifact window in a separate step with its own read token.
+The root README documents `scripts/ci.py accept-loss` for artifacts that cannot be recovered.
+That receipt accepts lost spend. Missing rows can cause future runs to pay for those epochs again.
 Execution errors remain visible without log links. Their unpublished logs stay in the workflow artifact.
 The publisher writes linked rows after the upload succeeds, in a file named for the release.
 Its dry run writes nothing. It excludes key-free, stale-hash, skills, and already published logs.
@@ -113,6 +118,21 @@ Docker exec failures, capture timeouts, and grader transport failures remain err
 The runner's `run()` function requires a budget for paid work. CI calls that same entry point.
 Exa search runs on the host through a tool bridge. Its optional key never enters containers or logs.
 The plan reserves the configured search price for each allowed request and also bounds selected epochs by wall time.
+The bridge offers `web_search_exa` and `web_fetch_exa` with Exa's hosted descriptions and schemas.
+Both share the 20-request epoch cap. `search_capped` counts our refusals, while `search_rate_limited` counts Exa throttling.
+Keyed search remains unverified until the first keyed run.
+
+The private CI runner has 2 CPUs, 8 GB of RAM, and 14 GB of disk.
+Each container has a 1 GiB limit, with at most three containers per epoch and two concurrent epochs.
+Local concurrency also must fit Docker's memory capacity, with at least 1 GiB left for the host.
+Admission uses the list-scheduling bound after it deducts measured preparation and discovery time.
+Sandbox epochs include 600 seconds for startup and 60 for cleanup. Act setup adds another 150 seconds.
+The standalone CI plan admits 8 of 72 epochs before preparation time is known. The run saves its final count afterward.
+Admission interleaves models. The execution step stops after 310 minutes within the 330-minute job.
+
+Author script crashes and malformed replies are the one deliberate fail-closed exception: they produce failed checks.
+Missing scripts, wrapper failures, host timeouts, and host kills remain errors.
+The [classification table](../README.md#failure-classification) gives the full rule.
 The panel uses the row's `limit` field to identify limits and displays the runner's check reasons.
 
 A pillar score is the mean of its eval scores.

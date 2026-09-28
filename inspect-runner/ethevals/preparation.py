@@ -20,6 +20,9 @@ from .images.tag import image_tag
 
 CHECK_SETS = {}
 SETUP_SECONDS = 150
+STARTUP_SECONDS = 600
+CLEANUP_SECONDS = 60
+DISCOVERY_SECONDS = 600
 
 
 @sandboxenv(name="ethevals_docker")
@@ -28,7 +31,8 @@ class EvalDocker(DockerSandboxEnvironment):
 
     @classmethod
     async def sample_init(cls, task_name, config, metadata):
-        environments = await super().sample_init(task_name, config, metadata)
+        with anyio.fail_after(STARTUP_SECONDS):
+            environments = await super().sample_init(task_name, config, metadata)
         try:
             evaluation = EVALUATIONS[(metadata["eval_id"], metadata["eval_hash"])]
             with anyio.fail_after(SETUP_SECONDS):
@@ -36,21 +40,26 @@ class EvalDocker(DockerSandboxEnvironment):
                     if setup := SCORERS[item.kind].setup:
                         await setup(item, evaluation, environments)
         except BaseException as error:
-            with anyio.CancelScope(shield=True):
+            with anyio.move_on_after(CLEANUP_SECONDS, shield=True):
                 await super().sample_cleanup(task_name, config, environments, False)
             if isinstance(error, TimeoutError):
                 raise RuntimeError("Eval setup exceeded its time limit.") from error
             raise
         return environments
 
+    @classmethod
+    async def sample_cleanup(cls, task_name, config, environments, interrupted):
+        with anyio.fail_after(CLEANUP_SECONDS, shield=True):
+            await super().sample_cleanup(task_name, config, environments, interrupted)
+
 
 def sandbox_type(evaluation):
-    return "ethevals_docker" if any(SCORERS[item.kind].setup for item in evaluation.scorers) else "docker"
+    return "ethevals_docker"
 
 
 def docker_command(command):
     try:
-        return subprocess.run(command, check=True, capture_output=True, text=True)
+        return subprocess.run(command, check=True, capture_output=True, text=True, timeout=1800)
     except subprocess.CalledProcessError as error:
         raise RuntimeError(f"Docker failed: {(error.stderr or error.stdout or str(error))[-8192:]}") from error
 
@@ -89,6 +98,13 @@ def prepare_compose(evaluation, output):
     return path
 
 
+def check_capacity(config):
+    memory = int(docker_command(["docker", "info", "--format", "{{.MemTotal}}"]).stdout)
+    concurrency = min(config.max_tasks, config.max_samples)
+    if concurrency * 3 * 1024**3 + 1024**3 > memory:
+        raise ValueError("Docker memory must cover 3 GiB per concurrent epoch plus 1 GiB for the host. Reduce concurrency.")
+
+
 @solver
 def no_player():
     async def solve(state, generate):
@@ -102,17 +118,18 @@ def reference_checks(eval_id, eval_hash):
 
     async def score(state, target):
         checks, discovered = {}, {}
-        for item in evaluation.scorers:
-            discover = SCORERS[item.kind].discover
-            if discover:
-                found = await discover(item, evaluation)
-                if not found or not all(check["passed"] for check in found.values()):
-                    reasons = "; ".join(f"{name}: {check['reason']}" for name, check in found.items() if not check["passed"])
-                    raise RuntimeError(f"{item.kind}: reference checks failed during discovery: {reasons or 'no checks'}")
-                if checks.keys() & found.keys():
-                    raise ValueError("Scorers returned duplicate check names")
-                checks.update(found)
-                discovered[item.kind] = sorted(found)
+        with anyio.fail_after(DISCOVERY_SECONDS):
+            for item in evaluation.scorers:
+                discover = SCORERS[item.kind].discover
+                if discover:
+                    found = await discover(item, evaluation)
+                    if not found or not all(check["passed"] for check in found.values()):
+                        reasons = "; ".join(f"{name}: {check['reason']}" for name, check in found.items() if not check["passed"])
+                        raise RuntimeError(f"{item.kind}: reference checks failed during discovery: {reasons or 'no checks'}")
+                    if checks.keys() & found.keys():
+                        raise ValueError("Scorers returned duplicate check names")
+                    checks.update(found)
+                    discovered[item.kind] = sorted(found)
         result = checks_score(checks)
         result.metadata["discovered"] = discovered
         return result
@@ -136,7 +153,7 @@ def prepare_eval(evaluation, output, compose=None):
                     solver=no_player(),
                     scorer=reference_checks(evaluation.id, evaluation.hash), model=get_model("mockllm/model"),
                     sandbox=SandboxEnvironmentSpec(type=sandbox_type(evaluation), config=str(compose)))
-        logs = eval(task, log_dir=str(path.parent / "preflight"), display="plain", retry_on_error=1, fail_on_error=False)
+        logs = eval(task, log_dir=str(path.parent / "preflight"), display="plain", retry_on_error=0, fail_on_error=False)
         log = logs[0]
         if log.error or not log.samples or log.samples[0].error:
             error = log.error or (log.samples[0].error if log.samples else None)

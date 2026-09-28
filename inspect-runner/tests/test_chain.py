@@ -234,15 +234,18 @@ def test_script_failure_includes_stderr_tail():
     import anyio
     from inspect_ai.util import ExecResult
     from ethevals.check_script import script_result
+    from ethevals.scoring_base import SubmissionFailed
 
     class Box:
-        async def exec(self, *args, **kwargs):
+        async def exec(self, command, **kwargs):
+            if "/usr/bin/test" in command or "/sys/fs/cgroup/memory.events" in command:
+                return ExecResult(success=True, returncode=0, stdout="oom 0\noom_kill 0\n", stderr="")
             return ExecResult(success=False, returncode=1, stdout="", stderr="")
 
         async def read_file(self, path, **kwargs):
             return b"" if path.endswith("stdout") else b"x" * 6000 + b"\nValueError: bad setup amount"
 
-    with pytest.raises(ValueError, match="ValueError: bad setup amount") as error:
+    with pytest.raises(SubmissionFailed, match="ValueError: bad setup amount") as error:
         anyio.run(script_result, "setup", Box())
     assert len(str(error.value)) < 4200
 
@@ -288,8 +291,7 @@ def test_docker_build_error_is_local_to_eval_and_keeps_diagnostics(tmp_path, mon
 
     monkeypatch.setattr(preparation.subprocess, "run", command)
     success, rows = run([act, quiz], config, tmp_path,
-                        players=lambda evaluation: [("internet" if evaluation is act else "vanilla", check_player(evaluation, "reference"))],
-                        grade=check_grader(), epochs=1)
+                        answer="reference", epochs=1)
     assert success is False
     assert [(row["eval_id"], row["status"]) for row in rows] == [("concepts/wei-per-ether", "passed")]
     assert json.loads((tmp_path / "discovery-errors.json").read_text()) == [{

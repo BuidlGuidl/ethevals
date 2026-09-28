@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,10 +13,10 @@ from .actors import Player, Grader, select_actors
 from .config import Config, read_yaml
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
-from .planning import epoch_selection, plan, budget_check
+from .planning import plan, budget_check
 from .scorers import named_checks, EVALUATIONS, SCORERS, check_names, rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS
 from .sandboxes import compose_file
-from .preparation import prepare_eval, prepare_compose, sandbox_type
+from .preparation import prepare_eval, prepare_compose, sandbox_type, check_capacity
 from .images.tag import image_inputs, image_tag
 
 
@@ -66,58 +67,69 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     )
 
 
-def run(evals: list[Eval], config: Config, output: Path, *, players=None, grade: Grader | None = None,
+def run(evals: list[Eval], config: Config, output: Path, *,
         epochs: int | None = None, fresh: bool = False, retry_errors: bool = False,
         rows_file: Path | None = None, models=None, modes=None, answer=None, delay=0,
         budget=None, wall_seconds=None, before_paid=None) -> tuple[bool, list[dict]]:
+    started = time.monotonic()
     previous = previous_rows(output, rows_file)
-    lazy = players is None
-    if lazy:
-        players, _ = select_actors(config, models, modes, answer, delay, planning=True)
-    paid = any(not actor.metadata.get("answer_kind") for evaluation in evals for _, actor in players(evaluation))
+    players, _ = select_actors(config, models, modes, answer, delay, planning=True)
+    paid = not answer
     report = budget_check(plan(evals, config, players, previous, epochs=epochs, fresh=fresh,
                                retry_errors=retry_errors, wall_seconds=wall_seconds), budget, required=paid)
     output.mkdir(parents=True, exist_ok=True)
     (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     if not report["within_budget"]:
         raise ValueError("Budget exceeded. No player or grader ran.")
-    if paid and report["missing"]:
-        if before_paid:
-            before_paid()
-        if not os.environ.get("OPENROUTER_API_KEY"):
-            raise ValueError("OPENROUTER_API_KEY is required for missing paid epochs")
-    if lazy and report["missing"]:
-        players, grade = select_actors(config, models, modes, answer, delay)
-    selected, pending, _ = epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
-    admitted = {epoch_identity(row, row["epoch"]) for row in report["missing"]}
-    pending = [item for item in pending if epoch_identity({"eval_id": item[0].id, "eval_hash": item[0].hash,
-               **item[2].metadata, "mode": item[1]}, item[3]) in admitted]
-    tasks, discovery_errors = [], []
+    if paid and report.admitted and not os.environ.get("OPENROUTER_API_KEY"):
+        raise ValueError("OPENROUTER_API_KEY is required for missing paid epochs")
+    selected, pending, exhausted = report.selection
+    prepared, discovery_errors = {}, []
+    if any(actor.sandbox_for(evaluation) for evaluation, _, actor, _, _ in pending):
+        check_capacity(config)
     for evaluation in evals:
-        missing = [item[1:] for item in pending if item[0].id == evaluation.id]
-        if not missing:
+        work = [item for item in pending if item[0].id == evaluation.id]
+        if not work:
             continue
         try:
-            compose = prepare_compose(evaluation, output) if any(actor.sandbox_for(evaluation) for _, actor, _, _ in missing) else None
-            evaluation = prepare_eval(evaluation, output, compose)
+            compose = prepare_compose(evaluation, output) if any(item[2].sandbox_for(evaluation) for item in work) else None
+            prepared[evaluation.id] = (prepare_eval(evaluation, output, compose), compose)
         except (ValueError, RuntimeError) as error:
             discovery_errors.append({"eval_id": evaluation.id, "eval_hash": evaluation.hash, "error": str(error)})
             logging.getLogger(__name__).error("%s: check discovery failed: %s", evaluation.id, error)
-            continue
-        for mode, actor, epoch, attempt in missing:
+    selection = (selected, [item for item in pending if item[0].id in prepared], exhausted)
+    report = budget_check(plan(evals, config, players, previous, wall_seconds=wall_seconds,
+                               selection=selection, preparation_seconds=time.monotonic() - started), budget, required=paid)
+    (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
+    if not report["within_budget"]:
+        raise ValueError("Budget exceeded. No player or grader ran.")
+    tasks = []
+    if report.admitted:
+        players, grade = select_actors(config, models, modes, answer, delay)
+        actors = {evaluation.id: {(mode, actor.metadata["model"]): actor for mode, actor in players(evaluation)}
+                  for evaluation in evals}
+        for original, mode, planned_actor, epoch, attempt in report.admitted:
+            evaluation, compose = prepared[original.id]
+            actor = actors[original.id][mode, planned_actor.metadata["model"]]
             task = build_task(evaluation, config, actor, grade, mode, 1, compose)
             task.metadata.update(epoch=epoch, attempt=attempt)
             tasks.append(task_with(task, name=f"{task.name}-epoch-{epoch}"))
-    output.mkdir(parents=True, exist_ok=True)
     error_path = output / "discovery-errors.json"
     if discovery_errors:
         previous_errors = json.loads(error_path.read_text()) if error_path.exists() else []
         error_path.write_text(json.dumps(previous_errors + discovery_errors, indent=2) + "\n")
     try:
         if tasks:
+            if paid and before_paid:
+                before_paid()
+            concurrency = min(config.max_tasks, config.max_samples)
             eval(tasks, log_dir=str(output / "logs"), model_roles={"grader": grade.model},
-                 retry_on_error=0, fail_on_error=False, max_samples=config.max_samples,
-                 max_tasks=config.max_tasks, log_buffer=1, display="plain")
+                 retry_on_error=0, fail_on_error=False, max_samples=concurrency,
+                 max_tasks=concurrency, max_sandboxes=concurrency, log_buffer=1, display="plain")
     finally:
         rows = [row for row in export_rows(output, previous) if epoch_identity(row, row["epoch"]) in selected]
-    return not discovery_errors and len(rows) == len(selected) - report["deferred_epochs"] and all(row["status"] != "error" for row in rows), rows
+    admitted = {epoch_identity(row, row["epoch"]): row["attempt"] for row in report["missing"]}
+    actual = {epoch_identity(row, row["epoch"]): row for row in rows}
+    return (not discovery_errors and not report["exhausted_errors"] and admitted.keys() <= actual.keys()
+            and all(actual[key]["status"] != "error" and actual[key]["attempt"] == attempt
+                    for key, attempt in admitted.items())), rows

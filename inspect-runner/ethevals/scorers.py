@@ -17,7 +17,7 @@ from inspect_ai.scorer._scorer import ScorerSpec
 from pydantic import Field, model_validator
 
 from .config import Declaration
-from .sandboxes import IMAGES, SOLC_VERSIONS, workspace_files, runner_exec, stop_agent
+from .sandboxes import IMAGES, SOLC_VERSIONS, workspace_files, runner_exec, scoring_exec, stop_agent
 from .rows import infrastructure_limit
 from .scoring_base import Submission, SubmissionFailed, ScorerKind, checks_score, failed_checks
 from .check_script import (CheckScriptScorer, check_script_scorer, validate_script,
@@ -225,7 +225,6 @@ async def prepare_forge(box, submitted, files):
 
 
 async def forge(box, *args):
-    from .sandboxes import scoring_exec
     # Read bytes separately so Inspect records sizes, never private code frames.
     result = await scoring_exec(box, ["/bin/bash", "-c",
         '/bin/rm -f /tmp/forge.stdout.pipe /tmp/forge.stderr.pipe; '
@@ -243,7 +242,7 @@ async def forge(box, *args):
     stdout = await box.read_file("/tmp/forge.stdout", text=False)
     stderr = await box.read_file("/tmp/forge.stderr", text=False)
     if max(len(stdout), len(stderr)) > 10485760:
-        raise OutputLimitExceededError("10 MiB", "")
+        raise SubmissionFailed("Submission exceeded Forge's 10 MiB output limit.")
     result.stdout = stdout.decode("utf-8", errors="replace")
     result.stderr = stderr.decode("utf-8", errors="replace")
     return result
@@ -296,15 +295,12 @@ def tests_scorer(config, evaluation):
         box = sandbox("scorer")
         captured = submission.captures["build"]
         await prepare_forge(box, captured.files, files)
-        try:
-            result = await forge(box)
-            checks = forge_checks(result.stdout, result.stderr, result.returncode, expected)
-            if checks["forge:compile"]["passed"]:
-                captured.compiled = await compiled_sources(box, captured.files)
-            else:
-                raise SubmissionFailed(checks["forge:compile"]["reason"])
-        except (TimeoutError, OutputLimitExceededError) as error:
-            raise SubmissionFailed(f"Submission exceeded Forge's time or output limit: {error}") from error
+        result = await forge(box)
+        checks = forge_checks(result.stdout, result.stderr, result.returncode, expected)
+        if checks["forge:compile"]["passed"]:
+            captured.compiled = await compiled_sources(box, captured.files)
+        else:
+            raise SubmissionFailed(checks["forge:compile"]["reason"])
         return checks_score(checks)
     return score
 

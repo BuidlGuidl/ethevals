@@ -62,8 +62,8 @@ class Config(Declaration):
     time_limits: dict[str, int] = Field(default_factory=dict)
     cost_limit: float = Field(gt=0)
     max_attempts: int = Field(gt=0)
-    max_tasks: int = Field(default=4, gt=0)
-    max_samples: int = Field(default=4, gt=0)
+    max_tasks: int = Field(default=2, gt=0)
+    max_samples: int = Field(default=2, gt=0)
     grader: GraderConfig
     search_provider: str | None
     search_limit: int = Field(default=20, gt=0)

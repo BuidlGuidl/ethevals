@@ -4,7 +4,7 @@ from urllib.parse import unquote, urlparse
 
 from inspect_ai.log import EvalLog, EvalSample, EvalError, list_eval_logs, read_eval_log, resolve_sample_attachments
 from inspect_ai.event import ToolEvent, ModelEvent
-from .search import search_result_status
+from .search import search_result_status, search_text, CAP_MESSAGE
 
 
 def infrastructure_limit(kind, working_seconds, working_limit):
@@ -29,15 +29,17 @@ def search_failures(sample):
         elif message.role == "tool":
             results[message.tool_call_id] = (message.text, bool(message.error))
             calls.setdefault(message.tool_call_id, message.function or "")
-    rate_limited = failed = 0
+    rate_limited = failed = capped = 0
     searches = {key for key, call in calls.items()
-                if "web_search_exa" in call or "web_search_advanced_exa" in call}
+                if any(name in call for name in ("web_search_exa", "web_fetch_exa", "web_search_advanced_exa"))}
     for key in searches & results.keys():
         result, error = results[key]
         limited, failure = search_result_status(result)
         rate_limited += limited
+        capped += CAP_MESSAGE in search_text(result)[0]
         failed += bool(error or failure)
-    return {"search_calls": len(searches), "search_failed": failed, "search_rate_limited": rate_limited}
+    return {"search_calls": len(searches), "search_failed": failed, "search_rate_limited": rate_limited,
+            "search_capped": capped}
 
 
 def epoch_identity(metadata: dict, epoch: int) -> tuple:

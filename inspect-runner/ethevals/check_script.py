@@ -4,7 +4,7 @@ import re
 from pathlib import PurePosixPath
 from typing import Literal
 
-from inspect_ai.util import sandbox, OutputLimitExceededError
+from inspect_ai.util import sandbox
 from inspect_ai.log import transcript
 
 from .config import Declaration
@@ -33,8 +33,10 @@ def script_cache_inputs(images):
 
 async def script_result(name, box=None):
     box = box if box is not None else sandbox("chain")
-    execute = scoring_exec if name == "check" else runner_exec
-    result = await execute(box, ["/bin/bash", "-c",
+    exists = await runner_exec(box, ["/usr/bin/test", "-f", f"/eval/scorer/{name}.py"])
+    if not exists.success:
+        raise RuntimeError(f"Missing scorer script: {name}.py")
+    result = await scoring_exec(box, ["/bin/bash", "-c",
         '/bin/rm -f /eval/script.stdout.pipe /eval/script.stderr.pipe; '
         '/usr/bin/mkfifo /eval/script.stdout.pipe /eval/script.stderr.pipe || exit 125; '
         '{ /usr/bin/head -c 1048577 > /eval/script.stdout; status=$?; /bin/cat > /dev/null; exit "$status"; } < /eval/script.stdout.pipe & out=$!; '
@@ -46,13 +48,18 @@ async def script_result(name, box=None):
         "script-output", "/usr/bin/env", "RPC_URL=http://127.0.0.1:8546", "SOLC=/opt/solc",
         "/usr/bin/python3", f"/eval/scorer/{name}.py"], cwd="/eval",
         timeout=SETUP_TIMEOUT if name == "setup" else CHECK_SECONDS)
+    if result.returncode == 125:
+        raise RuntimeError("Cannot capture check script output.")
     stdout = await box.read_file("/eval/script.stdout", text=False)
     stderr = await box.read_file("/eval/script.stderr", text=False)
     if max(len(stdout), len(stderr)) > 1048576:
-        raise OutputLimitExceededError("1 MiB", "")
+        raise SubmissionFailed("Check script exceeded its 1 MiB output limit.")
     if not result.success:
-        raise ValueError(f"{name}.py exited {result.returncode}: {stderr[-4096:].decode('utf-8', errors='replace')}")
-    return json.loads(stdout)
+        raise SubmissionFailed(f"{name}.py exited {result.returncode}: {stderr[-4096:].decode('utf-8', errors='replace')}")
+    try:
+        return json.loads(stdout)
+    except (ValueError, UnicodeDecodeError) as error:
+        raise SubmissionFailed(f"Check script returned malformed JSON: {error}") from error
 
 
 def setup_files(outputs, files):
@@ -134,10 +141,11 @@ def check_script_scorer(config, evaluation):
     expected = evaluation.discovered_checks[config.kind]
 
     async def score(state, target, submission):
+        value = await script_result("check")
         try:
-            checks = script_checks(await script_result("check"))
-            missing = failed_checks(expected, "Check script did not report this check.")
-            return checks_score({name: checks.get(name, missing[name]) for name in expected})
-        except (ValueError, TimeoutError, OutputLimitExceededError) as error:
+            checks = script_checks(value)
+        except ValueError as error:
             raise SubmissionFailed(f"Check script failed: {error}") from error
+        missing = failed_checks(expected, "Check script did not report this check.")
+        return checks_score({name: checks.get(name, missing[name]) for name in expected})
     return score

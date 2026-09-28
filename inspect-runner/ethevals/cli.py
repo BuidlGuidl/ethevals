@@ -44,7 +44,7 @@ def main() -> int:
         parsers[name].add_argument("--answer", choices=["reference", "empty", "default"], help="Use mockllm without an API call.")
         parsers[name].add_argument("--rows", type=Path, help="Committed rows used to find missing epochs.")
         parsers[name].add_argument("--budget", type=float, help="USD ceiling. Required for missing paid epochs.")
-        parsers[name].add_argument("--wall-seconds", type=float, help="Select epochs within this serial wall-time reserve.")
+        parsers[name].add_argument("--wall-seconds", type=float, help="Bound preparation and scheduled epochs in wall seconds.")
     parsers["check"].set_defaults(models=None, answer=None)
     parsers["export-hf"].add_argument("--hf-repo", default=os.environ.get("ETHEVALS_HF_REPO", DEFAULT_REPO))
     parsers["export-hf"].add_argument("--license", default=os.environ.get("ETHEVALS_DATASET_LICENSE"), help="HF dataset license identifier. Unset means undecided.")

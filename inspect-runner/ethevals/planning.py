@@ -2,8 +2,17 @@
 import math
 
 from .rows import epoch_identity
-from .scorers import rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS
-from .preparation import SETUP_SECONDS
+from .scorers import rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS, SCORERS
+from .preparation import SETUP_SECONDS, STARTUP_SECONDS, CLEANUP_SECONDS
+
+
+class Plan(dict):
+    """JSON report with the selected work retained for execution."""
+
+    def __init__(self, report, selection, admitted):
+        super().__init__(report)
+        self.selection = selection
+        self.admitted = admitted
 
 
 def budget_check(report, budget, *, required=False):
@@ -15,9 +24,14 @@ def budget_check(report, budget, *, required=False):
     return report
 
 
-def epoch_seconds(evaluation, config):
+def epoch_seconds(evaluation, config, actor):
     working = evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit)
-    return 3 * working + scoring_seconds(evaluation) + SCORING_OVERHEAD_SECONDS + SETUP_SECONDS
+    seconds = 3 * working + scoring_seconds(evaluation) + SCORING_OVERHEAD_SECONDS
+    if actor.sandbox_for(evaluation):
+        seconds += STARTUP_SECONDS + CLEANUP_SECONDS
+        if any(SCORERS[item.kind].setup for item in evaluation.scorers):
+            seconds += SETUP_SECONDS
+    return seconds
 
 
 def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, retry_errors=False):
@@ -38,15 +52,25 @@ def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, 
                     exhausted.append(row)
     if not selected:
         raise ValueError("No evals declare a selected mode")
+    # Interleave model queues so a partial run covers each model before its next epoch.
+    groups = {}
+    for item in pending:
+        groups.setdefault(item[2].metadata["model"], []).append(item)
+    pending = [group[index] for index in range(max(map(len, groups.values()), default=0))
+               for group in groups.values() if index < len(group)]
     return selected, pending, exhausted
 
 
-def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, fresh=False, wall_seconds=None):
+def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, fresh=False, wall_seconds=None,
+         selection=None, preparation_seconds=0):
     if wall_seconds is not None and (not math.isfinite(wall_seconds) or wall_seconds <= 0):
         raise ValueError("Wall seconds must be finite and positive")
-    _, pending, exhausted = epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
-    missing, deferred, reserved = [], [], 0
-    for evaluation, mode, actor, epoch, attempt in pending:
+    selection = selection or epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
+    _, pending, exhausted = selection
+    missing, deferred, admitted, total, longest, reserved = [], [], [], 0, 0, preparation_seconds
+    concurrency = min(config.max_tasks, config.max_samples)
+    for item in pending:
+        evaluation, mode, actor, epoch, attempt = item
         metadata = {"eval_id": evaluation.id, "eval_hash": evaluation.hash, "type": evaluation.declaration.type,
                     **actor.metadata, "mode": mode, "epoch": epoch}
         # Reserve every remaining runner attempt. Runtime spends one per invocation.
@@ -57,23 +81,27 @@ def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, f
         history = [row["model_cost_usd"] + row["grader_cost_usd"] for row in previous
                    if all(row.get(key) == metadata.get(key) for key in ("type", "model", "harness", "effort", "mode", "answer_kind"))
                    and row.get("model_cost_usd") is not None and row.get("grader_cost_usd") is not None]
-        seconds = epoch_seconds(evaluation, config)
+        seconds = epoch_seconds(evaluation, config, actor)
         row = {**metadata, "attempt": attempt, "remaining_attempts": remaining,
                         "wall_seconds": seconds,
                         "per_attempt_usd": per_attempt, "worst_case_usd": per_attempt * remaining,
                         "expected_usd_estimate": sum(history) / len(history) if history else None}
-        # A serial sum remains safe when Docker or provider concurrency shrinks.
-        if wall_seconds is not None and reserved + seconds > wall_seconds:
+        bound = preparation_seconds + (total + seconds) / concurrency + (1 - 1 / concurrency) * max(longest, seconds)
+        if wall_seconds is not None and bound > wall_seconds:
             deferred.append(row)
         else:
             missing.append(row)
-            reserved += seconds
-    return {"missing": missing, "missing_epochs": len(missing),
+            admitted.append(item)
+            total += seconds
+            longest = max(longest, seconds)
+            reserved = bound
+    return Plan({"missing": missing, "missing_epochs": len(missing),
             "deferred": deferred, "deferred_epochs": len(deferred), "wall_seconds": wall_seconds,
             "reserved_wall_seconds": reserved,
+            "preparation_seconds": preparation_seconds, "concurrency": concurrency,
             "exhausted_errors": exhausted,
             "worst_case_usd": round(sum(row["worst_case_usd"] for row in missing), 8),
             "expected_usd_estimate": round(sum(row["expected_usd_estimate"] for row in missing), 8)
             if all(row["expected_usd_estimate"] is not None for row in missing) else None,
             "history_covered_epochs": sum(row["expected_usd_estimate"] is not None for row in missing),
-            "cost_note": "Worst case includes configured model, grader, and search prices for remaining attempts. The player limit can overshoot by an in-flight call. Expected cost covers one attempt's model and grader spend only; null means incomplete history."}
+            "cost_note": "Worst case includes configured model, grader, and search prices for remaining attempts. The player limit can overshoot by an in-flight call. Expected cost covers one attempt's model and grader spend only; null means incomplete history."}, selection, admitted)

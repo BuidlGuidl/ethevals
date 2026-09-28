@@ -76,6 +76,11 @@ CI rebuilds the artifact's own rows before publication and commits them with a r
 It uploads release assets afterward. A failed upload leaves paid attempts recorded.
 An unrecorded earlier CI attempt blocks new paid work and names the artifact to recover.
 Retry its publication job before the 14-day artifact expires. See the root README for local recovery commands.
+The artifact's `paid-started.json` supplies the executing run ID, attempt, and source commit.
+A retry of publication keeps that identity. Gated runs and zero-work runs create no receipt or PR.
+The separate recovery step scans artifacts within the 14-day retention window and ignores workflow step names.
+`scripts/ci.py accept-loss --run-id RUN_ID-ATTEMPT --reason TEXT --repo OWNER/REPO --publish` records an unrecoverable loss.
+An accepted loss cannot restore rows. Missing epochs can spend again.
 Publication uses current `main` and current results. Attempt count and completion time decide which row wins.
 The log store only grows. Retry logs never replace earlier logs.
 Rows cover the whole store, with the latest row per eval ID, eval hash, agent, mode, and epoch number.
@@ -102,8 +107,15 @@ The Python `run()` result also contains only the current selection. `rows.jsonl`
 It shares epoch selection with `run` and uses the runtime's `cost_limit`, `rubric_budget`, and `max_attempts`.
 `run()` owns the paid gate. A paid run requires `--budget` before provider construction.
 Search adds `search_limit * search_price_usd` to each internet attempt's reserve.
-CI uses `--wall-seconds 16200` within its 330-minute job and reserves 60 minutes for preparation and artifact upload.
-The plan sums wall, scoring, and setup limits without assuming concurrency. Deferred epochs remain missing.
+CI uses `--wall-seconds 16200` for preparation and epochs within its 330-minute job.
+The execution step has a 310-minute deadline, which leaves 20 minutes for artifact upload.
+Final admission deducts measured preparation time, including builds and discovery.
+Builds have a 1,800-second timeout. Discovery scoring has a 600-second deadline and no retry.
+Sandbox epochs include startup and cleanup bounds of 600 and 60 seconds. Act setup adds another 150 seconds.
+Admission uses `preparation + sum(durations) / m + (1 - 1/m) * longest_duration`.
+CI sets `m = 2` for tasks, samples, and sandboxes. Admission interleaves models.
+The standalone plan admits 8 of 72 epochs before preparation time is known. `run()` saves the final admission after preparation.
+Execution uses those admitted items. Deferred epochs remain missing.
 `--budget USD` exits with code 1 when the worst-case estimate exceeds the budget.
 The plan also lists exhausted errors and an expected-cost estimate from recorded spend.
 See the root README for workflow setup and the limit on this billing estimate.
@@ -122,7 +134,7 @@ See the root README for workflow setup and the limit on this billing estimate.
 | `model_metered_usd`, `grader_metered_usd` | Dollars recorded by Inspect's cost meter for each role. Mock usage can have synthetic prices. |
 | `cost_limit_usd`, `grader_cost_limit_usd`, `limit` | Separate budgets and any player limit that stopped execution. |
 | `working_limit_seconds`, `time_limit_seconds`, `scoring_limit_seconds` | Player working limit, wall-clock backstop, and total scoring deadline. |
-| `search_calls`, `search_failed`, `search_rate_limited` | Search calls and failed or rate-limited results found in the transcript. Repeated model inputs count once. |
+| `search_calls`, `search_failed`, `search_rate_limited`, `search_capped` | Search and fetch calls, failed results, Exa throttling, and our cap refusals. Repeated model inputs count once. |
 | `checks` | JSON object keyed by check name. Each check has `passed` and a one-line `reason`. |
 | `error_kind`, `error_reason` | Error details, separate from a failed check. |
 | `model_tokens`, `grader_tokens`, `total_tokens` | Total token counts. Grader usage is subtracted from overall usage. |
@@ -191,7 +203,9 @@ Each model ID has one price schedule across both roles. Config loading rejects c
 `search_provider` accepts `https://mcp.exa.ai/mcp` or null. Null disables search.
 The host sends optional `EXA_API_KEY` in an HTTP header. The bridge exposes no key to any harness.
 Keyed and keyless requests use the same host-side path. Logs and agent configuration contain no key.
-`search_limit` caps requests at 20 per epoch. Failed requests consume a slot; each request returns at most five results.
+`search_limit` caps search and fetch requests together at 20 per epoch. Failed requests consume a slot.
+The bridge preserves hosted Exa descriptions and schemas in `exa-tools.json`, checked by the keyless parity test.
+The host logs failed HTTP status codes without credentials. Keyed search remains unverified until the first keyed run.
 The plan reserves the configured `search_price_usd`, currently a guessed $0.05, for every slot, including keyless runs.
 Check this price before funding a run. Rows retain the limit, price, and search outcome counts.
 `time_limit` supplies the fallback working-time limit. `time_limits` sets working limits by eval type.
@@ -265,7 +279,12 @@ A failed `constructor()` or `setUp()` fills that suite's missing tests.
 After compilation, unexplained missing names produce `status: error`.
 Unknown signal exits and output without results or a compiler diagnostic also produce errors.
 Invalid Solidity bytes and confirmed OOM kills fail the fixed checks.
-Stock scorer and chain containers have 2 GiB memory limits. Docker state and cgroup counters identify OOM kills.
+Every stock container has a 1 GiB limit. Custom Compose files require that limit and permit at most three services.
+Two concurrent epochs reserve at most 6 GiB on the private runner's 8 GB of RAM.
+That runner has 2 CPUs and 14 GB of disk. Local concurrency must also fit Docker's memory capacity.
+The capacity check reserves another 1 GiB for the host before preparation.
+Scoring reads `memory.events` after every unsuccessful command, including Forge exit 1 after solc dies.
+Both `oom` and `oom_kill` must be nonzero. A host kill without a local OOM event remains an error.
 Docker exec failures and capture timeouts remain errors. Only a known submission-rule violation raises `SubmissionFailed`.
 Forge streams through readers with a 10 MiB cap per stream and one extra byte to detect overflow.
 The wrapper waits for both reader process IDs before the scorer reads each file.
@@ -398,10 +417,14 @@ For example, a check script can print:
 A free reference run discovers names and must pass every check before player epochs can start.
 The names remain fixed across passing transfers, wrong amounts, missing checks, and script crashes.
 Extra runtime names cannot add checks. Missing checks fail with a reason.
-A crashed, malformed, timed-out, or oversized check script fails the full set, without an error retry.
+A crashed or malformed author check script fails the full set as the one deliberate fail-closed exception.
+Scripts must return a verdict for any chain state. An agent cannot evade a failure by crashing the checker.
+An in-container timeout or output overflow also fails the full set.
+Missing scripts, wrapper exit 125, host exec timeouts, and output-copy failures remain errors.
 Setup failures, failed discovery, and Docker failures remain runner errors.
 Player working-time and cost limits fail the fixed set and skip further scoring.
 Operator stops and wall-clock stops before the working limit remain errors.
+The [classification table](../README.md#failure-classification) lists every boundary and the deliberate script exception.
 
 The generic boundary first stops the agent's processes, including detached senders.
 Capture closes the filter and waits for the request that already holds the forwarding lock.
@@ -437,8 +460,8 @@ The bridge still owns generation and delivers events to inspect_swe's `CodexCons
 Malformed replies remain function calls for Codex to reject. A regression test detects when Inspect fixes the conversion.
 All factories explicitly set `retry_refusals=0`.
 
-All agents get the host-side `web_search_exa` tool through Inspect's MCP bridge.
-Rows count failed and rate-limited search results, including ordinary tool replies that contain Exa's rate-limit message.
+All agents get host-side `web_search_exa` and `web_fetch_exa` through Inspect's MCP bridge.
+`search_rate_limited` counts Exa throttling. `search_capped` counts refusals from our shared per-epoch cap.
 Agent proofs require a structured result with a title, URL, and content field.
 Claude Code disables `WebSearch`; Codex disables `web_search` to avoid provider-hosted search APIs.
 OpenCode's OpenRouter provider does not register `websearch` by default.

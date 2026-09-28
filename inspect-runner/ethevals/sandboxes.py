@@ -7,8 +7,6 @@ import anyio
 from pathlib import Path, PurePosixPath
 
 from inspect_ai.util import sandbox
-from inspect_ai.util._sandbox.events import SandboxEnvironmentProxy
-from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
 
 from .config import read_yaml
 from .images.tag import image_tag
@@ -61,12 +59,16 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
             reject(f"volume {name}: host paths, external volumes, and driver options are forbidden")
     allowed = {"image", "init", "command", "entrypoint", "working_dir", "user", "environment",
                "networks", "volumes", "depends_on", "healthcheck", "mem_limit", "cpus"}
+    if len(services) > 3:
+        reject("at most three services fit the per-epoch memory budget")
     for name, service in services.items():
         if not isinstance(service, dict):
             reject(f"service {name}: must be a mapping")
         extra = set(service) - allowed - ({"build"} if stock else set())
         if extra:
             reject(f"service {name}: forbidden options {sorted(extra)}; privileged containers and host mounts are forbidden")
+        if service.get("mem_limit") != "1g":
+            reject(f"service {name}: requires mem_limit: 1g")
         if name in {"default", "scorer"}:
             runner_image = image_tag(IMAGES)
             if service.get("image") != runner_image or service.get("user", "agent") != "agent":
@@ -101,39 +103,27 @@ async def runner_exec(box, command, **kwargs):
 
 
 async def oom_killed(box):
-    """Check Docker state and the cgroup counter after a scoring process dies."""
-    environment = box._sandbox if isinstance(box, SandboxEnvironmentProxy) else box
-    if not isinstance(environment, DockerSandboxEnvironment):
-        return False
-    project = environment._project
+    """Require this cgroup's limit to have caused an OOM, not a host OOM."""
     try:
         with anyio.fail_after(15):
-            result = await anyio.run_process(["docker", "ps", "-aq", "--filter",
-                f"label=com.docker.compose.project={project.name}", "--filter",
-                f"label=com.docker.compose.service={environment._service}"])
-            container = result.stdout.decode().strip()
-            if not container or "\n" in container:
-                raise RuntimeError("Cannot identify scorer container for OOM check.")
-            state = await anyio.run_process(["docker", "inspect", "--format", "{{json .State}}", container])
-            if json.loads(state.stdout)["OOMKilled"]:
-                return True
             events = await runner_exec(box, ["/bin/cat", "/sys/fs/cgroup/memory.events"], timeout=5)
             if not events.success:
                 raise RuntimeError("Cannot read scorer memory counters.")
-            return int(dict(line.split() for line in events.stdout.splitlines())["oom_kill"]) > 0
+            counters = dict(line.split() for line in events.stdout.splitlines())
+            return int(counters["oom"]) > 0 and int(counters["oom_kill"]) > 0
     except Exception as error:
         raise RuntimeError("Cannot inspect scorer memory state.") from error
 
 
 async def scoring_exec(box, command, **kwargs):
-    try:
-        result = await runner_exec(box, command, **kwargs)
-    except Exception:
-        if await oom_killed(box):
-            raise SubmissionFailed("Submission exceeded the scorer memory limit.") from None
-        raise
-    if result.returncode in {-9, 137} and await oom_killed(box):
+    # Own the in-container deadline so Inspect cannot merge it with a host timeout.
+    seconds = kwargs.pop("timeout")
+    with anyio.fail_after(seconds + 30):
+        result = await runner_exec(box, ["/usr/bin/timeout", "-k", "5s", f"{seconds}s", *command], **kwargs)
+    if not result.success and await oom_killed(box):
         raise SubmissionFailed("Submission exceeded the scorer memory limit.")
+    if result.returncode == 124:
+        raise SubmissionFailed("Submission exceeded the scoring time limit.")
     return result
 
 

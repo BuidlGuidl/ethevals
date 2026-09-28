@@ -14,5 +14,4 @@ def build_task(evaluation, config, key, mode, answer, epochs, compose=None):
 
 
 def run(evals, config, output, *, models=None, modes=None, answer=None, delay=0, **kwargs):
-    players, grade = select_actors(config, models, modes, answer, delay)
-    return actor_run(evals, config, output, players=players, grade=grade, **kwargs)
+    return actor_run(evals, config, output, models=models, modes=modes, answer=answer, delay=delay, **kwargs)

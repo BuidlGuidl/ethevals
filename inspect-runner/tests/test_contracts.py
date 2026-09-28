@@ -182,10 +182,11 @@ def test_grader_budget_error_keeps_finished_verdict(scoring_case):
 
 
 def test_submission_output_limit_fills_all_checks(scoring_case):
-    scoring_case["forge_error"] = OutputLimitExceededError("10 MiB", "truncated")
+    from ethevals.scoring_base import SubmissionFailed
+    scoring_case["forge_error"] = SubmissionFailed("Submission exceeded Forge's 10 MiB output limit.")
     row = scoring_case["run"]([])
     assert (row["status"], row["grader_tokens"]) == ("failed", 0)
-    assert row["checks"] == {name: {"passed": False, "reason": "Submission exceeded Forge's time or output limit: The sandbox output stream limit of 10 MiB was exceeded."} for name in NAMES}
+    assert row["checks"] == {name: {"passed": False, "reason": "Submission exceeded Forge's 10 MiB output limit."} for name in NAMES}
 
 
 def test_one_snapshot_supplies_tests_and_grader(scoring_case):
@@ -250,7 +251,7 @@ def test_quiz_internet_has_no_foundry_files_or_note():
     task = build_task(evaluation, config, None, "internet", "reference", 1)
     assert task.dataset[0].input == "How many wei equal one ether?"
     assert task.dataset[0].files == {"/workspace/.gitkeep": "data:application/octet-stream;base64,"}
-    assert task.dataset[0].sandbox.type == "docker"
+    assert task.dataset[0].sandbox.type == "ethevals_docker"
 
 
 def test_author_foundry_file_is_rejected(tmp_path):
