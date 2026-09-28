@@ -160,3 +160,86 @@ The site accepts schema v3 rows and uses the runner's catalog for declarations a
 The static export goes to `site/out/`. Without real rows, it shows an empty state.
 Use `ETHEVALS_SAMPLE=1 pnpm build` for the labelled sample board.
 [The site README](site/README.md) covers viewing the sample, results paths, and log URLs.
+
+## Publish full logs
+
+Publish one GitHub release per results run. Only logs referenced by `rows.jsonl` become assets.
+Choose a unique run ID, such as a CI run ID and attempt number.
+Use the full source commit SHA as `--target`.
+
+```sh
+uv run ethevals publish-logs --output results/paid \
+  --repo BuidlGuidl/ethevals --run-id 12345-1 --target FULL_COMMIT_SHA --dry-run
+```
+
+The default is a dry run. It makes no network calls.
+It prints a JSON plan with the release tag, the `gh` command, and each asset's rows and URL.
+It also writes `results/paid/published/rows.jsonl` locally. The original rows and logs stay available for resume.
+Each linked row stores `results-12345-1/<filename>.eval` in `log_file`.
+
+To publish that run, repeat the command with `--publish` instead of `--dry-run`.
+The command uses your authenticated `gh` session to create the release and upload its assets.
+It sets `--latest=false` so results releases do not replace a software release marked latest.
+It refuses missing logs, unsafe asset names, more than 1,000 assets, and files of 2 GiB or more.
+An existing release tag makes `gh release create` fail. The command never replaces existing assets.
+After a partial upload failure, inspect the release before retrying. Use a new run ID for a replacement release.
+
+Install the linked rows in the site's results file only after publication succeeds.
+Set `ETHEVALS_LOG_BASE=https://github.com/BuidlGuidl/ethevals/releases/download` when building the site.
+That base reaches every results release. A link downloads the full `.eval` file.
+Save the file in a local folder, then run `uv run inspect view --log-dir path/to/folder`.
+A private repository requires GitHub access to download its assets. Public log downloads require a public repository.
+
+## Export the vanilla quiz dataset
+
+```sh
+uv run ethevals export-hf --output out/hf \
+  --hf-repo ethereum-foundation/hf-ethevals-dataset
+```
+
+Use an empty output directory. The command writes JSONL data, an HF dataset card, and `eval.yaml`.
+It prints the row count, config names, repository setting, and license as JSON.
+It makes no model calls and uploads nothing. Keep result logs outside this directory.
+Set `ETHEVALS_HF_REPO` or pass `--hf-repo` to choose the dataset repository.
+The license is undecided. Set `ETHEVALS_DATASET_LICENSE` or pass `--license` after choosing an HF license identifier.
+
+Each row has `id`, `input`, `target`, `choices`, and `metadata` with the eval ID, pillar, and eval hash.
+Only quizzes that declare vanilla mode enter the export.
+Each config groups a pillar and one set of scorer settings under `data/<config>/test.jsonl`.
+The card lists every config and its file. Match tasks set `location` explicitly to preserve the runner's verdicts.
+The exporter stops on additional scorers or alternative target lists that stock Inspect's HF loader cannot preserve.
+It accepts single-item target lists as strings. It never drops an unsupported vanilla quiz silently.
+
+Load a local data file without a field mapping:
+
+```python
+from inspect_ai.dataset import json_dataset
+
+dataset = json_dataset("out/hf/data/CONFIG/test.jsonl")
+```
+
+Replace `CONFIG` with a config name printed by the export.
+After publication, the same fields load through `hf_dataset` without a mapping:
+
+```python
+from inspect_ai.dataset import hf_dataset
+
+dataset = hf_dataset("ethereum-foundation/hf-ethevals-dataset", name="CONFIG", split="test", revision="VERSION")
+```
+
+The remote loader needs Inspect's optional `datasets` package. The export and local proof do not need it.
+The dataset card also gives the stock `inspect eval hf/<owner>/<repo>` command.
+That command reads each task's solver and scorer from `eval.yaml` and calls the model you select.
+It needs `huggingface_hub` and `datasets`.
+
+Run the local proof without provider keys:
+
+```sh
+env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN \
+  uv run python inspect-runner/tests/prove_hf.py --export out/hf --output out/hf-proof
+```
+
+The proof checks `HFTask` validation, default JSONL loading, and Inspect's HF row conversion.
+It runs the declared stock solvers and scorers on mockllm, then compares both verdicts with the runner.
+Reference answers must pass. Wrong answers must fail. The proof writes its `.eval` logs outside the dataset directory.
+The hosted `hf/` download path remains untested until the dataset exists on HF.

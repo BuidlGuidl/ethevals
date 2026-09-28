@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { loadBoard, loadEvaluations, parseRows } from "../src/load";
+import { logUrl } from "../src/board";
 import { siteRoot } from "../src/paths";
 
 test("the board reads the merged runner's catalog and reference and empty rows", (t) => {
@@ -20,6 +21,7 @@ test("the board reads the merged runner's catalog and reference and empty rows",
       cwd: path.dirname(siteRoot), env, encoding: "utf8", timeout: 60_000,
     });
     assert.equal(result.status, 0, result.error?.message ?? result.stderr + result.stdout);
+    return result.stdout;
   }
   run(["catalog", "--output", path.join(site, ".catalog")]);
   run(["check", "--evals", "evals/concepts/agent-registries", "--epochs", "1", "--output", path.join(root, "results")]);
@@ -36,4 +38,12 @@ test("the board reads the merged runner's catalog and reference and empty rows",
     assert.deepEqual([Object.keys(board.evaluations), board.tables.internet.subjects, board.tables.vanilla.subjects],
       [["building/erc20-points-token", "concepts/agent-registries", "concepts/wei-per-ether"], [], []]);
   }
+  const plan = JSON.parse(run(["publish-logs", "--output", path.join(root, "results/reference"),
+    "--repo", "example/ethevals", "--run-id", "123-1", "--target", "a".repeat(40), "--dry-run"]));
+  const published = parseRows(readFileSync(plan.rows_file, "utf8"), plan.rows_file, evaluations);
+  const original = parseRows(readFileSync(path.join(root, "results/reference/rows.jsonl"), "utf8"), "local", evaluations);
+  assert.equal(published[0].log_file, `results-123-1/${path.basename(original[0].log_file)}`);
+  assert.equal(logUrl(plan.log_base, published[0].log_file),
+    `https://github.com/example/ethevals/releases/download/results-123-1/${path.basename(original[0].log_file)}`);
+  assert.equal(plan.assets[0].url, logUrl(plan.log_base, published[0].log_file));
 });

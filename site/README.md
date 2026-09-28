@@ -49,8 +49,8 @@ All paths below resolve from `site/`.
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `ETHEVALS_SAMPLE` | `0` | `1` selects only `sample/rows.jsonl` and `sample/catalog.json`. |
-| `ETHEVALS_ROWS` | `../results/rows.jsonl` | Path to one results file, with paths relative to its results folder. |
-| `ETHEVALS_LOG_BASE` | Unset | URL of the published results folder, or an absolute site path. |
+| `ETHEVALS_ROWS` | `../results/rows.jsonl` | Path to one results file. Published rows contain release-relative log paths. |
+| `ETHEVALS_LOG_BASE` | Unset | GitHub release-download base URL, or an absolute site path. |
 
 An absent default results file produces the empty state.
 An absent explicit file fails the build. Sample mode and `ETHEVALS_ROWS` cannot be combined.
@@ -60,16 +60,23 @@ A missing evals root or catalog fails the build.
 One build line reports the rows path and counts for shown, stale, key-free, and excluded skills rows.
 An absent default file appears in that line.
 
-For a published results folder, use:
+After publishing logs with `ethevals publish-logs --publish`, use:
 
 ```sh
-ETHEVALS_ROWS=../results/paid/rows.jsonl \
-ETHEVALS_LOG_BASE=https://example.org/ethevals/results \
+ETHEVALS_ROWS=../results/paid/published/rows.jsonl \
+ETHEVALS_LOG_BASE=https://github.com/BuidlGuidl/ethevals/releases/download \
 pnpm build
 ```
 
-A row with `log_file: logs/epoch.eval` links to `https://example.org/ethevals/results/logs/epoch.eval`.
-The publisher must preserve the relative log paths under that base.
+A row with `log_file: results-12345-1/epoch.eval` links to
+`https://github.com/BuidlGuidl/ethevals/releases/download/results-12345-1/epoch.eval`.
+Rows from other runs carry other release tags, so one base reaches all releases.
+The publisher stages linked rows separately from local rows used for resume.
+Its dry run also stages rows, but their links work only after the assets publish.
+Step 6 must merge published rows by epoch identity before building a board across runs.
+The site still reads one rows file and rejects duplicate identities.
+The link downloads the `.eval` file. Open its local folder with `inspect view --log-dir path/to/folder`.
+Private repository assets require GitHub access. Public downloads require a public repository.
 Without a base, the panel says that the full log is not published.
 The site does not copy or publish real logs.
 

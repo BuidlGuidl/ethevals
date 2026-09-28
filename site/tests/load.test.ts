@@ -167,3 +167,13 @@ test("default site paths do not depend on the process working directory", () => 
     process.chdir(previous);
   }
 });
+
+test("one log base resolves assets from different results releases", (t) => {
+  const f = fixture(t);
+  f.write([{ log_file: "results-123-1/first.eval" }, { epoch: 2, log_file: "results-124-1/second.eval" }]);
+  const board = loadBoard({ ETHEVALS_LOG_BASE: "https://github.com/example/ethevals/releases/download" }, f.site);
+  assert.deepEqual(board.tables.internet.pillars.concepts.evals[0].cells['["model-a","harness-a","high"]'].epochs.map((epoch) => epoch.logUrl), [
+    "https://github.com/example/ethevals/releases/download/results-123-1/first.eval",
+    "https://github.com/example/ethevals/releases/download/results-124-1/second.eval",
+  ]);
+});
