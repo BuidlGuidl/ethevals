@@ -60,7 +60,7 @@ def sandbox_type(evaluation):
 def docker_command(command):
     try:
         return subprocess.run(command, check=True, capture_output=True, text=True, timeout=1800)
-    except subprocess.CalledProcessError as error:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         raise RuntimeError(f"Docker failed: {(error.stderr or error.stdout or str(error))[-8192:]}") from error
 
 

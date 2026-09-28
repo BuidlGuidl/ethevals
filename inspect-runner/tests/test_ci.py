@@ -126,7 +126,7 @@ def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path):
                 "--epochs", "1", "--budget", "10", *common)
     assert first.returncode == 0, first.stdout + first.stderr
     published = cli("scripts/ci.py", "publish-results", "--output", tmp_path / "first",
-                    "--repo", "BuidlGuidl/ethevals", "--run-id", "local-1", "--commit", "a" * 40, *common)
+                    "--repo", "BuidlGuidl/ethevals", *common)
     assert published.returncode == 0, published.stderr
     assert [(r["epoch"], r["status"]) for r in read_rows(tmp_path / "first/rows.jsonl")] == [(1, "passed")]
     assert not rows.exists()

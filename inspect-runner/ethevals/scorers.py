@@ -11,7 +11,7 @@ from inspect_ai.log import transcript
 from inspect_ai.event import SampleLimitEvent
 from inspect_ai._eval.loader import scorer_from_spec
 from inspect_ai.model import ChatMessageSystem, ChatMessageUser, ContentText, GenerateConfig, ResponseSchema, get_model
-from inspect_ai.util import sandbox, cost_limit, LimitExceededError, OutputLimitExceededError
+from inspect_ai.util import sandbox, cost_limit, LimitExceededError
 from inspect_ai.scorer import Score, Scorer, Target, accuracy, scorer
 from inspect_ai.scorer._scorer import ScorerSpec
 from pydantic import Field, model_validator

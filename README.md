@@ -433,7 +433,7 @@ Run the publisher on the extracted artifact:
 
 ```sh
 uv run python scripts/ci.py publish-results --output recovered/results/ci-run \
-  --repo BuidlGuidl/ethevals --publish --open-pr
+  --repo BuidlGuidl/ethevals --publish
 ```
 
 This command writes GitHub results and requires `GH_TOKEN`. Retrying the publication job performs the same recovery.
@@ -485,7 +485,7 @@ The workflows call local scripts. To run their free paths:
 ```sh
 uv run python scripts/ci.py checks --output results/ci-checks
 uv run python scripts/ci.py after-merge --answer reference --budget 1000 --output results/local-ci
-uv run python scripts/ci.py publish-results --output results/local-ci --repo BuidlGuidl/ethevals --run-id local --commit FULL_COMMIT_SHA --open-pr
+uv run python scripts/ci.py publish-results --output results/local-ci --repo BuidlGuidl/ethevals
 uv run python scripts/ci.py release --output out/hf-ci --hf-repo OWNER/DATASET --license CHOSEN_LICENSE
 ```
 

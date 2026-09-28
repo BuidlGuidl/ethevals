@@ -13,7 +13,6 @@ from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose, prepare_eval
 from ethevals.rows import results_rows
 from ethevals.runner import build_task, run
-from ethevals.sandboxes import scoring_exec
 from test_docker import ROOT, containers
 
 pytestmark = pytest.mark.docker
