@@ -1,0 +1,5 @@
+type: quiz
+motivation: Check whether a model knows Ethereum's base unit conversion.
+prompt: How many wei equal one ether?
+choices: ["10^6", "10^9", "10^18", "10^24"]
+modes: [vanilla, internet]

@@ -82,3 +82,10 @@ An incorrect answer produces `status: failed`, with `passed: false`.
 
 [The runner reference](inspect-runner/README.md) describes eval folders, results rows, and the hooks for step 2b.
 [CONTEXT.md](CONTEXT.md) defines the project terms.
+
+## Build the results board
+
+From `site/`, run `pnpm install --frozen-lockfile && pnpm build` with Node.js 22 or later.
+The static export goes to `site/out/`. Without real rows, it shows an empty state.
+Use `ETHEVALS_SAMPLE=1 pnpm build` for the labelled sample board.
+[The site README](site/README.md) covers viewing the sample, results paths, and log URLs.

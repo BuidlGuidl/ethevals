@@ -1,0 +1,4 @@
+type: quiz
+motivation: Check whether a model knows the ERC for agent discovery and trust.
+prompt: Which ERC defines onchain identity, reputation, and validation registries for AI agents? Reply with just the number.
+modes: [vanilla, internet]

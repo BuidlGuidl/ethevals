@@ -1,0 +1,4 @@
+type: quiz
+motivation: Check whether a bare model understands token allowances.
+prompt: Does an ERC-20 approval give the spender permission to transfer native ether? Reply yes or no.
+modes: [vanilla]

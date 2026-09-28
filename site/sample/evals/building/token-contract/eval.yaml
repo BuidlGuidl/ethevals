@@ -1,0 +1,4 @@
+type: build
+motivation: Check whether an agent builds a token with the requested supply and transfer rules.
+prompt: Implement the token described in the workspace. Run the tests and explain your changes.
+modes: [internet]
