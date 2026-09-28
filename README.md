@@ -356,6 +356,7 @@ Then dispatch `Eval results` on `main` with a higher `budget` input.
 Each invocation runs at most one attempt per missing identity. The estimate reserves every remaining attempt.
 
 After execution, a separate job calls step 5's `publish-logs` implementation and uploads eligible logs to a GitHub release.
+It checks out the evaluated commit so later pushes cannot change which new logs qualify for publication.
 Only after publication succeeds does it fold new rows and release links into the committed file.
 The latest row replaces an earlier row with the same identity. Other rows, including stale hashes, remain.
 Error rows retain their attempt counts. Their local logs and discovery reports remain in the 14-day workflow artifact.
