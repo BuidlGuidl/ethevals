@@ -85,10 +85,15 @@ def test_paid_run_refuses_unrecorded_earlier_work(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
     monkeypatch.setattr(ci, "RECEIPTS", tmp_path / "runs.json")
     history = [{"workflow_runs": [{"id": 12, "run_number": 4, "run_attempt": 2}]}]
-    monkeypatch.setattr(ci, "command", lambda *a, **kw: subprocess.CompletedProcess(a, 0, stdout=json.dumps(history)))
+    jobs = [{"jobs": [{"steps": [{"name": "Plan and run missing epochs", "started_at": "2026-01-01", "conclusion": "failure"}]}]}]
+    monkeypatch.setattr(ci, "command", lambda *a, **kw: subprocess.CompletedProcess(
+        a, 0, stdout=json.dumps(jobs if "/attempts/" in a[-1] else history)))
     with pytest.raises(ValueError, match="12-1, 12-2"):
         run([evaluation], config, tmp_path / "run", models=["opus"], budget=100, epochs=1,
             before_paid=lambda: ci.require_recorded_runs("owner/repo", "13", "1"))
+    jobs[0]["jobs"] = []
+    # Jobs that never reached the paid step have no artifact to recover.
+    assert ci.require_recorded_runs("owner/repo", "13", "1") is None
     ci.RECEIPTS.write_text(json.dumps({"12-1": {}, "12-2": {}}))
     ci.require_recorded_runs("owner/repo", "13", "1")
     assert json.loads((tmp_path / "run/plan.json").read_text())["within_budget"] is True

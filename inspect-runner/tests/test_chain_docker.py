@@ -77,7 +77,7 @@ def test_script_output_waits_for_readers_and_caps_each_stream(monkeypatch):
         docker("exec", name, "mkdir", "-p", "/eval/scorer")
         docker("exec", "-i", name, "bash", "-c", "cat > /eval/slow-head; chmod +x /eval/slow-head",
                input='#!/bin/sh\nsleep 1\nexec /usr/bin/head "$@"\n')
-        monkeypatch.setattr(scripts, "runner_exec", slow_reader)
+        monkeypatch.setattr("ethevals.sandboxes.runner_exec", slow_reader)
 
         async def proof():
             box = ChainBox(name)

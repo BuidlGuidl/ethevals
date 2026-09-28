@@ -51,8 +51,19 @@ def restore_results(rows):
 
 def require_recorded_runs(repo, run_id, run_attempt):
     saved = receipts()
+
+    def unrecorded(identity, attempt):
+        if f"{identity}-{attempt}" in saved:
+            return False
+        pages = json.loads(command("gh", "api", "--paginate", "--slurp",
+            f"repos/{repo}/actions/runs/{identity}/attempts/{attempt}/jobs?per_page=100",
+            capture_output=True).stdout)
+        return any(step.get("started_at") and step.get("conclusion") != "skipped"
+                   for page in pages for job in page["jobs"] for step in job.get("steps", [])
+                   if step["name"] == "Plan and run missing epochs")
+
     pages = command("gh", "api", "--paginate", "--slurp",
-                    f"repos/{repo}/actions/workflows/results.yml/runs?branch=main&per_page=100",
+                    f"repos/{repo}/actions/workflows/results.yml/runs?per_page=100",
                     capture_output=True).stdout
     missing = []
     for page in json.loads(pages):
@@ -61,18 +72,10 @@ def require_recorded_runs(repo, run_id, run_attempt):
                 continue
             for attempt in range(1, previous["run_attempt"] + 1):
                 identity = f"{previous['id']}-{attempt}"
-                if identity not in saved:
-                    if previous.get("conclusion") in {"cancelled", "skipped"}:
-                        jobs = json.loads(command("gh", "api", "--paginate", "--slurp",
-                            f"repos/{repo}/actions/runs/{previous['id']}/attempts/{attempt}/jobs?per_page=100",
-                            capture_output=True).stdout)
-                        if not any(step.get("started_at") and step.get("conclusion") != "skipped"
-                                   for page in jobs for job in page["jobs"] for step in job.get("steps", [])
-                                   if step["name"] == "Plan and run missing epochs"):
-                            continue
+                if unrecorded(previous["id"], attempt):
                     missing.append(identity)
     missing.extend(f"{run_id}-{attempt}" for attempt in range(1, int(run_attempt))
-                   if f"{run_id}-{attempt}" not in saved)
+                   if unrecorded(run_id, attempt))
     if missing:
         raise ValueError("Recover unrecorded eval run artifacts before paid work: " + ", ".join(missing))
 
@@ -80,6 +83,8 @@ def require_recorded_runs(repo, run_id, run_attempt):
 def after_merge(args, evals, config):
     if args.output.exists():
         raise ValueError("Use a fresh output directory for each CI run")
+    args.output.mkdir(parents=True)
+    (args.output / "execution.json").write_text(json.dumps({"success": False}) + "\n")
     if args.restore_results:
         restore_results(args.rows)
     def before_paid():

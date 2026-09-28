@@ -127,6 +127,7 @@ Effort appears once in each subject's column header.
 Different efforts stay separate because the runner treats them as distinct agent identities.
 
 Epoch cost includes model cost and grader cost.
+Search charges enter the run plan's reserve but have no metered cost in the rows.
 If either cost is unknown, the total stays unknown.
 The panel retains both amounts and their sources, including guessed prices.
 Total tokens include the model and grader. Time is the total elapsed time, including setup.

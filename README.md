@@ -380,6 +380,7 @@ The publisher builds its commit from current `main` and folds current results in
 Higher attempt counts win, followed by the row's completion time. Argument order cannot change the result.
 Retried old publications preserve newer rows and source. Epoch numbers sort numerically.
 Each paid CI run checks earlier workflow attempts against the receipts before constructing providers.
+It reads job steps to distinguish cancelled queues and setup failures from attempts that reached execution.
 If an artifact remains unrecorded, the run stops and names the run to recover.
 Artifacts retain logs and discovery reports for 14 days. A missing or damaged artifact blocks further paid work.
 

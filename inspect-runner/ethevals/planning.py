@@ -76,4 +76,4 @@ def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, f
             "expected_usd_estimate": round(sum(row["expected_usd_estimate"] for row in missing), 8)
             if all(row["expected_usd_estimate"] is not None for row in missing) else None,
             "history_covered_epochs": sum(row["expected_usd_estimate"] is not None for row in missing),
-            "cost_note": "Worst case uses configured prices and remaining attempts. The player limit can overshoot by an in-flight call. Expected cost estimates one attempt from recorded spend; null means incomplete history."}
+            "cost_note": "Worst case includes configured model, grader, and search prices for remaining attempts. The player limit can overshoot by an in-flight call. Expected cost covers one attempt's model and grader spend only; null means incomplete history."}

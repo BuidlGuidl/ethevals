@@ -174,7 +174,7 @@ def test_slow_output_consumer_cannot_truncate_forge(tmp_path, monkeypatch):
             await runner_exec(box, ["/bin/chmod", "+x", "/tmp/slow-head"])
             await prepare_forge(box, {"src/Token.sol": b"pragma solidity =0.8.30; contract Token {}"}, {
                 "scorer/tests/Token.t.sol": b"pragma solidity =0.8.30; contract Tests { function testToken() public pure { assert(true); } }"})
-            monkeypatch.setattr(scorers, "runner_exec", slow_consumer)
+            monkeypatch.setattr("ethevals.sandboxes.runner_exec", slow_consumer)
             result = await forge(box)
             assert forge_checks(result.stdout, result.stderr, result.returncode,
                                 ["forge:test/Token.t.sol:Tests:testToken()"]) == {
@@ -195,7 +195,7 @@ def test_forge_output_file_has_a_size_cap(tmp_path, monkeypatch):
             return await original(box, args, **kwargs)
 
         async def proof():
-            monkeypatch.setattr(scorers, "runner_exec", noisy_forge)
+            monkeypatch.setattr("ethevals.sandboxes.runner_exec", noisy_forge)
             with pytest.raises(OutputLimitExceededError, match="10 MiB"):
                 await forge(boxes["scorer"])
             assert len(await boxes["scorer"].read_file("/tmp/forge.stdout", text=False)) == 10485761
