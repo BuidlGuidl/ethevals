@@ -186,7 +186,7 @@ def test_slow_output_consumer_cannot_truncate_forge(tmp_path, monkeypatch):
 
 def test_forge_output_file_has_a_size_cap(tmp_path, monkeypatch):
     import ethevals.scorers as scorers
-    from inspect_ai.util import OutputLimitExceededError
+    from ethevals.scoring_base import SubmissionFailed
     original = scorers.runner_exec
     with containers(tmp_path) as boxes:
         async def noisy_forge(box, args, **kwargs):
@@ -196,7 +196,7 @@ def test_forge_output_file_has_a_size_cap(tmp_path, monkeypatch):
 
         async def proof():
             monkeypatch.setattr("ethevals.sandboxes.runner_exec", noisy_forge)
-            with pytest.raises(OutputLimitExceededError, match="10 MiB"):
+            with pytest.raises(SubmissionFailed, match="10 MiB"):
                 await forge(boxes["scorer"])
             assert len(await boxes["scorer"].read_file("/tmp/forge.stdout", text=False)) == 10485761
         anyio.run(proof)

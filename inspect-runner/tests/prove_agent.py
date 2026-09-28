@@ -41,38 +41,44 @@ def main():
             from inspect_ai.util import sandbox
             from ethevals.sandboxes import runner_exec
             # Pass a digest, never the canary itself, into the live agent container.
-            scan = '''import os, glob, hashlib, json
-matches, files, environments = [], 0, 0
-def check(path):
-    global files
-    try:
-        with open(path, "rb") as source:
-            tail = b""
-            while chunk := source.read(1048576):
-                chunk = tail + chunk
-                start = 0
-                while (start := chunk.find(b"inert-", start)) >= 0:
-                    if hashlib.sha256(chunk[start:start+SIZE]).hexdigest() == DIGEST:
-                        matches.append(path)
-                    start += 1
-                tail = chunk[-SIZE:]
-        files += 1
-    except (OSError, PermissionError):
-        pass
-for root, dirs, names in os.walk("/", followlinks=False):
-    if root == "/":
-        dirs[:] = [name for name in dirs if name not in {"proc", "sys", "dev"}]
-    for name in names:
-        path = os.path.join(root, name)
-        if os.path.isfile(path) and not os.path.islink(path):
-            check(path)
-for path in glob.glob("/proc/[0-9]*/environ"):
-    environments += 1
-    check(path)
-print(json.dumps({"matches": matches, "files": files, "environments": environments}))
-'''
-            scan = "SIZE=" + str(len(key)) + "; DIGEST=" + repr(hashlib.sha256(key.encode()).hexdigest()) + "\n" + scan
-            result = await runner_exec(sandbox(), ["/usr/bin/python3", "-c", scan], user="root", timeout=90)
+            scan = """
+const fs = require("fs"), crypto = require("crypto");
+const matches = []; let files = 0, environments = 0;
+function check(path) {
+  let fd;
+  try {
+    fd = fs.openSync(path, "r");
+    let tail = Buffer.alloc(0), block = Buffer.alloc(1048576), length;
+    while ((length = fs.readSync(fd, block)) > 0) {
+      const data = Buffer.concat([tail, block.subarray(0, length)]);
+      let start = -1;
+      while ((start = data.indexOf("inert-", start + 1)) >= 0) {
+        if (crypto.createHash("sha256").update(data.subarray(start, start + SIZE)).digest("hex") === DIGEST)
+          matches.push(path);
+      }
+      tail = Buffer.from(data.subarray(-SIZE));
+    }
+    files++;
+  } catch {} finally { if (fd !== undefined) fs.closeSync(fd); }
+}
+function walk(root) {
+  let names;
+  try { names = fs.readdirSync(root, {withFileTypes: true}); } catch { return; }
+  for (const name of names) {
+    const path = root === "/" ? "/" + name.name : root + "/" + name.name;
+    if (["/proc", "/sys", "/dev"].includes(path)) continue;
+    if (name.isDirectory()) walk(path);
+    else if (name.isFile()) check(path);
+  }
+}
+walk("/");
+for (const name of fs.readdirSync("/proc")) {
+  if (/^[0-9]+$/.test(name)) { environments++; check("/proc/" + name + "/environ"); }
+}
+console.log(JSON.stringify({matches, files, environments}));
+"""
+            scan = "const SIZE=" + str(len(key)) + ", DIGEST=" + json.dumps(hashlib.sha256(key.encode()).hexdigest()) + ";\n" + scan
+            result = await runner_exec(sandbox(), ["/usr/local/bin/node", "-e", scan], user="root", timeout=90)
             assert result.success, result.stderr
             scanned = json.loads(result.stdout)
             assert scanned["matches"] == [] and scanned["files"] > 100 and scanned["environments"] > 1, scanned

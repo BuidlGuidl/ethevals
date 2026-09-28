@@ -2,6 +2,7 @@ import io
 import json
 import tarfile
 import re
+import time
 import yaml
 import anyio
 from pathlib import Path, PurePosixPath
@@ -118,11 +119,13 @@ async def oom_killed(box):
 async def scoring_exec(box, command, **kwargs):
     # Own the in-container deadline so Inspect cannot merge it with a host timeout.
     seconds = kwargs.pop("timeout")
+    started = time.monotonic()
     with anyio.fail_after(seconds + 30):
         result = await runner_exec(box, ["/usr/bin/timeout", "-k", "5s", f"{seconds}s", *command], **kwargs)
+    elapsed = time.monotonic() - started
     if not result.success and await oom_killed(box):
         raise SubmissionFailed("Submission exceeded the scorer memory limit.")
-    if result.returncode == 124:
+    if result.returncode == 124 or (result.returncode == 137 and elapsed >= seconds):
         raise SubmissionFailed("Submission exceeded the scoring time limit.")
     return result
 

@@ -61,7 +61,7 @@ def test_expensive_signed_transaction_cannot_change_captured_state():
 
 def test_script_output_waits_for_readers_and_caps_each_stream(monkeypatch):
     import ethevals.check_script as scripts
-    from inspect_ai.util import OutputLimitExceededError
+    from ethevals.scoring_base import SubmissionFailed
     from test_docker import DockerBox
 
     class ChainBox(DockerBox):
@@ -87,7 +87,7 @@ def test_script_output_waits_for_readers_and_caps_each_stream(monkeypatch):
             for stream in ("stdout", "stderr"):
                 docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py",
                        input=f'import sys\nsys.{stream}.write("x" * (2 * 1024 * 1024))\n')
-                with pytest.raises(OutputLimitExceededError, match="1 MiB"):
+                with pytest.raises(SubmissionFailed, match="1 MiB"):
                     await scripts.script_result("check", box)
                 assert len(await box.read_file(f"/eval/script.{stream}", text=False)) == 1048577
             docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py", input='raise SystemExit(125)\n')

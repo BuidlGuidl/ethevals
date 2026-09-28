@@ -18,6 +18,17 @@ from test_docker import ROOT, containers
 pytestmark = pytest.mark.docker
 
 
+def test_scoring_deadline_kills_a_process_that_ignores_term(tmp_path):
+    import anyio
+    from ethevals.sandboxes import scoring_exec
+    from ethevals.scoring_base import SubmissionFailed
+    with containers(tmp_path) as boxes:
+        async def proof():
+            with pytest.raises(SubmissionFailed, match="Submission exceeded the scoring time limit"):
+                await scoring_exec(boxes["scorer"], ["/bin/sh", "-c", "trap '' TERM; while :; do sleep 1; done"], timeout=.1)
+        anyio.run(proof)
+
+
 @pytest.mark.parametrize("kind", ["build", "act", "host_kill"])
 def test_oom_during_grading_fails_fixed_checks(tmp_path, monkeypatch, kind):
     import subprocess
