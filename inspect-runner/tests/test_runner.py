@@ -71,7 +71,7 @@ def test_loader_requires_scorer_file(folder):
 
 def test_loader_preserves_target_and_prompt(folder):
     (folder / "workspace/.gitkeep").unlink()
-    (folder / "eval.yaml").write_text("type: quiz\nmotivation: Test a literal answer.\nprompt: Say hello.\nmodes: [vanilla]\n")
+    (folder / "eval.yaml").write_text("type: quiz\nmotivation: Test a literal answer.\nprompt: Say hello.\nmodes: [internet]\n")
     (folder / "scorer/scorer.yaml").write_text(scorer_yaml('kind: target\ntarget: ["hello", "hi"]\n'))
     (folder / "workspace/hello.txt").write_text("public workspace")
     (folder / "scorer/secret.txt").write_text("private scorer")
@@ -197,10 +197,10 @@ def test_time_limit_is_a_failed_check(folder, tmp_path):
 
 
 def test_choice_target_list_accepts_either_letter(folder, tmp_path):
-    (folder / "eval.yaml").write_text("type: quiz\nmotivation: Check accepted alternatives.\nprompt: Select a greeting.\nmodes: [vanilla]\nchoices: [hello, hi, goodbye]\n")
+    (folder / "eval.yaml").write_text("type: quiz\nmotivation: Check accepted alternatives.\nprompt: Select a greeting.\nmodes: [internet]\nchoices: [hello, hi, goodbye]\n")
     (folder / "scorer/scorer.yaml").write_text(scorer_yaml('kind: target\nmethod: choice\ntarget: ["A", "B"]\n'))
     config = load_config()
-    task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
+    task = build_task(load_eval(folder, config), config, None, "internet", "reference", 1)
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", "ANSWER: B")])
     log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(read_eval_log(log.location))[0]

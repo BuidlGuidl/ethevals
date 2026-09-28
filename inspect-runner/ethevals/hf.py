@@ -7,9 +7,32 @@ from pathlib import Path
 
 import yaml
 
-from .loader import Eval
+from .loader import Eval, validate_hf_export
 
 DEFAULT_REPO = "ethereum-foundation/hf-ethevals-dataset"
+
+
+def config_name(evaluation: Eval) -> str:
+    config = evaluation.scorers[0]
+    name = f"{evaluation.pillar}-{config.method}"
+    if config.method == "match":
+        name += f"-{config.location}"
+        if config.numeric:
+            name += "-numeric"
+    elif config.method == "pattern":
+        name += "-" + hashlib.sha256(config.pattern.encode()).hexdigest()[:12]
+    if config.method != "choice" and not config.ignore_case:
+        name += "-case"
+    return name
+
+
+def size_category(count: int) -> str:
+    for limit, name in [(1000, "n<1K"), (10000, "1K<n<10K"), (100000, "10K<n<100K"),
+                        (1000000, "100K<n<1M"), (10000000, "1M<n<10M"),
+                        (100000000, "10M<n<100M"), (1000000000, "100M<n<1B")]:
+        if count < limit:
+            return name
+    return "n>1B"
 
 
 def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
@@ -17,16 +40,16 @@ def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
     if not re.fullmatch(r"[\w-]+/[\w.-]+", repo):
         raise ValueError("HF repo must have the form owner/name")
     groups = {}
+    skipped = []
     for evaluation in sorted(evals, key=lambda item: item.id):
         if evaluation.declaration.type != "quiz" or "vanilla" not in evaluation.declaration.modes:
+            skipped.append({"eval_id": evaluation.id, "reason": "not a quiz" if evaluation.declaration.type != "quiz"
+                            else "vanilla mode is not declared"})
             continue
-        if len(evaluation.scorers) != 1 or evaluation.scorers[0].kind != "target":
-            raise ValueError(f"{evaluation.id}: HF export requires exactly one target scorer")
+        validate_hf_export(evaluation.declaration, evaluation.scorers, evaluation.id)
         config = evaluation.scorers[0]
         target = config.target
         if isinstance(target, list):
-            if len(target) != 1:
-                raise ValueError(f"{evaluation.id}: Inspect's HF loader cannot preserve alternative targets; export stopped")
             target = target[0]
         if config.method == "match":
             args = {"location": config.location, "ignore_case": config.ignore_case, "numeric": config.numeric}
@@ -35,8 +58,7 @@ def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
         else:
             args = {}
         scorer = {"name": config.method, "args": args}
-        digest = hashlib.sha256(json.dumps(scorer, sort_keys=True).encode()).hexdigest()[:12]
-        name = f"{evaluation.pillar}-{config.method}-{digest}"
+        name = config_name(evaluation)
         if name not in groups:
             fields = {"input": "input", "target": "target", "metadata": ["metadata"]}
             if evaluation.declaration.choices:
@@ -57,11 +79,10 @@ def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
     if output.exists() and any(output.iterdir()):
         raise ValueError(f"{output}: HF export requires an empty output directory")
     configs = [{"config_name": name, "data_files": [{"split": "test", "path": f"data/{name}/test.jsonl"}]} for name in sorted(groups)]
-    card = {"pretty_name": "ETH Evals", "language": ["en"], "task_categories": ["question-answering"],
-            "tags": ["ethereum", "inspect-ai"], "size_categories": ["n<1K"], "configs": configs}
+    configs[0]["default"] = True
     count = sum(len(group["rows"]) for group in groups.values())
-    if count >= 1000:
-        card.pop("size_categories")
+    card = {"pretty_name": "ETH Evals", "language": ["en"], "task_categories": ["question-answering"],
+            "tags": ["ethereum", "inspect-ai"], "size_categories": [size_category(count)], "configs": configs}
     if license:
         card["license"] = license
     tasks = [groups[name]["task"] for name in sorted(groups)]
@@ -76,6 +97,12 @@ def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
     }, sort_keys=False))
     first = configs[0]["config_name"]
     license_text = f"Dataset license: `{license}`." if license else "Dataset license is undecided. Choose it before publication."
+    write_card(output, card, count, repo, first, license_text)
+    return {"repo": repo, "output": str(output), "rows": count, "skipped": skipped,
+            "configs": [config["config_name"] for config in configs], "license": license}
+
+
+def write_card(output: Path, card: dict, count: int, repo: str, first: str, license_text: str) -> None:
     (output / "README.md").write_text("---\n" + yaml.safe_dump(card, sort_keys=False) + "---\n\n" + f"""# ETH Evals
 
 This dataset contains {count} Ethereum quiz evals that declare the vanilla mode.
@@ -87,7 +114,8 @@ Each row holds one prompt and its target. Builds and agent modes stay in the sou
 The export contains no logs, workspace files, or build solutions.
 
 Each config groups one pillar and one set of scorer settings.
-Its suffix identifies those settings. `eval.yaml` names the solver and scorer for each config.
+Names spell out the settings. Only pattern configs include a regex hash. The first config is the default.
+`eval.yaml` names the solver and scorer for each config.
 Match tasks set their location explicitly. Choice tasks use `multiple_choice` and `choice`.
 The export rejects alternative target lists because Inspect's HF loader changes their meaning.
 A single-item target list becomes its string value.
@@ -119,5 +147,3 @@ Direct `hf_dataset` and `json_dataset` loads retain the row ID and metadata with
 
 These public targets can appear in training data. Scores on them alone do not establish unseen Ethereum knowledge.
 """)
-    return {"repo": repo, "output": str(output), "rows": count,
-            "configs": [config["config_name"] for config in configs], "license": license}

@@ -63,7 +63,7 @@ An absent default file appears in that line.
 After publishing logs with `ethevals publish-logs --publish`, use:
 
 ```sh
-ETHEVALS_ROWS=../results/paid/published/rows.jsonl \
+ETHEVALS_ROWS=../results/paid/published/results-12345-1.jsonl \
 ETHEVALS_LOG_BASE=https://github.com/BuidlGuidl/ethevals/releases/download \
 pnpm build
 ```
@@ -71,8 +71,10 @@ pnpm build
 A row with `log_file: results-12345-1/epoch.eval` links to
 `https://github.com/BuidlGuidl/ethevals/releases/download/results-12345-1/epoch.eval`.
 Rows from other runs carry other release tags, so one base reaches all releases.
-The publisher stages linked rows separately from local rows used for resume.
-Its dry run also stages rows, but their links work only after the assets publish.
+The publisher writes linked rows after the upload succeeds, in a file named for the release.
+Its dry run writes nothing. It excludes key-free, stale-hash, skills, and already published logs.
+If `ETHEVALS_LOG_BASE` is set, every shown row must have a `results-<run-id>/<asset>.eval` path.
+Local `logs/` paths fail the build. Sample mode keeps its bundled log links.
 Step 6 must merge published rows by epoch identity before building a board across runs.
 The site still reads one rows file and rejects duplicate identities.
 The link downloads the `.eval` file. Open its local folder with `inspect view --log-dir path/to/folder`.

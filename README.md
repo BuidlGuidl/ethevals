@@ -163,24 +163,29 @@ Use `ETHEVALS_SAMPLE=1 pnpm build` for the labelled sample board.
 
 ## Publish full logs
 
-Publish one GitHub release per results run. Only logs referenced by `rows.jsonl` become assets.
+Publish one GitHub release per results run. Only unpublished logs for rows the site shows become assets.
 Choose a unique run ID, such as a CI run ID and attempt number.
-Use the full source commit SHA as `--target`.
+Use the full source commit SHA as `--commit`.
 
 ```sh
 uv run ethevals publish-logs --output results/paid \
-  --repo BuidlGuidl/ethevals --run-id 12345-1 --target FULL_COMMIT_SHA --dry-run
+  --repo BuidlGuidl/ethevals --run-id 12345-1 --commit FULL_COMMIT_SHA --dry-run
 ```
 
-The default is a dry run. It makes no network calls.
+The default is a dry run. It writes nothing and makes no network calls.
 It prints a JSON plan with the release tag, the `gh` command, and each asset's rows and URL.
-It also writes `results/paid/published/rows.jsonl` locally. The original rows and logs stay available for resume.
-Each linked row stores `results-12345-1/<filename>.eval` in `log_file`.
+The plan reports skipped rows by reason. It excludes key-free, stale-hash, and skills rows.
+The command loads current eval hashes from `evals/*/*`. Use `--evals` and `--config` to select other evals or settings.
+It skips release-linked rows and logs named in earlier `published/results-*.jsonl` files.
+Keep those files when reusing a results folder. An empty plan creates no release or rows file.
 
 To publish that run, repeat the command with `--publish` instead of `--dry-run`.
 The command uses your authenticated `gh` session to create the release and upload its assets.
+After the upload succeeds, it writes `results/paid/published/results-12345-1.jsonl`.
+Each linked row stores `results-12345-1/<filename>.eval` in `log_file`.
+The original rows and logs stay available for resume. A failed publish writes no linked rows.
 It sets `--latest=false` so results releases do not replace a software release marked latest.
-It refuses missing logs, unsafe asset names, more than 1,000 assets, and files of 2 GiB or more.
+It refuses missing logs, unsafe asset names, paths containing `#`, more than 1,000 assets, and files of 2 GiB or more.
 An existing release tag makes `gh release create` fail. The command never replaces existing assets.
 After a partial upload failure, inspect the release before retrying. Use a new run ID for a replacement release.
 
@@ -198,7 +203,7 @@ uv run ethevals export-hf --output out/hf \
 ```
 
 Use an empty output directory. The command writes JSONL data, an HF dataset card, and `eval.yaml`.
-It prints the row count, config names, repository setting, and license as JSON.
+It prints the row count, config names, skipped evals with reasons, repository setting, and license as JSON.
 It makes no model calls and uploads nothing. Keep result logs outside this directory.
 Set `ETHEVALS_HF_REPO` or pass `--hf-repo` to choose the dataset repository.
 The license is undecided. Set `ETHEVALS_DATASET_LICENSE` or pass `--license` after choosing an HF license identifier.
@@ -206,8 +211,11 @@ The license is undecided. Set `ETHEVALS_DATASET_LICENSE` or pass `--license` aft
 Each row has `id`, `input`, `target`, `choices`, and `metadata` with the eval ID, pillar, and eval hash.
 Only quizzes that declare vanilla mode enter the export.
 Each config groups a pillar and one set of scorer settings under `data/<config>/test.jsonl`.
-The card lists every config and its file. Match tasks set `location` explicitly to preserve the runner's verdicts.
-The exporter stops on additional scorers or alternative target lists that stock Inspect's HF loader cannot preserve.
+Names spell out scorer settings, such as `concepts-choice` and `concepts-match-exact`. Only pattern configs use a regex hash.
+The card marks the first config as the default and computes its size category from the exported row count.
+Match tasks set `location` explicitly to preserve the runner's verdicts.
+The loader rejects blank choices. Vanilla quizzes must have one target scorer and one accepted answer.
+`validate`, `check`, and `export-hf` enforce that export rule before any run or export.
 It accepts single-item target lists as strings. It never drops an unsupported vanilla quiz silently.
 
 Load a local data file without a field mapping:
@@ -236,10 +244,12 @@ Run the local proof without provider keys:
 
 ```sh
 env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN \
-  uv run python inspect-runner/tests/prove_hf.py --export out/hf --output out/hf-proof
+  uv run ethevals prove-hf --export out/hf --output out/hf-proof
 ```
 
-The proof checks `HFTask` validation, default JSONL loading, and Inspect's HF row conversion.
-It runs the declared stock solvers and scorers on mockllm, then compares both verdicts with the runner.
-Reference answers must pass. Wrong answers must fail. The proof writes its `.eval` logs outside the dataset directory.
+The proof calls Inspect's `task_create_from_hf` with local replacements for Hub downloads and dataset reads.
+Inspect resolves the solver and scorer specs itself. The proof also checks default JSONL loading against the runner.
+Reference answers must pass. Wrong answers must fail.
+It records observed verdicts in `out/hf-proof/report.json` and prints them as JSON.
+Proof logs must stay outside the dataset directory. Pytest runs the same proof.
 The hosted `hf/` download path remains untested until the dataset exists on HF.

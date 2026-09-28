@@ -152,9 +152,11 @@ test("log base rejects unsafe values and produces a published link for a valid U
   for (const base of ["javascript:alert(1)", "//elsewhere.test", "relative/logs"]) {
     assert.throws(() => loadBoard({ ETHEVALS_LOG_BASE: base }, f.site), /ETHEVALS_LOG_BASE must be an HTTP URL/);
   }
+  assert.throws(() => loadBoard({ ETHEVALS_LOG_BASE: "https://example.org/results" }, f.site), /requires published release paths/);
+  f.write([{ log_file: "results-123-1/epoch.eval" }, { epoch: 2, answer_kind: "reference" }]);
   const board = loadBoard({ ETHEVALS_LOG_BASE: "https://example.org/results" }, f.site);
   assert.equal(board.tables.internet.pillars.concepts.evals[0].cells['["model-a","harness-a","high"]'].epochs[0].logUrl,
-    "https://example.org/results/logs/epoch.eval");
+    "https://example.org/results/results-123-1/epoch.eval");
 });
 
 test("default site paths do not depend on the process working directory", () => {
