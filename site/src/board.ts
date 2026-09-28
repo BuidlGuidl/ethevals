@@ -1,6 +1,10 @@
+import type { Row } from "./rows";
+export type { Row } from "./rows";
+
 export const pillars = ["concepts", "transactions", "building", "security"] as const;
 export type Pillar = (typeof pillars)[number];
 export type Mode = "vanilla" | "internet" | "skills";
+export type TableMode = Exclude<Mode, "skills">;
 export type EvalType = "quiz" | "scenario" | "build" | "act";
 
 export interface Evaluation {
@@ -14,6 +18,7 @@ export interface Evaluation {
   choices: string[];
   modes: Mode[];
 }
+export type DisplayEvaluation = Omit<Evaluation, "hash">;
 
 export interface Subject {
   model: string;
@@ -21,105 +26,125 @@ export interface Subject {
   effort: string | null;
 }
 
-export interface Row extends Subject {
-  schema_version: 2;
-  eval_id: string;
-  eval_hash: string;
-  pillar: Pillar;
-  type: EvalType;
-  mode: Mode;
-  answer_kind: string | null;
-  epoch: number;
-  status: "passed" | "failed" | "error";
-  passed: boolean | null;
-  checks: Record<string, { passed: boolean; reason: string }>;
-  error_kind: string | null;
-  error_reason: string | null;
-  total_tokens: number;
-  token_source: string;
-  model_cost_usd: number | null;
-  grader_cost_usd: number | null;
-  model_cost_source: string;
-  grader_cost_source: string;
-  total_seconds: number | null;
-  working_seconds: number | null;
-  log_file: string;
-}
+export type Epoch = Pick<Row, "epoch" | "status" | "checks" | "error_kind" | "error_reason"
+  | "total_tokens" | "total_seconds" | "model_cost_usd" | "grader_cost_usd"
+  | "model_cost_source" | "grader_cost_source"> & {
+  cost: number | null;
+  issue: string;
+  logUrl: string | null;
+};
 
-export interface BoardData {
-  sample: boolean;
-  evaluations: Evaluation[];
-  rows: Row[];
-  logBase: string;
-}
-
-export interface Cell {
-  state: "score" | "na" | "pending";
+interface Counts {
   score: number | null;
   passed: number;
   total: number;
   errors: number;
+}
+export interface EvalCell extends Counts {
+  state: "score" | "na" | "pending";
+  epochs: Epoch[];
+}
+export interface PillarCell extends Counts {
+  state: "score" | "empty" | "pending";
   scoredEvals: number;
-  epochs: Row[];
+}
+export type Cell = EvalCell | PillarCell;
+export interface PillarRow {
+  evals: { id: string; cells: Record<string, EvalCell> }[];
+  cells: Record<string, PillarCell>;
+}
+export interface Table {
+  subjects: Subject[];
+  pillars: Record<Pillar, PillarRow>;
+}
+export interface BoardData {
+  sample: boolean;
+  evaluations: Record<string, DisplayEvaluation>;
+  tables: Record<TableMode, Table>;
 }
 
 export function subjectKey(subject: Subject): string {
   return JSON.stringify([subject.model, subject.harness, subject.effort]);
 }
 
-export function boardRows(evaluations: Evaluation[], rows: Row[]): Row[] {
-  const current = new Map(evaluations.map((evaluation) => [evaluation.id, evaluation]));
-  return rows.filter((row) => {
-    const evaluation = current.get(row.eval_id);
-    return row.answer_kind === null && row.token_source !== "mock"
-      && evaluation?.hash === row.eval_hash && evaluation.modes.includes(row.mode)
-      && evaluation.type === row.type && evaluation.pillar === row.pillar
-      && (row.mode === "internet" ? Boolean(row.harness)
-        : row.mode === "vanilla" && row.harness === null && evaluation.type === "quiz");
-  });
-}
-
-export function subjectsFor(rows: Row[], mode: Mode): Subject[] {
-  const subjects = new Map<string, Subject>();
-  for (const row of rows.filter((row) => row.mode === mode)) {
-    subjects.set(subjectKey(row), { model: row.model, harness: row.harness, effort: row.effort });
-  }
-  return [...subjects.values()].sort((a, b) => subjectKey(a).localeCompare(subjectKey(b), "en"));
-}
-
-export function evalCell(evaluation: Evaluation, subject: Subject, mode: Mode, rows: Row[]): Cell {
-  const applicable = evaluation.modes.includes(mode);
-  const epochs = applicable ? boardRows([evaluation], rows)
-    .filter((row) => row.mode === mode && subjectKey(row) === subjectKey(subject))
-    .sort((a, b) => a.epoch - b.epoch) : [];
-  const scored = epochs.filter((row) => row.status !== "error" && row.passed !== null);
+function evalCell(evaluation: Evaluation, mode: TableMode, rows: Row[], logBase: string): EvalCell {
+  const scored = rows.filter((row) => row.status !== "error");
   const passed = scored.filter((row) => row.passed).length;
   return {
-    state: !applicable ? "na" : scored.length ? "score" : "pending",
+    state: !evaluation.modes.includes(mode) ? "na" : scored.length ? "score" : "pending",
     score: scored.length ? passed / scored.length : null,
-    passed,
-    total: scored.length,
-    errors: epochs.filter((row) => row.status === "error").length,
-    scoredEvals: scored.length ? 1 : 0,
-    epochs,
+    passed, total: scored.length, errors: rows.length - scored.length,
+    epochs: rows.sort((a, b) => a.epoch - b.epoch).map((row) => ({
+      epoch: row.epoch, status: row.status, checks: row.checks, error_kind: row.error_kind,
+      error_reason: row.error_reason, total_tokens: row.total_tokens, total_seconds: row.total_seconds,
+      model_cost_usd: row.model_cost_usd, grader_cost_usd: row.grader_cost_usd,
+      model_cost_source: row.model_cost_source, grader_cost_source: row.grader_cost_source,
+      cost: epochCost(row), issue: row.error_reason ?? Object.entries(row.checks)
+        .filter(([name, check]) => name.startsWith("runner_") && name.endsWith("_limit") && !check.passed)
+        .map(([, check]) => check.reason).join(" "),
+      logUrl: logUrl(logBase, row.log_file),
+    })),
   };
 }
 
-export function pillarCell(evaluations: Evaluation[], subject: Subject, mode: Mode, rows: Row[]): Cell {
-  const cells = evaluations.map((evaluation) => evalCell(evaluation, subject, mode, rows));
+function pillarCell(cells: EvalCell[]): PillarCell {
   const scored = cells.filter((cell) => cell.score !== null);
   return {
-    state: !cells.some((cell) => cell.state !== "na") ? "na" : scored.length ? "score" : "pending",
+    state: !cells.some((cell) => cell.state !== "na") ? "empty" : scored.length ? "score" : "pending",
     score: scored.length ? scored.reduce((sum, cell) => sum + cell.score!, 0) / scored.length : null,
     passed: cells.reduce((sum, cell) => sum + cell.passed, 0),
     total: cells.reduce((sum, cell) => sum + cell.total, 0),
     errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
     scoredEvals: scored.length,
-    epochs: cells.flatMap((cell) => cell.epochs),
   };
 }
 
-export function epochCost(row: Row): number | null {
+// The loader supplies current, checked rows. Group each row and compute each cell once.
+export function buildBoard(evaluations: Evaluation[], rows: Row[], sample = false, logBase = ""): BoardData {
+  const groups = new Map<string, Row[]>();
+  const subjects: Record<TableMode, Map<string, Subject>> = { internet: new Map(), vanilla: new Map() };
+  for (const row of rows) {
+    if (row.mode === "skills") continue;
+    const key = subjectKey(row);
+    subjects[row.mode].set(key, { model: row.model, harness: row.harness, effort: row.effort });
+    const group = JSON.stringify([row.eval_id, row.mode, key]);
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group)!.push(row);
+  }
+  const tables = {} as BoardData["tables"];
+  for (const mode of ["internet", "vanilla"] as const) {
+    const columns = [...subjects[mode].values()].sort((a, b) => subjectKey(a).localeCompare(subjectKey(b), "en"));
+    const table = { subjects: columns, pillars: {} as Table["pillars"] };
+    // The knowledge table shows quizzes only. Both table and panel use these rows.
+    const eligible = evaluations.filter((evaluation) => mode !== "vanilla" || evaluation.type === "quiz");
+    for (const pillar of pillars) {
+      const evals = eligible.filter((evaluation) => evaluation.pillar === pillar).map((evaluation) => ({
+        id: evaluation.id,
+        cells: Object.fromEntries(columns.map((subject) => {
+          const key = subjectKey(subject);
+          return [key, evalCell(evaluation, mode, groups.get(JSON.stringify([evaluation.id, mode, key])) ?? [], logBase)];
+        })),
+      }));
+      table.pillars[pillar] = {
+        evals,
+        cells: Object.fromEntries(columns.map((subject) => {
+          const key = subjectKey(subject);
+          return [key, pillarCell(evals.map((entry) => entry.cells[key]))];
+        })),
+      };
+    }
+    tables[mode] = table;
+  }
+  return {
+    sample, tables,
+    evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {
+      id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar, type: evaluation.type,
+      motivation: evaluation.motivation, prompt: evaluation.prompt, choices: evaluation.choices, modes: evaluation.modes,
+    }])),
+  };
+}
+
+export function epochCost(row: Pick<Row, "model_cost_usd" | "grader_cost_usd">): number | null {
   return row.model_cost_usd === null || row.grader_cost_usd === null
     ? null : row.model_cost_usd + row.grader_cost_usd;
 }

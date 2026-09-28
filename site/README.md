@@ -6,7 +6,7 @@ Expand a pillar to see its evals. Open a cell for its prompt, epochs, checks, an
 
 ## Build the site
 
-Use Node.js 22 or later and pnpm 9.14.2.
+Use Node.js 22 or later, pnpm 9.14.2, and uv with Python 3.13.
 From `site/`, run:
 
 ```sh
@@ -40,18 +40,25 @@ If your shell exports that variable, unset it first.
 
 ## Data settings
 
-The loader reads eval folders and one runner `rows.jsonl` file at build time.
+The build runs `uv run ethevals catalog --output site/.catalog` from the repository root.
+The runner loads the evals and exports their declarations and hashes to `site/.catalog/catalog.json`.
+The site reads that catalog and one runner `rows.jsonl` file.
+Sample builds use an invented `sample/catalog.json` fixture instead.
 All paths below resolve from `site/`.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `ETHEVALS_SAMPLE` | `0` | `1` selects only `sample/rows.jsonl` and `sample/evals/`. |
-| `ETHEVALS_ROWS` | `../results/paid/rows.jsonl` | Path to one results file, with paths relative to its results folder. |
+| `ETHEVALS_SAMPLE` | `0` | `1` selects only `sample/rows.jsonl` and `sample/catalog.json`. |
+| `ETHEVALS_ROWS` | `../results/rows.jsonl` | Path to one results file, with paths relative to its results folder. |
 | `ETHEVALS_LOG_BASE` | Unset | URL of the published results folder, or an absolute site path. |
 
 An absent default results file produces the empty state.
 An absent explicit file fails the build. Sample mode and `ETHEVALS_ROWS` cannot be combined.
-Malformed rows and duplicate epoch identities fail the build with a file-specific error.
+Malformed rows and duplicate epoch identities fail the build with the file and line.
+This includes undeclared modes, mismatched pillars or types at the same hash, and invalid mode and harness pairs.
+A missing evals root or catalog fails the build.
+One build line reports the rows path and counts for shown, stale, key-free, and excluded skills rows.
+An absent default file appears in that line.
 
 For a published results folder, use:
 
@@ -67,11 +74,11 @@ Without a base, the panel says that the full log is not published.
 The site does not copy or publish real logs.
 
 The loader accepts schema version 2.
-It reads the real evals from `../evals/` and derives titles from folder names when no title exists.
+The runner reads the real evals from `../evals/`. The site derives titles from their IDs.
 It keeps prompts, choices, motivations, types, pillars, and declared modes.
 The browser receives no scorer files or targets.
 
-The loader matches the runner's hash algorithm, including its reserved artifact names and symlink rule.
+The runner supplies each hash. The site contains no eval hash algorithm or YAML declaration parser.
 Only rows with the current eval hash enter the board.
 Reference, empty, default mock, and other key-free rows never enter the board.
 Internet results require a harness. Vanilla results require a bare model and a quiz eval.
@@ -90,6 +97,7 @@ The pillar's epoch count adds the eval counts together. It is not the denominato
 The board shows counts instead of a confidence interval.
 
 An unsupported mode shows `Not applicable`.
+A pillar without evals that declare the mode shows `No evals yet` in both the table and panel.
 A supported cell without scored epochs shows `No epochs yet`, with an error count when relevant.
 Effort appears once in each subject's column header.
 Different efforts stay separate because the runner treats them as distinct agent identities.
@@ -98,6 +106,11 @@ Epoch cost includes model cost and grader cost.
 If either cost is unknown, the total stays unknown.
 The panel retains both amounts and their sources, including guessed prices.
 Total tokens include the model and grader. Time is the total elapsed time, including setup.
+
+The loader groups rows by eval, mode, and subject once.
+It computes each eval cell once and derives pillar means from those cells.
+The client renders that model, so column highlights do not recalculate scores.
+Epoch details contain only the fields the panel uses.
 
 ## Check the site
 

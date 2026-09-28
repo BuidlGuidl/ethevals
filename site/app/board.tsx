@@ -2,8 +2,8 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
-  epochCost, evalCell, logUrl, pillarCell, pillars, subjectKey, subjectsFor,
-  type BoardData, type Cell, type Evaluation, type Mode, type Pillar, type Row, type Subject,
+  pillars, subjectKey,
+  type BoardData, type Cell, type DisplayEvaluation as Evaluation, type TableMode as Mode, type Pillar, type Epoch, type Subject,
 } from "../src/board";
 
 const names: Record<Pillar, string> = {
@@ -19,21 +19,19 @@ const percent = (score: number) => `${Math.round(score * 100)}%`;
 const money = (cost: number | null) => cost === null ? "Unknown" : `$${cost.toFixed(4)}`;
 const countText = (cell: Cell) => `${cell.passed} of ${cell.total} epochs passed`;
 const cellText = (cell: Cell) => cell.state === "na" ? "Not applicable"
-  : cell.state === "pending" ? "No epochs yet" : percent(cell.score!);
+  : cell.state === "empty" ? "No evals yet" : cell.state === "pending" ? "No epochs yet" : percent(cell.score!);
 const subjectName = (subject: Subject) => [subject.model, subject.harness].filter(Boolean).join(" · ");
-const epochIssue = (row: Row) => row.error_reason ?? Object.entries(row.checks)
-  .filter(([name, check]) => name.startsWith("runner_") && name.endsWith("_limit") && !check.passed)
-  .map(([, check]) => check.reason).join(" ");
 
 type Selection = { evaluation?: Evaluation; pillar: Pillar; subject: Subject; mode: Mode };
 
-function Score({ cell, pillar = false, label, open }: {
-  cell: Cell; pillar?: boolean; label: string; open: () => void;
+function Score({ cell, label, open }: {
+  cell: Cell; label: string; open: () => void;
 }) {
+  const pillar = "scoredEvals" in cell;
   const tone = cell.score === null ? "" : cell.score < 0.25 ? "negative" : cell.score < 0.5 ? "caution" : "positive";
   return <button className="cell" onClick={open}
     aria-label={`${label}. ${cellText(cell)}.${cell.state === "score" ? ` ${countText(cell)}.` : ""} Open details.`}>
-    <span className={cell.state === "score" ? `score ${tone}` : cell.state}>{cellText(cell)}</span>
+    <span className={cell.state === "score" ? `score ${tone}` : cell.state === "empty" ? "empty-pillar" : cell.state}>{cellText(cell)}</span>
     {cell.state === "score" && <>
       <span className="subline">{pillar ? `Mean of ${cell.scoredEvals} eval${cell.scoredEvals === 1 ? "" : "s"}` : countText(cell)}</span>
       {pillar && <span className="subline">{countText(cell)}</span>}
@@ -45,8 +43,9 @@ function Score({ cell, pillar = false, label, open }: {
 function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onOpen: (selection: Selection) => void }) {
   const [expanded, setExpanded] = useState<Pillar[]>(["concepts"]);
   const [column, setColumn] = useState<string | null>(null);
-  const subjects = subjectsFor(data.rows, mode);
-  const evaluations = data.evaluations.filter((evaluation) => mode !== "vanilla" || evaluation.type === "quiz");
+  const table = data.tables[mode];
+  const subjects = table.subjects;
+  const evaluations = pillars.flatMap((pillar) => table.pillars[pillar].evals.map((entry) => data.evaluations[entry.id]));
   const title = mode === "internet" ? "Agent table" : "Knowledge table";
 
   return <section className="board-section" id={mode === "internet" ? "agents" : "knowledge"} aria-label={title}>
@@ -83,7 +82,8 @@ function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onO
             </th>)}
           </tr></thead>
           {pillars.map((pillar) => {
-            const items = evaluations.filter((evaluation) => evaluation.pillar === pillar);
+            const pillarRow = table.pillars[pillar];
+            const items = pillarRow.evals;
             const open = expanded.includes(pillar);
             const id = `${mode}-${pillar}`;
             return <Fragment key={pillar}>
@@ -98,24 +98,24 @@ function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onO
                 {subjects.map((subject) => <td key={subjectKey(subject)}
                   className={column === subjectKey(subject) ? "column-hover" : ""}
                   onMouseEnter={() => setColumn(subjectKey(subject))} onFocus={() => setColumn(subjectKey(subject))}>
-                  <Score cell={pillarCell(items, subject, mode, data.rows)} pillar
+                  <Score cell={pillarRow.cells[subjectKey(subject)]}
                     label={`${names[pillar]}, ${subjectName(subject)}`}
                     open={() => onOpen({ pillar, subject, mode })} />
                 </td>)}
               </tr></tbody>
               <tbody id={id} hidden={!open}>
-                {items.length ? items.map((evaluation) => <tr key={evaluation.id} className="eval-row">
+                {items.length ? items.map((entry) => { const evaluation = data.evaluations[entry.id]; return <tr key={evaluation.id} className="eval-row">
                   <th scope="row" className="row-label" onMouseEnter={() => setColumn(null)}>
                     {evaluation.title}<span className="eval-id">{evaluation.id}</span><span className="subline">{evaluation.type}</span>
                   </th>
                   {subjects.map((subject) => <td key={subjectKey(subject)}
                     className={column === subjectKey(subject) ? "column-hover" : ""}
                     onMouseEnter={() => setColumn(subjectKey(subject))} onFocus={() => setColumn(subjectKey(subject))}>
-                    <Score cell={evalCell(evaluation, subject, mode, data.rows)}
+                    <Score cell={entry.cells[subjectKey(subject)]}
                       label={`${evaluation.title}, ${subjectName(subject)}`}
                       open={() => onOpen({ evaluation, pillar, subject, mode })} />
                   </td>)}
-                </tr>) : <tr><td colSpan={subjects.length + 1} className="no-evals">No {mode === "vanilla" ? "quiz " : ""}evals in this pillar yet.</td></tr>}
+                </tr>; }) : <tr><td colSpan={subjects.length + 1} className="no-evals">No evals yet for this mode.</td></tr>}
               </tbody>
             </Fragment>;
           })}
@@ -132,11 +132,11 @@ function Prompt({ evaluation }: { evaluation: Evaluation }) {
   </div>;
 }
 
-function Epochs({ rows, data }: { rows: Row[]; data: BoardData }) {
+function Epochs({ rows, data }: { rows: Epoch[]; data: BoardData }) {
   const [selected, setSelected] = useState(0);
   const epoch = rows[selected];
   if (!epoch) return null;
-  const href = logUrl(data.logBase, epoch.log_file);
+  const href = epoch.logUrl;
   return <>
     <div className="table-scroll" tabIndex={0} role="region" aria-label="Epoch results. Scroll horizontally for all fields.">
       <table className="epoch-table"><caption className="sr-only">Epoch results and costs including the grader</caption>
@@ -145,8 +145,8 @@ function Epochs({ rows, data }: { rows: Row[]; data: BoardData }) {
           <th scope="row"><button aria-expanded={index === selected} aria-controls="epoch-checks" onClick={() => setSelected(index)}>Epoch {row.epoch}</button></th>
           <td className={row.status === "passed" ? "positive" : row.status === "failed" ? "negative" : "caution"}>{row.status === "passed" ? "Pass" : row.status === "failed" ? "Fail" : "Error"}</td>
           <td>{row.total_seconds === null ? "Unknown" : `${row.total_seconds.toFixed(1)}s`}</td>
-          <td>{row.total_tokens.toLocaleString("en-US")}</td><td>{money(epochCost(row))}</td>
-          <td className="epoch-issue">{epochIssue(row) || "None"}</td>
+          <td>{row.total_tokens.toLocaleString("en-US")}</td><td>{money(row.cost)}</td>
+          <td className="epoch-issue">{row.issue || "None"}</td>
         </tr>)}</tbody>
       </table>
     </div>
@@ -168,7 +168,7 @@ function Epochs({ rows, data }: { rows: Row[]; data: BoardData }) {
   </>;
 }
 
-function Detail({ selection, data, onSelect, onClose }: {
+export function Detail({ selection, data, onSelect, onClose }: {
   selection: Selection; data: BoardData; onSelect: (selection: Selection) => void; onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -185,8 +185,11 @@ function Detail({ selection, data, onSelect, onClose }: {
     closeButton.current?.focus();
   }, [selection]);
   const { evaluation, pillar, subject, mode } = selection;
-  const evaluations = data.evaluations.filter((item) => item.pillar === pillar && (mode !== "vanilla" || item.type === "quiz"));
-  const cell = evaluation ? evalCell(evaluation, subject, mode, data.rows) : pillarCell(evaluations, subject, mode, data.rows);
+  const pillarRow = data.tables[mode].pillars[pillar];
+  const key = subjectKey(subject);
+  const evalRow = evaluation ? pillarRow.evals.find((entry) => entry.id === evaluation.id) : undefined;
+  const evalCell = evalRow?.cells[key];
+  const cell = evalCell ?? pillarRow.cells[key];
   return <dialog ref={dialog} aria-labelledby="detail-title" onCancel={(event) => { event.preventDefault(); onClose(); }}
     onClick={(event) => {
       const bounds = event.currentTarget.getBoundingClientRect();
@@ -205,15 +208,15 @@ function Detail({ selection, data, onSelect, onClose }: {
         <section><h3>Prompt</h3><Prompt evaluation={evaluation} /></section>
         {cell.state === "na" && <p>This eval does not declare the {mode} mode.</p>}
         {cell.state === "pending" && <p>{cell.errors ? "No scored epochs yet. Errors do not count toward the score." : "No epochs yet for this eval."}</p>}
-        <Epochs key={`${evaluation.id}-${subjectKey(subject)}-${mode}`} rows={cell.epochs} data={data} />
+        {evalCell && <Epochs key={`${evaluation.id}-${subjectKey(subject)}-${mode}`} rows={evalCell.epochs} data={data} />}
       </> : <>
         <p>Each eval with scored epochs has equal weight. Missing and errored epochs never count as zero.</p>
-        {cell.state === "score" && <p className="muted">{percent(cell.score!)} is the mean of {cell.scoredEvals} eval scores. The epoch count below each score adds their epochs together.</p>}
-        <div className="eval-list">{evaluations.map((item) => <button key={item.id} onClick={() => onSelect({ ...selection, evaluation: item })}>
+        {cell.state === "score" && <p className="muted">{percent(cell.score!)} is the mean of {pillarRow.cells[key].scoredEvals} eval scores. The epoch count below each score adds their epochs together.</p>}
+        <div className="eval-list">{pillarRow.evals.map((entry) => { const item = data.evaluations[entry.id]; return <button key={item.id} onClick={() => onSelect({ ...selection, evaluation: item })}>
           <span>{item.title}<span className="eval-id">{item.type} · {item.id}</span></span>
-          <span className="mono">{cellText(evalCell(item, subject, mode, data.rows))}</span>
-        </button>)}</div>
-        {!evaluations.length && <p>No evals in this pillar yet.</p>}
+          <span className="mono">{cellText(entry.cells[key])}</span>
+        </button>; })}</div>
+        {cell.state === "empty" && <p>No evals yet for this mode.</p>}
       </>}
     </div>
   </dialog>;
@@ -235,7 +238,7 @@ export default function Board({ data }: { data: BoardData }) {
         <p>A pillar score is the mean of its eval scores. Evals without scored epochs do not enter the mean.</p>
         <p>Errors stay in the details but do not count toward scores. Time and token limits count as failures.</p>
         <p>Counts show how much evidence sits behind each score. No confidence interval is shown.</p>
-        <div className="legend"><span><b>Not applicable</b> · the eval does not declare this mode</span><span><b>No epochs yet</b> · no scored epochs for this cell</span></div>
+        <div className="legend"><span><b>No evals yet</b> · the pillar has no evals for this mode</span><span><b>Not applicable</b> · the eval does not declare this mode</span><span><b>No epochs yet</b> · no scored epochs for this cell</span></div>
         <p className="subline">Only results for current eval hashes appear. Reference answers, empty answers, and other mock checks never enter the board.</p>
       </section>
       <footer>ETH Evals · Costs are in USD and include the model and grader. Unknown cost stays unknown.</footer>

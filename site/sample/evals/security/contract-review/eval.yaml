@@ -1,4 +1,0 @@
-type: scenario
-motivation: Check whether an agent identifies a withdrawal flaw and explains its impact.
-prompt: Review the vault contract in the workspace. Explain any withdrawal flaw and propose a fix.
-modes: [internet]

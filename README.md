@@ -86,6 +86,8 @@ An incorrect answer produces `status: failed`, with `passed: false`.
 ## Build the results board
 
 From `site/`, run `pnpm install --frozen-lockfile && pnpm build` with Node.js 22 or later.
+Real builds also require uv and Python 3.13 to export the runner's eval catalog.
+The board reads `results/rows.jsonl` by default. `ETHEVALS_ROWS` selects another rows file.
 The static export goes to `site/out/`. Without real rows, it shows an empty state.
 Use `ETHEVALS_SAMPLE=1 pnpm build` for the labelled sample board.
 [The site README](site/README.md) covers viewing the sample, results paths, and log URLs.

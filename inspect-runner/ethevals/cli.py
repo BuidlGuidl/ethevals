@@ -2,6 +2,7 @@ import argparse
 import os
 from pathlib import Path
 
+from .catalog import write_catalog
 from .config import load_config
 from .loader import load_eval
 from .runner import run
@@ -16,7 +17,7 @@ def positive(value: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="ethevals")
-    parser.add_argument("command", choices=["run", "check", "validate"])
+    parser.add_argument("command", choices=["run", "check", "validate", "catalog"])
     parser.add_argument("--evals", nargs="+", help="Eval folders. Defaults to evals/*/*.")
     parser.add_argument("--models", nargs="+", help="Model names from config.yaml. Defaults to all four.")
     parser.add_argument("--modes", nargs="+", help="Select vanilla, internet, or skills. Run defaults to vanilla; check selects by type.")
@@ -32,6 +33,9 @@ def main() -> int:
         if not paths:
             raise ValueError("No eval folders found. Use --evals or start from the repository root.")
         evals = [load_eval(path, config) for path in paths]
+        if args.command == "catalog":
+            write_catalog(evals, args.output)
+            return 0
         if args.command == "validate":
             for evaluation in evals:
                 print(f"{evaluation.id} {evaluation.hash}")
