@@ -25,6 +25,7 @@ class Player:
     solver_for: Callable
     sandbox_for: Callable
     free_check: bool = False
+    key: str | None = None
 
 
 @dataclass
@@ -66,7 +67,7 @@ def player(config, key, mode, planning=False):
             return quiz_solver(evaluation)
         return internet_solver(harness, config, item)
 
-    return Player(model, metadata, solve, lambda evaluation: mode != "vanilla")
+    return Player(model, metadata, solve, lambda evaluation: mode != "vanilla", key=key)
 
 
 def grader(config):

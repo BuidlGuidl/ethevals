@@ -79,6 +79,7 @@ The root README gives the local recovery command.
 Receipt and release identities come from the artifact's executing run and attempt, even after a publish-only retry.
 Only runs that began paid work need receipts. Gated and zero-work runs open no results PR.
 Recovery scans the 14-day artifact window in a separate step with its own read token.
+It scans at most 100 metadata pages and fails closed if more remain, without assuming artifact order.
 The root README documents `scripts/ci.py accept-loss` for artifacts that cannot be recovered.
 That receipt accepts lost spend. Missing rows can cause future runs to pay for those epochs again.
 Execution errors remain visible without log links. Their unpublished logs stay in the workflow artifact.

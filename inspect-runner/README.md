@@ -79,6 +79,7 @@ Retry its publication job before the 14-day artifact expires. See the root READM
 The artifact's `paid-started.json` supplies the executing run ID, attempt, and source commit.
 A retry of publication keeps that identity. Gated runs and zero-work runs create no receipt or PR.
 The separate recovery step scans artifacts within the 14-day retention window and ignores workflow step names.
+Its metadata scan permits 100 pages and fails closed if more remain. Artifact order does not affect the result.
 `scripts/ci.py accept-loss --run-id RUN_ID-ATTEMPT --reason TEXT --repo OWNER/REPO --publish` records an unrecoverable loss.
 An accepted loss cannot restore rows. Missing epochs can spend again.
 Publication uses current `main` and current results. Attempt count and completion time decide which row wins.

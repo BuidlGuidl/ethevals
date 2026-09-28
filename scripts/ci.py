@@ -54,13 +54,12 @@ def require_recorded_runs(repo):
     saved = result_record()[1]
     cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
     missing = []
-    page = 1
-    while True:
+    for page in range(1, 101):
         artifacts = json.loads(command("gh", "api",
             f"repos/{repo}/actions/artifacts?per_page=100&page={page}", capture_output=True).stdout)["artifacts"]
         for artifact in artifacts:
             if artifact["created_at"] < cutoff:
-                break
+                continue
             if not artifact["name"].startswith("eval-run-"):
                 continue
             identity = artifact["name"].removeprefix("eval-run-")
@@ -77,9 +76,10 @@ def require_recorded_runs(repo):
                     marker = json.loads(contents.read(name))
                     if marker["run_id"] not in saved:
                         missing.append(marker["run_id"])
-        if len(artifacts) < 100 or artifacts[-1]["created_at"] < cutoff:
+        if len(artifacts) < 100:
             break
-        page += 1
+    else:
+        raise ValueError("Recovery scan exceeded 10000 artifacts. Review artifact retention before paid work.")
     if missing:
         raise ValueError("Recover unrecorded eval run artifacts before paid work: " + ", ".join(missing))
 

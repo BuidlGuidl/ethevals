@@ -107,11 +107,11 @@ def run(evals: list[Eval], config: Config, output: Path, *,
     tasks = []
     if report.admitted:
         players, grade = select_actors(config, models, modes, answer, delay)
-        actors = {evaluation.id: {(mode, actor.metadata["model"]): actor for mode, actor in players(evaluation)}
+        actors = {evaluation.id: {(mode, actor.key): actor for mode, actor in players(evaluation)}
                   for evaluation in evals}
         for original, mode, planned_actor, epoch, attempt in report.admitted:
             evaluation, compose = prepared[original.id]
-            actor = actors[original.id][mode, planned_actor.metadata["model"]]
+            actor = actors[original.id][mode, planned_actor.key]
             task = build_task(evaluation, config, actor, grade, mode, 1, compose)
             task.metadata.update(epoch=epoch, attempt=attempt)
             tasks.append(task_with(task, name=f"{task.name}-epoch-{epoch}"))

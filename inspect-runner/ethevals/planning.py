@@ -51,12 +51,6 @@ def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, 
                     exhausted.append(row)
     if not selected:
         raise ValueError("No evals declare a selected mode")
-    # Interleave model queues so a partial run covers each model before its next epoch.
-    groups = {}
-    for item in pending:
-        groups.setdefault(item[2].metadata["model"], []).append(item)
-    pending = [group[index] for index in range(max(map(len, groups.values()), default=0))
-               for group in groups.values() if index < len(group)]
     return selected, pending, exhausted
 
 
@@ -69,7 +63,12 @@ def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, f
     missing, deferred, admitted, total, longest, reserved = [], [], [], 0, 0, preparation_seconds
     lifecycle = 0
     concurrency = min(config.max_tasks, config.max_samples)
-    for item in pending:
+    queue = list(pending)
+    counts = dict.fromkeys((item[2].key for item in queue), 0)
+    while queue:
+        # Keep models with fewer admitted epochs first, including after a deferral.
+        index = min(range(len(queue)), key=lambda index: counts[queue[index][2].key])
+        item = queue.pop(index)
         evaluation, mode, actor, epoch, attempt = item
         metadata = {"eval_id": evaluation.id, "eval_hash": evaluation.hash, "type": evaluation.declaration.type,
                     **actor.metadata, "mode": mode, "epoch": epoch}
@@ -96,6 +95,7 @@ def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, f
         else:
             missing.append(row)
             admitted.append(item)
+            counts[actor.key] += 1
             total += seconds
             longest = max(longest, seconds)
             lifecycle += task_overhead

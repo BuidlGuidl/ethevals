@@ -425,7 +425,8 @@ Gated runs and runs with no paid work create no receipt or results PR.
 The recovery check runs in its own step. Only that step receives its read token.
 It scans recent artifacts, independent of workflow step names, and checks markers against committed receipts.
 If an artifact remains unrecorded, the run stops and names the run to recover.
-Artifacts retain logs and discovery reports for 14 days. The recovery scan stops at that retention boundary.
+Artifacts retain logs and discovery reports for 14 days. Recovery reads markers within that retention window.
+The metadata scan stops after 100 pages and fails closed if more remain. It does not assume artifact order.
 An unreadable artifact within the scan blocks paid work. Recover it or record an accepted loss before funding another run.
 
 To recover a failed run, download its `eval-run-RUN_ID-ATTEMPT` artifact before it expires.

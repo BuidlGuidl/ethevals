@@ -101,7 +101,8 @@ def test_publication_retry_uses_artifact_identity_and_gate_ignores_step_names(tm
     def api(*args, **kwargs):
         queries.append(args[-1])
         return subprocess.CompletedProcess(args, 0, stdout=archive.getvalue() if args[-1].endswith("/zip")
-                                           else json.dumps({"artifacts": [artifact]}))
+                                           else json.dumps({"artifacts": [
+                                               {**artifact, "id": 0, "created_at": "1900-01-01T00:00:00Z"}, artifact]}))
 
     monkeypatch.setattr(ci, "command", api)
     with pytest.raises(ValueError, match="12-1"):
@@ -165,6 +166,17 @@ def test_admission_counts_discovery_and_startup_and_interleaves_models():
     assert (report["missing_epochs"], report["reserved_wall_seconds"], report["task_lifecycle_seconds"]) == (1, 1900, 120)
 
 
+def test_deferred_long_epochs_keep_admission_balanced_across_models():
+    from collections import Counter
+    config = load_config()
+    evals = [load_eval(path, config) for path in sorted((ROOT / "evals").glob("*/*"))]
+    players, _ = select_actors(config, modes=["vanilla", "internet"], planning=True)
+    report = plan(evals, config, players, [], wall_seconds=16200)
+    assert dict(Counter(row["model"] for row in report["missing"])) == {
+        "openrouter/anthropic/claude-opus-5.5": 2, "openrouter/openai/gpt-6-sol": 2,
+        "openrouter/moonshotai/kimi-k3": 2, "openrouter/z-ai/glm-5.3": 1}
+
+
 def test_run_executes_final_admission_without_selecting_again(tmp_path, monkeypatch):
     import ethevals.planning as planning
     import ethevals.runner as runner
@@ -188,6 +200,19 @@ def test_run_executes_final_admission_without_selecting_again(tmp_path, monkeypa
     assert [(r["epoch"], r["status"]) for r in rows] == [(1, "passed"), (2, "passed")]
     assert [r["epoch"] for r in report["missing"]] == [1, 2]
     assert report["preparation_seconds"] == 100
+
+
+def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path, monkeypatch):
+    config, evaluation = quiz()
+    first = config.models["opus"].model_copy(update={"model": "mockllm/shared", "harness": None})
+    config.models = {"high": first, "low": first.model_copy(update={"effort": "low"})}
+    config.grader.model = "mockllm/grader"
+    # Both providers are MockLLM. The gate key never reaches a provider request.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "inert-offline-gate-key")
+    success, rows = run([evaluation], config, tmp_path, models=["high", "low"], modes=["vanilla"], epochs=1, budget=20)
+    assert success
+    assert [(row["effort"], row["status"], row["attempt"]) for row in rows] == [
+        ("high", "failed", 1), ("low", "failed", 1)]
 
 
 @pytest.mark.parametrize("mode", ["vanilla", "internet"])
