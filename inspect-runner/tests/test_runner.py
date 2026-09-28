@@ -473,7 +473,13 @@ def test_kill_and_resume_keeps_completed_epochs(folder, tmp_path):
             deadline = time.monotonic() + 30
             while time.monotonic() < deadline and process.poll() is None:
                 for path in (output / "logs").glob("*.eval"):
-                    log = read_eval_log(path)
+                    try:
+                        log = read_eval_log(path)
+                    except ValueError as error:
+                        if "EOCD not found" not in str(error):
+                            raise
+                        # Inspect has opened the ZIP but has not written its directory yet.
+                        continue
                     completed.extend((log.eval.metadata["epoch"], sample.uuid)
                                      for sample in log.samples or [] if sample.scores)
                 if completed:

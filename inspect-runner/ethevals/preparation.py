@@ -1,35 +1,91 @@
-"""Discover reference checks for an eval and its scoring inputs."""
+"""Discover each scorer's reference checks before player epochs."""
 import hashlib
 import json
+import subprocess
 from dataclasses import replace
 
+import anyio
 from inspect_ai import Task, eval
-from inspect_ai.dataset import Sample
 from inspect_ai.model import get_model
 from inspect_ai.scorer import scorer, accuracy
 from inspect_ai.solver import solver
-from inspect_ai.util import SandboxEnvironmentSpec, sandbox
+from inspect_ai.util import SandboxEnvironmentSpec, sandboxenv
+from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
+import yaml
 
-from .scorers import EVALUATIONS, checks_score, forge, forge_results, prepare_forge, compiler_diagnostic
+from .scorers import EVALUATIONS, SCORERS, checks_score
 from .sandboxes import IMAGES, compose_file, validate_compose
 from .config import read_yaml
 from .images.tag import image_tag
 
 CHECK_SETS = {}
+SETUP_SECONDS = 150
+
+
+@sandboxenv(name="ethevals_docker")
+class EvalDocker(DockerSandboxEnvironment):
+    """Run scorer setup before Inspect starts sample time and cost limits."""
+
+    @classmethod
+    async def sample_init(cls, task_name, config, metadata):
+        environments = await super().sample_init(task_name, config, metadata)
+        try:
+            evaluation = EVALUATIONS[(metadata["eval_id"], metadata["eval_hash"])]
+            with anyio.fail_after(SETUP_SECONDS):
+                for item in evaluation.scorers:
+                    if setup := SCORERS[item.kind].setup:
+                        await setup(item, evaluation, environments)
+        except BaseException as error:
+            with anyio.CancelScope(shield=True):
+                await super().sample_cleanup(task_name, config, environments, False)
+            if isinstance(error, TimeoutError):
+                raise RuntimeError("Eval setup exceeded its time limit.") from error
+            raise
+        return environments
+
+
+def sandbox_type(evaluation):
+    return "ethevals_docker" if any(SCORERS[item.kind].setup for item in evaluation.scorers) else "docker"
+
+
+def docker_command(command):
+    try:
+        return subprocess.run(command, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f"Docker failed: {(error.stderr or error.stdout or str(error))[-8192:]}") from error
 
 
 def check_cache_path(evaluation, output, compose=None):
-    image = read_yaml(compose or compose_file())["services"]["scorer"]["image"]
-    inputs = [evaluation.hash.encode(), image.encode(), image_tag(IMAGES).encode(), b"forge-check-names-v1"]
+    path = compose or compose_file(evaluation.declaration.type)
+    images = {name: service["image"] for name, service in read_yaml(path)["services"].items()}
+    inputs = [evaluation.hash.encode(), json.dumps(images, sort_keys=True).encode(),
+              image_tag(IMAGES).encode(), (IMAGES / "foundry.toml").read_bytes(), b"scorer-discovery-v3"]
+    if "chain" in images:
+        inputs.append(image_tag(IMAGES, "chain").encode())
+    for item in evaluation.scorers:
+        inputs.extend(SCORERS[item.kind].cache_inputs(IMAGES))
     key = hashlib.sha256(b"\0".join(inputs)).hexdigest()
     return output / "inputs" / evaluation.hash / key / "checks.json"
 
 
 def prepare_compose(evaluation, output):
     if "compose.yaml" not in evaluation.files:
-        return compose_file()
+        stock = compose_file(evaluation.declaration.type)
+        document = yaml.safe_load(stock.read_bytes())
+        built = {name: service for name, service in document["services"].items()
+                 if name not in {"default", "scorer"} and "build" in service}
+        if not built:
+            return stock
+        # Both stock images use names derived from their build inputs.
+        docker_command(["docker", "compose", "-f", str(stock), "build",
+                        *[name for name, service in document["services"].items() if "build" in service]])
+        for service in document["services"].values():
+            service.pop("build", None)
+        data = yaml.safe_dump(document).encode()
+    else:
+        data = evaluation.files["compose.yaml"]
     path = output.resolve() / "inputs" / evaluation.hash / "compose.yaml"
-    normalized = validate_compose(path, data=evaluation.files["compose.yaml"])
+    normalized = validate_compose(path, data=data)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(normalized)
     return path
@@ -47,50 +103,54 @@ def reference_checks(eval_id, eval_hash):
     evaluation = EVALUATIONS[(eval_id, eval_hash)]
 
     async def score(state, target):
-        reference = {name.removeprefix("scorer/solution/"): data for name, data in evaluation.files.items()
-                     if name.startswith("scorer/solution/")}
-        box = sandbox("scorer")
-        await prepare_forge(box, reference, evaluation.files)
-        result = await forge(box)
-        checks = {name: check for name, check in forge_results(result.stdout).items() if name.startswith("forge:test/")}
-        if not result.success or not checks or not all(check["passed"] for check in checks.values()):
-            failures = [f"{name}: {check['reason']}" for name, check in checks.items() if not check["passed"]]
-            diagnostic = compiler_diagnostic(result.stdout, result.stderr)
-            if diagnostic:
-                failures.append(diagnostic)
-            raise RuntimeError("Reference tests failed during check discovery. "
-                               + ("; ".join(failures) or f"Forge exited {result.returncode} without test results."))
-        return checks_score(checks)
+        checks, discovered = {}, {}
+        for item in evaluation.scorers:
+            discover = SCORERS[item.kind].discover
+            if discover:
+                found = await discover(item, evaluation)
+                if not found or not all(check["passed"] for check in found.values()):
+                    reasons = "; ".join(f"{name}: {check['reason']}" for name, check in found.items() if not check["passed"])
+                    raise RuntimeError(f"{item.kind}: reference checks failed during discovery: {reasons or 'no checks'}")
+                if checks.keys() & found.keys():
+                    raise ValueError("Scorers returned duplicate check names")
+                checks.update(found)
+                discovered[item.kind] = sorted(found)
+        result = checks_score(checks)
+        result.metadata["discovered"] = discovered
+        return result
     return score
 
 
 def prepare_eval(evaluation, output, compose=None):
-    if not any(item.kind == "tests" for item in evaluation.scorers):
+    required = {item.kind for item in evaluation.scorers if SCORERS[item.kind].discover}
+    if required <= evaluation.discovered_checks.keys():
         return evaluation
+    compose = compose or prepare_compose(evaluation, output)
     path = check_cache_path(evaluation, output, compose)
-    if evaluation.test_checks:
-        return evaluation
     key = path.parent.name
     if key in CHECK_SETS:
         names = CHECK_SETS[key]
     elif path.exists():
         names = json.loads(path.read_text())
-        if not isinstance(names, list) or not names or any(not isinstance(name, str) or not name.startswith("forge:test/") for name in names):
-            raise ValueError(f"{path}: invalid reference check cache")
     else:
         EVALUATIONS[(evaluation.id, evaluation.hash)] = evaluation
-        task = Task(name="reference-checks", dataset=[Sample(input="Discover reference checks.")],
-                    solver=no_player(), scorer=reference_checks(evaluation.id, evaluation.hash),
-                    model=get_model("mockllm/model"),
-                    sandbox=SandboxEnvironmentSpec(type="docker", config=str(compose or prepare_compose(evaluation, output))))
+        task = Task(name="reference-checks", dataset=[evaluation.sample()],
+                    solver=no_player(),
+                    scorer=reference_checks(evaluation.id, evaluation.hash), model=get_model("mockllm/model"),
+                    sandbox=SandboxEnvironmentSpec(type=sandbox_type(evaluation), config=str(compose)))
         logs = eval(task, log_dir=str(path.parent / "preflight"), display="plain", retry_on_error=1, fail_on_error=False)
         log = logs[0]
         if log.error or not log.samples or log.samples[0].error:
             error = log.error or (log.samples[0].error if log.samples else None)
             raise ValueError(f"{evaluation.id}: reference check discovery failed: {error.message if error else 'no result'}")
-        names = sorted(log.samples[0].scores["reference_checks"].metadata["checks"])
+        names = log.samples[0].scores["reference_checks"].metadata["discovered"]
+    if (not isinstance(names, dict) or set(names) != required or
+            any(not isinstance(group, list) or not group or
+                any(not isinstance(name, str) or not name.strip() for name in group) or
+                len(set(group)) != len(group) for group in names.values())):
+        raise ValueError(f"{path}: invalid reference check cache")
     CHECK_SETS[key] = names
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(names) + "\n")
-    return replace(evaluation, test_checks=tuple(names))
+    return replace(evaluation, discovered_checks={kind: tuple(group) for kind, group in names.items()})

@@ -1,0 +1,13 @@
+{
+  "version": "0.8.30",
+  "sources": {
+    "amd64": {
+      "url": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/linux-amd64/solc-linux-amd64-v0.8.30+commit.73712a01",
+      "sha256": "f3e987dc6ecebd4bd350c48edcbc320b46cf9e3109bd3fc3d88f1acaf4c428f7"
+    },
+    "arm64": {
+      "url": "https://raw.githubusercontent.com/nikitastupin/solc/main/linux/aarch64/solc-v0.8.30",
+      "sha256": "54f48274e5ec8a58b378f07c226fa1e25801526b6b0d16129f3a14a18efe72cd"
+    }
+  }
+}

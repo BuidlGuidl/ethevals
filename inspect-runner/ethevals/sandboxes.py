@@ -1,4 +1,5 @@
 import io
+import json
 import tarfile
 import re
 import yaml
@@ -7,14 +8,15 @@ from pathlib import Path, PurePosixPath
 from inspect_ai.util import sandbox
 
 from .config import read_yaml
+from .images.tag import image_tag
 
 IMAGES = Path(__file__).with_name("images")
-SOLC_VERSIONS = ("0.8.30",)
+SOLC_VERSIONS = (json.loads((IMAGES / "solc.json").read_bytes())["version"],)
 MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
 
 
-def compose_file() -> Path:
-    path = IMAGES / "stock.compose.yaml"
+def compose_file(eval_type=None) -> Path:
+    path = IMAGES / ("act.compose.yaml" if eval_type == "act" else "stock.compose.yaml")
     validate_compose(path, stock=True)
     return path
 
@@ -44,8 +46,9 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
     services, networks = data.get("services", {}), data.get("networks", {})
     if not isinstance(services, dict) or not {"default", "scorer"} <= services.keys():
         reject("services must include default and scorer")
-    if networks != {"private": {"internal": True}, "internet": {}}:
-        reject("networks must declare private with internal: true and internet: {}")
+    if networks != {"private": {"internal": True, "driver_opts": {
+            "com.docker.network.bridge.inhibit_ipv4": "true"}}, "internet": {}}:
+        reject("networks must declare private with internal: true and inhibit_ipv4: 'true', and internet: {}")
     volumes = data.get("volumes") or {}
     if not isinstance(volumes, dict):
         reject("volumes must be a mapping")
@@ -61,9 +64,11 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
         if extra:
             reject(f"service {name}: forbidden options {sorted(extra)}; privileged containers and host mounts are forbidden")
         if name in {"default", "scorer"}:
-            runner_image = read_yaml(IMAGES / "stock.compose.yaml")["services"]["default"]["image"]
+            runner_image = image_tag(IMAGES)
             if service.get("image") != runner_image or service.get("user", "agent") != "agent":
-                reject(f"service {name}: requires the runner image and the agent user")
+                reject(f"service {name}: requires the runner image and the agent user; expected {runner_image}")
+        if name == "chain" and service.get("image") != image_tag(IMAGES, "chain"):
+            reject(f"service chain: requires the chain image {image_tag(IMAGES, 'chain')}")
         if service.get("networks") != (["private", "internet"] if name == "default" else ["private"]):
             reject(f"service {name}: only default can join internet; all services must join private")
         for volume in service.get("volumes", []):
@@ -109,7 +114,7 @@ def unpack_workspace(data: bytes) -> dict[str, bytes]:
     return files
 
 
-async def workspace_files() -> dict[str, bytes]:
+async def stop_agent():
     agent = sandbox("default")
     # Freeze every process owned by the unprivileged agent, including detached
     # writers. Root runs the collector; the agent cannot resume itself.
@@ -123,6 +128,10 @@ exit 1
 """], user="root", cwd="/", timeout=10)
     if not stopped.success:
         raise ValueError(f"Cannot stop agent processes: {stopped.stderr}")
+
+
+async def workspace_files() -> dict[str, bytes]:
+    agent = sandbox("default")
     temporary = await runner_exec(agent, ["/usr/bin/mktemp", "-d", "/tmp/ethevals.XXXXXXXXXX"], user="root", cwd="/")
     if not temporary.success:
         raise RuntimeError(f"Cannot allocate snapshot: {temporary.stderr}")

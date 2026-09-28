@@ -11,9 +11,10 @@ from .actors import Player, Grader
 from .config import Config, read_yaml
 from .loader import Eval
 from .rows import epoch_identity, export_rows, store_rows
-from .scorers import named_checks, EVALUATIONS, check_names, rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS
+from .scorers import named_checks, EVALUATIONS, SCORERS, check_names, rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS
 from .sandboxes import compose_file
-from .preparation import prepare_eval, prepare_compose
+from .preparation import prepare_eval, prepare_compose, sandbox_type
+from .images.tag import image_inputs, image_tag
 
 
 def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
@@ -25,8 +26,8 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     sample = evaluation.sample()
     images = {}
     if player.sandbox_for(evaluation):
-        compose = compose or compose_file()
-        sample.sandbox = SandboxEnvironmentSpec(type="docker", config=str(compose))
+        compose = compose or compose_file(evaluation.declaration.type)
+        sample.sandbox = SandboxEnvironmentSpec(type=sandbox_type(evaluation), config=str(compose))
         images = {name: service["image"] for name, service in read_yaml(compose)["services"].items()}
     else:
         sample.files = None
@@ -37,14 +38,17 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
         raise ValueError(f"Scoring needs {scoring_limit} seconds, but Inspect allows {time_limit / 2}.")
     metadata = {**sample.metadata, **player.metadata, **grader.metadata,
                 "created_at": datetime.now(timezone.utc).isoformat(), "mode": mode,
-                "images": images, "cost_limit_usd": config.cost_limit,
+                "images": images,
+                "runner_inputs": image_inputs() if images else {},
+                "chain_inputs": image_inputs(image="chain") if images.get("chain") == image_tag(image="chain") else {},
+                "cost_limit_usd": config.cost_limit,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
                 "free_check": player.free_check,
                 "working_limit_seconds": working_limit, "time_limit_seconds": time_limit,
                 "scoring_limit_seconds": scoring_limit,
                 "check_names": check_names(evaluation, player.free_check)}
     sample.metadata = dict(metadata)
-    if any(item.kind == "tests" for item in evaluation.scorers) and not evaluation.test_checks:
+    if any(SCORERS[item.kind].discover and item.kind not in evaluation.discovered_checks for item in evaluation.scorers):
         raise ValueError("Discover reference checks with prepare_eval before building a task.")
     EVALUATIONS[(evaluation.id, evaluation.hash)] = evaluation
     identity = hashlib.sha256(json.dumps(epoch_identity(metadata, 0)).encode()).hexdigest()[:16]

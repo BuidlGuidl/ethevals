@@ -8,6 +8,18 @@ services:
     image: ethevals-solidity:inputs-f7690ccd7debdf27
     init: true
     networks: [private]
+  chain:
+    build:
+      context: .
+      dockerfile: Chain.Dockerfile
+    image: ethevals-chain:inputs-2d2622ed7d675d9e
+    init: true
+    networks: [private]
+    healthcheck:
+      test: [CMD, cast, chain-id, --rpc-url, http://127.0.0.1:8545]
+      interval: 1s
+      timeout: 3s
+      retries: 30
 networks:
   private:
     internal: true

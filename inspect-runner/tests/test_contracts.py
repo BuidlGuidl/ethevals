@@ -57,6 +57,7 @@ def scoring_case(tmp_path, monkeypatch):
         return case["compiled"]
 
     monkeypatch.setattr(scorers, "workspace_files", submitted)
+    monkeypatch.setattr(scorers, "stop_agent", prepare)
     monkeypatch.setattr(scorers, "sandbox", lambda name: object())
     monkeypatch.setattr(scorers, "prepare_forge", prepare)
     monkeypatch.setattr(scorers, "forge", forge)
@@ -302,14 +303,14 @@ def test_cached_check_names_are_known_before_an_error_epoch(tmp_path, monkeypatc
     evaluation = load_eval(BUILD, config)
     path = check_cache_path(evaluation, tmp_path)
     path.parent.mkdir(parents=True)
-    path.write_text(json.dumps([CHECK]))
+    path.write_text(json.dumps({"tests": [CHECK]}))
     monkeypatch.setattr(preparation, "CHECK_SETS", {})
     prepared = prepare_eval(evaluation, tmp_path)
-    assert prepared.test_checks == ("forge:test/Token.t.sol:TokenTest:testSupply()",)
+    assert prepared.discovered_checks == {"tests": ("forge:test/Token.t.sol:TokenTest:testSupply()",)}
     # A second output uses the already discovered contract, without Docker.
     second = prepare_eval(evaluation, tmp_path / "second")
-    assert second.test_checks == ("forge:test/Token.t.sol:TokenTest:testSupply()",)
-    assert json.loads(check_cache_path(evaluation, tmp_path / "second").read_text()) == [CHECK]
+    assert second.discovered_checks == {"tests": ("forge:test/Token.t.sol:TokenTest:testSupply()",)}
+    assert json.loads(check_cache_path(evaluation, tmp_path / "second").read_text()) == {"tests": [CHECK]}
 
 
 def test_check_cache_tracks_image_foundry_and_naming_inputs(tmp_path, monkeypatch):

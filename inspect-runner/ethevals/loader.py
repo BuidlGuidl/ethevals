@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -36,7 +36,7 @@ class Eval:
     declaration: EvalDeclaration
     scorers: list[Declaration]
     files: dict[str, bytes]
-    test_checks: tuple[str, ...] = ()
+    discovered_checks: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def sample(self) -> Sample:
         # Only workspace files are eligible for copying into a future sandbox.
@@ -98,9 +98,15 @@ def load_eval(folder: Path, config: Config) -> Eval:
             raise ValueError(f"{path}: {error}") from error
         scorers.append(scorer_config)
         kinds.add(kind)
+    if declaration.type == "act" and "check_script" not in kinds:
+        raise ValueError(f"{path}: act evals require check_script")
     validate_hf_export(declaration, scorers, str(path))
-    if "rubric" in kinds and ("tests" not in kinds or [item.kind for item in scorers].index("rubric") < [item.kind for item in scorers].index("tests")):
-        raise ValueError(f"{path}: rubric requires tests before it to supply compiled evidence")
+    preceding = set()
+    for item in scorers:
+        required = set(SCORERS[item.kind].requires)
+        if not required <= preceding:
+            raise ValueError(f"{path}: {item.kind} requires {', '.join(sorted(required))} before it to supply evidence")
+        preceding.add(item.kind)
     if declaration.type in {"build", "act"} and not (folder / "scorer/solution").is_dir():
         raise ValueError(f"{folder}: scorer/solution is required for build and act evals")
     if (folder / "compose.yaml").is_dir():

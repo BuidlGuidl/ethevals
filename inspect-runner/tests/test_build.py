@@ -84,7 +84,9 @@ def test_unsafe_compose_is_rejected(tmp_path, extra, reason):
 def test_services_cannot_join_internet(tmp_path):
     data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
     data["services"]["default"].pop("build")
-    data["services"]["chain"] = {"image": "chain:test", "networks": ["private", "internet"]}
+    data["services"]["chain"] = yaml.safe_load((IMAGES / "act.compose.yaml").read_text())["services"]["chain"]
+    data["services"]["chain"].pop("build")
+    data["services"]["chain"]["networks"] = ["private", "internet"]
     path = tmp_path / "compose.yaml"
     path.write_text(yaml.safe_dump(data))
     with pytest.raises(ValueError, match="only default can join internet"):

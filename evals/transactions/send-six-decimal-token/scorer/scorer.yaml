@@ -1,0 +1,2 @@
+scorers:
+  - kind: check_script

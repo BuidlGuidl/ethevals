@@ -2,7 +2,7 @@
 
 ETH Evals measures what bare models know about Ethereum and how well agents do Ethereum work.
 
-The runner uses Inspect for quizzes and Solidity builds.
+The runner uses Inspect for quizzes, Solidity builds, and chain transactions.
 Claude Code, Codex CLI, and OpenCode run in Docker in the internet mode.
 A separate container grades their code with Forge.
 
@@ -16,7 +16,7 @@ uv sync --frozen
 ```
 
 Docker is required for builds and internet epochs. Vanilla quiz checks need no Docker.
-Build the pinned Solidity image before the first build or internet epoch:
+For build evals and internet quizzes, build the Solidity image before the first epoch:
 
 ```sh
 docker compose -f inspect-runner/ethevals/images/stock.compose.yaml build default
@@ -25,9 +25,13 @@ docker compose -f inspect-runner/ethevals/images/stock.compose.yaml build defaul
 The image includes Foundry 1.5.1, Solidity 0.8.30, OpenZeppelin 5.4.0, and forge-std 1.9.7.
 The last two dependencies live in a root-owned directory. Submitted copies cannot replace them during grading.
 It also supplies Node 20.11.0 and ripgrep for OpenCode. Rebuild the image after pulling runner changes.
-The image tag hashes `Dockerfile` and `foundry.toml`. Tests reject a tag that no longer matches those inputs.
-After changing either input, run `uv run python inspect-runner/ethevals/images/tag.py`.
-Use its output for both image tags in `stock.compose.yaml`, then rebuild.
+Both image names hash their Dockerfile and copied files. Grading settings in `foundry.toml` do not rename an image.
+The runner hashes `Dockerfile` and `solc.json`. The chain hashes `Chain.Dockerfile`, `solc.json`, and `rpc_filter.py`.
+`solc.json` supplies the compiler version, URLs, and checksums for both images and the runner's compiler list.
+Preparation rejects a declared stock image name that differs from its computed name.
+After changing build inputs, run `uv run python inspect-runner/ethevals/images/tag.py`.
+Use its output in `stock.compose.yaml` and `act.compose.yaml`, then rebuild.
+These names identify inputs, not image bytes. The runner's apt packages remain unpinned, so fresh builds can differ.
 
 ## Run without a key
 
@@ -36,8 +40,8 @@ env -u OPENROUTER_API_KEY uv run ethevals check
 env -u OPENROUTER_API_KEY uv run pytest
 ```
 
-`check` runs each quiz's reference answer and the build's reference solution for three epochs.
-It repeats the pipeline with empty answers and the untouched build workspace.
+`check` runs each quiz's reference answer and each build or act reference solution for three epochs.
+It repeats the pipeline with empty answers, untouched workspaces, and untouched chains.
 The command succeeds only when every reference passes and every untouched case fails.
 It makes no paid call. Rubrics do not run in `check`.
 Every invocation runs fresh, including when its output folder already contains logs.
@@ -138,9 +142,9 @@ Each epoch is identified by its eval hash, agent, mode, and epoch number.
 Price or grader changes never repeat completed agent work.
 Rows retain the prices and grader used at execution time.
 
-Quizzes allow 300 seconds of working time. Builds allow 1,200 seconds.
+Quizzes allow 300 seconds of working time. Builds and acts allow 1,200 seconds.
 Inspect excludes provider retry backoff and sandbox waits from working time.
-The wall-clock backstop is three times the working limit: 900 seconds for quizzes and 3,600 seconds for builds.
+The wall-clock backstop is three times the working limit: 900 seconds for quizzes and 3,600 seconds for builds and acts.
 The configuration gives the player a $5 cost budget.
 The grader has separate model, effort, and output settings. Each model ID has one price schedule across both roles.
 Config loading rejects conflicting prices for the same model ID.
@@ -153,6 +157,7 @@ Inspect meters completed requests separately. The ceiling also covers abandoned 
 Each grader call has a 60-second total deadline, including backoff, and a 20-second attempt timeout.
 The two-question build permits 240 seconds of grading plus 180 seconds of Forge execution.
 Scoring has a 540-second total deadline, including 120 seconds for snapshot and transfer work.
+Act scoring has a 240-second total deadline, including its 120-second check script and 120 seconds for capture and transfer.
 Task creation rejects scoring bounds that cannot fit inside Inspect's scoring window, half the wall-clock backstop.
 Inspect meters configured prices, including the lower price for cached reads. These prices are estimates until checked.
 Limits stop further calls after usage arrives. An in-flight call can exceed its remaining budget.
@@ -169,6 +174,53 @@ An incorrect answer produces `status: failed`, with `passed: false`.
 
 [The runner reference](inspect-runner/README.md) describes eval folders, results rows, and extension hooks.
 [CONTEXT.md](CONTEXT.md) defines the project terms.
+
+## Write an act eval
+
+Copy [send-six-decimal-token](evals/transactions/send-six-decimal-token) into `evals/transactions/<name>/`.
+Set `type: act`, `modes: [internet]`, and a prompt in `eval.yaml`.
+Declare `scorers: [{kind: check_script}]` in `scorer/scorer.yaml`.
+Keep the starting files under `workspace/`.
+
+Write `scorer/setup.py` to prepare the chain before the agent starts.
+Use a fresh key, fund it, and deploy the task's contracts.
+The script returns JSON with a `files` mapping of workspace paths to text.
+The fixture supplies `chain.json` with the key, contract addresses, and `http://chain:8545`.
+Setup and check code stay in the chain container. Only those selected output files reach the agent.
+Setup has its own 120-second script limit and a 150-second total limit, including file transfer.
+Setup consumes neither the player's time allowance nor its recorded working time. Setup failures and timeouts are errors.
+
+Write `scorer/check.py` to print named checks with boolean `passed` and a one-line `reason`.
+Write `scorer/solution/run.sh` to sign and send through the public RPC URL, using the supplied key.
+The reference runs in the offline scorer, which also receives the workspace and setup's selected files.
+Author scripts can reach the private containers. They cannot reach the host or internet.
+Compose requires `internal: true` and `com.docker.network.bridge.inhibit_ipv4: "true"` on the private network.
+The runner discovers check names from that reference before any agent epoch.
+Wrong amounts, missing verdicts, and crashed check scripts keep the same check set.
+
+The stock chain uses Anvil 1.5.1 behind an RPC allowlist in the same container.
+Anvil listens on localhost. The agent can read chain state and send signed raw transactions through the filter.
+It cannot use unlocked sends, unsigned sends, signing methods, WebSockets, or chain controls.
+A namespace blocklist misses `eth_sendUnsignedTransaction`, which moves value without a key.
+The runner stops the agent's processes once, then closes the filter.
+The request already forwarding finishes. Waiting requests fail.
+Capture disables mining, clears the pool, and waits for an empty block after any active mining.
+The check reads the state at that final block. No interval mining runs.
+
+The chain image builds independently of the runner image.
+It uses digest-pinned Python 3.13.7 and Foundry 1.5.1 images, plus checksum-pinned solc 0.8.30 for each architecture.
+The runner builds both images for act evals. A build failure becomes that eval's discovery error with Docker's message.
+Rows record both input-based image names under `images`.
+`runner_inputs` and `chain_inputs` record SHA-256 hashes of each image's build files, including the shared compiler manifest.
+Then run the free check:
+
+```sh
+env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN \
+  uv run ethevals check --evals evals/transactions/send-six-decimal-token
+```
+
+The reference must pass every check. The untouched chain must fail the epoch.
+[The act contract](inspect-runner/README.md#act-scoring) gives script paths, limits, and failure rules.
 
 ## Run the paid ADR 0002 test
 
@@ -195,8 +247,8 @@ The build row has `harness: claude_code`, eight `forge:` checks, and two `rubric
 The rubric's tokens and cost appear in `grader_tokens` and `grader_cost_usd`.
 Rows with `status: error` need diagnosis. An agent's incorrect code has `status: failed`.
 Before player epochs start, a key-free reference run discovers the seven test functions.
-The cache includes the eval hash, declared image tag, computed image tag, and check-naming version.
-`images/tag.py` hashes the Dockerfile and Foundry config for both the image tag and cache identity.
+The cache includes the eval hash, service image names, computed stock image names, grading config, and check-naming versions.
+An edit to `foundry.toml` invalidates discovered checks without renaming either image.
 Names live under `inputs/<eval_hash>/<scoring_hash>/checks.json`. `forge:compile` completes the Forge check set.
 Missing expected names after compilation are runner errors unless that suite's constructor or `setUp()` failed.
 Discovery runs only for evals with missing epochs. Failures append to `discovery-errors.json`; other evals continue.

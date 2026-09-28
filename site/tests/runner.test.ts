@@ -26,7 +26,7 @@ test("the board reads the merged runner's catalog and reference and empty rows",
   run(["check", "--evals", "evals/concepts/agent-registries", "--epochs", "1", "--output", path.join(root, "results")]);
   const evaluations = loadEvaluations(path.join(site, ".catalog/catalog.json"));
   assert.deepEqual(evaluations.map((evaluation) => evaluation.id),
-    ["building/erc20-points-token", "concepts/agent-registries", "concepts/wei-per-ether"]);
+    ["building/erc20-points-token", "concepts/agent-registries", "concepts/wei-per-ether", "transactions/send-six-decimal-token"]);
   for (const answer of ["reference", "empty"]) {
     const filename = path.join(root, "results", answer, "rows.jsonl");
     const rows = parseRows(readFileSync(filename, "utf8"), filename, evaluations);
@@ -35,7 +35,7 @@ test("the board reads the merged runner's catalog and reference and empty rows",
     assert.equal(rows[0].eval_hash, evaluations.find((evaluation) => evaluation.id === rows[0].eval_id)!.hash);
     const board = loadBoard({ ETHEVALS_ROWS: filename }, site);
     assert.deepEqual([Object.keys(board.evaluations), board.tables.internet.subjects, board.tables.vanilla.subjects],
-      [["building/erc20-points-token", "concepts/agent-registries", "concepts/wei-per-ether"], [], []]);
+      [["building/erc20-points-token", "concepts/agent-registries", "concepts/wei-per-ether", "transactions/send-six-decimal-token"], [], []]);
   }
   const plan = JSON.parse(run(["publish-logs", "--output", path.join(root, "results/reference"),
     "--repo", "example/ethevals", "--run-id", "123-1", "--commit", "a".repeat(40), "--dry-run"]));

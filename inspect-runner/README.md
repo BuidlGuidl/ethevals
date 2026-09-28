@@ -10,6 +10,7 @@ The pillar is `concepts`, `transactions`, `building`, or `security`.
 The folder contains `eval.yaml`, `workspace/`, and `scorer/scorer.yaml`.
 An optional `compose.yaml` declares services for an internet epoch.
 Without it, the runner uses `images/stock.compose.yaml` for quizzes and builds.
+Act evals use `images/act.compose.yaml` with the shared chain service.
 
 `eval.yaml` requires `type`, `motivation`, `prompt`, and `modes`.
 It accepts optional `choices`, a list of strings, and `time_limit`, a positive number of seconds.
@@ -93,6 +94,7 @@ The Python `run()` result also contains only the current selection. `rows.jsonl`
 | `eval_id`, `eval_hash`, `pillar`, `type` | Eval identity at execution time. |
 | `harness`, `model`, `effort`, `mode` | Agent or bare model identity. A bare model has a null harness. |
 | `harness_version`, `images` | Harness version and service image tags used for this execution. |
+| `runner_inputs`, `chain_inputs` | SHA-256 hashes of each stock image's Dockerfile and copied files. Both include `solc.json`. |
 | `grader_model`, `grader_effort`, `grader_prices` | Grader identity and configured prices. Free checks bind the grader to mockllm. |
 | `answer_kind` | `reference`, `empty`, or `default` for mock checks. Null for paid epochs. |
 | `epoch`, `status`, `passed` | Epoch number and result. Errors have a null verdict. |
@@ -129,6 +131,13 @@ The site's normal build runs this command and reads schema v3 rows. See [the sit
 
 `SCORERS` in `scorers.py` owns each kind's schema, validation, sample fields, reference reply, and scorer factory.
 Each kind also supplies its check names, workspace files, and prompt note.
+The optional `setup`, `discover`, and `capture` hooks prepare services, discover names, and capture grading inputs.
+Each kind supplies its cache inputs. Generic discovery stores a mapping from kind to names.
+Sandbox initialization runs setup hooks before Inspect starts the player's limits and working-time clock.
+The generic boundary stops the agent once, then calls each selected capture hook before scoring.
+Scorers share captured state through `Submission.captures`; the build capture owns Forge's compiled source records.
+`scoring_base.py` owns the shared types and `SubmissionFailed`. The generic scorer catches that exception once to fail the fixed set.
+The `requires` field declares scorer order dependencies. The rubric requires tests before it.
 Only `tests` supplies `foundry.toml` and the Solidity note. Internet quizzes receive neither.
 A `tests` eval must omit `workspace/foundry.toml`; the loader rejects an author's copy.
 A new kind returns an Inspect `Score` with `metadata["checks"]`.
@@ -163,8 +172,8 @@ Each model ID has one price schedule across both roles. Config loading rejects c
 `EXA_API_KEY` supplies an optional key for the configured `mcp.exa.ai` endpoint. Without it, search uses the keyless endpoint.
 `time_limit` supplies the fallback working-time limit. `time_limits` sets working limits by eval type.
 An eval's `time_limit` takes precedence.
-Quizzes allow 300 working seconds; builds allow 1,200. Inspect excludes retry backoff and sandbox waits.
-The wall-clock backstop is three times the working limit: 900 seconds for quizzes and 3,600 seconds for builds.
+Quizzes allow 300 working seconds; builds and acts allow 1,200. Inspect excludes retry backoff and sandbox waits.
+The wall-clock backstop is three times the working limit: 900 seconds for quizzes and 3,600 seconds for builds and acts.
 `cost_limit` gives the player $5. The grader has a computed allowance instead of a configurable minimum.
 Each request caps serialized messages and generation settings at 300,000 bytes, including filenames and omission counts.
 Evidence uses ASCII escapes. The allowance reserves one input token per serialized byte.
@@ -182,6 +191,7 @@ Grader calls set `max_retries=2`, so brief provider failures can recover without
 Inspect applies its backoff between attempts. Invalid replies permit at most two generation calls per question.
 Two questions permit 240 seconds of grader calls plus 180 seconds of Forge execution.
 The total scoring deadline adds 120 seconds for snapshot and transfer work, for 540 seconds in the current build.
+Act scoring allows 120 seconds for the check script plus 120 seconds for capture and transfer, for 240 seconds total.
 Task creation requires that deadline to fit inside Inspect's scoring window, half the wall-clock backstop.
 Player working-time and cost limits take precedence over scoring errors and produce a final failed row.
 After a player limit, scoring skips the snapshot and grader.
@@ -217,8 +227,8 @@ The agent and scorer have separate filesystems with no shared volumes.
 
 Before any player epoch, the runner discovers checks with a key-free reference run in the scorer container.
 It caches names under `inputs/<eval_hash>/<scoring_hash>/checks.json` and reuses them across epochs.
-The scoring hash includes the eval hash, declared image tag, computed image tag, and check-naming version.
-`images/tag.py` hashes the Dockerfile and Foundry config for both the image tag and cache identity.
+The scoring hash includes the eval hash, service image names, computed stock image names, grading config, and check-naming versions.
+An edit to `foundry.toml` invalidates discovered checks without renaming either image.
 Cache hits do not rewrite existing files.
 Its test functions define `forge:<test path>:<suite>:<function signature>` checks. `forge:compile` always accompanies them.
 The reference must pass. Discovery runs only for evals with missing epochs and permits one infrastructure retry.
@@ -264,9 +274,12 @@ Scorer options in logs contain only the eval ID and hash. The scorer resolves ca
 
 Custom compose files use prebuilt images and declare `default` and `scorer` services.
 Those two services require the stock runner image and its unprivileged `agent` user.
-Other services can choose their own images. This keeps process control and runner-owned dependencies outside the eval author's control.
-All services join the `private` network with `internal: true`.
+The `chain` service requires the computed stock chain image name. Other services can choose their own images.
+These rules keep process control and runner-owned dependencies outside the eval author's control.
+All services join the `private` network with `internal: true` and `com.docker.network.bridge.inhibit_ipv4: "true"`.
+The bridge has no host IPv4 address. Private-only services can reach each other, but cannot reach the host or internet.
 Only `default` also joins the `internet` network. The scorer has no internet access.
+The player container retains internet and host access through its internet network.
 No service publishes host ports. Privileged mode, host namespaces, host paths, and external volumes are rejected.
 The agent and scorer cannot mount volumes. Other services can use declared private named volumes.
 Custom Docker builds are rejected because their contexts can include scorer files.
@@ -285,8 +298,93 @@ They also run reference and untouched-workspace scripts through each of the four
 Each agent proof makes one real Exa search and records the raw CLI effort in `cli-requests.jsonl`.
 OpenCode proofs check the selected system prompt and model identity.
 
-Step 4 can add chain images and private services without changing the agent solver.
-It still needs service setup and act reference preparation. No setup script runs in this step.
+## Act scoring
+
+An act eval declares `scorers: [{kind: check_script}]` and `modes: [internet]`.
+The [token fixture](../evals/transactions/send-six-decimal-token) sends 12.5 tokens with six decimals.
+Its two checks inspect the recipient's exact balance and the transaction's sender.
+Both checks fail on the untouched chain.
+
+The stock compose file adds one `chain` service on the private network.
+The chain image builds independently of the runner image and installs no packages from a changing apt index.
+It copies Foundry 1.5.1 binaries from digest `sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e`.
+Its Python 3.13.7 base uses digest `sha256:adafcc17694d715c905b4c7bebd96907a1fd5cf183395f0ebc4d3428bd22d92d`.
+Both image indexes include arm64 and amd64.
+Both images read the compiler version, URLs, and per-architecture SHA-256 checksums from [solc.json](ethevals/images/solc.json).
+The amd64 compiler comes from ethereum/solc-bin. The arm64 compiler comes from nikitastupin/solc, which Foundry also uses.
+Preparation builds both images and retains their computed names in the execution compose file.
+Rows record both names in `images`, with file hashes in `runner_inputs` and `chain_inputs`. No registry push is needed.
+Additional custom services have no stock input hashes. An absent chain has an empty `chain_inputs` mapping.
+A build failure becomes that eval's discovery error and includes Docker's last 8 KiB of diagnostics.
+The discovery cache includes both image names, the eval hash, grading config, and naming versions.
+
+Anvil listens at `127.0.0.1:8546` inside the chain container, with no generated accounts and no interval mining.
+The filter listens at `http://chain:8545`. It accepts only JSON-RPC POST requests to `/`.
+It allows standard wallet reads and `eth_sendRawTransaction`.
+The full list lives in [rpc_filter.py](ethevals/images/rpc_filter.py).
+It rejects the whole batch if any member names a refused method.
+It rejects WebSocket upgrades, other HTTP paths, and bodies above 2 MiB.
+Batches permit at most 100 requests. The filter permits at most 32 active connections.
+Refused methods return JSON-RPC error `-32601`. The epoch log retains refusal messages.
+Each refusal uses at most 1 KiB. The log stops at 1 MiB and never writes refusals to container stdout.
+Capture retains the whole bounded refusal log in an Inspect info event.
+Upstream responses above 2 MiB return `Chain response too large.`
+
+The allowlist blocks unknown methods by default.
+Anvil unlocks generated accounts, and `eth_sendUnsignedTransaction` bypasses signatures even without generated accounts.
+Blocking only `anvil_*`, `evm_*`, and `hardhat_*` leaves those bypasses open.
+Agents must sign locally with the fresh key that setup funds.
+
+The script contract is:
+
+- `scorer/setup.py` is optional. It runs once before the player, in `/eval` inside the chain container.
+- All private files under `scorer/`, except `solution/`, reach that container from the captured eval manifest.
+- Scripts run with Python 3. `RPC_URL` points directly to Anvil. `SOLC` points to `/opt/solc`.
+- `cast` and `forge` are available in both containers.
+- Author scripts can reach private containers. They cannot reach the host or internet.
+- Setup prints exactly one JSON object, `{"files": {"chain.json": "file contents"}}`.
+- File paths must be relative workspace paths. Setup cannot replace declared workspace files.
+- Setup's selected files reach both agent and scorer. Setup can retain private state under `/eval` for the check script.
+- `scorer/solution/run.sh` is required. The reference runs with Bash in the offline scorer after setup.
+- The scorer also receives the declared workspace files.
+- The solution uses the same public RPC URL and key that an agent receives.
+- `scorer/check.py` is required. It runs after capture, in `/eval` with direct Anvil access.
+- The check script prints one JSON object keyed by stable names matching `[a-z][a-z0-9_]*`.
+- Each value has exactly `passed`, a boolean, and `reason`, a nonempty string.
+- The runner adds the `script:` prefix and normalizes reasons to one line.
+- Setup and check scripts each have a 120-second limit and a 1 MiB output limit per stream.
+- Capped readers finish before the runner reads either output file. One extra byte detects overflow.
+- Setup has a separate 150-second total limit, including file transfer.
+- Setup consumes neither the player's time allowance nor its recorded working time. Setup timeouts are errors.
+- Script failures include the last 4 KiB of stderr. Failed discovery lists each failing check and its reason.
+- Public setup values remain visible to the agent.
+
+For example, a check script can print:
+
+```json
+{"recipient_balance": {"passed": true, "reason": "Recipient holds 12500000 base units."}}
+```
+
+A free reference run discovers names and must pass every check before player epochs can start.
+The names remain fixed across passing transfers, wrong amounts, missing checks, and script crashes.
+Extra runtime names cannot add checks. Missing checks fail with a reason.
+A crashed, malformed, timed-out, or oversized check script fails the full set, without an error retry.
+Setup failures, failed discovery, and Docker failures remain runner errors.
+Player working-time and cost limits fail the fixed set and skip further scoring.
+Operator stops and wall-clock stops before the working limit remain errors.
+
+The generic boundary first stops the agent's processes, including detached senders.
+Capture closes the filter and waits for the request that already holds the forwarding lock.
+Requests waiting for that lock fail. Further public RPC requests fail too.
+The runner disables mining and drops queued and pending transactions through localhost RPC.
+An awaited manual mine takes Anvil's mining lock and seals an empty block after any active mining finishes.
+Capture records that final block's hash. It adds one empty block even if the player sent no transaction.
+The check script reads that fixed chain state. It must inspect state without changing it.
+The agent cannot reopen the filter's local Unix control socket.
+
+`ethevals check` runs the reference and untouched cases through this full pipeline.
+The real Claude Code proof supports the act fixture with `--eval evals/transactions/send-six-decimal-token`.
+`tests/prove_chain.py` exercises wrong amounts, broken checks, bypass attempts, and pending transactions.
 
 The agent registry includes Claude Code, Codex CLI, and OpenCode, with pinned versions beside their factories.
 Kimi and GLM use the same OpenCode factory. The player supplies the real model and effort to Inspect.
@@ -318,8 +416,13 @@ Its built-in search calls the same keyless Exa endpoint when enabled through opt
 Claude Code keeps `WebFetch`, and OpenCode keeps `webfetch`. Codex has no native page-fetch tool.
 Every agent keeps a shell with network access.
 The stock image includes Node 20.11.0 and ripgrep for OpenCode.
-Its tag hashes `Dockerfile` and `foundry.toml`; tests reject stale tags.
-After changing either input, run `uv run python inspect-runner/ethevals/images/tag.py` and update both stock Compose image tags.
+Both image names hash their Dockerfile and copied files, in the order declared by `images/tag.py`.
+Each filename and file's bytes have a NUL separator. The name uses the first 16 hexadecimal characters of SHA-256.
+The runner's inputs are `Dockerfile` and `solc.json`. The chain adds `rpc_filter.py` to `Chain.Dockerfile` and `solc.json`.
+Grading settings in `foundry.toml` affect the check cache only. Preparation refuses stale stock image names.
+After changing build inputs, run `uv run python inspect-runner/ethevals/images/tag.py`.
+Update the names in both stock Compose files before rebuilding.
+Names identify inputs, not image bytes. The runner's apt packages remain unpinned, so fresh builds can differ.
 The bridge downloads and stages the pinned agent binaries at runtime.
 
 The [paid ADR test](../README.md#run-the-paid-adr-0002-test) gives exact commands and expected row fields.

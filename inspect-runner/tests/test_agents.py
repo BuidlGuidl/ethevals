@@ -178,9 +178,9 @@ def test_stock_image_tag_matches_inputs():
 
 def test_image_tag_changes_with_each_input(tmp_path):
     (tmp_path / "Dockerfile").write_text("FROM scratch\n")
-    (tmp_path / "foundry.toml").write_text("[profile.default]\n")
+    (tmp_path / "solc.json").write_text('{"version":"0.8.30"}\n')
     original = image_tag(tmp_path)
     (tmp_path / "Dockerfile").write_text("FROM debian\n")
     changed = image_tag(tmp_path)
-    (tmp_path / "foundry.toml").write_text("[profile.default]\noptimizer = true\n")
+    (tmp_path / "solc.json").write_text('{"version":"0.8.31"}\n')
     assert len({original, changed, image_tag(tmp_path)}) == 3

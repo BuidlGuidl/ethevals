@@ -52,11 +52,7 @@ def test_unexplained_forge_failure_produces_error_row(scoring_case):
 ])
 def test_discovery_error_names_failure(scoring_case, monkeypatch, case, reason):
     import ethevals.preparation as preparation
-    import ethevals.scorers as scorers
     scoring_case.update(CAPTURES[case])
-    monkeypatch.setattr(preparation, "sandbox", scorers.sandbox)
-    monkeypatch.setattr(preparation, "prepare_forge", scorers.prepare_forge)
-    monkeypatch.setattr(preparation, "forge", scorers.forge)
     task = scoring_case["task"]
     task.scorer = [preparation.reference_checks(task.metadata["eval_id"], task.metadata["eval_hash"])]
     row = scoring_case["run"]([])

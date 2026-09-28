@@ -200,3 +200,8 @@ def test_forge_output_file_has_a_size_cap(tmp_path, monkeypatch):
                 await forge(boxes["scorer"])
             assert len(await boxes["scorer"].read_file("/tmp/forge.stdout", text=False)) == 10485761
         anyio.run(proof)
+
+
+def test_act_checks_bypasses_and_grading_boundary(tmp_path):
+    from prove_chain import run_proof as chain_proof
+    chain_proof(tmp_path / "chain")
