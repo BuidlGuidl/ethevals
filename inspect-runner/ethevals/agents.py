@@ -1,9 +1,11 @@
 from inspect_ai.agent import as_solver
-from inspect_ai.model import Model, get_model
+from inspect_ai.model import Model
 from inspect_ai.solver import multiple_choice, solver
 from inspect_ai.tool import MCPServerConfigHTTP
 from inspect_swe import claude_code, codex_cli, opencode
 import json
+import os
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -15,7 +17,14 @@ class Harness:
     version: str
 
     def build(self, config, model):
-        servers = [MCPServerConfigHTTP(type="http", name="exa", url=config.search_provider)] if config.search_provider else []
+        url = config.search_provider
+        if url and os.environ.get("EXA_API_KEY"):
+            parts = urlsplit(url)
+            if parts.hostname == "mcp.exa.ai":
+                query = dict(parse_qsl(parts.query))
+                query["exaApiKey"] = os.environ["EXA_API_KEY"]
+                url = urlunsplit(parts._replace(query=urlencode(query)))
+        servers = [MCPServerConfigHTTP(type="http", name="exa", url=url)] if url else []
         return self.factory(model, version=self.version, mcp_servers=servers)
 
 
@@ -28,17 +37,13 @@ def claude(model, **settings):
 
 
 def codex(model, **settings):
-    async def solve(state, generate):
-        adapted = CodexModel(get_model())
-        agent = as_solver(codex_cli(
-            cwd="/workspace", model_config=model.agent_model_config,
-            web_search="disabled", retry_refusals=0,
-            config_overrides={"model_reasoning_effort": json.dumps(model.effort)},
-            model_aliases={"inspect": adapted, model.agent_model_config: adapted},
-            **settings,
-        ))
-        return await agent(state, generate)
-    return solve
+    # The active player is a CodexModel, so every bridge fallback uses it.
+    return as_solver(codex_cli(
+        cwd="/workspace", model_config=model.agent_model_config,
+        web_search="disabled", retry_refusals=0,
+        config_overrides={"model_reasoning_effort": json.dumps(model.effort)},
+        **settings,
+    ))
 
 
 class CodexModel(Model):
@@ -64,7 +69,6 @@ def restore_codex_calls(output, tools):
             if (call.function in custom and not call.parse_error
                     and set(call.arguments) == {"input"}
                     and isinstance(call.arguments["input"], str)):
-                call.arguments = {"input": call.arguments["input"]}
                 call.type = "custom"
     return output
 

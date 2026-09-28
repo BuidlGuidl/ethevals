@@ -27,6 +27,8 @@ def submit(files, variant):
             source = b"pragma solidity =0.8.29; contract BuilderPoints {}"
         elif variant == "missing_method":
             source = b"pragma solidity =0.8.30; contract BuilderPoints {}"
+        elif variant == "syntax":
+            source = b"pragma solidity =0.8.30; contract BuilderPoints { uint value = ; }"
         elif variant == "traced":
             result = await sandbox().exec(["bash", "-c", """
 case $(uname -m) in aarch64) ptrace=117 ;; x86_64) ptrace=101 ;; *) exit 1 ;; esac
@@ -87,10 +89,14 @@ def run_proof(output):
 import {Test} from "forge-std/Test.sol";
 import {BuilderPoints} from "../src/BuilderPoints.sol";
 contract ImageLibraryTest is Test { function testImageLibrary() public { assertEq(new BuilderPoints().balanceOf(address(this)), 1_000_000 ether); } } // PRIVATE_SOURCE_SENTINEL
+contract ConstructorTest is Test {
+    BuilderPoints token = new BuilderPoints();
+    function testConstructed() public view { assertEq(token.totalSupply(), 1_000_000 ether); }
+}
 '''
     evaluation = prepare_eval(replace(original, files=files, hash=content_hash(files)), output)
     tasks = []
-    for variant in ("reference", "pragma", "setup", "dependency", "snapshot", "traced", "missing_method"):
+    for variant in ("reference", "pragma", "setup", "dependency", "snapshot", "traced", "missing_method", "syntax"):
         task = build_task(evaluation, config, None, "internet", "reference", 1)
         task.metadata["answer_kind"] = variant
         task = task_with(task, name=task.name + "-" + variant)
@@ -103,11 +109,11 @@ contract ImageLibraryTest is Test { function testImageLibrary() public { assertE
     eval(tasks, log_dir=str(output / "logs"), display="plain", max_tasks=2, max_samples=2,
          retry_on_error=0, fail_on_error=False)
     rows = export_rows(output)
-    expected = {"reference": "passed", "pragma": "failed", "setup": "failed", "dependency": "passed", "snapshot": "passed", "traced": "passed", "missing_method": "failed"}
+    expected = {"reference": "passed", "pragma": "failed", "setup": "failed", "dependency": "passed", "snapshot": "passed", "traced": "passed", "missing_method": "failed", "syntax": "failed"}
     assert {row["answer_kind"]: row["status"] for row in rows} == expected, rows
     check_sets = [set(row["checks"]) for row in rows]
     assert all(names == check_sets[0] for names in check_sets)
-    assert len(check_sets[0]) == 9
+    assert len(check_sets[0]) == 10
     assert not any("testFree" in name for name in check_sets[0])
     for row in rows:
         log = read_eval_log(str(output / row["log_file"]))
@@ -124,6 +130,12 @@ contract ImageLibraryTest is Test { function testImageLibrary() public { assertE
         assert "PRIVATE_SOURCE_SENTINEL" not in str(row["checks"])
         if row["answer_kind"] == "pragma":
             assert "Available solc versions: 0.8.30" in row["checks"]["forge:compile"]["reason"]
+        elif row["answer_kind"] == "syntax":
+            assert row["checks"]["forge:compile"] == {
+                "passed": False, "reason": "Error (6933): Expected primary expression."}
+        elif row["answer_kind"] == "setup":
+            assert row["checks"]["forge:test/ImageLibrary.t.sol:ConstructorTest:testConstructed()"] == {
+                "passed": False, "reason": "constructor failed"}
     print("PASS: reference, unavailable compiler, constructor failure, owned libraries, stopped processes, and private diagnostics.")
 
 

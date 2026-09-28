@@ -61,8 +61,8 @@ def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
                 fields["choices"] = "choices"
             groups[name] = {"rows": [], "task": {
                 "id": name, "config": name, "split": "test", "field_spec": fields,
-                "solvers": [quiz_solver_spec(evaluation)],
-                "scorers": [scorer],
+                "solvers": [{"name": quiz_solver_spec(evaluation).solver, "args": quiz_solver_spec(evaluation).args}],
+                "scorers": [{"name": scorer.scorer, "args": scorer.args}],
             }}
         groups[name]["rows"].append({
             "id": evaluation.id, "input": evaluation.declaration.prompt,

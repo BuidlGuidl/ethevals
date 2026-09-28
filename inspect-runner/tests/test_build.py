@@ -31,8 +31,9 @@ def test_forge_names_and_reasons():
 
 
 def test_compiler_error_is_a_failed_check():
-    assert forge_checks("", 'Error (2314): Expected semicolon.\n --> src/Token.sol:4:1', 1, []) == {
-        "forge:compile": {"passed": False, "reason": "Error (2314): Expected semicolon. Scoring is offline. Available solc versions: 0.8.30."},
+    captured = json.loads((Path(__file__).parent / "fixtures/forge-1.5.1.json").read_text())["syntax"]
+    assert forge_checks(**captured, expected=[]) == {
+        "forge:compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},
     }
 
 
@@ -116,4 +117,4 @@ def test_eval_time_limit_overrides_type(tmp_path):
     config = load_config()
     config.cost_limit = 0.25
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
-    assert (task.time_limit, task.cost_limit) == (123, 0.25)
+    assert (task.working_limit, task.time_limit, task.cost_limit) == (123, 369, 0.25)

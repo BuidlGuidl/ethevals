@@ -82,7 +82,8 @@ This lets the runner select missing epochs without using Inspect's broader task 
 After the second error, `run` returns failure without another model call.
 `--retry-errors` grants one further execution to each selected error epoch without deleting logs.
 It never repeats a completed pass or failure. The next ordinary invocation still obeys the configured cap.
-Player time and cost limits fail the existing checks with the limit reason. The row's `limit` field records the limit.
+Player working-time and cost limits fail the existing checks with the limit reason. The row's `limit` field records the limit.
+Operator stops and wall-clock stops before the working limit produce errors.
 `check` writes fresh logs on every invocation and checks only the current selection.
 The Python `run()` result also contains only the current selection. `rows.jsonl` contains the whole store.
 
@@ -98,6 +99,8 @@ The Python `run()` result also contains only the current selection. `rows.jsonl`
 | `attempt`, `max_attempts` | Execution count and configured cap per identity. |
 | `model_metered_usd`, `grader_metered_usd` | Dollars recorded by Inspect's cost meter for each role. Mock usage can have synthetic prices. |
 | `cost_limit_usd`, `grader_cost_limit_usd`, `limit` | Separate budgets and any player limit that stopped execution. |
+| `working_limit_seconds`, `time_limit_seconds`, `scoring_limit_seconds` | Player working limit, wall-clock backstop, and total scoring deadline. |
+| `search_calls`, `search_failed`, `search_rate_limited` | Search calls and failed or rate-limited results found in the transcript. Repeated model inputs count once. |
 | `checks` | JSON object keyed by check name. Each check has `passed` and a one-line `reason`. |
 | `error_kind`, `error_reason` | Error details, separate from a failed check. |
 | `model_tokens`, `grader_tokens`, `total_tokens` | Total token counts. Grader usage is subtracted from overall usage. |
@@ -157,23 +160,32 @@ All four configured models declare a harness and remain available for vanilla qu
 Actor construction registers prices once, including names absent from Inspect's database.
 Each model ID has one price schedule across both roles. Config loading rejects conflicting schedules.
 `search_provider` holds the Exa MCP URL. A null value disables that MCP server.
-`time_limit` supplies the fallback limit. `time_limits` sets limits by eval type.
-An eval's `time_limit` takes precedence. It remains the main bound on a hung agent.
+`EXA_API_KEY` supplies an optional key for the configured `mcp.exa.ai` endpoint. Without it, search uses the keyless endpoint.
+`time_limit` supplies the fallback working-time limit. `time_limits` sets working limits by eval type.
+An eval's `time_limit` takes precedence.
+Quizzes allow 300 working seconds; builds allow 1,200. Inspect excludes retry backoff and sandbox waits.
+The wall-clock backstop is three times the working limit: 900 seconds for quizzes and 3,600 seconds for builds.
 `cost_limit` gives the player $5. The grader has a computed allowance instead of a configurable minimum.
 Each request caps serialized messages and generation settings at 300,000 bytes, including filenames and omission counts.
-The allowance covers two calls per question, with maximum output and three serialized bytes per input token.
-The estimate assumes no cache discount.
-It uses the higher input or cache-write price, plus the output price.
-Rows record the allowance as `grader_cost_limit_usd`. The configured two-question build allows $2.9096.
-Three bytes per token is a planning estimate. Inspect enforces the allowance against reported usage.
+Evidence uses ASCII escapes. The allowance reserves one input token per serialized byte.
+It covers two calls per question and three provider attempts per call, including abandoned attempts absent from reported usage.
+The formula is `questions * 2 * (max_retries + 1) * (300000 * max(input, cache_read, cache_write) + max_tokens * output) / 1000000`.
+`rubric_budget(evaluation, config)` supplies this ceiling for rows and the CI budget gate.
+Rows record it as `grader_cost_limit_usd`. The configured two-question build reserves $23.7288.
+The ceiling assumes the configured prices and output cap. It grants no cache discount.
 These settings live in `config.yaml`, alongside `max_attempts: 2`.
 Inspect uses the configured prices for uncached input, cache reads, cache writes, and output.
 It checks cost after each call. An in-flight call can exceed its remaining budget.
-The grader defaults to effort `none`, 4,096 output tokens, and a 60-second attempt timeout.
+The grader defaults to effort `none` and 4,096 output tokens.
+Each generation call has a 60-second total deadline, including backoff, and a 20-second attempt timeout.
 Grader calls set `max_retries=2`, so brief provider failures can recover without repeating the player epoch.
 Inspect applies its backoff between attempts. Invalid replies permit at most two generation calls per question.
-Player limits take precedence over scoring errors and produce a final failed row.
+Two questions permit 240 seconds of grader calls plus 180 seconds of Forge execution.
+The total scoring deadline adds 120 seconds for snapshot and transfer work, for 540 seconds in the current build.
+Task creation requires that deadline to fit inside Inspect's scoring window, half the wall-clock backstop.
+Player working-time and cost limits take precedence over scoring errors and produce a final failed row.
 After a player limit, scoring skips the snapshot and grader.
+An operator stop or a wall-clock stop before the working limit produces an error row.
 `max_tasks` and `max_samples` control concurrency. Both default to four.
 
 ## Build scoring
@@ -210,12 +222,18 @@ The scoring hash includes the eval hash, declared image tag, computed image tag,
 Cache hits do not rewrite existing files.
 Its test functions define `forge:<test path>:<suite>:<function signature>` checks. `forge:compile` always accompanies them.
 The reference must pass. Discovery runs only for evals with missing epochs and permits one infrastructure retry.
-A discovery failure enters `discovery-errors.json` and skips that eval. Other evals continue.
+A discovery failure appends to `discovery-errors.json` and skips that eval. Other evals continue.
+The error names failed tests, their reasons, and the compiler diagnostic when present.
 Discovery failures consume no player attempts. A later invocation can retry discovery.
 Forge runs only tests under `test/`. Agent functions outside that expected set cannot add checks.
 Compilation or submission output-limit failure fills every eval check with its reason.
-A setup failure fills that suite's missing tests.
-After compilation, missing expected names without a failed suite setup produce `status: error`.
+A failed `constructor()` or `setUp()` fills that suite's missing tests.
+After compilation, unexplained missing names produce `status: error`.
+Signal exits and output without results or a compiler diagnostic also produce errors.
+Forge streams through readers with a 10 MiB cap per stream and one extra byte to detect overflow.
+The wrapper waits for both reader process IDs before the scorer reads each file.
+The cap applies only to captured output, so Forge can write larger build-info files.
+Compilation reasons use the coded diagnostic. Only compiler-version failures include the offline compiler note.
 Scorer-side Forge output enters log events as byte counts. Compilation reasons exclude private source lines and code frames.
 Workspace failures fail all the eval's Forge and rubric checks with the snapshot reason.
 The fixed set keeps the same denominator across successful and failed submissions.
@@ -285,12 +303,15 @@ Inspect separately applies the backend effort after dropping CLI generation sett
 The proof records requests before that conversion, without setting effort on its mock model.
 
 Inspect 0.3.271 forwards namespaced custom tools to non-OpenAI providers but does not restore the reply type.
-`CodexModel` converts well-formed replies through the supported `model_aliases` option.
+`CodexModel` wraps the active player and converts well-formed replies.
+Every requested model name resolves through the bridge's fallback to that active player.
 The bridge still owns generation and delivers events to inspect_swe's `CodexConsumer`.
 Malformed replies remain function calls for Codex to reject. A regression test detects when Inspect fixes the conversion.
 All factories explicitly set `retry_refusals=0`.
 
 All agents get Exa's HTTP MCP search and fetch tools.
+Rows count failed and rate-limited search results, including ordinary tool replies that contain Exa's rate-limit message.
+Agent proofs require a structured result with a title, URL, and content field.
 Claude Code disables `WebSearch`; Codex disables `web_search` to avoid provider-hosted search APIs.
 OpenCode's OpenRouter provider does not register `websearch` by default.
 Its built-in search calls the same keyless Exa endpoint when enabled through optional search flags.
@@ -319,6 +340,7 @@ uv run ethevals publish-logs --output results/paid \
 
 The dry run writes nothing. Replace `--dry-run` with `--publish` to upload through `gh`.
 After success, the command writes `results/paid/published/results-RUN_ID.jsonl`.
+Publication skips non-final error rows as well as key-free, stale-hash, and skills rows.
 It skips hidden rows and logs already linked to releases. Keep publication files when reusing a results folder.
 Each command accepts only its own flags. Export, proof, and publish commands require explicit output paths.
 `validate` rejects alternative targets and extra scorers on vanilla quizzes.

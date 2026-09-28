@@ -76,7 +76,7 @@ def main() -> int:
             for evaluation in evals:
                 print(f"{evaluation.id} {evaluation.hash}")
             return 0
-        if args.models and (args.answer or args.command == "check"):
+        if args.models and args.answer:
             raise ValueError("--models cannot be combined with key-free checks")
         unknown = set(args.models or []) - config.models.keys()
         if unknown:
@@ -85,8 +85,6 @@ def main() -> int:
             raise ValueError("--mock-delay requires a key-free check and a nonnegative value")
         if args.command == "run" and not args.answer and not os.environ.get("OPENROUTER_API_KEY"):
             raise ValueError("OPENROUTER_API_KEY is required. Use --answer reference for a key-free epoch.")
-        if args.command == "check" and args.answer:
-            raise ValueError("check chooses both reference and empty answers; omit --answer")
         answers = ["reference", "empty"] if args.command == "check" else [args.answer]
         passed = True
         for answer in answers:

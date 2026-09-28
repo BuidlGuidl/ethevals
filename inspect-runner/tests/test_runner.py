@@ -182,17 +182,17 @@ def test_error_is_distinct_from_failed_answer(folder, tmp_path):
     assert "Harness crashed in the test." in row["error_reason"]
 
 
-def test_time_limit_is_a_failed_check(folder, tmp_path):
+def test_working_limit_is_a_failed_check(folder, tmp_path):
     config = load_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.solver = mock_delay(2)
-    task.time_limit = 1
+    task.working_limit = 1
     log = eval(task, fail_on_error=False, log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(read_eval_log(log.location))[0]
     assert (row["status"], row["passed"], row["error_kind"]) == ("failed", False, None)
     assert row["checks"]["erc_number"]["passed"] is False
-    assert "time limit 1" in row["checks"]["erc_number"]["reason"]
-    assert row["limit"]["type"] == "time"
+    assert "working limit 1" in row["checks"]["erc_number"]["reason"]
+    assert row["limit"]["type"] == "working"
 
 
 def test_choice_target_list_accepts_either_letter(folder, tmp_path):
@@ -294,16 +294,16 @@ def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_
     assert attempts == 4
 
 
-@pytest.mark.parametrize("kind", ["time", "token"])
+@pytest.mark.parametrize("kind", ["working", "token"])
 def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch, kind):
     import ethevals.runner as runner
     original = runner.build_task
 
     def limited(*args, **kwargs):
         task = original(*args, **kwargs)
-        if kind == "time":
+        if kind == "working":
             task.solver = mock_delay(2)
-            task.time_limit = 1
+            task.working_limit = 1
         else:
             task.token_limit = 1
         return task

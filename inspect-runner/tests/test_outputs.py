@@ -147,7 +147,7 @@ def test_changing_fixture_scorer_updates_runner_and_export(tmp_path):
         spec = yaml.safe_load((output / "eval.yaml").read_text())["tasks"][0]
         assert spec["scorers"] == [{"name": "match", "args": {
             "location": location, "ignore_case": True, "numeric": False}}]
-        assert spec["solvers"] == [{"name": "generate"}]
+        assert spec["solvers"] == [{"name": "generate", "args": {}}]
         exported = local_hf_tasks(output)[0]
         runner = build_task(evaluation, load_config(), None, "vanilla", "reference", 1)
         for task in (exported, runner):
@@ -176,7 +176,7 @@ def local_results(tmp_path):
     for name in ["old.eval", "kept.eval", "unused.eval"]:
         (tmp_path / "logs" / name).write_bytes(b"log fixture")
     rows = [{"eval_id": EVALUATION.id, "eval_hash": EVALUATION.hash,
-             "answer_kind": None, "token_source": "provider", "model": "test/model", "mode": "vanilla", "epoch": epoch,
+             "answer_kind": None, "token_source": "provider", "status": "passed", "model": "test/model", "mode": "vanilla", "epoch": epoch,
              "log_file": "logs/kept.eval"} for epoch in [1, 2]]
     (tmp_path / "rows.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
     return rows

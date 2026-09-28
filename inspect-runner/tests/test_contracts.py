@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 from inspect_ai import eval
-from inspect_ai.model import ModelOutput, ModelUsage, get_model
+from inspect_ai.model import GenerateConfig, ModelOutput, ModelUsage, get_model
 from inspect_ai.solver import generate
 from inspect_ai.util import ExecResult, OutputLimitExceededError
 
@@ -50,7 +50,8 @@ def scoring_case(tmp_path, monkeypatch):
     async def forge(*args):
         if case["forge_error"]:
             raise case["forge_error"]
-        return ExecResult(success=True, returncode=0, stdout=case["stdout"], stderr="")
+        code = case.get("returncode", 0)
+        return ExecResult(success=code == 0, returncode=code, stdout=case["stdout"], stderr=case.get("stderr", ""))
 
     async def compiled(*args):
         return case["compiled"]
@@ -66,17 +67,22 @@ def scoring_case(tmp_path, monkeypatch):
             task.dataset[0].metadata["grader_cost_limit_usd"] = budget
         pending = iter(replies)
 
-        def grade(messages, tools, tool_choice, config):
+        async def grade(messages, tools, tool_choice, config):
+            import anyio
             case["requests"].append(messages)
             case["configs"].append(config)
             reply = next(pending)
+            if isinstance(reply, tuple):
+                delay, reply = reply
+                await anyio.sleep(delay)
             if isinstance(reply, Exception):
                 raise reply
             output = ModelOutput.from_content("mockllm/grader", reply)
             output.usage = ModelUsage(input_tokens=100, output_tokens=100, total_tokens=200)
             return output
 
-        log = eval(task, model_roles={"grader": get_model("mockllm/grader", custom_outputs=grade)},
+        log = eval(task, model_roles={"grader": get_model("mockllm/grader", custom_outputs=grade,
+                   config=GenerateConfig(max_tokens=config.grader.max_tokens, reasoning_effort=config.grader.effort))},
                    log_dir=str(tmp_path / "logs"), display="none")[0]
         case["log"] = log
         return results_rows(log)[0]
@@ -98,12 +104,12 @@ def test_stale_check_set_is_an_error(scoring_case):
 
 def test_player_limit_skips_snapshot_and_unavailable_grader(scoring_case):
     from ethevals.checks import mock_delay
-    scoring_case["task"].time_limit = 1
+    scoring_case["task"].working_limit = 1
     scoring_case["task"].solver = mock_delay(2)
     row = scoring_case["run"]([RuntimeError("Grader unavailable")])
     assert (row["status"], row["passed"], row["grader_tokens"]) == ("failed", False, 0)
-    assert row["limit"]["type"] == "time"
-    assert all(not check["passed"] and "time limit" in check["reason"] for check in row["checks"].values())
+    assert row["limit"]["type"] == "working"
+    assert all(not check["passed"] and "working limit" in check["reason"] for check in row["checks"].values())
     assert scoring_case["snapshots"] == 0
     assert scoring_case["requests"] == []
 
@@ -215,8 +221,8 @@ def test_grader_budget_covers_full_evidence_for_each_question():
     first = rubric_budget(evaluation, config)
     files = {**evaluation.files, "scorer/rubric.md": b"## one\nQuestion?\n## two\nQuestion?\n## three\nQuestion?"}
     larger = rubric_budget(replace(evaluation, files=files), config)
-    assert first == pytest.approx(2.9096)
-    assert larger == pytest.approx(4.3644)
+    assert first == pytest.approx(23.7288)
+    assert larger == pytest.approx(35.5932)
 
 
 def test_compose_rejects_binary_yaml(tmp_path):
@@ -351,6 +357,9 @@ def test_completed_epochs_skip_discovery_and_other_evals_survive_its_failure(tmp
     assert json.loads((output / "discovery-errors.json").read_text()) == [{
         "eval_id": "building/erc20-points-token", "eval_hash": build.hash,
         "error": "Discovery unavailable for building/erc20-points-token"}]
+    success, fourth = run([quiz], config, output, answer="reference", epochs=1)
+    assert success and fourth == first
+    assert json.loads((output / "discovery-errors.json").read_text())[0]["error"] == "Discovery unavailable for building/erc20-points-token"
 
 
 def test_long_paths_and_escaped_contents_fit_the_whole_request(scoring_case):
@@ -387,7 +396,7 @@ def test_evidence_gets_inspects_cache_marker(scoring_case):
 def test_scoring_error_cannot_override_a_recorded_player_limit(scoring_case):
     from inspect_ai.log import EvalError
     from ethevals.checks import mock_delay
-    scoring_case["task"].time_limit = 1
+    scoring_case["task"].working_limit = 1
     scoring_case["task"].solver = mock_delay(2)
     scoring_case["run"]([])
     log = scoring_case["log"]

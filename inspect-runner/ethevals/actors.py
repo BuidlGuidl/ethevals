@@ -2,19 +2,20 @@ from dataclasses import dataclass
 from typing import Callable, get_args
 
 from inspect_ai.model import GenerateConfig, Model, ModelInfo, ModelCost, get_model, get_model_info, set_model_info
-import inspect_ai.solver as inspect_solvers
+from inspect_ai.solver import SolverSpec
+from inspect_ai._eval.loader import solver_from_spec
 
-from .agents import AGENTS, internet_solver
-from .config import Mode
+from .agents import AGENTS, CodexModel, internet_solver
+from .config import Mode, GraderConfig
 
 
 def quiz_solver_spec(evaluation):
-    return {"name": "multiple_choice" if evaluation.declaration.choices else "generate"}
+    return SolverSpec(solver="multiple_choice" if evaluation.declaration.choices else "generate")
 
 
 def quiz_solver(evaluation):
     spec = quiz_solver_spec(evaluation)
-    return getattr(inspect_solvers, spec["name"])(**spec.get("args", {}))
+    return solver_from_spec(spec)
 
 
 @dataclass
@@ -36,7 +37,7 @@ def model_actor(item, prefix=""):
     info = get_model_info(item.model) or ModelInfo()
     set_model_info(item.model, info.model_copy(update={"cost": ModelCost(**item.prices.model_dump())}))
     model = get_model(item.model, config=GenerateConfig(reasoning_effort=item.effort,
-                                                       max_tokens=getattr(item, "max_tokens", None)))
+                                                       max_tokens=item.max_tokens if isinstance(item, GraderConfig) else None))
     return model, {prefix + key: value for key, value in {
         "model": str(model), "effort": item.effort, "prices": item.prices.model_dump(),
         "cost_source": f"computed:{item.price_source}",
@@ -47,6 +48,8 @@ def player(config, key, mode):
     item = config.models[key]
     model, metadata = model_actor(item)
     harness = item.harness if mode == "internet" else None
+    if harness == "codex_cli":
+        model = CodexModel(model)
     metadata.update(harness=harness, harness_version=AGENTS[harness].version if harness else None, answer_kind=None)
 
     def solve(evaluation):

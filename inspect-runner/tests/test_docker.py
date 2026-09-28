@@ -157,3 +157,46 @@ def test_unavailable_compiler_fails_offline_and_names_available_versions(tmp_pat
             assert "No solc version installed that matches" in result.stderr
             assert "https://" not in result.stderr
         anyio.run(proof)
+
+
+def test_slow_output_consumer_cannot_truncate_forge(tmp_path, monkeypatch):
+    import ethevals.scorers as scorers
+    original = scorers.runner_exec
+    with containers(tmp_path) as boxes:
+        box = boxes["scorer"]
+
+        async def slow_consumer(box, args, **kwargs):
+            args = [arg.replace("/usr/bin/head", "/tmp/slow-head") for arg in args]
+            return await original(box, args, **kwargs)
+
+        async def proof():
+            await box.write_file("/tmp/slow-head", '#!/bin/sh\nsleep 1\nexec /usr/bin/head "$@"\n')
+            await runner_exec(box, ["/bin/chmod", "+x", "/tmp/slow-head"])
+            await prepare_forge(box, {"src/Token.sol": b"pragma solidity =0.8.30; contract Token {}"}, {
+                "scorer/tests/Token.t.sol": b"pragma solidity =0.8.30; contract Tests { function testToken() public pure { assert(true); } }"})
+            monkeypatch.setattr(scorers, "runner_exec", slow_consumer)
+            result = await forge(box)
+            assert forge_checks(result.stdout, result.stderr, result.returncode,
+                                ["forge:test/Token.t.sol:Tests:testToken()"]) == {
+                "forge:compile": {"passed": True, "reason": "Compilation passed."},
+                "forge:test/Token.t.sol:Tests:testToken()": {"passed": True, "reason": "Test passed."},
+            }
+        anyio.run(proof)
+
+
+def test_forge_output_file_has_a_size_cap(tmp_path, monkeypatch):
+    import ethevals.scorers as scorers
+    from inspect_ai.util import OutputLimitExceededError
+    original = scorers.runner_exec
+    with containers(tmp_path) as boxes:
+        async def noisy_forge(box, args, **kwargs):
+            position = args.index("/usr/local/bin/forge")
+            args = args[:position] + ["/usr/bin/perl", "-e", 'print "x" x (12 * 1024 * 1024)']
+            return await original(box, args, **kwargs)
+
+        async def proof():
+            monkeypatch.setattr(scorers, "runner_exec", noisy_forge)
+            with pytest.raises(OutputLimitExceededError, match="10 MiB"):
+                await forge(boxes["scorer"])
+            assert len(await boxes["scorer"].read_file("/tmp/forge.stdout", text=False)) == 10485761
+        anyio.run(proof)

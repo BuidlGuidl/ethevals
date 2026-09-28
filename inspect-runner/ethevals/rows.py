@@ -2,7 +2,42 @@ import json
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from inspect_ai.log import EvalLog, EvalSample, EvalError, list_eval_logs, read_eval_log
+from inspect_ai.log import EvalLog, EvalSample, EvalError, list_eval_logs, read_eval_log, resolve_sample_attachments
+from inspect_ai.event import ToolEvent, ModelEvent
+from .search import search_result_status
+
+
+def infrastructure_limit(kind, working_seconds, working_limit):
+    return kind == "operator" or (kind == "time" and working_limit is not None
+                                  and (working_seconds is None or working_seconds < working_limit))
+
+
+def search_failures(sample):
+    sample = resolve_sample_attachments(sample)
+    calls, results = {}, {}
+    messages = list(sample.messages)
+    for event in sample.events:
+        if isinstance(event, ModelEvent):
+            messages.extend(event.input)
+        elif isinstance(event, ToolEvent):
+            calls[event.id] = event.function + json.dumps(event.arguments)
+            results[event.id] = (event.result, bool(event.error or event.failed))
+    for message in messages:
+        if message.role == "assistant":
+            for call in message.tool_calls or []:
+                calls[call.id] = call.function + json.dumps(call.arguments)
+        elif message.role == "tool":
+            results[message.tool_call_id] = (message.text, bool(message.error))
+            calls.setdefault(message.tool_call_id, message.function or "")
+    rate_limited = failed = 0
+    searches = {key for key, call in calls.items()
+                if "web_search_exa" in call or "web_search_advanced_exa" in call}
+    for key in searches & results.keys():
+        result, error = results[key]
+        limited, failure = search_result_status(result)
+        rate_limited += limited
+        failed += bool(error or failure)
+    return {"search_calls": len(searches), "search_failed": failed, "search_rate_limited": rate_limited}
 
 
 def epoch_identity(metadata: dict, epoch: int) -> tuple:
@@ -39,9 +74,12 @@ def results_rows(log: EvalLog) -> list[dict]:
             for name in metadata.get("check_names", []):
                 checks.setdefault(name, {"passed": False, "reason": " ".join(f"No verdict: {error}".split())})
         if sample.limit:
-            error = error_kind = None
             reason = " ".join((f"Epoch reached {sample.limit.type} limit {sample.limit.limit}. "
                                + (sample.limit.reason or "")).split())
+            if infrastructure_limit(sample.limit.type, sample.working_time, metadata.get("working_limit_seconds")):
+                error_kind, error = "execution", reason
+            else:
+                error = error_kind = None
             checks = {name: {"passed": False, "reason": reason} for name in metadata.get("check_names", checks)}
         if not checks and not error:
             error_kind, error = "scoring", "The epoch produced no named checks."
@@ -72,6 +110,7 @@ def results_rows(log: EvalLog) -> list[dict]:
                 "eval_id", "eval_hash", "pillar", "type", "mode", "harness", "model", "effort", "answer_kind",
                 "grader_model", "grader_effort", "harness_version", "images",
                 "cost_limit_usd", "grader_cost_limit_usd", "max_attempts",
+                "working_limit_seconds", "time_limit_seconds", "scoring_limit_seconds",
             )},
             "epoch": metadata.get("epoch", sample.epoch),
             "attempt": metadata.get("attempt", 1),
@@ -99,6 +138,7 @@ def results_rows(log: EvalLog) -> list[dict]:
             "log_sample_id": sample.id,
             "log_epoch": sample.epoch,
             "sample_uuid": sample.uuid,
+            **search_failures(sample),
         })
     return rows
 

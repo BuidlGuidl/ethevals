@@ -11,7 +11,7 @@ from .actors import Player, Grader
 from .config import Config, read_yaml
 from .loader import Eval
 from .rows import epoch_identity, export_rows, store_rows
-from .scorers import named_checks, EVALUATIONS, check_names, rubric_budget
+from .scorers import named_checks, EVALUATIONS, check_names, rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS
 from .sandboxes import compose_file
 from .preparation import prepare_eval, prepare_compose
 
@@ -30,11 +30,18 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
         images = {name: service["image"] for name, service in read_yaml(compose)["services"].items()}
     else:
         sample.files = None
+    working_limit = evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit)
+    time_limit = working_limit * 3
+    scoring_limit = scoring_seconds(evaluation) + SCORING_OVERHEAD_SECONDS
+    if scoring_seconds(evaluation) and scoring_limit >= time_limit / 2:
+        raise ValueError(f"Scoring needs {scoring_limit} seconds, but Inspect allows {time_limit / 2}.")
     metadata = {**sample.metadata, **player.metadata, **grader.metadata,
                 "created_at": datetime.now(timezone.utc).isoformat(), "mode": mode,
                 "images": images, "cost_limit_usd": config.cost_limit,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
                 "free_check": player.free_check,
+                "working_limit_seconds": working_limit, "time_limit_seconds": time_limit,
+                "scoring_limit_seconds": scoring_limit,
                 "check_names": check_names(evaluation, player.free_check)}
     sample.metadata = dict(metadata)
     if any(item.kind == "tests" for item in evaluation.scorers) and not evaluation.test_checks:
@@ -46,7 +53,7 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
         version=evaluation.hash, dataset=[sample], solver=player.solver_for(evaluation),
         scorer=named_checks(evaluation.id, evaluation.hash),
         model=player.model, epochs=epochs,
-        time_limit=evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit),
+        working_limit=working_limit, time_limit=time_limit,
         cost_limit=config.cost_limit, metadata=metadata,
     )
 
@@ -85,7 +92,10 @@ def run(evals: list[Eval], config: Config, output: Path, *, players, grade: Grad
     if not selected:
         raise ValueError("No evals declare a selected mode")
     output.mkdir(parents=True, exist_ok=True)
-    (output / "discovery-errors.json").write_text(json.dumps(discovery_errors, indent=2) + "\n")
+    error_path = output / "discovery-errors.json"
+    if discovery_errors:
+        previous_errors = json.loads(error_path.read_text()) if error_path.exists() else []
+        error_path.write_text(json.dumps(previous_errors + discovery_errors, indent=2) + "\n")
     if tasks:
         eval(tasks, log_dir=str(output / "logs"), model_roles={"grader": grade.model},
              retry_on_error=0, fail_on_error=False, max_samples=config.max_samples,

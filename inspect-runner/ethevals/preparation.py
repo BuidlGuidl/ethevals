@@ -10,7 +10,7 @@ from inspect_ai.scorer import scorer, accuracy
 from inspect_ai.solver import solver
 from inspect_ai.util import SandboxEnvironmentSpec, sandbox
 
-from .scorers import EVALUATIONS, checks_score, forge, forge_results, prepare_forge
+from .scorers import EVALUATIONS, checks_score, forge, forge_results, prepare_forge, compiler_diagnostic
 from .sandboxes import IMAGES, compose_file, validate_compose
 from .config import read_yaml
 from .images.tag import image_tag
@@ -54,7 +54,12 @@ def reference_checks(eval_id, eval_hash):
         result = await forge(box)
         checks = {name: check for name, check in forge_results(result.stdout).items() if name.startswith("forge:test/")}
         if not result.success or not checks or not all(check["passed"] for check in checks.values()):
-            raise RuntimeError("Reference tests failed during check discovery. Check the reference against the offline compiler configuration.")
+            failures = [f"{name}: {check['reason']}" for name, check in checks.items() if not check["passed"]]
+            diagnostic = compiler_diagnostic(result.stdout, result.stderr)
+            if diagnostic:
+                failures.append(diagnostic)
+            raise RuntimeError("Reference tests failed during check discovery. "
+                               + ("; ".join(failures) or f"Forge exited {result.returncode} without test results."))
         return checks_score(checks)
     return score
 

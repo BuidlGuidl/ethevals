@@ -119,6 +119,8 @@ Its built-in search also calls keyless Exa. The runner leaves its optional searc
 Claude Code retains `WebFetch`; OpenCode retains `webfetch`. Codex has no native page-fetch tool.
 All four agents retain Exa search and fetch, plus a shell with network access.
 Exa's keyless endpoint can rate-limit concurrent agents.
+Set `EXA_API_KEY` to authenticate the configured `mcp.exa.ai` endpoint.
+Rows count search calls, failed results, and rate-limited results in `search_calls`, `search_failed`, and `search_rate_limited`.
 
 Inspect also accepts `ANTHROPIC_AUTH_TOKEN`, including a subscription token from `claude setup-token`.
 Using that token this way is against Anthropic's terms.
@@ -136,23 +138,31 @@ Each epoch is identified by its eval hash, agent, mode, and epoch number.
 Price or grader changes never repeat completed agent work.
 Rows retain the prices and grader used at execution time.
 
-Quizzes have a 300-second limit. Builds have a 1,200-second limit.
+Quizzes allow 300 seconds of working time. Builds allow 1,200 seconds.
+Inspect excludes provider retry backoff and sandbox waits from working time.
+The wall-clock backstop is three times the working limit: 900 seconds for quizzes and 3,600 seconds for builds.
 The configuration gives the player a $5 cost budget.
 The grader has separate model, effort, and output settings. Each model ID has one price schedule across both roles.
 Config loading rejects conflicting prices for the same model ID.
 Each grader request caps its serialized messages and generation settings at 300,000 bytes, including filenames and omission counts.
-Its epoch allowance prices two calls per question at three bytes per input token and maximum output, without cache discounts.
-At the configured prices, the two-question build allows $2.9096 for grading. Rows record this as `grader_cost_limit_usd`.
-This allowance estimates input tokens. Inspect enforces it against reported usage.
-Each grader call allows two provider retries with Inspect's backoff and a 60-second attempt timeout.
+Evidence uses ASCII escapes. The allowance reserves one input token per serialized byte and the maximum output for every provider attempt.
+Each question permits two generation calls, each with two retries: at most six provider attempts per question.
+The formula is `questions * 2 * 3 * (300000 * max(input, cache_read, cache_write) + max_tokens * output) / 1000000`.
+At the configured prices, the two-question build reserves $23.7288. Rows record this ceiling as `grader_cost_limit_usd`.
+Inspect meters completed requests separately. The ceiling also covers abandoned attempts that do not appear in usage.
+Each grader call has a 60-second total deadline, including backoff, and a 20-second attempt timeout.
+The two-question build permits 240 seconds of grading plus 180 seconds of Forge execution.
+Scoring has a 540-second total deadline, including 120 seconds for snapshot and transfer work.
+Task creation rejects scoring bounds that cannot fit inside Inspect's scoring window, half the wall-clock backstop.
 Inspect meters configured prices, including the lower price for cached reads. These prices are estimates until checked.
 Limits stop further calls after usage arrives. An in-flight call can exceed its remaining budget.
 Rows record each role's metered dollars and budget. The runner runs up to four tasks and samples at once.
 An eval can override its time limit with `time_limit` in `eval.yaml`.
 A runner, Docker, or grader failure produces `status: error`, with `passed: null`, and retries within the execution cap.
 Grader errors include provider failures, exhausted budgets, and invalid replies after two calls.
-Player time or cost limits fail the eval's checks and produce a final `status: failed` result.
+Player working-time or cost limits fail the eval's checks and produce a final `status: failed` result.
 These limits take precedence over scoring errors. The runner skips the snapshot and grader after a player limit.
+An operator stop or a wall-clock stop before the working limit produces `status: error`.
 An incorrect answer produces `status: failed`, with `passed: false`.
 
 ## Read the runner contracts
@@ -173,11 +183,11 @@ uv run ethevals run --evals evals/building/erc20-points-token --models opus --mo
 
 The quiz uses bare Opus 5.5. The build uses Claude Code 2.1.274 with Opus 5.5 and high effort.
 The separate `grader` configuration selects the model that answers the two rubric questions.
-Web search uses the keyless Exa MCP URL in `search_provider`. Claude Code's built-in WebSearch is disabled.
+Web search uses the Exa MCP URL in `search_provider`, with an optional `EXA_API_KEY`. Claude Code's built-in WebSearch is disabled.
 The Exa endpoint can rate-limit requests. Agents can also fetch pages and install packages from their containers.
 
 Guess: the pair costs $1 to $5, including rubric grading. This estimate is not a spending cap.
-The cost meter uses the configured prices. The time limit remains the main bound on a hung agent.
+The cost meter uses the configured prices. Working time bounds player work; the wall-clock backstop bounds a hung agent.
 
 Inspect `results/adr0002/rows.jsonl` after both commands finish.
 The quiz row has `harness: null` and the `erc_number` check.
@@ -188,12 +198,17 @@ Before player epochs start, a key-free reference run discovers the seven test fu
 The cache includes the eval hash, declared image tag, computed image tag, and check-naming version.
 `images/tag.py` hashes the Dockerfile and Foundry config for both the image tag and cache identity.
 Names live under `inputs/<eval_hash>/<scoring_hash>/checks.json`. `forge:compile` completes the Forge check set.
-Missing expected names after compilation are runner errors unless that suite's setup failed.
-Discovery runs only for evals with missing epochs. Failures enter `discovery-errors.json`; other evals continue.
-Compilation and setup failures retain that check set. Agent-added tests cannot add checks.
+Missing expected names after compilation are runner errors unless that suite's constructor or `setUp()` failed.
+Discovery runs only for evals with missing epochs. Failures append to `discovery-errors.json`; other evals continue.
+Discovery errors name failed tests and compiler diagnostics.
+Compilation and suite lifecycle failures retain that check set. Agent-added tests cannot add checks.
+Signal exits and Forge output without results or a compiler diagnostic are runner errors.
+Forge streams through capped readers. The wrapper waits for both reader processes before the scorer reads their files.
+The cap is 10 MiB per stream, with one extra byte to detect overflow.
+Compilation reasons use the coded diagnostic, without source frames. Only compiler-version failures include the offline compiler note.
 Forge and the rubric read one workspace snapshot after the runner stops the agent's processes.
 The supplied `foundry.toml` defines grading settings and dependency remappings. Agent edits to it do not affect grading.
-Scoring is offline with solc 0.8.30. The prompt and compilation failures list that available compiler.
+Scoring is offline with solc 0.8.30. The prompt and compiler-version failures list that available compiler.
 The scorer container has no internet network. Compiler downloads happen only when the image builds.
 The rubric reads Forge's compiled source records, with the agent's `src/` files first.
 It excludes unused libraries, private tests, and the runner's libraries.
@@ -261,7 +276,7 @@ uv run ethevals publish-logs --output results/paid \
 
 The default is a dry run. It writes nothing and makes no network calls.
 It prints a JSON plan with the release tag, the `gh` command, and each asset's rows and URL.
-The plan reports skipped rows by reason. It excludes key-free, stale-hash, and skills rows.
+The plan reports skipped rows by reason. It excludes key-free, stale-hash, skills, and non-final error rows.
 The command loads current eval hashes from `evals/*/*`. Use `--evals` and `--config` to select other evals or settings.
 It skips release-linked rows and logs named in earlier `published/results-*.jsonl` files.
 Keep those files when reusing a results folder. An empty plan creates no release or rows file.

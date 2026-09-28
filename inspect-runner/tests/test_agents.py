@@ -136,6 +136,38 @@ def test_inspect_still_needs_custom_call_adapter():
     assert json.loads(call.arguments) == {"input": "text(42);"}
 
 
+@pytest.mark.parametrize("requested", ["inspect", "gpt-6-sol", "another-model", "openai/other"])
+def test_codex_active_player_adapts_every_bridge_model(tmp_path, requested, monkeypatch):
+    from inspect_ai import Task, eval
+    from inspect_ai.dataset import Sample
+    from inspect_ai.solver import solver
+    config = load_config()
+    config.models["codex"].model = "mockllm/model"
+    actor = player(config, "codex", "internet")
+    monkeypatch.setattr(actor.model.source.api, "outputs", lambda *args: ModelOutput.for_tool_call(
+        "mockllm/model", "exec", {"input": "text(42);"}))
+    calls = []
+
+    @solver
+    def through_bridge():
+        async def solve(state, generate):
+            bridge = AgentBridge(AgentState(messages=[]), model="inspect")
+            response = await inspect_responses_api_request_impl({
+                "model": requested, "input": [{"role": "user", "content": "Run code"}],
+                "tools": [{"type": "namespace", "name": "functions", "description": "Tools", "tools": [
+                    {"type": "custom", "name": "exec", "description": "Run JavaScript", "format": {"type": "text"}},
+                ]}],
+            }, None, None, None, bridge)
+            call = response.output[-1]
+            calls.append((call.type, call.input if call.type == "custom_tool_call" else call.arguments))
+            return state
+        return solve
+
+    log = eval(Task(dataset=[Sample(input="Run code")], solver=through_bridge(), model=actor.model),
+               log_dir=str(tmp_path / "logs"), display="none")[0]
+    assert (log.status, calls) == ("success", [("custom_tool_call", "text(42);")])
+
+
 def test_stock_image_tag_matches_inputs():
     directory = Path(agents.__file__).with_name("images")
     compose = yaml.safe_load((directory / "stock.compose.yaml").read_text())

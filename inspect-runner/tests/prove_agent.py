@@ -13,6 +13,8 @@ from inspect_ai import eval
 from inspect_ai.model import ModelOutput, get_model
 
 from ethevals.config import load_config
+from ethevals.agents import CodexModel
+from ethevals.search import valid_search_result
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
 from support import build_task
@@ -80,7 +82,7 @@ def main():
         if calls == search_call + 1:
             result = next(message for message in reversed(messages) if message.role == "tool")
             assert not result.error, result
-            assert "https://" in result.text and '"isError":true' not in result.text.replace(" ", ""), result.text
+            assert valid_search_result(result.text), result.text
             assert "ERC" in result.text or "token" in result.text.lower(), result.text
             search_ok = True
             print(json.dumps({"exa_search": "passed", "result": result.text}), flush=True)
@@ -112,6 +114,8 @@ def main():
         }))
 
     task.model = get_model("mockllm/model", custom_outputs=reply)
+    if harness == "codex_cli":
+        task.model = CodexModel(task.model)
     started = time.monotonic()
     from inspect_ai.agent._bridge import anthropic_api_impl, completions, responses_impl
     with ExitStack() as stack:
@@ -126,6 +130,7 @@ def main():
     print(json.dumps({"seconds": round(time.monotonic() - started, 2), "bridge_calls": calls, "row": row}), flush=True)
     assert row["status"] == ("passed" if args.answer == "reference" else "failed"), row
     assert search_ok
+    assert (row["search_calls"], row["search_failed"], row["search_rate_limited"]) == (1, 0, 0), row
     effort = [(request.get("reasoning") or {}).get("effort") or
               (request.get("output_config") or {}).get("effort") or
               request.get("reasoning_effort") for request in requests]

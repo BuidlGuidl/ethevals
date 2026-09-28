@@ -6,13 +6,13 @@ import subprocess
 from pathlib import Path
 
 
-def publish_logs(output: Path, repo: str, run_id: str, target: str,
+def publish_logs(output: Path, repo: str, run_id: str, commit: str,
                  *, current_hashes: dict[str, str], publish: bool = False) -> dict:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*", repo):
         raise ValueError("GitHub repo must have the form owner/name")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", run_id):
         raise ValueError("run-id must use 1 to 100 letters, digits, underscores, or hyphens")
-    if not re.fullmatch(r"[0-9a-f]{40}", target):
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("commit must be a full Git commit SHA")
     tag = f"results-{run_id}"
     base = f"https://github.com/{repo}/releases/download"
@@ -39,6 +39,9 @@ def publish_logs(output: Path, repo: str, run_id: str, target: str,
         if row["mode"] == "skills":
             skipped["skills"] += 1
             continue
+        if row.get("status") not in {"passed", "failed"}:
+            skipped["non_final"] = skipped.get("non_final", 0) + 1
+            continue
         relative = Path(row["log_file"])
         if re.fullmatch(r"results-[A-Za-z0-9][A-Za-z0-9_-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]*\.eval", row["log_file"]) or relative.name in published:
             skipped["published"] += 1
@@ -63,12 +66,12 @@ def publish_logs(output: Path, repo: str, run_id: str, target: str,
         linked.append({**row, "log_file": f"{tag}/{name}"})
     if len(assets) > 1000:
         raise ValueError("A release accepts at most 1000 assets; split the results run")
-    command = ["gh", "release", "create", tag, "--repo", repo, "--target", target,
+    command = ["gh", "release", "create", tag, "--repo", repo, "--target", commit,
                "--latest=false", "--title", f"Results {run_id}", "--notes",
                "Full Inspect logs for this results run. Download a .eval file and open its directory with inspect view.",
                *[asset["source"] for asset in sorted(assets.values(), key=lambda asset: asset["name"])]]
     destination = root / "published" / f"{tag}.jsonl"
-    plan = {"dry_run": not publish, "release": tag, "repo": repo, "commit": target,
+    plan = {"dry_run": not publish, "release": tag, "repo": repo, "commit": commit,
             "log_base": base, "rows_file": str(destination), "command": command if assets else [],
             "skipped": skipped,
             "assets": sorted(assets.values(), key=lambda asset: asset["name"])}

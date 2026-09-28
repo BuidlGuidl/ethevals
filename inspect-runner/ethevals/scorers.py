@@ -3,18 +3,22 @@ import base64
 import json
 import io
 import tarfile
+import anyio
 from dataclasses import dataclass
 from typing import Callable, Literal
 
-from inspect_ai.log import transcript, SampleLimitEvent
+from inspect_ai.log import transcript
+from inspect_ai.event import SampleLimitEvent
+from inspect_ai._eval.loader import scorer_from_spec
 from inspect_ai.model import ChatMessageSystem, ChatMessageUser, ContentText, GenerateConfig, ResponseSchema, get_model
 from inspect_ai.util import sandbox, cost_limit, LimitExceededError, OutputLimitExceededError
-import inspect_ai.scorer as inspect_scorers
 from inspect_ai.scorer import Score, Scorer, Target, accuracy, scorer
+from inspect_ai.scorer._scorer import ScorerSpec
 from pydantic import Field, model_validator
 
 from .config import Declaration
 from .sandboxes import IMAGES, SOLC_VERSIONS, workspace_files, runner_exec
+from .rows import infrastructure_limit
 
 
 class TargetScorer(Declaration):
@@ -45,19 +49,19 @@ class TargetScorer(Declaration):
         return self
 
 
-def target_scorer_spec(config: TargetScorer) -> dict:
+def target_scorer_spec(config: TargetScorer) -> ScorerSpec:
     if config.method == "match":
         args = {"location": config.location, "ignore_case": config.ignore_case, "numeric": config.numeric}
     elif config.method == "pattern":
         args = {"pattern": config.pattern, "ignore_case": config.ignore_case}
     else:
         args = {}
-    return {"name": config.method, "args": args}
+    return ScorerSpec(scorer=config.method, args=args)
 
 
 def target_scorer(config: TargetScorer, evaluation) -> Scorer:
     spec = target_scorer_spec(config)
-    underlying = getattr(inspect_scorers, spec["name"])(**spec["args"])
+    underlying = scorer_from_spec(spec, task_path=None, **spec.args)
 
     async def score(state, target, submission=None):
         # A target list means alternatives, including for a choice quiz.
@@ -147,23 +151,37 @@ def forge_results(stdout: str) -> dict:
     return checks
 
 
+def compiler_diagnostic(stdout: str, stderr: str) -> str | None:
+    lines = [line.strip() for line in (stdout + "\n" + stderr).splitlines()]
+    reason = next((line for line in lines if re.match(r"^(?:Compiler)?Error \([0-9]+\):", line)), None)
+    if reason is None:
+        reason = next((line for line in lines if line.startswith("CompilerError:")), None)
+    version = next((line for line in lines if re.search(r"No solc version|invalid solc version|incompatible versions", line, re.I)), None)
+    if reason is None and version:
+        reason = f"{version} Scoring is offline. Available solc versions: {', '.join(SOLC_VERSIONS)}."
+    return reason
+
+
 def forge_checks(stdout: str, stderr: str, returncode: int, expected: list[str]) -> dict:
+    if returncode < 0 or returncode >= 128:
+        raise RuntimeError(f"Forge terminated with exit code {returncode}.")
     checks = forge_results(stdout)
     if checks and returncode and all(check["passed"] for check in checks.values()):
         raise RuntimeError(f"Forge exited {returncode} after passing every test.")
-    text = stderr + "\n" + stdout
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
     compiled = bool(checks)
-    reason = next((line for line in lines if re.match(r"^(?:Compiler)?Error(?: \([0-9]+\))?:", line)), "Forge could not compile the submission.")
-    reason = f"{reason} Scoring is offline. Available solc versions: {', '.join(SOLC_VERSIONS)}."
+    reason = compiler_diagnostic(stdout, stderr)
+    if not compiled and reason is None:
+        raise RuntimeError(f"Forge exited {returncode} without test results or a compiler diagnostic.")
+    lifecycle = {name.rsplit(":", 1)[0]: check for name, check in checks.items()
+                 if name.rsplit(":", 1)[1] in {"setUp()", "constructor()"} and not check["passed"]}
     missing = [name for name in expected if name not in checks
-               and checks.get(name.rsplit(":", 1)[0] + ":setUp()", {"passed": True})["passed"]]
+               and name.rsplit(":", 1)[0] not in lifecycle]
     if compiled and missing:
         raise RuntimeError("Reference check set does not match Forge results: " + ", ".join(missing))
     result = {"forge:compile": {"passed": compiled, "reason": "Compilation passed." if compiled else reason}}
     for name in expected:
         suite = name.rsplit(":", 1)[0]
-        setup = checks.get(f"{suite}:setUp()")
+        setup = lifecycle.get(suite)
         result[name] = checks.get(name, {"passed": False, "reason": setup["reason"] if setup else reason})
     return result
 
@@ -205,10 +223,18 @@ async def prepare_forge(box, submitted, files):
 async def forge(box, *args):
     # Read bytes separately so Inspect records sizes, never private code frames.
     result = await runner_exec(box, ["/bin/bash", "-c",
-        '"$@" > >(/usr/bin/head -c 10485761 > /tmp/forge.stdout) '
-        '2> >(/usr/bin/head -c 10485761 > /tmp/forge.stderr); result=$?; wait; exit "$result"', "forge-output",
+        '/bin/rm -f /tmp/forge.stdout.pipe /tmp/forge.stderr.pipe; '
+        '/usr/bin/mkfifo /tmp/forge.stdout.pipe /tmp/forge.stderr.pipe || exit 125; '
+        '{ /usr/bin/head -c 10485761 > /tmp/forge.stdout; status=$?; /bin/cat > /dev/null; exit "$status"; } < /tmp/forge.stdout.pipe & out=$!; '
+        '{ /usr/bin/head -c 10485761 > /tmp/forge.stderr; status=$?; /bin/cat > /dev/null; exit "$status"; } < /tmp/forge.stderr.pipe & err=$!; '
+        '"$@" > /tmp/forge.stdout.pipe 2> /tmp/forge.stderr.pipe; result=$?; '
+        'wait "$out"; out_status=$?; wait "$err"; err_status=$?; '
+        'if (( out_status || err_status )); then exit 125; fi; '
+        '/bin/rm -f /tmp/forge.stdout.pipe /tmp/forge.stderr.pipe; exit "$result"', "forge-output",
         "/usr/local/bin/forge", "test", "--root", "/workspace", "--match-path", "test/**", "--json", "--build-info", *args,
-    ], timeout=180)
+    ], timeout=FORGE_SECONDS)
+    if result.returncode == 125:
+        raise RuntimeError("Cannot capture Forge output.")
     stdout = await box.read_file("/tmp/forge.stdout", text=False)
     stderr = await box.read_file("/tmp/forge.stderr", text=False)
     if max(len(stdout), len(stderr)) > 10485760:
@@ -225,8 +251,11 @@ def failed_checks(names, reason):
 @dataclass
 class Submission:
     files: dict[str, bytes]
-    failure: str | None = None
     compiled: dict[str, bytes] | None = None
+
+
+class SubmissionFailed(Exception):
+    pass
 
 
 async def compiled_sources(box, submitted):
@@ -254,11 +283,9 @@ def tests_scorer(config, evaluation):
             if checks["forge:compile"]["passed"]:
                 submission.compiled = await compiled_sources(box, submission.files)
             else:
-                submission.failure = checks["forge:compile"]["reason"]
+                raise SubmissionFailed(checks["forge:compile"]["reason"])
         except (TimeoutError, OutputLimitExceededError) as error:
-            submission.failure = f"Submission exceeded Forge's time or output limit: {error}"
-        if submission.failure:
-            return None
+            raise SubmissionFailed(f"Submission exceeded Forge's time or output limit: {error}") from error
         return checks_score(checks)
     return score
 
@@ -290,7 +317,9 @@ def rubric_evidence(files):
 
 GRADER_REQUEST_BYTES = 300000
 GRADER_CALLS = 2
-GRADER_CONFIG = GenerateConfig(attempt_timeout=60, max_retries=2, response_schema=ResponseSchema(
+FORGE_SECONDS = 180
+SCORING_OVERHEAD_SECONDS = 120
+GRADER_CONFIG = GenerateConfig(timeout=60, attempt_timeout=20, max_retries=2, response_schema=ResponseSchema(
     name="verdict", json_schema={"type": "object", "properties": {
         "passed": {"type": "boolean"}, "reason": {"type": "string"}},
         "required": ["passed", "reason"], "additionalProperties": False}))
@@ -298,7 +327,7 @@ GRADER_CONFIG = GenerateConfig(attempt_timeout=60, max_retries=2, response_schem
 
 def grader_request_size(messages, config):
     return len(json.dumps({"messages": [message.model_dump(exclude_none=True) for message in messages],
-                           "config": config.model_dump(exclude_none=True)}, ensure_ascii=False).encode())
+                           "config": config.model_dump(exclude_none=True)}, ensure_ascii=True).encode())
 
 
 def grader_request(files, question, config):
@@ -314,7 +343,7 @@ def grader_request(files, question, config):
     while low <= high:
         count = (low + high) // 2
         messages[1].content = [ContentText(text=json.dumps({"files": dict(items[:count]),
-            "omitted_file_count": len(omitted) + len(items) - count}, ensure_ascii=False))]
+            "omitted_file_count": len(omitted) + len(items) - count}, ensure_ascii=True))]
         if grader_request_size(messages, config) <= GRADER_REQUEST_BYTES:
             low = count + 1
         else:
@@ -322,19 +351,24 @@ def grader_request(files, question, config):
     if high < 0:
         raise ValueError("Rubric question and grader settings exceed the request byte limit.")
     messages[1].content = [ContentText(text=json.dumps({"files": dict(items[:high]),
-        "omitted_file_count": len(omitted) + len(items) - high}, ensure_ascii=False))]
+        "omitted_file_count": len(omitted) + len(items) - high}, ensure_ascii=True))]
     return messages
 
 
 def rubric_budget(evaluation, config):
     if not any(item.kind == "rubric" for item in evaluation.scorers):
         return 0.0
-    # Plan at three serialized bytes per token, without assuming a cache hit.
-    # The cost scope enforces this allowance against reported usage.
+    # Byte-level tokenizers cannot use more than one input token per byte.
+    # Reserve every attempt, including abandoned attempts absent from usage.
     settings = config.grader
-    input_price = max(settings.prices.input, settings.prices.input_cache_write)
-    return len(rubric_questions(evaluation.files)) * GRADER_CALLS * (
-        GRADER_REQUEST_BYTES / 3 * input_price + settings.max_tokens * settings.prices.output) / 1_000_000
+    input_price = max(settings.prices.input, settings.prices.input_cache_write, settings.prices.input_cache_read)
+    return len(rubric_questions(evaluation.files)) * GRADER_CALLS * (1 + GRADER_CONFIG.max_retries) * (
+        GRADER_REQUEST_BYTES * input_price + settings.max_tokens * settings.prices.output) / 1_000_000
+
+
+def scoring_seconds(evaluation):
+    questions = len(rubric_questions(evaluation.files)) if any(item.kind == "rubric" for item in evaluation.scorers) else 0
+    return (FORGE_SECONDS if any(item.kind == "tests" for item in evaluation.scorers) else 0) + questions * GRADER_CALLS * GRADER_CONFIG.timeout
 
 
 def rubric_scorer(config, evaluation):
@@ -345,7 +379,7 @@ def rubric_scorer(config, evaluation):
             raise RuntimeError("Rubric scoring requires the tests scorer's build info.")
         model = get_model(role="grader")
         request_config = model.config.merge(GRADER_CONFIG)
-        longest = max(questions.values(), key=lambda question: len(json.dumps(question, ensure_ascii=False).encode()))
+        longest = max(questions.values(), key=lambda question: len(json.dumps(question, ensure_ascii=True).encode()))
         prefix = grader_request(submission.compiled, longest, request_config)[:2]
         checks = {}
         try:
@@ -353,7 +387,11 @@ def rubric_scorer(config, evaluation):
                 for name, question in questions.items():
                     messages = [*prefix, ChatMessageUser(content=question)]
                     for attempt in range(GRADER_CALLS):
-                        reply = await model.generate(messages, config=GRADER_CONFIG)
+                        try:
+                            with anyio.fail_after(GRADER_CONFIG.timeout):
+                                reply = await model.generate(messages, config=GRADER_CONFIG)
+                        except TimeoutError as error:
+                            raise RuntimeError("Grader exceeded its total call deadline.") from error
                         try:
                             checks[f"rubric:{name}"] = rubric_reply(reply.completion)
                             state.metadata.setdefault("scoring_checks", {}).update(checks)
@@ -416,32 +454,34 @@ def named_checks(eval_id: str, eval_hash: str) -> Scorer:
         free_check = state.metadata["free_check"]
         limit = next((event for event in reversed(transcript().events) if isinstance(event, SampleLimitEvent)), None)
         if limit:
+            if infrastructure_limit(limit.type, limit.working_start, state.metadata.get("working_limit_seconds")):
+                raise RuntimeError(f"Epoch stopped by {limit.type} before its working limit.")
             return checks_score(failed_checks(check_names(evaluation, free_check),
                 f"Epoch reached {limit.type} limit {limit.limit}. {limit.message}"))
         underlying = [(item.kind, SCORERS[item.kind].build(item, evaluation)) for item in evaluation.scorers
                       if not free_check or SCORERS[item.kind].free_check]
         checks = {}
         submission = None
-        if any(kind in {"tests", "rubric"} for kind, _ in underlying):
-            try:
-                submission = Submission(await workspace_files())
-            except (ValueError, TimeoutError, tarfile.TarError, OutputLimitExceededError) as error:
-                submission = Submission({}, f"Workspace snapshot failed: {error}")
-        for kind, grade in underlying:
-            if submission and submission.failure:
-                break
-            result = await grade(state, target, submission)
-            if submission and submission.failure:
-                break
-            additions = (result.metadata or {}).get("checks", {})
-            if not additions:
-                raise ValueError("Scorer returned no named checks")
-            if checks.keys() & additions.keys():
-                raise ValueError("Scorers returned duplicate check names")
-            checks.update(additions)
-            state.metadata["scoring_checks"] = dict(checks)
-        if submission and submission.failure:
-            return checks_score(failed_checks(check_names(evaluation, free_check), submission.failure))
+        try:
+            with anyio.fail_after(scoring_seconds(evaluation) + SCORING_OVERHEAD_SECONDS):
+                if any(kind in {"tests", "rubric"} for kind, _ in underlying):
+                    try:
+                        submission = Submission(await workspace_files())
+                    except (ValueError, TimeoutError, tarfile.TarError, OutputLimitExceededError) as error:
+                        raise SubmissionFailed(f"Workspace snapshot failed: {error}") from error
+                for kind, grade in underlying:
+                    result = await grade(state, target, submission)
+                    additions = (result.metadata or {}).get("checks", {})
+                    if not additions:
+                        raise ValueError("Scorer returned no named checks")
+                    if checks.keys() & additions.keys():
+                        raise ValueError("Scorers returned duplicate check names")
+                    checks.update(additions)
+                    state.metadata["scoring_checks"] = dict(checks)
+        except SubmissionFailed as error:
+            return checks_score(failed_checks(check_names(evaluation, free_check), str(error)))
+        except TimeoutError as error:
+            raise RuntimeError("Scoring exceeded its total deadline.") from error
         if set(checks) != set(check_names(evaluation, free_check)):
             raise ValueError("Scorer did not return the eval's fixed check set.")
         for name, check in checks.items():
