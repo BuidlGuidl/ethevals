@@ -1,21 +1,15 @@
 # ETH Evals system proposal
 
-What already exists, and what we propose.
-
-Labels: **measured** means checked on 2026-09-28; **inferred** means reasoned from what we checked; **guess** means no evidence; **illustrative** means a made-up example.
-
-Research from 2026-09-28 on existing Ethereum eval projects, Hugging Face and Inspect. Unless marked otherwise, facts were checked that day. Companion docs: [publishing ethevals to Hugging Face](./publishing-ethevals-to-hugging-face.md) and [ethevals on Inspect: the ERC-20 example](./ethevals-on-inspect-erc20-example.md).
-
-## The short version
-
-- **Four Ethereum eval projects exist, and each covers one slice.** Some run agents in isolation, some publish data, some have a site. None runs automatically when an eval or a model is added.
-- **Hugging Face is where the EF wants the data.** It's good for datasets and open models, not for agents.
-- **Inspect fits the runner part of our system.** It gives us isolated containers per run, a judge model, dollar cost, resume, and a transcript viewer.
-- **The proposal.** `BuidlGuidl/ethevals` holds the evals, an Inspect-based runner, the site, and the automation. It publishes the quiz evals to `ethereum-foundation/hf-ethevals-dataset` on HF.
+Labels: 
+- **measured** means checked on 2026-09-28; 
+- **inferred** means reasoned from what we checked; 
+- **guess** means no evidence; 
+- **illustrative** means a made-up example.
 
 ## What each project does
 
-### Austin's ethevals (`austintgriffith/ethevals`)
+<details>
+<summary><strong>Austin's ethevals</strong> (<code>austintgriffith/ethevals</code>)</summary>
 
 - **Intention.** Score agents (Claude Code, Codex, OpenCode), with and without ethskills, across our four pillars.
 - **How the evals are written.** There are 100 YAML files, 25 per pillar: 94 quizzes and 6 builds. Austin Griffith's agent clawdbot wrote them in three days, and 60 were ported from ethskills-evals and clawdbot's eth-evals.
@@ -27,7 +21,10 @@ Research from 2026-09-28 on existing Ethereum eval projects, Hugging Face and In
   There's no container and no chain, and each eval runs once.
 - **How it shows data.** ethevals.com is one static page with 7 cards. Results arrive by hand-made PRs, with no CI. Nothing is on HF.
 
-### EthIQ (`ethpandaops/ai-evals`)
+</details>
+
+<details>
+<summary><strong>EthIQ</strong> (<code>ethpandaops/ai-evals</code>)</summary>
 
 - **Intention.** ethPandaOps built it to test models on protocol internals (EVM, consensus, fork choice) for their own daily work.
 - **How the evals are made.** They're generated, not written. Official spec test fixtures get mutated with a seed, and the spec's own reference code computes each answer. There are 376 questions, 325 of them private.
@@ -39,7 +36,10 @@ Research from 2026-09-28 on existing Ethereum eval projects, Hugging Face and In
   The framework is unknown, because the repo is private.
 - **How it shows data.** Its own site, ethiq.ethpandaops.io, with confidence intervals, cost, and a page per question. Nothing is on HF.
 
-### Wallet evals (`Ethereum-dAI/local-llm-evals`)
+</details>
+
+<details>
+<summary><strong>Wallet evals</strong> (<code>Ethereum-dAI/local-llm-evals</code>)</summary>
 
 - **Intention.** The EF AI team (Gabriel Fior) wants to prove that a fine-tuned 4B Gemma running on the user's device turns "send 0.1 ETH to vitalik.eth" into the right wallet tool call, better than GPT-5.
 - **How the evals are made.** Python scripts generate 1000 noisy phrasings from hand-written seeds, and the expected call is computed from the seed. Each case is one model call graded by exact match, with no chain, no MCP, and no agent.
@@ -50,7 +50,10 @@ Research from 2026-09-28 on existing Ethereum eval projects, Hugging Face and In
   ```
 - **How it shows data.** Hand-written reports in the repo. The data sits on HF as `ef-ai/wallet-eval-benchmark`, but in promptfoo's YAML format, so HF can't load it as rows. One person pushed it by hand, with no PRs and no tags.
 
-### eth-bench (`JossDuff/eth-bench`)
+</details>
+
+<details>
+<summary><strong>eth-bench</strong> (<code>JossDuff/eth-bench</code>)</summary>
 
 - **Intention.** Measure how much Ethereum a model knows.
 - **How the evals are written.** 343 hand-written questions in 9 sections, of three types: multiple choice, open answer, and false premise, where the model has to reject a made-up fact.
@@ -77,6 +80,8 @@ Research from 2026-09-28 on existing Ethereum eval projects, Hugging Face and In
 ```
 
 The model is asked the question, and a separate grader model compares its reply with `answer`. It returns correct, incorrect, or not attempted.
+
+</details>
 
 </details>
 
@@ -182,6 +187,9 @@ flowchart LR
 
 We keep our own repo and site because we also eval agents and closed models, not only open models.
 
+<details>
+<summary>Repo layout</summary>
+
 ```text
 ethevals/
 ├── evals/<pillar>/<name>/      # what authors write: eval.yaml, starter/, setup/, grader/
@@ -195,6 +203,8 @@ ethevals/
 ├── models.yaml, prices.yaml    # who is on the board, what a token costs
 └── .github/workflows/          # check an eval PR, run what's missing, publish to HF
 ```
+
+</details>
 
 Why this system is worth building:
 
@@ -214,11 +224,3 @@ flowchart LR
     P --> S["results PR → site"]
     P --> H["release → HF pull request"]
 ```
-
-## Proposed next steps
-
-1. **Spend 2 to 3 days testing Inspect.** Run one vanilla quiz, plus the ERC-20 build with Claude Code and Codex on an anvil chain. This settles Inspect or our own runner (guess on the time).
-2. **Thin the spec (PR #4).** Keep the folder, named checks and modes. Park chain details until the test runs, and add the constructor line to `erc20-points-token`'s `SPEC.md`.
-3. **Seed evals.** Convert a few of Austin's 100 per pillar into our format, so we reach 10 to 20 real evals.
-4. **Answer the EF.** One home and one format. HF gets the quiz rows through reviewed pull requests. We own the system and the Building evals, and other teams bring evals in our format.
-5. **Build the automation early.** The results PR and the HF export are the part of the pitch nobody else has.
