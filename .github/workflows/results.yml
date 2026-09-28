@@ -22,8 +22,6 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 330
-    outputs:
-      source: ${{ steps.source.outputs.commit }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -34,10 +32,7 @@ jobs:
         with:
           enable-cache: false
       - run: uv sync --frozen
-      - id: source
-        run: |
-          git rev-parse HEAD > source-sha.txt
-          echo "commit=$(cat source-sha.txt)" >> "$GITHUB_OUTPUT"
+      - run: git rev-parse HEAD > source-sha.txt
       - name: Check recovery receipts
         env:
           GH_TOKEN: ${{ github.token }}
