@@ -66,7 +66,10 @@ The hash excludes timestamps and permissions. Renames change it.
 ## Results rows
 
 Each `rows.jsonl` file contains one flat JSON object per epoch.
-The exporter replaces the file atomically after Inspect returns.
+The exporter folds new rows into the existing file and replaces it atomically after Inspect returns.
+It skips the write when the content is unchanged.
+`--rows results/rows.jsonl` adds committed rows to the resume record without requiring their logs.
+CI uses a fresh output directory and reads only that run's logs.
 After an abrupt kill, the logs remain the recovery source until the next command exports rows.
 The log store only grows. Retry logs never replace earlier logs.
 Rows cover the whole store, with the latest row per eval ID, eval hash, agent, mode, and epoch number.
@@ -87,6 +90,12 @@ Player working-time and cost limits fail the existing checks with the limit reas
 Operator stops and wall-clock stops before the working limit produce errors.
 `check` writes fresh logs on every invocation and checks only the current selection.
 The Python `run()` result also contains only the current selection. `rows.jsonl` contains the whole store.
+
+`ethevals plan --rows results/rows.jsonl --modes vanilla internet` prints missing epochs without keys, Docker, or model calls.
+It shares epoch selection with `run` and uses the runtime's `cost_limit`, `rubric_budget`, and `max_attempts`.
+`--budget USD` exits with code 1 when the worst-case estimate exceeds the budget.
+The plan also lists exhausted errors and an expected-cost estimate from recorded spend.
+See the root README for workflow setup and the limit on this billing estimate.
 
 | Fields | Meaning |
 | --- | --- |

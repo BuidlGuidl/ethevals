@@ -227,28 +227,21 @@ def test_slow_setup_preserves_player_time_and_timeout_is_error(tmp_path, monkeyp
     config = load_config()
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
     files = {**evaluation.files,
-             "scorer/setup.py": b'import time; time.sleep(3); print(\'{"files": {}}\')',
+             "scorer/setup.py": b'import time; time.sleep(31); print(\'{"files": {}}\')',
              "scorer/check.py": b'print(\'{"ran":{"passed":true,"reason":"Player reached grading."}}\')'}
     evaluation = replace(evaluation, files=files, discovered_checks={"check_script": ("script:ran",)})
     compose = prepare_compose(evaluation, tmp_path)
     player = replace(check_player(evaluation, "empty"), solver_for=lambda _: slow_player())
     task = build_task(evaluation, config, player, check_grader(), "internet", 1, compose)
     task.working_limit = 2
-    task.time_limit = 2
+    # Setup exceeds both player limits. The wall limit also gives scoring
+    # 15 seconds instead of a flaky one-second Docker capture deadline.
+    task.time_limit = 30
     log = eval(task, log_dir=str(tmp_path / "slow"), display="none", retry_on_error=0)[0]
     row = results_rows(log)[0]
     assert (row["status"], row["checks"]) == ("passed", {"script:ran": {"passed": True, "reason": "Player reached grading."}})
     assert row["model_tokens"] > 0
-    # Inspect includes scorer and container teardown time in the exported metric.
-    # Compare against the same run without the setup delay.
-    fast = replace(evaluation, files={**files, "scorer/setup.py": b'print(\'{"files": {}}\')'})
-    fast_task = build_task(fast, config, player, check_grader(), "internet", 1, compose)
-    fast_task.working_limit = fast_task.time_limit = 2
-    fast_log = eval(fast_task, log_dir=str(tmp_path / "fast"), display="none", retry_on_error=0)[0]
-    fast_row = results_rows(fast_log)[0]
-    assert fast_row["status"] == "passed"
-    assert abs(row["working_seconds"] - fast_row["working_seconds"]) < 2
-    # Restore the delayed setup in the evaluation registry before the timeout run.
+    # Check setup's own deadline separately from the player's limits.
     task = build_task(evaluation, config, player, check_grader(), "internet", 1, compose)
     monkeypatch.setattr(preparation, "SETUP_SECONDS", .2)
     log = eval(task, log_dir=str(tmp_path / "timeout"), display="none", retry_on_error=0)[0]

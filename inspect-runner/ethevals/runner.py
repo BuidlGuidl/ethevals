@@ -10,7 +10,8 @@ from inspect_ai.util import SandboxEnvironmentSpec
 from .actors import Player, Grader
 from .config import Config, read_yaml
 from .loader import Eval
-from .rows import epoch_identity, export_rows, store_rows
+from .rows import epoch_identity, export_rows, store_rows, read_rows, fold_rows
+from .planning import epoch_selection
 from .scorers import named_checks, EVALUATIONS, SCORERS, check_names, rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS
 from .sandboxes import compose_file
 from .preparation import prepare_eval, prepare_compose, sandbox_type
@@ -63,24 +64,14 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
 
 
 def run(evals: list[Eval], config: Config, output: Path, *, players, grade: Grader,
-        epochs: int | None = None, fresh: bool = False, retry_errors: bool = False) -> tuple[bool, list[dict]]:
-    previous = {epoch_identity(row, row["epoch"]): row for row in store_rows(output)}
-    tasks, selected, discovery_errors = [], set(), []
+        epochs: int | None = None, fresh: bool = False, retry_errors: bool = False,
+        rows_file: Path | None = None) -> tuple[bool, list[dict]]:
+    previous = fold_rows(read_rows(rows_file) if rows_file else [], read_rows(output / "rows.jsonl"), store_rows(output))
+    selected, pending, _ = epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
+    tasks, discovery_errors = [], []
     for evaluation in evals:
-        actors = players(evaluation)
-        if not actors:
-            continue
-        pending = []
-        for mode, actor in actors:
-            for epoch in range(1, (epochs or config.epochs) + 1):
-                identity = epoch_identity({"eval_id": evaluation.id, "eval_hash": evaluation.hash,
-                                           **actor.metadata, "mode": mode}, epoch)
-                selected.add(identity)
-                prior = previous.get(identity, {})
-                if fresh or (prior.get("status") not in {"passed", "failed"}
-                             and (prior.get("attempt", 0) < config.max_attempts or retry_errors)):
-                    pending.append((mode, actor, epoch, prior.get("attempt", 0) + 1))
-        if not pending:
+        missing = [item[1:] for item in pending if item[0].id == evaluation.id]
+        if not missing:
             continue
         try:
             compose = prepare_compose(evaluation, output)
@@ -89,12 +80,10 @@ def run(evals: list[Eval], config: Config, output: Path, *, players, grade: Grad
             discovery_errors.append({"eval_id": evaluation.id, "eval_hash": evaluation.hash, "error": str(error)})
             logging.getLogger(__name__).error("%s: check discovery failed: %s", evaluation.id, error)
             continue
-        for mode, actor, epoch, attempt in pending:
+        for mode, actor, epoch, attempt in missing:
             task = build_task(evaluation, config, actor, grade, mode, 1, compose)
             task.metadata.update(epoch=epoch, attempt=attempt)
             tasks.append(task_with(task, name=f"{task.name}-epoch-{epoch}"))
-    if not selected:
-        raise ValueError("No evals declare a selected mode")
     output.mkdir(parents=True, exist_ok=True)
     error_path = output / "discovery-errors.json"
     if discovery_errors:
@@ -104,5 +93,5 @@ def run(evals: list[Eval], config: Config, output: Path, *, players, grade: Grad
         eval(tasks, log_dir=str(output / "logs"), model_roles={"grader": grade.model},
              retry_on_error=0, fail_on_error=False, max_samples=config.max_samples,
              max_tasks=config.max_tasks, log_buffer=1, display="plain")
-    rows = [row for row in export_rows(output) if epoch_identity(row, row["epoch"]) in selected]
+    rows = [row for row in export_rows(output, previous) if epoch_identity(row, row["epoch"]) in selected]
     return not discovery_errors and len(rows) == len(selected) and all(row["status"] != "error" for row in rows), rows

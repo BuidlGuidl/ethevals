@@ -315,6 +315,97 @@ The static export goes to `site/out/`. Without real rows, it shows an empty stat
 Use `ETHEVALS_SAMPLE=1 pnpm build` for the labelled sample board.
 [The site README](site/README.md) covers viewing the sample, results paths, and log URLs.
 
+## CI and committed results
+
+`results/rows.jsonl` is the committed record. The repository starts with an empty file.
+Logs, discovery caches, and free-check outputs stay out of Git.
+The site reads this same file. It shows execution errors without a release link because the publisher skips error logs.
+
+Pull requests run `Free checks` on `pull_request`, with no model keys and a read-only token.
+The checks validate eval folders and Compose rules, run reference and empty cases, and run pytest.
+They also run Docker scoring and chain proofs, the offline HF proof, and the site's tests and build.
+The real-agent Docker proofs stay outside PR checks. They download agent CLIs and query keyless Exa, which can rate-limit.
+Run them locally with the command in "Prove the agent path without a key".
+
+Each push to `main` starts `Eval results`. Runs share one concurrency group and never cancel an active run.
+The job checks out the latest `main` after it leaves the queue.
+It also reads committed rows from the pending `ci/results` branch, so an unmerged results PR cannot cause duplicate spending.
+The job plans every configured model in vanilla and internet modes, limited to each eval's declared modes.
+Skills mode remains unimplemented.
+
+To print the same missing epochs and budget estimate without a key:
+
+```sh
+uv run ethevals plan --rows results/rows.jsonl --modes vanilla internet --budget 100
+```
+
+Passed and failed epochs are complete. Errors can use the remaining attempts under `max_attempts`.
+The plan lists errors that exhausted their attempts. A discovery failure leaves its epochs missing and spends no player allowance.
+Each missing epoch reserves the player cost limit plus `rubric_budget(evaluation, config)`, multiplied by its remaining attempts.
+The current build reserves $28.7288 per attempt, or $57.4576 with both attempts left.
+The gate uses this worst-case estimate. Prices remain guesses, and an in-flight player call can exceed its cost limit.
+The gate is not a provider billing cap.
+
+History supplies a separate expected-cost estimate for one attempt, matched by eval type, model, harness, effort, mode, and answer kind.
+The plan reports how many missing epochs have history. Its total expected estimate is null unless all have history.
+The gate never uses that estimate.
+
+`ETHEVALS_BUDGET_USD` sets the automatic run's budget. Its default is zero, which stops missing paid work before any model call.
+If the estimate exceeds the budget, inspect the saved `plan.json` artifact.
+Then dispatch `Eval results` on `main` with a higher `budget` input.
+Each invocation runs at most one attempt per missing identity. The estimate reserves every remaining attempt.
+
+After execution, a separate job calls step 5's `publish-logs` implementation and uploads eligible logs to a GitHub release.
+Only after publication succeeds does it fold new rows and release links into the committed file.
+The latest row replaces an earlier row with the same identity. Other rows, including stale hashes, remain.
+Error rows retain their attempt counts. Their local logs and discovery reports remain in the 14-day workflow artifact.
+Execution or discovery errors fail the publication job after it records available rows and updates the PR when rows changed.
+If publication fails, recover the artifact before starting another paid run. Rows absent from Git cannot prevent repeat spending.
+
+The job appends a commit to `ci/results` and opens a results PR against `main`.
+It retains the previous results branch as a parent, so it never needs a force push.
+Merge that PR to put the rows on the board. A merge with no missing epochs makes no model calls.
+The built-in token's PR checks wait for a maintainer to approve them.
+A GitHub App token avoids that wait; choosing and installing an App remains Shiv's decision.
+See [GitHub's token rules](https://docs.github.com/en/actions/concepts/security/github_token).
+
+The paid job holds only `OPENROUTER_API_KEY` and optional `EXA_API_KEY` during execution.
+Its token has read access. The publication job holds the write token and no model keys.
+Agent containers have internet by design and can reach the runner host's network.
+Treat merged evals as code that runs beside the paid job's credentials.
+
+`Publish HF dataset` runs only through manual dispatch on `main`.
+It exports vanilla quizzes, then uploads them with `HF_TOKEN` to the selected dataset repository.
+It requires the dataset name and an explicit license. The workflow does not choose a license.
+
+Set up GitHub and Hugging Face once:
+
+- Enable Actions and permit the pinned actions in these workflows.
+- Require the `Free checks` job before merging into `main`.
+- Enable [Allow GitHub Actions to create and approve pull requests](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-your-repository).
+- Allow the built-in token to write releases and `ci/results`, and to open pull requests. Keep force pushes disabled.
+- Add the repository secret `OPENROUTER_API_KEY`. Check the configured model slugs and prices before funding runs.
+- Optionally add `EXA_API_KEY` to reduce keyless search rate limits. Rows count failed and rate-limited searches.
+- Set the repository variable `ETHEVALS_BUDGET_USD` after reviewing the plan. Leaving it unset keeps the budget at zero.
+- Create the HF dataset repository and choose its license. Add a write-scoped token for that dataset as `HF_TOKEN`.
+- For release log links, set `ETHEVALS_LOG_BASE=https://github.com/BuidlGuidl/ethevals/releases/download` in the site build environment.
+
+`BuidlGuidl/ethevals` is private. Release asset downloads require GitHub access, and Actions minutes use the organization's quota.
+
+The workflows call local scripts. To run their free paths:
+
+```sh
+uv run python scripts/ci.py checks --output results/ci-checks
+uv run python scripts/ci.py after-merge --answer reference --budget 1000 --output results/local-ci
+uv run python scripts/ci.py publish-results --output results/local-ci --repo BuidlGuidl/ethevals --run-id local --commit FULL_COMMIT_SHA --open-pr
+uv run python scripts/ci.py release --output out/hf-ci --hf-repo OWNER/DATASET --license CHOSEN_LICENSE
+```
+
+Use a fresh output directory for each invocation. Install the images and site packages before `checks`.
+The mock after-merge run folds its rows locally. The site excludes those rows from scores.
+Without `--publish`, publication and HF release commands print plans and make no remote writes.
+For a local paid run that resumes from committed rows, pass `--rows results/rows.jsonl` to `ethevals run`.
+
 ## Publish full logs
 
 Publish one GitHub release per results run. Only unpublished logs for rows the site shows become assets.

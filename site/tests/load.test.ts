@@ -179,3 +179,15 @@ test("one log base resolves assets from different results releases", (t) => {
     "https://github.com/example/ethevals/releases/download/results-124-1/second.eval",
   ]);
 });
+
+test("committed errors remain visible without unpublished release links", (t) => {
+  const f = fixture(t);
+  f.write([{ log_file: "results-1/epoch.eval" }, { epoch: 2, status: "error", passed: null,
+    error_kind: "execution", error_reason: "Provider unavailable.", log_file: "logs/error.eval" }]);
+  const board = loadBoard({ ETHEVALS_LOG_BASE: "https://github.com/example/ethevals/releases/download" }, f.site);
+  const cell = board.tables.internet.pillars.concepts.evals[0].cells['["model-a","harness-a","high"]'];
+  assert.deepEqual([cell.passed, cell.total, cell.errors], [1, 1, 1]);
+  assert.equal(cell.epochs[0].logUrl, "https://github.com/example/ethevals/releases/download/results-1/epoch.eval");
+  assert.equal(cell.epochs[1].logUrl, null);
+  assert.equal(cell.epochs[1].error_reason, "Provider unavailable.");
+});

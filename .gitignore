@@ -1,7 +1,8 @@
 .venv/
 __pycache__/
 .pytest_cache/
-results/
+results/*
+!results/rows.jsonl
 .DS_Store
 out/
 cache/

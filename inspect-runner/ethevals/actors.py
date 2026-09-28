@@ -44,11 +44,14 @@ def model_actor(item, prefix=""):
     }.items()}
 
 
-def player(config, key, mode):
+def player(config, key, mode, planning=False):
     item = config.models[key]
-    model, metadata = model_actor(item)
+    if planning:
+        model, metadata = None, {"model": item.model, "effort": item.effort}
+    else:
+        model, metadata = model_actor(item)
     harness = item.harness if mode == "internet" else None
-    if harness == "codex_cli":
+    if harness == "codex_cli" and not planning:
         model = CodexModel(model)
     metadata.update(harness=harness, harness_version=AGENTS[harness].version if harness else None, answer_kind=None)
 
@@ -67,7 +70,7 @@ def grader(config):
     return Grader(model, metadata)
 
 
-def select_actors(config, models=None, modes=None, answer=None, delay=0):
+def select_actors(config, models=None, modes=None, answer=None, delay=0, *, planning=False):
     from .checks import CHECK_MODES, check_player, check_grader
     if modes and set(modes) - set(get_args(Mode)):
         raise ValueError(f"Unknown modes: {modes}")
@@ -79,8 +82,8 @@ def select_actors(config, models=None, modes=None, answer=None, delay=0):
             return [(mode, check_player(evaluation, answer, delay, mode))
                     for mode in dict.fromkeys(evaluation.declaration.modes) if mode in selected]
     else:
-        grade = grader(config)
-        actors = [(mode, player(config, key, mode)) for mode in dict.fromkeys(modes or ["vanilla"])
+        grade = None if planning else grader(config)
+        actors = [(mode, player(config, key, mode, planning)) for mode in dict.fromkeys(modes or ["vanilla"])
                   for key in models or config.models]
 
         def players(evaluation):

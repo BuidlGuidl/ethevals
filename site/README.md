@@ -71,6 +71,8 @@ pnpm build
 A row with `log_file: results-12345-1/epoch.eval` links to
 `https://github.com/BuidlGuidl/ethevals/releases/download/results-12345-1/epoch.eval`.
 Rows from other runs carry other release tags, so one base reaches all releases.
+CI folds these linked rows into the committed `results/rows.jsonl` file before opening its results PR.
+Execution errors remain visible without log links. Their unpublished logs stay in the workflow artifact.
 The publisher writes linked rows after the upload succeeds, in a file named for the release.
 Its dry run writes nothing. It excludes key-free, stale-hash, skills, and already published logs.
 If `ETHEVALS_LOG_BASE` is set, every shown row must have a `results-<run-id>/<asset>.eval` path.

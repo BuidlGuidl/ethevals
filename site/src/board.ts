@@ -82,7 +82,7 @@ function evalCell(evaluation: Evaluation, mode: TableMode, rows: Row[], logBase:
       cost: epochCost(row), issue: row.error_reason ?? (row.limit
         ? [...new Set(Object.values(row.checks).filter((check) => !check.passed).map((check) => check.reason))].join(" ")
         : ""),
-      logUrl: logUrl(logBase, row.log_file),
+      logUrl: row.status === "error" ? null : logUrl(logBase, row.log_file),
     })),
   };
 }

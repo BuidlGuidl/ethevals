@@ -166,11 +166,26 @@ def store_rows(output: Path) -> list[dict]:
     ))
 
 
-def export_rows(output: Path) -> list[dict]:
-    rows = store_rows(output)
-    destination = output / "rows.jsonl"
+def read_rows(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()] if path.exists() else []
+
+
+def fold_rows(*groups: list[dict]) -> list[dict]:
+    latest = {epoch_identity(row, row["epoch"]): row for group in groups for row in group}
+    return sorted(latest.values(), key=lambda row: tuple(str(value or "") for value in epoch_identity(row, row["epoch"])))
+
+
+def write_rows(destination: Path, rows: list[dict]) -> None:
+    content = "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows)
+    if destination.exists() and destination.read_text() == content:
+        return
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(".tmp")
-    temporary.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows))
+    temporary.write_text(content)
     temporary.replace(destination)
+
+
+def export_rows(output: Path, previous: list[dict] | None = None) -> list[dict]:
+    rows = fold_rows(read_rows(output / "rows.jsonl"), previous or [], store_rows(output))
+    write_rows(output / "rows.jsonl", rows)
     return rows
