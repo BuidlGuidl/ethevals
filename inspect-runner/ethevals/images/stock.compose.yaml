@@ -1,11 +1,11 @@
 services:
   default:
     build: .
-    image: ethevals-solidity:foundry-1.5.1-solc-0.8.30-std-1.9.7
+    image: ethevals-solidity:inputs-68e4835f7eb35167
     init: true
     networks: [private, internet]
   scorer:
-    image: ethevals-solidity:foundry-1.5.1-solc-0.8.30-std-1.9.7
+    image: ethevals-solidity:inputs-68e4835f7eb35167
     init: true
     networks: [private]
 networks:

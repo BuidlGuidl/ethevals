@@ -13,14 +13,14 @@ from inspect_ai.util import SandboxEnvironmentSpec, sandbox
 from .scorers import EVALUATIONS, checks_score, forge, forge_results, prepare_forge
 from .sandboxes import IMAGES, compose_file, validate_compose
 from .config import read_yaml
+from .images.tag import image_tag
 
 CHECK_SETS = {}
 
 
 def check_cache_path(evaluation, output, compose=None):
     image = read_yaml(compose or compose_file())["services"]["scorer"]["image"]
-    inputs = [evaluation.hash.encode(), image.encode(), (IMAGES / "Dockerfile").read_bytes(),
-              (IMAGES / "foundry.toml").read_bytes(), b"forge-check-names-v1"]
+    inputs = [evaluation.hash.encode(), image.encode(), image_tag(IMAGES).encode(), b"forge-check-names-v1"]
     key = hashlib.sha256(b"\0".join(inputs)).hexdigest()
     return output / "inputs" / evaluation.hash / key / "checks.json"
 

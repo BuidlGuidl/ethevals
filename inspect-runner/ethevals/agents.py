@@ -1,8 +1,11 @@
 from inspect_ai.agent import as_solver
+from inspect_ai.model import Model, get_model
 from inspect_ai.solver import multiple_choice, solver
 from inspect_ai.tool import MCPServerConfigHTTP
-from inspect_swe import claude_code
+from inspect_swe import claude_code, codex_cli, opencode
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 
@@ -11,25 +14,85 @@ class Harness:
     factory: Callable
     version: str
 
+    def build(self, config, model):
+        servers = [MCPServerConfigHTTP(type="http", name="exa", url=config.search_provider)] if config.search_provider else []
+        return self.factory(model, version=self.version, mcp_servers=servers)
 
-def claude(config, model):
-    servers = [MCPServerConfigHTTP(type="http", name="exa", url=config.search_provider)] if config.search_provider else []
+
+def claude(model, **settings):
     return as_solver(claude_code(
         cwd="/workspace", model_config=model.agent_model_config, effort=model.effort,
-        version=AGENTS["claude_code"].version, disallowed_tools=["WebSearch"], mcp_servers=servers,
-        retry_uncaught_errors=0,
+        disallowed_tools=["WebSearch"], retry_refusals=0, retry_uncaught_errors=0,
+        env={"CLAUDE_CODE_EFFORT_LEVEL": model.effort}, **settings,
     ))
 
 
-# Step 3 adds Codex CLI and OpenCode factories here.
-AGENTS = {"claude_code": Harness(claude, "2.1.274")}
+def codex(model, **settings):
+    async def solve(state, generate):
+        adapted = CodexModel(get_model())
+        agent = as_solver(codex_cli(
+            cwd="/workspace", model_config=model.agent_model_config,
+            web_search="disabled", retry_refusals=0,
+            config_overrides={"model_reasoning_effort": json.dumps(model.effort)},
+            model_aliases={"inspect": adapted, model.agent_model_config: adapted},
+            **settings,
+        ))
+        return await agent(state, generate)
+    return solve
+
+
+class CodexModel(Model):
+    """Restore custom calls inside the bridge's normal generation context."""
+
+    def __init__(self, source):
+        super().__init__(source.api, source.config, source.model_args)
+        self.source = source
+
+    async def generate(self, input, tools=(), **kwargs):
+        output = await self.source.generate(input, tools=tools, **kwargs)
+        return restore_codex_calls(output, tools)
+
+
+def restore_codex_calls(output, tools):
+    # Inspect 0.3.271 forwards namespaced custom tools to non-OpenAI providers,
+    # but never restores their custom reply type. Keep malformed calls recoverable.
+    custom = {tool.name for tool in tools if tool.options
+              and (tool.options.get("__responses_namespace__") or [None])[0] == "functions"
+              and "custom_format" in tool.options}
+    for choice in output.choices:
+        for call in choice.message.tool_calls or []:
+            if (call.function in custom and not call.parse_error
+                    and set(call.arguments) == {"input"}
+                    and isinstance(call.arguments["input"], str)):
+                call.arguments = {"input": call.arguments["input"]}
+                call.type = "custom"
+    return output
+
+
+def open_code(model, **settings):
+    provider = json.loads((Path(__file__).with_name("images") / "opencode-models.json").read_text())
+    for definition in provider["models"].values():
+        definition["options"] = {"reasoning": {"effort": model.effort}}
+    return as_solver(opencode(
+        cwd="/workspace", retry_refusals=0, opencode_model=model.agent_model_config,
+        env={"OPENROUTER_API_KEY": "sk-none",
+             "OPENCODE_CONFIG_CONTENT": json.dumps({"provider": {"openrouter": provider}})},
+        **settings,
+    ))
+
+
+AGENTS = {
+    "claude_code": Harness(claude, "2.1.274"),
+    "codex_cli": Harness(codex, "0.158.0"),
+    "opencode": Harness(open_code, "1.18.33"),
+}
 
 
 @solver
 def internet_solver(harness: str, config, model):
     if harness not in AGENTS:
         raise ValueError(f"Harness {harness!r} has no internet solver yet")
-    agent = AGENTS[harness].factory(config, model)
+    agent = AGENTS[harness].build(config, model)
 
     async def solve(state, generate):
         if state.choices:

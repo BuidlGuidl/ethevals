@@ -318,11 +318,15 @@ def test_check_cache_tracks_image_foundry_and_naming_inputs(tmp_path, monkeypatc
     foundry.write_text(foundry.read_text() + "optimizer = true\n")
     changed = check_cache_path(evaluation, tmp_path)
     assert changed != original
+    dockerfile = image_files / "Dockerfile"
+    dockerfile.write_text(dockerfile.read_text() + "\nENV CACHE_PROOF=1\n")
+    changed_dockerfile = check_cache_path(evaluation, tmp_path)
+    assert changed_dockerfile not in {original, changed}
     document = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
     document["services"]["scorer"]["image"] = "ethevals-solidity:new-version"
     compose = tmp_path / "image.yaml"
     compose.write_text(yaml.safe_dump(document))
-    assert check_cache_path(evaluation, tmp_path, compose) not in {original, changed}
+    assert check_cache_path(evaluation, tmp_path, compose) not in {original, changed, changed_dockerfile}
 
 
 def test_completed_epochs_skip_discovery_and_other_evals_survive_its_failure(tmp_path, monkeypatch):

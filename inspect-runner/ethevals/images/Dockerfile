@@ -1,6 +1,14 @@
 FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251
 ARG TARGETARCH
-RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certificates tar gzip curl git procps && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certificates tar gzip xz-utils curl git procps ripgrep && rm -rf /var/lib/apt/lists/*
+# Install Node here because inspect_swe stages it into a root-owned directory.
+RUN case "$TARGETARCH" in \
+      amd64) arch=x64; checksum=822780369d0ea309e7d218e41debbd1a03f8cdf354ebf8a4420e89f39cc2e612 ;; \
+      arm64) arch=arm64; checksum=f6df68c6793244071f69023a9b43a0cf0b13d65cbe86d55925c28e4134d9aafb ;; \
+      *) exit 1 ;; esac && \
+    curl -fsSL "https://nodejs.org/dist/v20.11.0/node-v20.11.0-linux-${arch}.tar.xz" -o /tmp/node.tar.xz && \
+    echo "$checksum  /tmp/node.tar.xz" | sha256sum -c - && \
+    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 && rm /tmp/node.tar.xz
 RUN case "$TARGETARCH" in \
       amd64) checksum=73640b01bd9ed29fdb4965085099371f8cf0dbbec3e2086cf54564efc4dcfe88 ;; \
       arm64) checksum=cccf28bdf202289e837a9e21ed213b2b80dc1e806e12f1717bc98a44315c331e ;; \

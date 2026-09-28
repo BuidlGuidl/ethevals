@@ -3,7 +3,8 @@
 ETH Evals measures what bare models know about Ethereum and how well agents do Ethereum work.
 
 The runner uses Inspect for quizzes and Solidity builds.
-Claude Code runs in Docker in the internet mode. A separate container grades its code with Forge.
+Claude Code, Codex CLI, and OpenCode run in Docker in the internet mode.
+A separate container grades their code with Forge.
 
 ## Install
 
@@ -23,6 +24,10 @@ docker compose -f inspect-runner/ethevals/images/stock.compose.yaml build defaul
 
 The image includes Foundry 1.5.1, Solidity 0.8.30, OpenZeppelin 5.4.0, and forge-std 1.9.7.
 The last two dependencies live in a root-owned directory. Submitted copies cannot replace them during grading.
+It also supplies Node 20.11.0 and ripgrep for OpenCode. Rebuild the image after pulling runner changes.
+The image tag hashes `Dockerfile` and `foundry.toml`. Tests reject a tag that no longer matches those inputs.
+After changing either input, run `uv run python inspect-runner/ethevals/images/tag.py`.
+Use its output for both image tags in `stock.compose.yaml`, then rebuild.
 
 ## Run without a key
 
@@ -67,6 +72,53 @@ uv run ethevals run --output results/paid
 The default selects all four configured models and three epochs for every quiz in the vanilla mode.
 To select a subset, use `--evals`, `--models opus codex`, `--modes vanilla`, or `--epochs 1`.
 Use `--config path/to/config.yaml` for a separate configuration.
+
+To run all four agents on the ERC-20 build and both quizzes in the internet mode:
+
+```sh
+uv run ethevals run --evals evals/building/erc20-points-token evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes internet --epochs 1 --output results/four-agents
+```
+
+To run all four bare models on both quizzes in the vanilla mode:
+
+```sh
+uv run ethevals run --evals evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes vanilla --epochs 1 --output results/four-models
+```
+
+Guess: these commands together cost $5 to $20, including build rubric grading.
+This guess is not a spending cap. Actual slugs, prices, and paid model behavior remain untested.
+
+The agents use Claude Code 2.1.274, Codex CLI 0.158.0, and OpenCode 1.18.33.
+Kimi and GLM share OpenCode. All four models default to high effort in the configuration.
+
+| Agent | CLI identity | CLI effort setting |
+| --- | --- | --- |
+| Claude Code | `claude-opus-5-5` | `CLAUDE_CODE_EFFORT_LEVEL=high` |
+| Codex CLI | `gpt-6-sol` | `model_reasoning_effort="high"` |
+| OpenCode with Kimi | `openrouter/moonshotai/kimi-k3` | Model option `reasoning.effort=high` |
+| OpenCode with GLM | `openrouter/z-ai/glm-5.3` | Model option `reasoning.effort=high` |
+
+`agent_model_config` selects each CLI's identity. OpenCode selects its Kimi prompt for Kimi and its default prompt for GLM.
+Its provider definitions live in [opencode-models.json](inspect-runner/ethevals/images/opencode-models.json).
+Both use OpenRouter's `top_provider` limits of 1,048,576 context tokens and 943,718 output tokens, checked September 28, 2026.
+These are catalog limits. They do not promise that every routed provider supports the same limits.
+Source: [OpenRouter model catalog](https://openrouter.ai/api/v1/models).
+The container gets a dummy OpenRouter credential. Inspect routes model calls to the configured host-side model.
+
+Inspect also sets the configured backend effort. Its default bridge drops the CLI's generation settings before that step.
+The proofs record the raw CLI requests separately, so the backend setting cannot conceal a missing CLI effort.
+Codex uses code mode. A model adapter repairs Inspect 0.3.271's custom-call conversion while preserving its event consumer.
+It converts only declared custom calls with exactly one string `input` and no parse error.
+All agent factories set refusal retries to zero. Inspect's provider retries remain separate.
+
+Each agent gets the Exa HTTP MCP server from `search_provider`.
+Claude Code disallows `WebSearch`, and Codex sets `web_search="disabled"`.
+These settings keep search on Exa instead of each provider's hosted search API.
+OpenCode 1.18.33 does not register `websearch` for OpenRouter unless its optional search flags are enabled.
+Its built-in search also calls keyless Exa. The runner leaves its optional search flags unset.
+Claude Code retains `WebFetch`; OpenCode retains `webfetch`. Codex has no native page-fetch tool.
+All four agents retain Exa search and fetch, plus a shell with network access.
+Exa's keyless endpoint can rate-limit concurrent agents.
 
 Inspect also accepts `ANTHROPIC_AUTH_TOKEN`, including a subscription token from `claude setup-token`.
 Using that token this way is against Anthropic's terms.
@@ -133,7 +185,8 @@ The build row has `harness: claude_code`, eight `forge:` checks, and two `rubric
 The rubric's tokens and cost appear in `grader_tokens` and `grader_cost_usd`.
 Rows with `status: error` need diagnosis. An agent's incorrect code has `status: failed`.
 Before player epochs start, a key-free reference run discovers the seven test functions.
-The cache includes the eval hash, image tag, Dockerfile, Foundry config, and check-naming version.
+The cache includes the eval hash, declared image tag, computed image tag, and check-naming version.
+`images/tag.py` hashes the Dockerfile and Foundry config for both the image tag and cache identity.
 Names live under `inputs/<eval_hash>/<scoring_hash>/checks.json`. `forge:compile` completes the Forge check set.
 Missing expected names after compilation are runner errors unless that suite's setup failed.
 Discovery runs only for evals with missing epochs. Failures enter `discovery-errors.json`; other evals continue.
@@ -165,17 +218,21 @@ ADR 0002 remains proposed until this paid test succeeds.
 
 ## Prove the agent path without a key
 
-These scripts run the real Claude Code binary with scripted `mockllm` responses:
+These scripts run a real agent binary with scripted `mockllm` responses:
 
 ```sh
-env -u OPENROUTER_API_KEY uv run python inspect-runner/tests/prove_agent.py reference --output results/agent-reference
-env -u OPENROUTER_API_KEY uv run python inspect-runner/tests/prove_agent.py empty --output results/agent-empty
+env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN uv run python inspect-runner/tests/prove_agent.py reference --model codex --output results/codex-reference
+env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN uv run python inspect-runner/tests/prove_agent.py empty --model codex --output results/codex-empty
 ```
 
-The reference script sends a Bash tool call that writes the reference solution.
+Select `opus`, `codex`, `kimi`, or `glm` with `--model`. The default is `opus`.
+The reference script sends a shell tool call that writes the reference solution.
 The empty script leaves the workspace untouched. Both run Forge and the scripted rubric grader.
-The scripts assert the expected row status and named checks.
-The Docker regression tests also cover hostile Compose environments and workspace contents:
+Each proof makes one real Exa search and checks its result.
+The scripts check row status, named checks, raw CLI effort, and absence of built-in search.
+OpenCode proofs also check its model identity and selected system prompt.
+`cli-requests.jsonl` records the CLI requests before Inspect merges model settings.
+The Docker tests run both scripts for all four agents, plus the existing Compose and workspace proofs:
 
 ```sh
 env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN uv run pytest -q --run-docker -m docker
