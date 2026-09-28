@@ -106,20 +106,23 @@ async def oom_killed(box):
     if not isinstance(environment, DockerSandboxEnvironment):
         return False
     project = environment._project
-    with anyio.fail_after(15):
-        result = await anyio.run_process(["docker", "ps", "-aq", "--filter",
-            f"label=com.docker.compose.project={project.name}", "--filter",
-            f"label=com.docker.compose.service={environment._service}"])
-        container = result.stdout.decode().strip()
-        if not container or "\n" in container:
-            raise RuntimeError("Cannot identify scorer container for OOM check.")
-        state = await anyio.run_process(["docker", "inspect", "--format", "{{json .State}}", container])
-        if json.loads(state.stdout)["OOMKilled"]:
-            return True
-        events = await runner_exec(box, ["/bin/cat", "/sys/fs/cgroup/memory.events"], timeout=5)
-        if not events.success:
-            raise RuntimeError("Cannot read scorer memory counters.")
-        return int(dict(line.split() for line in events.stdout.splitlines())["oom_kill"]) > 0
+    try:
+        with anyio.fail_after(15):
+            result = await anyio.run_process(["docker", "ps", "-aq", "--filter",
+                f"label=com.docker.compose.project={project.name}", "--filter",
+                f"label=com.docker.compose.service={environment._service}"])
+            container = result.stdout.decode().strip()
+            if not container or "\n" in container:
+                raise RuntimeError("Cannot identify scorer container for OOM check.")
+            state = await anyio.run_process(["docker", "inspect", "--format", "{{json .State}}", container])
+            if json.loads(state.stdout)["OOMKilled"]:
+                return True
+            events = await runner_exec(box, ["/bin/cat", "/sys/fs/cgroup/memory.events"], timeout=5)
+            if not events.success:
+                raise RuntimeError("Cannot read scorer memory counters.")
+            return int(dict(line.split() for line in events.stdout.splitlines())["oom_kill"]) > 0
+    except Exception as error:
+        raise RuntimeError("Cannot inspect scorer memory state.") from error
 
 
 async def scoring_exec(box, command, **kwargs):

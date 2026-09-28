@@ -2,7 +2,7 @@
 import pytest
 
 from test_contracts import scoring_case, YES
-from ethevals.scorers import prepare_forge
+from ethevals.scorers import prepare_forge, forge as real_forge
 
 
 @pytest.mark.parametrize("operation", ["stop_agent", "workspace_files"])
@@ -22,6 +22,30 @@ def test_empty_grader_reason_fails_the_rubric_check(scoring_case):
     assert row["checks"]["rubric:uses_openzeppelin"] == {
         "passed": False, "reason": "The grader could not justify a verdict."}
     assert row["checks"]["rubric:protects_holders"]["passed"] is True
+
+
+def test_docker_timeout_during_oom_inspection_is_an_error(scoring_case, monkeypatch):
+    from types import SimpleNamespace
+    from inspect_ai.util import ExecResult
+    from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
+
+    box = object.__new__(DockerSandboxEnvironment)
+    box._project = SimpleNamespace(name="test")
+    box._service = "scorer"
+
+    async def killed(*args, **kwargs):
+        return ExecResult(success=False, returncode=137, stdout="", stderr="")
+
+    async def unavailable(*args, **kwargs):
+        raise TimeoutError("Docker inspect timed out")
+
+    monkeypatch.setattr("ethevals.scorers.sandbox", lambda name: box)
+    monkeypatch.setattr("ethevals.scorers.forge", real_forge)
+    monkeypatch.setattr("ethevals.sandboxes.runner_exec", killed)
+    monkeypatch.setattr("ethevals.sandboxes.anyio.run_process", unavailable)
+    row = scoring_case["run"]([])
+    assert (row["status"], row["passed"]) == ("error", None)
+    assert "Cannot inspect scorer memory state" in row["error_reason"]
 
 
 def test_invalid_source_bytes_fail_all_checks(scoring_case, monkeypatch):
