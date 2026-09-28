@@ -5,9 +5,11 @@ from typing import Literal
 
 from inspect_ai.dataset import Sample
 from pydantic import Field
+from pydantic import ValidationError
 
 from .config import Config, Declaration, Mode, parse_file, read_yaml
-from .scorers import SCORERS, TargetScorer
+from .scorers import SCORERS
+from .sandboxes import validate_compose
 
 PILLARS = {"concepts", "transactions", "building", "security"}
 
@@ -18,6 +20,7 @@ class EvalDeclaration(Declaration):
     type: Literal["quiz", "scenario", "build", "act"]
     modes: list[Mode] = Field(min_length=1)
     choices: list[str] | None = Field(default=None, min_length=2, max_length=26)
+    time_limit: int | None = Field(default=None, gt=0)
 
 
 # These local artifacts never form part of an eval, including before git add.
@@ -54,7 +57,7 @@ class Eval:
     hash: str
     pillar: str
     declaration: EvalDeclaration
-    scorer: Declaration
+    scorers: list[Declaration]
 
     def sample(self) -> Sample:
         # Only workspace files are eligible for copying into a future sandbox.
@@ -62,9 +65,12 @@ class Eval:
             f"/workspace/{path.relative_to(self.folder / 'workspace').as_posix()}": str(path)
             for path in eval_files(self.folder / "workspace")
         }
+        fields = {}
+        for item in self.scorers:
+            fields.update(SCORERS[item.kind].sample_fields(item))
         return Sample(
             id=self.id, input=self.declaration.prompt,
-            target=getattr(self.scorer, "target", ""), choices=self.declaration.choices,
+            **fields, choices=self.declaration.choices,
             files=files, metadata={"eval_id": self.id, "eval_hash": self.hash,
                                    "pillar": self.pillar, "type": self.declaration.type},
         )
@@ -79,19 +85,35 @@ def load_eval(folder: Path, config: Config) -> Eval:
         if not (folder / name).is_dir():
             raise ValueError(f"{folder / name}: {name}: required directory is missing")
     path = folder / "scorer" / "scorer.yaml"
-    kind = read_yaml(path).get("kind")
-    if not isinstance(kind, str) or kind not in SCORERS:
-        raise ValueError(f"{path}: kind: unknown scorer kind {kind!r}")
-    scorer_config = parse_file(SCORERS[kind].schema, path)
-    if isinstance(scorer_config, TargetScorer):
-        if declaration.type != "quiz":
-            raise ValueError(f"{folder / 'eval.yaml'}: type: target scoring requires quiz")
-        if bool(declaration.choices) != (scorer_config.method == "choice"):
-            raise ValueError(f"{path}: method: choices require choice scoring and vice versa")
-        if declaration.choices:
-            targets = [scorer_config.target] if isinstance(scorer_config.target, str) else scorer_config.target
-            valid = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:len(declaration.choices)])
-            if any(target not in valid for target in targets):
-                raise ValueError(f"{path}: target: must name an available choice letter")
+    raw = read_yaml(path)
+    # Preserve the original single-kind form for existing target evals.
+    if "scorers" in raw:
+        if set(raw) != {"scorers"}:
+            raise ValueError(f"{path}: only scorers is allowed beside a scorer list")
+        items = raw["scorers"]
+    else:
+        items = [raw]
+    if not isinstance(items, list) or not items:
+        raise ValueError(f"{path}: scorers must be a nonempty list")
+    scorers, kinds = [], set()
+    for item in items:
+        kind = item.get("kind") if isinstance(item, dict) else None
+        if not isinstance(kind, str) or kind not in SCORERS or kind in kinds:
+            raise ValueError(f"{path}: kind: unknown or repeated scorer kind {kind!r}")
+        entry = SCORERS[kind]
+        try:
+            scorer_config = entry.schema.model_validate(item)
+            entry.validate(scorer_config, declaration, folder)
+        except ValidationError as error:
+            details = "; ".join(f"{'.'.join(map(str, item['loc']))}: {item['msg']}" for item in error.errors(include_input=False))
+            raise ValueError(f"{path}: {details}") from error
+        except ValueError as error:
+            raise ValueError(f"{path}: {error}") from error
+        scorers.append(scorer_config)
+        kinds.add(kind)
+    if declaration.type in {"build", "act"} and not (folder / "scorer/solution").is_dir():
+        raise ValueError(f"{folder}: scorer/solution is required for build and act evals")
+    if (folder / "compose.yaml").exists():
+        validate_compose(folder / "compose.yaml")
     return Eval(folder, f"{folder.parent.name}/{folder.name}", eval_hash(folder),
-                folder.parent.name, declaration, scorer_config)
+                folder.parent.name, declaration, scorers)

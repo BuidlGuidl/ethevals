@@ -52,6 +52,10 @@ Mode = Literal["vanilla", "internet", "skills"]
 class Config(Declaration):
     epochs: int = Field(gt=0)
     time_limit: int = Field(gt=0)
+    time_limits: dict[str, int] = Field(default_factory=dict)
+    token_limit: int = Field(default=500000, gt=0)
+    max_tasks: int = Field(default=4, gt=0)
+    max_samples: int = Field(default=4, gt=0)
     grader: str
     search_provider: str | None
     models: dict[str, ModelConfig]
@@ -60,6 +64,8 @@ class Config(Declaration):
     def check_grader(self):
         if self.grader not in self.models:
             raise ValueError("grader must name a configured model")
+        if any(key not in {"quiz", "build", "act", "scenario"} or value <= 0 for key, value in self.time_limits.items()):
+            raise ValueError("time_limits requires eval types and positive seconds")
         return self
 
 

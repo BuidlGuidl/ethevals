@@ -1,7 +1,11 @@
 epochs: 3
 time_limit: 300
+time_limits: {build: 1200, act: 1200, scenario: 900}
+token_limit: 500000
+max_tasks: 4
+max_samples: 4
 grader: opus
-search_provider: null
+search_provider: https://mcp.exa.ai/mcp
 # Model slugs and all prices are guesses. Check them before a paid epoch.
 # Prices are USD per million tokens, including separate cache rates.
 models:

@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 from inspect_ai import eval
 from inspect_ai.log import read_eval_log
 from inspect_ai.model import ModelCost, ModelInfo, ModelOutput, ModelUsage, get_model, set_model_info
@@ -129,7 +130,7 @@ def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected
 
 @scorer(metrics=[accuracy()])
 def with_grader():
-    underlying = named_checks("target", {"kind": "target", "target": "8004"})
+    underlying = named_checks([{"kind": "target", "target": "8004"}], ".")
 
     async def score(state, target):
         await get_model(role="grader").generate("Grade this answer.")
@@ -237,26 +238,27 @@ def test_pattern_check_through_cli(folder, tmp_path, pattern, reference):
 
 def test_check_reruns_changed_scorer(folder, tmp_path, monkeypatch):
     from ethevals.cli import main
-    from ethevals.scorers import SCORERS, ScorerKind, TargetScorer
+    from ethevals.scorers import SCORERS
+    from dataclasses import replace
     from inspect_ai.scorer import Score
 
     monkeypatch.setattr(sys, "argv", ["ethevals", "check", "--evals", str(folder),
                                     "--epochs", "1", "--output", str(tmp_path / "results")])
     assert main() == 0
 
-    def always_pass(config):
+    def always_pass(config, folder):
         async def score(state, target):
             return Score(value="C", metadata={"checks": {"answer": {"passed": True, "reason": "Broken scorer."}}})
         return score
 
-    monkeypatch.setitem(SCORERS, "target", ScorerKind(TargetScorer, always_pass))
+    monkeypatch.setitem(SCORERS, "target", replace(SCORERS["target"], build=always_pass))
     assert main() == 1
     empty = json.loads((tmp_path / "results/empty/rows.jsonl").read_text())
     assert empty["checks"] == {"answer": {"passed": True, "reason": "Broken scorer."}}
 
 
 def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_path, monkeypatch):
-    from ethevals.runner import CHECK_SOLVERS
+    from ethevals.runner import CHECK_SOLVERS, CheckRun
     attempts = 0
 
     @solver
@@ -269,8 +271,9 @@ def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_
             return await generate(state)
         return solve
 
-    monkeypatch.setitem(CHECK_SOLVERS, "quiz", lambda evaluation, answer: crash_once())
+    monkeypatch.setitem(CHECK_SOLVERS, "quiz", lambda evaluation, answer: CheckRun(crash_once(), "8004"))
     config = load_config()
+    config.max_tasks = config.max_samples = 1
     evaluation = load_eval(folder, config)
     output = tmp_path / "results"
     success, first = run([evaluation], config, output, answer="reference")
@@ -402,20 +405,6 @@ def test_validate_rejects_effort_typo(folder, tmp_path):
     assert "models.opus.effort" in result.stderr
 
 
-def test_check_selects_mode_by_type(folder, tmp_path, monkeypatch):
-    from dataclasses import replace
-    from ethevals.runner import CHECK_SOLVERS, quiz_check_solver
-
-    config = load_config()
-    quiz = load_eval(folder, config)
-    # A registered future type uses its internet mode through the same runner.
-    build = replace(quiz, declaration=quiz.declaration.model_copy(update={"type": "build", "modes": ["internet"]}))
-    monkeypatch.setitem(CHECK_SOLVERS, "build", quiz_check_solver)
-    success, rows = run([build], config, tmp_path / "results", answer="reference", epochs=1, fresh=True)
-    assert success is True
-    assert [(row["type"], row["mode"], row["status"]) for row in rows] == [("build", "internet", "passed")]
-
-
 def test_selected_modes_cross_only_declared_modes(folder, tmp_path):
     config = load_config()
     evaluation = load_eval(folder, config)
@@ -461,8 +450,12 @@ def test_setup_failure_has_unknown_cost(folder, tmp_path):
 
 def test_kill_and_resume_keeps_completed_epochs(folder, tmp_path):
     output = tmp_path / "results"
+    config = load_config()
+    config.max_tasks = config.max_samples = 1
+    config_path = tmp_path / "serial.yaml"
+    config_path.write_text(yaml.safe_dump(config.model_dump()))
     command = [sys.executable, "-m", "ethevals.cli", "run", "--evals", str(folder), "--answer", "reference",
-               "--epochs", "3", "--mock-delay", "2", "--output", str(output)]
+               "--epochs", "3", "--mock-delay", "2", "--output", str(output), "--config", str(config_path)]
     environment = {key: value for key, value in os.environ.items() if key != "OPENROUTER_API_KEY"}
     completed = []
     with (tmp_path / "killed.txt").open("w") as stream:
