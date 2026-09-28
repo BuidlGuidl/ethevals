@@ -56,6 +56,7 @@ def scoring_case(tmp_path, monkeypatch):
         return case["compiled"]
 
     monkeypatch.setattr(scorers, "workspace_files", submitted)
+    monkeypatch.setattr(scorers, "stop_agent", prepare)
     monkeypatch.setattr(scorers, "sandbox", lambda name: object())
     monkeypatch.setattr(scorers, "prepare_forge", prepare)
     monkeypatch.setattr(scorers, "forge", forge)

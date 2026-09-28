@@ -98,6 +98,8 @@ def load_eval(folder: Path, config: Config) -> Eval:
             raise ValueError(f"{path}: {error}") from error
         scorers.append(scorer_config)
         kinds.add(kind)
+    if declaration.type == "act" and "check_script" not in kinds:
+        raise ValueError(f"{path}: act evals require check_script")
     validate_hf_export(declaration, scorers, str(path))
     preceding = set()
     for item in scorers:

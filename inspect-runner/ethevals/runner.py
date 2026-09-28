@@ -13,7 +13,7 @@ from .loader import Eval
 from .rows import epoch_identity, export_rows, store_rows
 from .scorers import named_checks, EVALUATIONS, SCORERS, check_names, rubric_budget
 from .sandboxes import compose_file
-from .preparation import prepare_eval, prepare_compose, initialize_scorers
+from .preparation import prepare_eval, prepare_compose, sandbox_type, chain_inputs
 
 
 def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
@@ -26,13 +26,14 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     images = {}
     if player.sandbox_for(evaluation):
         compose = compose or compose_file(evaluation.declaration.type)
-        sample.sandbox = SandboxEnvironmentSpec(type="docker", config=str(compose))
+        sample.sandbox = SandboxEnvironmentSpec(type=sandbox_type(evaluation), config=str(compose))
         images = {name: service["image"] for name, service in read_yaml(compose)["services"].items()}
     else:
         sample.files = None
     metadata = {**sample.metadata, **player.metadata, **grader.metadata,
                 "created_at": datetime.now(timezone.utc).isoformat(), "mode": mode,
-                "images": images, "cost_limit_usd": config.cost_limit,
+                "images": images, "chain_inputs": chain_inputs() if "chain" in images and "compose.yaml" not in evaluation.files else {},
+                "cost_limit_usd": config.cost_limit,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
                 "free_check": player.free_check,
                 "check_names": check_names(evaluation, player.free_check)}
@@ -43,7 +44,7 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     identity = hashlib.sha256(json.dumps(epoch_identity(metadata, 0)).encode()).hexdigest()[:16]
     return Task(
         name=f"{evaluation.id.replace('/', '-')}-{identity}",
-        version=evaluation.hash, dataset=[sample], setup=initialize_scorers(evaluation), solver=player.solver_for(evaluation),
+        version=evaluation.hash, dataset=[sample], solver=player.solver_for(evaluation),
         scorer=named_checks(evaluation.id, evaluation.hash),
         model=player.model, epochs=epochs,
         time_limit=evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit),

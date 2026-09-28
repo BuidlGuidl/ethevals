@@ -15,7 +15,7 @@ uv sync --frozen
 ```
 
 Docker is required for builds and internet epochs. Vanilla quiz checks need no Docker.
-Build the pinned Solidity image before the first build or internet epoch:
+For build evals and internet quizzes, build the Solidity image before the first epoch:
 
 ```sh
 docker compose -f inspect-runner/ethevals/images/stock.compose.yaml build default
@@ -120,9 +120,14 @@ Use a fresh key, fund it, and deploy the task's contracts.
 The script returns JSON with a `files` mapping of workspace paths to text.
 The fixture supplies `chain.json` with the key, contract addresses, and `http://chain:8545`.
 Setup and check code stay in the chain container. Only those selected output files reach the agent.
+Setup has its own 120-second script limit and a 150-second total limit, including file transfer.
+Setup consumes neither the player's time allowance nor its recorded working time. Setup failures and timeouts are errors.
 
 Write `scorer/check.py` to print named checks with boolean `passed` and a one-line `reason`.
 Write `scorer/solution/run.sh` to sign and send through the public RPC URL, using the supplied key.
+The reference runs in the offline scorer, which also receives the workspace and setup's selected files.
+Author scripts can reach the private containers. They cannot reach the host or internet.
+Compose requires `internal: true` and `com.docker.network.bridge.inhibit_ipv4: "true"` on the private network.
 The runner discovers check names from that reference before any agent epoch.
 Wrong amounts, missing verdicts, and crashed check scripts keep the same check set.
 
@@ -130,11 +135,15 @@ The stock chain uses Anvil 1.5.1 behind an RPC allowlist in the same container.
 Anvil listens on localhost. The agent can read chain state and send signed raw transactions through the filter.
 It cannot use unlocked sends, unsigned sends, signing methods, WebSockets, or chain controls.
 A namespace blocklist misses `eth_sendUnsignedTransaction`, which moves value without a key.
-The runner closes the filter, drains accepted requests, and drops pending transactions before grading.
-It also stops the agent's processes. No interval mining runs.
+The runner stops the agent's processes once, then closes the filter.
+The request already forwarding finishes. Waiting requests fail.
+Capture disables mining, clears the pool, and waits for an empty block after any active mining.
+The check reads the state at that final block. No interval mining runs.
 
-Build the runner image first, as described above. The runner builds the shared chain image when needed.
-Its Foundry base uses a pinned multi-architecture digest. Each epoch uses the built chain image's immutable local SHA-256 ID.
+The chain image builds independently of the runner image.
+It uses digest-pinned Python 3.13.7 and Foundry 1.5.1 images, plus checksum-pinned solc 0.8.30 for each architecture.
+The runner builds both images for act evals. A build failure becomes that eval's discovery error with Docker's message.
+Rows record the chain image ID and hashes of its Dockerfile and filter under `chain_inputs`.
 Then run the free check:
 
 ```sh

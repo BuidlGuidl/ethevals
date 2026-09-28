@@ -93,6 +93,7 @@ The Python `run()` result also contains only the current selection. `rows.jsonl`
 | `eval_id`, `eval_hash`, `pillar`, `type` | Eval identity at execution time. |
 | `harness`, `model`, `effort`, `mode` | Agent or bare model identity. A bare model has a null harness. |
 | `harness_version`, `images` | Harness version and service image tags used for this execution. |
+| `chain_inputs` | SHA-256 hashes of the chain Dockerfile and RPC filter used for grading. |
 | `grader_model`, `grader_effort`, `grader_prices` | Grader identity and configured prices. Free checks bind the grader to mockllm. |
 | `answer_kind` | `reference`, `empty`, or `default` for mock checks. Null for paid epochs. |
 | `epoch`, `status`, `passed` | Epoch number and result. Errors have a null verdict. |
@@ -129,7 +130,8 @@ The site's normal build runs this command and reads schema v3 rows. See [the sit
 Each kind also supplies its check names, workspace files, and prompt note.
 The optional `setup`, `discover`, and `capture` hooks prepare services, discover names, and capture grading inputs.
 Each kind supplies its cache inputs. Generic discovery stores a mapping from kind to names.
-Capture hooks run before scorers. The chain closes before workspace collection.
+Sandbox initialization runs setup hooks before Inspect starts the player's limits and working-time clock.
+The generic boundary stops the agent once, then calls each selected capture hook before scoring.
 Scorers share captured state through `Submission.captures`; the build capture owns Forge's compiled source records.
 The `requires` field declares scorer order dependencies. The rubric requires tests before it.
 Only `tests` supplies `foundry.toml` and the Solidity note. Internet quizzes receive neither.
@@ -251,8 +253,10 @@ Scorer options in logs contain only the eval ID and hash. The scorer resolves ca
 Custom compose files use prebuilt images and declare `default` and `scorer` services.
 Those two services require the stock runner image and its unprivileged `agent` user.
 Other services can choose their own images. This keeps process control and runner-owned dependencies outside the eval author's control.
-All services join the `private` network with `internal: true`.
+All services join the `private` network with `internal: true` and `com.docker.network.bridge.inhibit_ipv4: "true"`.
+The bridge has no host IPv4 address. Private-only services can reach each other, but cannot reach the host or internet.
 Only `default` also joins the `internet` network. The scorer has no internet access.
+The player container retains internet and host access through its internet network.
 No service publishes host ports. Privileged mode, host namespaces, host paths, and external volumes are rejected.
 The agent and scorer cannot mount volumes. Other services can use declared private named volumes.
 Custom Docker builds are rejected because their contexts can include scorer files.
@@ -276,11 +280,15 @@ Its two checks inspect the recipient's exact balance and the transaction's sende
 Both checks fail on the untouched chain.
 
 The stock compose file adds one `chain` service on the private network.
-The chain image extends Foundry 1.5.1 at digest `sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e`.
-That upstream index contains arm64 and amd64 images. Build the runner image for the host architecture first.
-The chain image copies its solc 0.8.30 binary and adds Python 3 plus the filter.
-Preparation builds the shared image and resolves its immutable local image ID into the execution compose file.
-Rows record that SHA-256 ID. No registry push is needed.
+The chain image builds independently of the runner image and installs no packages from a changing apt index.
+It copies Foundry 1.5.1 binaries from digest `sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e`.
+Its Python 3.13.7 base uses digest `sha256:adafcc17694d715c905b4c7bebd96907a1fd5cf183395f0ebc4d3428bd22d92d`.
+Both image indexes include arm64 and amd64.
+Solc 0.8.30 downloads have per-architecture SHA-256 checksums in [Chain.Dockerfile](ethevals/images/Chain.Dockerfile).
+The amd64 compiler comes from ethereum/solc-bin. The arm64 compiler comes from nikitastupin/solc, which Foundry also uses.
+Preparation builds both services and resolves the chain's local image ID into the execution compose file.
+Rows record that ID and the Dockerfile and filter hashes under `chain_inputs`. No registry push is needed.
+A build failure becomes that eval's discovery error and includes Docker's last 8 KiB of diagnostics.
 The discovery cache includes the execution compose file, filter code, Dockerfile, and naming version.
 
 Anvil listens at `127.0.0.1:8546` inside the chain container, with no generated accounts and no interval mining.
@@ -291,6 +299,9 @@ It rejects the whole batch if any member names a refused method.
 It rejects WebSocket upgrades, other HTTP paths, and bodies above 2 MiB.
 Batches permit at most 100 requests. The filter permits at most 32 active connections.
 Refused methods return JSON-RPC error `-32601`. The epoch log retains refusal messages.
+Each refusal uses at most 1 KiB. The log stops at 1 MiB and never writes refusals to container stdout.
+Capture retains the whole bounded refusal log in an Inspect info event.
+Upstream responses above 2 MiB return `Chain response too large.`
 
 The allowlist blocks unknown methods by default.
 Anvil unlocks generated accounts, and `eth_sendUnsignedTransaction` bypasses signatures even without generated accounts.
@@ -302,18 +313,23 @@ The script contract is:
 - `scorer/setup.py` is optional. It runs once before the player, in `/eval` inside the chain container.
 - All private files under `scorer/`, except `solution/`, reach that container from the captured eval manifest.
 - Scripts run with Python 3. `RPC_URL` points directly to Anvil. `SOLC` points to `/opt/solc`.
-- `cast` and `forge` are available. The chain and scorer containers have no internet access.
+- `cast` and `forge` are available in both containers.
+- Author scripts can reach private containers. They cannot reach the host or internet.
 - Setup prints exactly one JSON object, `{"files": {"chain.json": "file contents"}}`.
 - File paths must be relative workspace paths. Setup cannot replace declared workspace files.
-- Only setup's selected files reach the agent. Setup can retain private state under `/eval` for the check script.
-- `scorer/solution/run.sh` is required. The reference runs with Bash in the agent container after setup.
+- Setup's selected files reach both agent and scorer. Setup can retain private state under `/eval` for the check script.
+- `scorer/solution/run.sh` is required. The reference runs with Bash in the offline scorer after setup.
+- The scorer also receives the declared workspace files.
 - The solution uses the same public RPC URL and key that an agent receives.
 - `scorer/check.py` is required. It runs after capture, in `/eval` with direct Anvil access.
 - The check script prints one JSON object keyed by stable names matching `[a-z][a-z0-9_]*`.
 - Each value has exactly `passed`, a boolean, and `reason`, a nonempty string.
 - The runner adds the `script:` prefix and normalizes reasons to one line.
 - Setup and check scripts each have a 120-second limit and a 1 MiB output limit per stream.
-- Script source and private output enter sandbox events as byte counts. Public setup values remain visible to the agent.
+- Setup has a separate 150-second total limit, including file transfer.
+- Setup consumes neither the player's time allowance nor its recorded working time. Setup timeouts are errors.
+- Script failures include the last 4 KiB of stderr. Failed discovery lists each failing check and its reason.
+- Public setup values remain visible to the agent.
 
 For example, a check script can print:
 
@@ -328,12 +344,14 @@ A crashed, malformed, timed-out, or oversized check script fails the full set, w
 Setup failures, failed discovery, and Docker failures remain runner errors.
 Player limits retain the existing final-failure rule and skip further scoring.
 
-Capture first closes the filter under the same lock used for forwarding.
-Accepted requests finish before the boundary. Further public RPC requests fail.
+The generic boundary first stops the agent's processes, including detached senders.
+Capture closes the filter and waits for the request that already holds the forwarding lock.
+Requests waiting for that lock fail. Further public RPC requests fail too.
 The runner disables mining and drops queued and pending transactions through localhost RPC.
-It records the latest block hash, then stops the agent's processes before any check script runs.
+An awaited manual mine takes Anvil's mining lock and seals an empty block after any active mining finishes.
+Capture records that final block's hash. It adds one empty block even if the player sent no transaction.
 The check script reads that fixed chain state. It must inspect state without changing it.
-This boundary also stops detached agent senders. The agent cannot reopen the filter's local Unix control socket.
+The agent cannot reopen the filter's local Unix control socket.
 
 `ethevals check` runs the reference and untouched cases through this full pipeline.
 The real Claude Code proof supports the act fixture with `--eval evals/transactions/send-six-decimal-token`.

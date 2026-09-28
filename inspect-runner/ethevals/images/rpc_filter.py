@@ -18,18 +18,22 @@ READS = frozenset({
     "eth_getBlockTransactionCountByHash", "eth_getBlockTransactionCountByNumber",
     "eth_getTransactionByHash", "eth_getTransactionByBlockHashAndIndex",
     "eth_getTransactionByBlockNumberAndIndex", "eth_getTransactionReceipt", "eth_getLogs", "eth_getProof",
+    "eth_accounts", "eth_getAccountInfo",
 })
 ALLOWED = READS | {"eth_sendRawTransaction"}
 MAX_BODY = 2 * 1024 * 1024
 CONTROL = "/tmp/ethevals-chain.sock"
+REFUSALS = "/tmp/rpc-refusals.log"
+LOG_BYTES = 1048576
+LOG_LOCK = threading.Lock()
 
 
 def refusal(message):
-    line = f"RPC refused: {message}\n"
-    print(line, end="", flush=True)
-    with open("/tmp/rpc-refusals.log", "a") as log:
-        if log.tell() < 1048576:
-            log.write(line[:1024])
+    line = (f"RPC refused: {message}".encode("utf-8")[:1023] + b"\n")
+    # Keep one bounded sink. Docker stdout has no total-size limit.
+    with LOG_LOCK, open(REFUSALS, "ab") as log:
+        remaining = max(0, LOG_BYTES - log.tell())
+        log.write(line[:remaining])
 
 
 def rpc(method, params=None):
@@ -77,7 +81,10 @@ class Chain:
             data = json.dumps(payload).encode()
             request = urllib.request.Request("http://127.0.0.1:8546", data, {"Content-Type": "application/json"})
             with urllib.request.urlopen(request, timeout=15) as response:
-                return json.loads(response.read(MAX_BODY + 1))
+                body = response.read(MAX_BODY + 1)
+                if len(body) > MAX_BODY:
+                    return error(None, -32000, "Chain response too large.")
+                return json.loads(body)
 
     def freeze(self):
         # Reject waiting requests before taking the lock held by the current request.
@@ -91,6 +98,9 @@ class Chain:
                 rpc("anvil_removePoolTransactions", [address])
             if any(rpc("txpool_content").values()):
                 raise RuntimeError("Transaction pool did not empty at the grading boundary.")
+            # Anvil's awaited manual mine takes the same mining mutex as automine.
+            # With the pool empty, this seals an empty block after active mining.
+            rpc("evm_mine")
             return rpc("eth_getBlockByNumber", ["latest", False])["hash"]
 
 
@@ -154,6 +164,10 @@ class Server(ThreadingHTTPServer):
         finally:
             self.slots.release()
 
+    def handle_error(self, request, address):
+        # Disconnected clients cannot produce unlimited traceback output.
+        refusal("HTTP connection failed.")
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -161,15 +175,17 @@ def main():
     args = parser.parse_args()
     if args.freeze:
         with socket.socket(socket.AF_UNIX) as client:
+            client.settimeout(45)
             client.connect(CONTROL)
             client.sendall(b"freeze\n")
-            result = json.loads(client.recv(4096))
+            with client.makefile("rb") as response:
+                result = json.loads(response.read(4097))
             if "error" in result:
                 raise RuntimeError(result["error"])
             print(json.dumps(result))
         return
     process = subprocess.Popen(["anvil", "--host", "127.0.0.1", "--port", "8546", "--accounts", "0", "--silent"])
-    open("/tmp/rpc-refusals.log", "w").close()
+    open(REFUSALS, "w").close()
     for attempt in range(100):
         try:
             rpc("eth_chainId")
@@ -184,6 +200,7 @@ def main():
 
     class Control(socketserver.StreamRequestHandler):
         def handle(self):
+            self.connection.settimeout(45)
             try:
                 if self.rfile.readline(32) != b"freeze\n":
                     raise ValueError("Unknown control request")

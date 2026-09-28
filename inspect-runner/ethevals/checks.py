@@ -8,6 +8,7 @@ from inspect_ai.util import sandbox
 
 from .actors import Player, Grader, quiz_solver
 from .scorers import SCORERS
+from .check_script import run_solution
 
 
 @dataclass
@@ -39,7 +40,6 @@ def build_workspace(evaluation, answer):
 def act_solution(evaluation, answer):
     async def solve(state, generate):
         if answer == "reference":
-            from .check_script import run_solution
             await run_solution(evaluation)
         return await generate(state)
     return solve

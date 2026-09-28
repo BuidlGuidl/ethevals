@@ -3,8 +3,8 @@ import base64
 import json
 import io
 import tarfile
-from dataclasses import dataclass, field
-from typing import Callable, Literal
+from dataclasses import dataclass
+from typing import Literal
 
 from inspect_ai.log import transcript, SampleLimitEvent
 from inspect_ai.model import ChatMessageSystem, ChatMessageUser, ContentText, GenerateConfig, ResponseSchema, get_model
@@ -14,7 +14,10 @@ from inspect_ai.scorer import Score, Scorer, Target, accuracy, scorer
 from pydantic import Field, model_validator
 
 from .config import Declaration
-from .sandboxes import IMAGES, SOLC_VERSIONS, workspace_files, runner_exec
+from .sandboxes import IMAGES, SOLC_VERSIONS, workspace_files, runner_exec, stop_agent
+from .scoring_base import Submission, ScorerKind, checks_score, failed_checks
+from .check_script import (CheckScriptScorer, check_script_scorer, validate_script,
+                           setup_script, discover_script, capture_chain, script_cache_inputs)
 
 
 class TargetScorer(Declaration):
@@ -124,10 +127,6 @@ def validate_rubric(config, declaration, files):
     rubric_questions(files)
 
 
-def checks_score(checks):
-    return Score(value="C" if all(c["passed"] for c in checks.values()) else "I", metadata={"checks": checks})
-
-
 def forge_results(stdout: str) -> dict:
     try:
         output = json.loads(stdout)
@@ -218,16 +217,6 @@ async def forge(box, *args):
     return result
 
 
-def failed_checks(names, reason):
-    return {name: {"passed": False, "reason": reason} for name in names}
-
-
-@dataclass
-class Submission:
-    captures: dict = field(default_factory=dict)
-    failure: str | None = None
-
-
 @dataclass
 class BuildCapture:
     files: dict[str, bytes]
@@ -235,8 +224,7 @@ class BuildCapture:
 
 
 async def capture_tests(config, evaluation, submission):
-    if "build" not in submission.captures:
-        submission.captures["build"] = BuildCapture(await workspace_files())
+    submission.captures["build"] = BuildCapture(await workspace_files())
 
 
 async def discover_tests(config, evaluation):
@@ -391,34 +379,12 @@ def rubric_scorer(config, evaluation):
     return score
 
 
-@dataclass(frozen=True)
-class ScorerKind:
-    schema: type[Declaration]
-    build: Callable
-    validate: Callable
-    sample_fields: Callable = lambda config: {}
-    reference: Callable = lambda config, declaration: ""
-    free_check: bool = True
-    workspace: Callable = lambda config: ({}, "")
-    names: Callable = lambda config, evaluation: []
-    discover: Callable | None = None
-    capture: Callable | None = None
-    setup: Callable | None = None
-    cache_inputs: Callable = lambda images: []
-    requires: tuple[str, ...] = ()
-    capture_order: int = 10
-
-
 def tests_workspace(config):
     return {"foundry.toml": (IMAGES / "foundry.toml").read_bytes()}, (
         f"Scoring is offline. Available solc versions: {', '.join(SOLC_VERSIONS)}. "
         "Grading uses the supplied foundry.toml. Changes to compiler settings or remappings do not affect grading. "
         "OpenZeppelin and forge-std come from the image. Other Solidity dependencies must use relative imports under src/ or lib/."
     )
-
-
-from .check_script import (CheckScriptScorer, check_script_scorer, validate_script,
-                           setup_script, discover_script, capture_chain, script_cache_inputs)
 
 
 SCORERS = {
@@ -432,11 +398,11 @@ SCORERS = {
                             (images / "foundry.toml").read_bytes(), b"forge-check-names-v1"]),
     "rubric": ScorerKind(RubricScorer, rubric_scorer, validate_rubric, free_check=False,
                          names=lambda config, evaluation: [f"rubric:{name}" for name in rubric_questions(evaluation.files)],
-                         capture=capture_tests, requires=("tests",)),
+                         requires=("tests",)),
     "check_script": ScorerKind(CheckScriptScorer, check_script_scorer, validate_script,
                               names=lambda config, evaluation: list(evaluation.discovered_checks.get(config.kind, ())),
                               discover=discover_script, capture=capture_chain, setup=setup_script,
-                              cache_inputs=script_cache_inputs, capture_order=0),
+                              cache_inputs=script_cache_inputs),
 }
 
 
@@ -464,21 +430,20 @@ def named_checks(eval_id: str, eval_hash: str) -> Scorer:
                       if not free_check or SCORERS[item.kind].free_check]
         checks = {}
         submission = Submission()
-        for item in sorted(selected, key=lambda item: SCORERS[item.kind].capture_order):
-            capture = SCORERS[item.kind].capture
-            if capture is None:
-                continue
-            try:
-                await capture(item, evaluation, submission)
-            except (ValueError, TimeoutError, tarfile.TarError, OutputLimitExceededError) as error:
-                submission.failure = f"Workspace snapshot failed: {error}"
-                break
+        try:
+            if any(SCORERS[item.kind].capture for item in selected):
+                await stop_agent()
+            for item in selected:
+                if capture := SCORERS[item.kind].capture:
+                    await capture(item, evaluation, submission)
+        except (ValueError, TimeoutError, tarfile.TarError, OutputLimitExceededError) as error:
+            submission.failure = f"Grading capture failed: {error}"
         for item in selected:
-            if submission and submission.failure:
+            if submission.failure:
                 break
             grade = SCORERS[item.kind].build(item, evaluation)
             result = await grade(state, target, submission)
-            if submission and submission.failure:
+            if submission.failure:
                 break
             additions = (result.metadata or {}).get("checks", {})
             if not additions:
@@ -487,7 +452,7 @@ def named_checks(eval_id: str, eval_hash: str) -> Scorer:
                 raise ValueError("Scorers returned duplicate check names")
             checks.update(additions)
             state.metadata["scoring_checks"] = dict(checks)
-        if submission and submission.failure:
+        if submission.failure:
             return checks_score(failed_checks(check_names(evaluation, free_check), submission.failure))
         if set(checks) != set(check_names(evaluation, free_check)):
             raise ValueError("Scorer did not return the eval's fixed check set.")

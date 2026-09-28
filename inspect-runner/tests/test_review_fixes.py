@@ -188,9 +188,13 @@ def test_workspace_failure_fills_all_eval_checks(tmp_path, monkeypatch):
     async def broken_workspace():
         raise ValueError("Workspace contains a link or special file: src/Token.sol")
 
+    async def stopped():
+        pass
+
+    monkeypatch.setattr(scorers, "stop_agent", stopped)
     monkeypatch.setattr(scorers, "workspace_files", broken_workspace)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    failure = {"passed": False, "reason": "Workspace snapshot failed: Workspace contains a link or special file: src/Token.sol"}
+    failure = {"passed": False, "reason": "Grading capture failed: Workspace contains a link or special file: src/Token.sol"}
     assert row["checks"] == {"forge:compile": failure, CHECK: failure,
                              "rubric:uses_openzeppelin": failure, "rubric:protects_holders": failure}
     assert (row["status"], row["grader_tokens"]) == ("failed", 0)

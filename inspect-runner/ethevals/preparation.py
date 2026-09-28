@@ -4,17 +4,58 @@ import json
 import subprocess
 from dataclasses import replace
 
+import anyio
 from inspect_ai import Task, eval
 from inspect_ai.model import get_model
 from inspect_ai.scorer import scorer, accuracy
 from inspect_ai.solver import solver
-from inspect_ai.util import SandboxEnvironmentSpec
+from inspect_ai.util import SandboxEnvironmentSpec, sandboxenv
+from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
 import yaml
 
 from .scorers import EVALUATIONS, SCORERS, checks_score
 from .sandboxes import IMAGES, compose_file, validate_compose
 
 CHECK_SETS = {}
+SETUP_SECONDS = 150
+
+
+@sandboxenv(name="ethevals_docker")
+class EvalDocker(DockerSandboxEnvironment):
+    """Run scorer setup before Inspect starts sample time and cost limits."""
+
+    @classmethod
+    async def sample_init(cls, task_name, config, metadata):
+        environments = await super().sample_init(task_name, config, metadata)
+        try:
+            evaluation = EVALUATIONS[(metadata["eval_id"], metadata["eval_hash"])]
+            with anyio.fail_after(SETUP_SECONDS):
+                for item in evaluation.scorers:
+                    if setup := SCORERS[item.kind].setup:
+                        await setup(item, evaluation, environments)
+        except BaseException as error:
+            with anyio.CancelScope(shield=True):
+                await super().sample_cleanup(task_name, config, environments, False)
+            if isinstance(error, TimeoutError):
+                raise RuntimeError("Eval setup exceeded its time limit.") from error
+            raise
+        return environments
+
+
+def sandbox_type(evaluation):
+    return "ethevals_docker" if any(SCORERS[item.kind].setup for item in evaluation.scorers) else "docker"
+
+
+def chain_inputs():
+    return {name: hashlib.sha256((IMAGES / name).read_bytes()).hexdigest()
+            for name in ("Chain.Dockerfile", "rpc_filter.py")}
+
+
+def docker_command(command):
+    try:
+        return subprocess.run(command, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f"Docker failed: {(error.stderr or error.stdout or str(error))[-8192:]}") from error
 
 
 def check_cache_path(evaluation, output, compose=None):
@@ -35,11 +76,10 @@ def prepare_compose(evaluation, output):
         if not built:
             return stock
         # Build shared service code, then execute its immutable local image ID.
-        subprocess.run(["docker", "compose", "-f", str(stock), "build", *built], check=True,
-                       capture_output=True)
+        docker_command(["docker", "compose", "-f", str(stock), "build",
+                        *[name for name, service in document["services"].items() if "build" in service]])
         for service in built.values():
-            result = subprocess.run(["docker", "image", "inspect", service["image"], "--format", "{{.Id}}"],
-                                    check=True, capture_output=True, text=True)
+            result = docker_command(["docker", "image", "inspect", service["image"], "--format", "{{.Id}}"])
             service["image"] = result.stdout.strip()
             del service["build"]
         # The agent image has its own build workflow and validator rules.
@@ -53,17 +93,6 @@ def prepare_compose(evaluation, output):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(normalized)
     return path
-
-
-@solver
-def initialize_scorers(evaluation):
-    async def solve(state, generate):
-        for item in evaluation.scorers:
-            setup = SCORERS[item.kind].setup
-            if setup:
-                await setup(item, evaluation, state)
-        return state
-    return solve
 
 
 @solver
@@ -84,7 +113,8 @@ def reference_checks(eval_id, eval_hash):
             if discover:
                 found = await discover(item, evaluation)
                 if not found or not all(check["passed"] for check in found.values()):
-                    raise RuntimeError(f"{item.kind}: reference checks failed during discovery")
+                    reasons = "; ".join(f"{name}: {check['reason']}" for name, check in found.items() if not check["passed"])
+                    raise RuntimeError(f"{item.kind}: reference checks failed during discovery: {reasons or 'no checks'}")
                 if checks.keys() & found.keys():
                     raise ValueError("Scorers returned duplicate check names")
                 checks.update(found)
@@ -109,9 +139,9 @@ def prepare_eval(evaluation, output, compose=None):
     else:
         EVALUATIONS[(evaluation.id, evaluation.hash)] = evaluation
         task = Task(name="reference-checks", dataset=[evaluation.sample()],
-                    setup=initialize_scorers(evaluation), solver=no_player(),
+                    solver=no_player(),
                     scorer=reference_checks(evaluation.id, evaluation.hash), model=get_model("mockllm/model"),
-                    sandbox=SandboxEnvironmentSpec(type="docker", config=str(compose or prepare_compose(evaluation, output))))
+                    sandbox=SandboxEnvironmentSpec(type=sandbox_type(evaluation), config=str(compose)))
         logs = eval(task, log_dir=str(path.parent / "preflight"), display="plain", retry_on_error=1, fail_on_error=False)
         log = logs[0]
         if log.error or not log.samples or log.samples[0].error:

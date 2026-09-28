@@ -70,7 +70,7 @@ def results_rows(log: EvalLog) -> list[dict]:
             "schema_version": 3,
             **{key: metadata.get(key) for key in (
                 "eval_id", "eval_hash", "pillar", "type", "mode", "harness", "model", "effort", "answer_kind",
-                "grader_model", "grader_effort", "harness_version", "images",
+                "grader_model", "grader_effort", "harness_version", "images", "chain_inputs",
                 "cost_limit_usd", "grader_cost_limit_usd", "max_attempts",
             )},
             "epoch": metadata.get("epoch", sample.epoch),

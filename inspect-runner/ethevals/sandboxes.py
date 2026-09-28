@@ -44,8 +44,9 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
     services, networks = data.get("services", {}), data.get("networks", {})
     if not isinstance(services, dict) or not {"default", "scorer"} <= services.keys():
         reject("services must include default and scorer")
-    if networks != {"private": {"internal": True}, "internet": {}}:
-        reject("networks must declare private with internal: true and internet: {}")
+    if networks != {"private": {"internal": True, "driver_opts": {
+            "com.docker.network.bridge.inhibit_ipv4": "true"}}, "internet": {}}:
+        reject("networks must declare private with internal: true and inhibit_ipv4: 'true', and internet: {}")
     volumes = data.get("volumes") or {}
     if not isinstance(volumes, dict):
         reject("volumes must be a mapping")
@@ -126,7 +127,6 @@ exit 1
 
 
 async def workspace_files() -> dict[str, bytes]:
-    await stop_agent()
     agent = sandbox("default")
     temporary = await runner_exec(agent, ["/usr/bin/mktemp", "-d", "/tmp/ethevals.XXXXXXXXXX"], user="root", cwd="/")
     if not temporary.success:
