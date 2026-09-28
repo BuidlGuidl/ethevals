@@ -12,7 +12,7 @@ import pytest
 @pytest.mark.parametrize("answer", ["reference", "empty"])
 def test_agent_proof(tmp_path, model, answer):
     environment = os.environ.copy()
-    for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
+    for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY"):
         environment.pop(name, None)
     proof = Path(__file__).with_name("prove_agent.py")
     command = [sys.executable, str(proof), answer, "--model", model, "--output", str(tmp_path / "proof")]

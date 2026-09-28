@@ -29,6 +29,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--exa-canary", action="store_true")
     args = parser.parse_args()
+    if not args.exa_canary:
+        assert not os.environ.get("EXA_API_KEY"), "Strip EXA_API_KEY before the keyless search proof."
     if args.exa_canary:
         import ethevals.search as search
         os.environ["EXA_API_KEY"] = "inert-offline-exa-canary"
