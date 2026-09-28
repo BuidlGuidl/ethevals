@@ -13,8 +13,8 @@ SOLC_VERSIONS = ("0.8.30",)
 MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
 
 
-def compose_file() -> Path:
-    path = IMAGES / "stock.compose.yaml"
+def compose_file(eval_type=None) -> Path:
+    path = IMAGES / ("act.compose.yaml" if eval_type == "act" else "stock.compose.yaml")
     validate_compose(path, stock=True)
     return path
 
@@ -109,7 +109,7 @@ def unpack_workspace(data: bytes) -> dict[str, bytes]:
     return files
 
 
-async def workspace_files() -> dict[str, bytes]:
+async def stop_agent():
     agent = sandbox("default")
     # Freeze every process owned by the unprivileged agent, including detached
     # writers. Root runs the collector; the agent cannot resume itself.
@@ -123,6 +123,11 @@ exit 1
 """], user="root", cwd="/", timeout=10)
     if not stopped.success:
         raise ValueError(f"Cannot stop agent processes: {stopped.stderr}")
+
+
+async def workspace_files() -> dict[str, bytes]:
+    await stop_agent()
+    agent = sandbox("default")
     temporary = await runner_exec(agent, ["/usr/bin/mktemp", "-d", "/tmp/ethevals.XXXXXXXXXX"], user="root", cwd="/")
     if not temporary.success:
         raise RuntimeError(f"Cannot allocate snapshot: {temporary.stderr}")

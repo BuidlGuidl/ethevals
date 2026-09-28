@@ -13,7 +13,7 @@ from ethevals.config import load_config
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
 from support import build_task
-from ethevals.preparation import prepare_eval
+from ethevals.preparation import prepare_eval, prepare_compose
 
 
 def main():
@@ -27,8 +27,9 @@ def main():
     config.models["opus"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(Path(args.eval), config)
-    evaluation = prepare_eval(evaluation, args.output)
-    task = build_task(evaluation, config, "opus", "internet", None, 1)
+    compose = prepare_compose(evaluation, args.output)
+    evaluation = prepare_eval(evaluation, args.output, compose)
+    task = build_task(evaluation, config, "opus", "internet", None, 1, compose)
     task.metadata.update(answer_kind=f"scripted_{args.answer}", cost_source="mock", grader_cost_source="mock")
     calls = 0
 
@@ -38,6 +39,12 @@ def main():
         if evaluation.declaration.type == "quiz":
             return ModelOutput.from_content("mockllm/model", "ANSWER: C" if evaluation.declaration.choices else "8004")
         if calls == 1 and args.answer == "reference":
+            if evaluation.declaration.type == "act":
+                solution = evaluation.files["scorer/solution/run.sh"]
+                encoded = base64.b64encode(solution).decode()
+                command = ("test ! -e /workspace/scorer && "
+                           f"printf '%s' '{encoded}' | base64 -d > /workspace/run.sh && bash /workspace/run.sh")
+                return ModelOutput.for_tool_call("mockllm/model", "Bash", {"command": command, "description": "Read decimals and sign the transfer"})
             solution = (evaluation.folder / "scorer/solution/src/BuilderPoints.sol").read_bytes()
             encoded = base64.b64encode(solution).decode()
             command = (

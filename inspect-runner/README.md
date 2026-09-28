@@ -10,6 +10,7 @@ The pillar is `concepts`, `transactions`, `building`, or `security`.
 The folder contains `eval.yaml`, `workspace/`, and `scorer/scorer.yaml`.
 An optional `compose.yaml` declares services for an internet epoch.
 Without it, the runner uses `images/stock.compose.yaml` for quizzes and builds.
+Act evals use `images/act.compose.yaml` with the shared chain service.
 
 `eval.yaml` requires `type`, `motivation`, `prompt`, and `modes`.
 It accepts optional `choices`, a list of strings, and `time_limit`, a positive number of seconds.
@@ -126,6 +127,11 @@ The site's normal build runs this command and reads schema v3 rows. See [the sit
 
 `SCORERS` in `scorers.py` owns each kind's schema, validation, sample fields, reference reply, and scorer factory.
 Each kind also supplies its check names, workspace files, and prompt note.
+The optional `setup`, `discover`, and `capture` hooks prepare services, discover names, and capture grading inputs.
+Each kind supplies its cache inputs. Generic discovery stores a mapping from kind to names.
+Capture hooks run before scorers. The chain closes before workspace collection.
+Scorers share captured state through `Submission.captures`; the build capture owns Forge's compiled source records.
+The `requires` field declares scorer order dependencies. The rubric requires tests before it.
 Only `tests` supplies `foundry.toml` and the Solidity note. Internet quizzes receive neither.
 A `tests` eval must omit `workspace/foundry.toml`; the loader rejects an author's copy.
 A new kind returns an Inspect `Score` with `metadata["checks"]`.
@@ -262,8 +268,76 @@ Author values such as `TAR_OPTIONS`, `PATH`, and `FOUNDRY_FFI` cannot alter thos
 The normal pytest suite skips Docker proofs. Run `uv run pytest -q --run-docker -m docker` to include them.
 The proofs cover Compose normalization, collection, compiled evidence, library ownership, and frozen writers.
 
-Step 4 can add chain images and private services without changing the agent solver.
-It still needs service setup and act reference preparation. No setup script runs in this step.
+## Act scoring
+
+An act eval declares `scorers: [{kind: check_script}]` and `modes: [internet]`.
+The [token fixture](../evals/transactions/send-six-decimal-token) sends 12.5 tokens with six decimals.
+Its two checks inspect the recipient's exact balance and the transaction's sender.
+Both checks fail on the untouched chain.
+
+The stock compose file adds one `chain` service on the private network.
+The chain image extends Foundry 1.5.1 at digest `sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e`.
+That upstream index contains arm64 and amd64 images. Build the runner image for the host architecture first.
+The chain image copies its solc 0.8.30 binary and adds Python 3 plus the filter.
+Preparation builds the shared image and resolves its immutable local image ID into the execution compose file.
+Rows record that SHA-256 ID. No registry push is needed.
+The discovery cache includes the execution compose file, filter code, Dockerfile, and naming version.
+
+Anvil listens at `127.0.0.1:8546` inside the chain container, with no generated accounts and no interval mining.
+The filter listens at `http://chain:8545`. It accepts only JSON-RPC POST requests to `/`.
+It allows standard wallet reads and `eth_sendRawTransaction`.
+The full list lives in [rpc_filter.py](ethevals/images/rpc_filter.py).
+It rejects the whole batch if any member names a refused method.
+It rejects WebSocket upgrades, other HTTP paths, and bodies above 2 MiB.
+Batches permit at most 100 requests. The filter permits at most 32 active connections.
+Refused methods return JSON-RPC error `-32601`. The epoch log retains refusal messages.
+
+The allowlist blocks unknown methods by default.
+Anvil unlocks generated accounts, and `eth_sendUnsignedTransaction` bypasses signatures even without generated accounts.
+Blocking only `anvil_*`, `evm_*`, and `hardhat_*` leaves those bypasses open.
+Agents must sign locally with the fresh key that setup funds.
+
+The script contract is:
+
+- `scorer/setup.py` is optional. It runs once before the player, in `/eval` inside the chain container.
+- All private files under `scorer/`, except `solution/`, reach that container from the captured eval manifest.
+- Scripts run with Python 3. `RPC_URL` points directly to Anvil. `SOLC` points to `/opt/solc`.
+- `cast` and `forge` are available. The chain and scorer containers have no internet access.
+- Setup prints exactly one JSON object, `{"files": {"chain.json": "file contents"}}`.
+- File paths must be relative workspace paths. Setup cannot replace declared workspace files.
+- Only setup's selected files reach the agent. Setup can retain private state under `/eval` for the check script.
+- `scorer/solution/run.sh` is required. The reference runs with Bash in the agent container after setup.
+- The solution uses the same public RPC URL and key that an agent receives.
+- `scorer/check.py` is required. It runs after capture, in `/eval` with direct Anvil access.
+- The check script prints one JSON object keyed by stable names matching `[a-z][a-z0-9_]*`.
+- Each value has exactly `passed`, a boolean, and `reason`, a nonempty string.
+- The runner adds the `script:` prefix and normalizes reasons to one line.
+- Setup and check scripts each have a 120-second limit and a 1 MiB output limit per stream.
+- Script source and private output enter sandbox events as byte counts. Public setup values remain visible to the agent.
+
+For example, a check script can print:
+
+```json
+{"recipient_balance": {"passed": true, "reason": "Recipient holds 12500000 base units."}}
+```
+
+A free reference run discovers names and must pass every check before player epochs can start.
+The names remain fixed across passing transfers, wrong amounts, missing checks, and script crashes.
+Extra runtime names cannot add checks. Missing checks fail with a reason.
+A crashed, malformed, timed-out, or oversized check script fails the full set, without an error retry.
+Setup failures, failed discovery, and Docker failures remain runner errors.
+Player limits retain the existing final-failure rule and skip further scoring.
+
+Capture first closes the filter under the same lock used for forwarding.
+Accepted requests finish before the boundary. Further public RPC requests fail.
+The runner disables mining and drops queued and pending transactions through localhost RPC.
+It records the latest block hash, then stops the agent's processes before any check script runs.
+The check script reads that fixed chain state. It must inspect state without changing it.
+This boundary also stops detached agent senders. The agent cannot reopen the filter's local Unix control socket.
+
+`ethevals check` runs the reference and untouched cases through this full pipeline.
+The real Claude Code proof supports the act fixture with `--eval evals/transactions/send-six-decimal-token`.
+`tests/prove_chain.py` exercises wrong amounts, broken checks, bypass attempts, and pending transactions.
 
 The [paid ADR test](../README.md#run-the-paid-adr-0002-test) gives exact commands and expected row fields.
 

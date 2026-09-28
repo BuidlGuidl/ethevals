@@ -11,9 +11,9 @@ from .actors import Player, Grader
 from .config import Config, read_yaml
 from .loader import Eval
 from .rows import epoch_identity, export_rows, store_rows
-from .scorers import named_checks, EVALUATIONS, check_names, rubric_budget
+from .scorers import named_checks, EVALUATIONS, SCORERS, check_names, rubric_budget
 from .sandboxes import compose_file
-from .preparation import prepare_eval, prepare_compose
+from .preparation import prepare_eval, prepare_compose, initialize_scorers
 
 
 def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
@@ -25,7 +25,7 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     sample = evaluation.sample()
     images = {}
     if player.sandbox_for(evaluation):
-        compose = compose or compose_file()
+        compose = compose or compose_file(evaluation.declaration.type)
         sample.sandbox = SandboxEnvironmentSpec(type="docker", config=str(compose))
         images = {name: service["image"] for name, service in read_yaml(compose)["services"].items()}
     else:
@@ -37,13 +37,13 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
                 "free_check": player.free_check,
                 "check_names": check_names(evaluation, player.free_check)}
     sample.metadata = dict(metadata)
-    if any(item.kind == "tests" for item in evaluation.scorers) and not evaluation.test_checks:
+    if any(SCORERS[item.kind].discover and item.kind not in evaluation.discovered_checks for item in evaluation.scorers):
         raise ValueError("Discover reference checks with prepare_eval before building a task.")
     EVALUATIONS[(evaluation.id, evaluation.hash)] = evaluation
     identity = hashlib.sha256(json.dumps(epoch_identity(metadata, 0)).encode()).hexdigest()[:16]
     return Task(
         name=f"{evaluation.id.replace('/', '-')}-{identity}",
-        version=evaluation.hash, dataset=[sample], solver=player.solver_for(evaluation),
+        version=evaluation.hash, dataset=[sample], setup=initialize_scorers(evaluation), solver=player.solver_for(evaluation),
         scorer=named_checks(evaluation.id, evaluation.hash),
         model=player.model, epochs=epochs,
         time_limit=evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit),

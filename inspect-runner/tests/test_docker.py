@@ -157,3 +157,8 @@ def test_unavailable_compiler_fails_offline_and_names_available_versions(tmp_pat
             assert "No solc version installed that matches" in result.stderr
             assert "https://" not in result.stderr
         anyio.run(proof)
+
+
+def test_act_checks_bypasses_and_grading_boundary(tmp_path):
+    from prove_chain import run_proof as chain_proof
+    chain_proof(tmp_path / "chain")

@@ -3,7 +3,7 @@ import base64
 import json
 import io
 import tarfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Literal
 
 from inspect_ai.log import transcript, SampleLimitEvent
@@ -224,9 +224,31 @@ def failed_checks(names, reason):
 
 @dataclass
 class Submission:
-    files: dict[str, bytes]
+    captures: dict = field(default_factory=dict)
     failure: str | None = None
+
+
+@dataclass
+class BuildCapture:
+    files: dict[str, bytes]
     compiled: dict[str, bytes] | None = None
+
+
+async def capture_tests(config, evaluation, submission):
+    if "build" not in submission.captures:
+        submission.captures["build"] = BuildCapture(await workspace_files())
+
+
+async def discover_tests(config, evaluation):
+    reference = {name.removeprefix("scorer/solution/"): data for name, data in evaluation.files.items()
+                 if name.startswith("scorer/solution/")}
+    box = sandbox("scorer")
+    await prepare_forge(box, reference, evaluation.files)
+    result = await forge(box)
+    checks = {name: check for name, check in forge_results(result.stdout).items() if name.startswith("forge:test/")}
+    if not result.success or not checks or not all(check["passed"] for check in checks.values()):
+        raise RuntimeError("Reference tests failed during check discovery. Check the reference against the offline compiler configuration.")
+    return checks
 
 
 async def compiled_sources(box, submitted):
@@ -243,16 +265,17 @@ async def compiled_sources(box, submitted):
 
 
 def tests_scorer(config, evaluation):
-    files, expected = evaluation.files, list(evaluation.test_checks)
+    files, expected = evaluation.files, list(evaluation.discovered_checks.get(config.kind, ()))
 
     async def score(state, target, submission):
         box = sandbox("scorer")
-        await prepare_forge(box, submission.files, files)
+        captured = submission.captures["build"]
+        await prepare_forge(box, captured.files, files)
         try:
             result = await forge(box)
             checks = forge_checks(result.stdout, result.stderr, result.returncode, expected)
             if checks["forge:compile"]["passed"]:
-                submission.compiled = await compiled_sources(box, submission.files)
+                captured.compiled = await compiled_sources(box, captured.files)
             else:
                 submission.failure = checks["forge:compile"]["reason"]
         except (TimeoutError, OutputLimitExceededError) as error:
@@ -341,12 +364,13 @@ def rubric_scorer(config, evaluation):
     questions = rubric_questions(evaluation.files)
 
     async def score(state, target, submission):
-        if submission.compiled is None:
+        compiled = submission.captures["build"].compiled
+        if compiled is None:
             raise RuntimeError("Rubric scoring requires the tests scorer's build info.")
         model = get_model(role="grader")
         request_config = model.config.merge(GRADER_CONFIG)
         longest = max(questions.values(), key=lambda question: len(json.dumps(question, ensure_ascii=False).encode()))
-        prefix = grader_request(submission.compiled, longest, request_config)[:2]
+        prefix = grader_request(compiled, longest, request_config)[:2]
         checks = {}
         try:
             with cost_limit(state.metadata["grader_cost_limit_usd"]):
@@ -377,6 +401,12 @@ class ScorerKind:
     free_check: bool = True
     workspace: Callable = lambda config: ({}, "")
     names: Callable = lambda config, evaluation: []
+    discover: Callable | None = None
+    capture: Callable | None = None
+    setup: Callable | None = None
+    cache_inputs: Callable = lambda images: []
+    requires: tuple[str, ...] = ()
+    capture_order: int = 10
 
 
 def tests_workspace(config):
@@ -387,14 +417,26 @@ def tests_workspace(config):
     )
 
 
+from .check_script import (CheckScriptScorer, check_script_scorer, validate_script,
+                           setup_script, discover_script, capture_chain, script_cache_inputs)
+
+
 SCORERS = {
     "target": ScorerKind(TargetScorer, target_scorer, validate_target,
                          lambda config: {"target": config.target}, target_reference,
                          names=lambda config, evaluation: [config.name]),
     "tests": ScorerKind(TestsScorer, tests_scorer, validate_tests, workspace=tests_workspace,
-                        names=lambda config, evaluation: ["forge:compile", *evaluation.test_checks]),
+                        names=lambda config, evaluation: ["forge:compile", *evaluation.discovered_checks.get(config.kind, ())],
+                        discover=discover_tests, capture=capture_tests,
+                        cache_inputs=lambda images: [(images / "Dockerfile").read_bytes(),
+                            (images / "foundry.toml").read_bytes(), b"forge-check-names-v1"]),
     "rubric": ScorerKind(RubricScorer, rubric_scorer, validate_rubric, free_check=False,
-                         names=lambda config, evaluation: [f"rubric:{name}" for name in rubric_questions(evaluation.files)]),
+                         names=lambda config, evaluation: [f"rubric:{name}" for name in rubric_questions(evaluation.files)],
+                         capture=capture_tests, requires=("tests",)),
+    "check_script": ScorerKind(CheckScriptScorer, check_script_scorer, validate_script,
+                              names=lambda config, evaluation: list(evaluation.discovered_checks.get(config.kind, ())),
+                              discover=discover_script, capture=capture_chain, setup=setup_script,
+                              cache_inputs=script_cache_inputs, capture_order=0),
 }
 
 
@@ -418,18 +460,23 @@ def named_checks(eval_id: str, eval_hash: str) -> Scorer:
         if limit:
             return checks_score(failed_checks(check_names(evaluation, free_check),
                 f"Epoch reached {limit.type} limit {limit.limit}. {limit.message}"))
-        underlying = [(item.kind, SCORERS[item.kind].build(item, evaluation)) for item in evaluation.scorers
+        selected = [item for item in evaluation.scorers
                       if not free_check or SCORERS[item.kind].free_check]
         checks = {}
-        submission = None
-        if any(kind in {"tests", "rubric"} for kind, _ in underlying):
+        submission = Submission()
+        for item in sorted(selected, key=lambda item: SCORERS[item.kind].capture_order):
+            capture = SCORERS[item.kind].capture
+            if capture is None:
+                continue
             try:
-                submission = Submission(await workspace_files())
+                await capture(item, evaluation, submission)
             except (ValueError, TimeoutError, tarfile.TarError, OutputLimitExceededError) as error:
-                submission = Submission({}, f"Workspace snapshot failed: {error}")
-        for kind, grade in underlying:
+                submission.failure = f"Workspace snapshot failed: {error}"
+                break
+        for item in selected:
             if submission and submission.failure:
                 break
+            grade = SCORERS[item.kind].build(item, evaluation)
             result = await grade(state, target, submission)
             if submission and submission.failure:
                 break

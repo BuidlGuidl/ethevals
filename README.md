@@ -2,7 +2,7 @@
 
 ETH Evals measures what bare models know about Ethereum and how well agents do Ethereum work.
 
-The runner uses Inspect for quizzes and Solidity builds.
+The runner uses Inspect for quizzes, Solidity builds, and chain transactions.
 Claude Code runs in Docker in the internet mode. A separate container grades its code with Forge.
 
 ## Install
@@ -31,8 +31,8 @@ env -u OPENROUTER_API_KEY uv run ethevals check
 env -u OPENROUTER_API_KEY uv run pytest
 ```
 
-`check` runs each quiz's reference answer and the build's reference solution for three epochs.
-It repeats the pipeline with empty answers and the untouched build workspace.
+`check` runs each quiz's reference answer and each build or act reference solution for three epochs.
+It repeats the pipeline with empty answers, untouched workspaces, and untouched chains.
 The command succeeds only when every reference passes and every untouched case fails.
 It makes no paid call. Rubrics do not run in `check`.
 Every invocation runs fresh, including when its output folder already contains logs.
@@ -107,6 +107,43 @@ An incorrect answer produces `status: failed`, with `passed: false`.
 
 [The runner reference](inspect-runner/README.md) describes eval folders, results rows, and extension hooks.
 [CONTEXT.md](CONTEXT.md) defines the project terms.
+
+## Write an act eval
+
+Copy [send-six-decimal-token](evals/transactions/send-six-decimal-token) into `evals/transactions/<name>/`.
+Set `type: act`, `modes: [internet]`, and a prompt in `eval.yaml`.
+Declare `scorers: [{kind: check_script}]` in `scorer/scorer.yaml`.
+Keep the starting files under `workspace/`.
+
+Write `scorer/setup.py` to prepare the chain before the agent starts.
+Use a fresh key, fund it, and deploy the task's contracts.
+The script returns JSON with a `files` mapping of workspace paths to text.
+The fixture supplies `chain.json` with the key, contract addresses, and `http://chain:8545`.
+Setup and check code stay in the chain container. Only those selected output files reach the agent.
+
+Write `scorer/check.py` to print named checks with boolean `passed` and a one-line `reason`.
+Write `scorer/solution/run.sh` to sign and send through the public RPC URL, using the supplied key.
+The runner discovers check names from that reference before any agent epoch.
+Wrong amounts, missing verdicts, and crashed check scripts keep the same check set.
+
+The stock chain uses Anvil 1.5.1 behind an RPC allowlist in the same container.
+Anvil listens on localhost. The agent can read chain state and send signed raw transactions through the filter.
+It cannot use unlocked sends, unsigned sends, signing methods, WebSockets, or chain controls.
+A namespace blocklist misses `eth_sendUnsignedTransaction`, which moves value without a key.
+The runner closes the filter, drains accepted requests, and drops pending transactions before grading.
+It also stops the agent's processes. No interval mining runs.
+
+Build the runner image first, as described above. The runner builds the shared chain image when needed.
+Its Foundry base uses a pinned multi-architecture digest. Each epoch uses the built chain image's immutable local SHA-256 ID.
+Then run the free check:
+
+```sh
+env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN \
+  uv run ethevals check --evals evals/transactions/send-six-decimal-token
+```
+
+The reference must pass every check. The untouched chain must fail the epoch.
+[The act contract](inspect-runner/README.md#act-scoring) gives script paths, limits, and failure rules.
 
 ## Run the paid ADR 0002 test
 

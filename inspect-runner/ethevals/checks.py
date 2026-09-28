@@ -35,7 +35,18 @@ def build_workspace(evaluation, answer):
     return solve
 
 
-CHECK_SOLVERS = {"quiz": quiz_check_solver, "build": lambda evaluation, answer: CheckRun(build_workspace(evaluation, answer))}
+@solver
+def act_solution(evaluation, answer):
+    async def solve(state, generate):
+        if answer == "reference":
+            from .check_script import run_solution
+            await run_solution(evaluation)
+        return await generate(state)
+    return solve
+
+
+CHECK_SOLVERS = {"quiz": quiz_check_solver, "build": lambda evaluation, answer: CheckRun(build_workspace(evaluation, answer)),
+                 "act": lambda evaluation, answer: CheckRun(act_solution(evaluation, answer))}
 CHECK_MODES = {"quiz": "vanilla", "scenario": "internet", "build": "internet", "act": "internet"}
 
 
