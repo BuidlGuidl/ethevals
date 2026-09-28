@@ -127,7 +127,8 @@ Each container has a 1 GiB limit, with at most three containers per epoch and tw
 Local concurrency also must fit Docker's memory capacity, with at least 1 GiB left for the host.
 Admission uses the list-scheduling bound after it deducts measured preparation and discovery time.
 Sandbox epochs include 600 seconds for startup and 60 for cleanup. Act setup adds another 150 seconds.
-The standalone CI plan admits 8 of 72 epochs before preparation time is known. The run saves its final count afterward.
+Task initialization and final task cleanup each have a 60-second deadline. The plan reserves both outside the parallel bound.
+The standalone CI plan admits 7 of 72 epochs before preparation time is known. The run saves its final count afterward.
 Admission interleaves models. The execution step stops after 310 minutes within the 330-minute job.
 
 Author script crashes and malformed replies are the one deliberate fail-closed exception: they produce failed checks.

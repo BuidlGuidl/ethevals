@@ -13,7 +13,7 @@ from .actors import Player, Grader, select_actors
 from .config import Config, read_yaml
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
-from .planning import plan, budget_check
+from .planning import epoch_selection, plan, budget_check
 from .scorers import named_checks, EVALUATIONS, SCORERS, check_names, rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS
 from .sandboxes import compose_file
 from .preparation import prepare_eval, prepare_compose, sandbox_type, check_capacity
@@ -75,15 +75,16 @@ def run(evals: list[Eval], config: Config, output: Path, *,
     previous = previous_rows(output, rows_file)
     players, _ = select_actors(config, models, modes, answer, delay, planning=True)
     paid = not answer
-    report = budget_check(plan(evals, config, players, previous, epochs=epochs, fresh=fresh,
-                               retry_errors=retry_errors, wall_seconds=wall_seconds), budget, required=paid)
+    selected, pending, exhausted = epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
+    budget_check({"missing": pending, "worst_case_usd": 0}, budget, required=paid)
     output.mkdir(parents=True, exist_ok=True)
-    (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
-    if not report["within_budget"]:
+    if paid and pending and budget == 0:
+        report = budget_check(plan(evals, config, players, previous, wall_seconds=wall_seconds,
+                                   selection=(selected, pending, exhausted)), budget, required=True)
+        (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
         raise ValueError("Budget exceeded. No player or grader ran.")
-    if paid and report.admitted and not os.environ.get("OPENROUTER_API_KEY"):
+    if paid and pending and not os.environ.get("OPENROUTER_API_KEY"):
         raise ValueError("OPENROUTER_API_KEY is required for missing paid epochs")
-    selected, pending, exhausted = report.selection
     prepared, discovery_errors = {}, []
     if any(actor.sandbox_for(evaluation) for evaluation, _, actor, _, _ in pending):
         check_capacity(config)

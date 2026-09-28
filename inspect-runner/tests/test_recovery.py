@@ -162,7 +162,7 @@ def test_admission_counts_discovery_and_startup_and_interleaves_models():
     assert [item[3] for item in report.admitted] == [1, 1]
     internet, _ = select_actors(config, ["opus", "codex"], ["internet"], planning=True)
     report = plan([evaluation], config, internet, [], epochs=3, wall_seconds=1900, preparation_seconds=100)
-    assert (report["missing_epochs"], report["reserved_wall_seconds"]) == (1, 1780)
+    assert (report["missing_epochs"], report["reserved_wall_seconds"], report["task_lifecycle_seconds"]) == (1, 1900, 120)
 
 
 def test_run_executes_final_admission_without_selecting_again(tmp_path, monkeypatch):
@@ -178,7 +178,8 @@ def test_run_executes_final_admission_without_selecting_again(tmp_path, monkeypa
         assert selected == 1
         return selection(*args, **kwargs)
 
-    monkeypatch.setattr(planning, "epoch_selection", once)
+    monkeypatch.setattr(runner, "epoch_selection", once)
+    monkeypatch.setattr(planning, "epoch_selection", lambda *args, **kwargs: pytest.fail("Plan selected work again"))
     from types import SimpleNamespace
     monkeypatch.setattr(runner, "time", SimpleNamespace(monotonic=iter([0, 100]).__next__))
     success, rows = run([evaluation], config, tmp_path, answer="reference", epochs=3, wall_seconds=1700)

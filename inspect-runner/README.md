@@ -112,9 +112,10 @@ The execution step has a 310-minute deadline, which leaves 20 minutes for artifa
 Final admission deducts measured preparation time, including builds and discovery.
 Builds have a 1,800-second timeout. Discovery scoring has a 600-second deadline and no retry.
 Sandbox epochs include startup and cleanup bounds of 600 and 60 seconds. Act setup adds another 150 seconds.
-Admission uses `preparation + sum(durations) / m + (1 - 1/m) * longest_duration`.
+Task initialization and final task cleanup each have a 60-second deadline. The plan reserves both outside the parallel bound.
+Admission uses `preparation + lifecycle + sum(durations) / m + (1 - 1/m) * longest_duration`.
 CI sets `m = 2` for tasks, samples, and sandboxes. Admission interleaves models.
-The standalone plan admits 8 of 72 epochs before preparation time is known. `run()` saves the final admission after preparation.
+The standalone plan admits 7 of 72 epochs before preparation time is known. `run()` saves the final admission after preparation.
 Execution uses those admitted items. Deferred epochs remain missing.
 `--budget USD` exits with code 1 when the worst-case estimate exceeds the budget.
 The plan also lists exhausted errors and an expected-cost estimate from recorded spend.

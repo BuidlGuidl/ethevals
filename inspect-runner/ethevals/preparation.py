@@ -23,11 +23,22 @@ SETUP_SECONDS = 150
 STARTUP_SECONDS = 600
 CLEANUP_SECONDS = 60
 DISCOVERY_SECONDS = 600
+TASK_LIFECYCLE_SECONDS = 60
 
 
 @sandboxenv(name="ethevals_docker")
 class EvalDocker(DockerSandboxEnvironment):
     """Run scorer setup before Inspect starts sample time and cost limits."""
+
+    @classmethod
+    async def task_init(cls, task_name, config):
+        with anyio.fail_after(TASK_LIFECYCLE_SECONDS):
+            await super().task_init(task_name, config)
+
+    @classmethod
+    async def task_cleanup(cls, task_name, config, cleanup):
+        with anyio.fail_after(TASK_LIFECYCLE_SECONDS, shield=True):
+            await super().task_cleanup(task_name, config, cleanup)
 
     @classmethod
     async def sample_init(cls, task_name, config, metadata):

@@ -66,6 +66,7 @@ def test_script_output_waits_for_readers_and_caps_each_stream(monkeypatch):
 
     class ChainBox(DockerBox):
         async def exec(self, args, **kwargs):
+            kwargs.setdefault("cwd", "/eval")
             return await super().exec(args, user="foundry", **kwargs)
 
     original = scripts.runner_exec
@@ -91,7 +92,7 @@ def test_script_output_waits_for_readers_and_caps_each_stream(monkeypatch):
                     await scripts.script_result("check", box)
                 assert len(await box.read_file(f"/eval/script.{stream}", text=False)) == 1048577
             docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py", input='raise SystemExit(125)\n')
-            with pytest.raises(ValueError, match="check.py exited 125"):
+            with pytest.raises(RuntimeError, match="Cannot capture check script output"):
                 await scripts.script_result("check", box)
 
         anyio.run(proof)

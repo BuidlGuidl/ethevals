@@ -393,10 +393,11 @@ The execution step stops at 310 minutes, which leaves 20 minutes for artifact up
 Preparation runs first. Final admission deducts the measured preparation time, including image builds and discovery.
 Image builds stop after 1,800 seconds. Each discovery scorer has a 600-second deadline and no retry.
 Sandbox epochs include 600 seconds for startup and 60 for cleanup. Act setup adds another 150 seconds.
-The bound is `preparation + sum(durations) / m + (1 - 1/m) * longest_duration`, with `m = 2` in CI.
+Task initialization and final task cleanup each have a 60-second deadline. The plan reserves both outside the parallel bound.
+The bound is `preparation + lifecycle + sum(durations) / m + (1 - 1/m) * longest_duration`, with `m = 2` in CI.
 Inspect refills vacant task slots. The runner uses the same concurrency for tasks, samples, and sandboxes.
 Admission interleaves models. Execution uses the admitted items without selecting epochs again.
-The standalone plan admits 8 of 72 epochs before preparation time is known. The run saves its final count in `plan.json`.
+The standalone plan admits 7 of 72 epochs before preparation time is known. The run saves its final count in `plan.json`.
 Epochs that do not fit remain missing for the next run. `--wall-seconds` sets this reserve locally.
 The current build reserves $29.7288 per attempt, or $59.4576 with both attempts left, including the search reserve.
 The gate uses this worst-case estimate. Prices remain guesses, and an in-flight player call can exceed its cost limit.

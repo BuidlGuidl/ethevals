@@ -83,3 +83,28 @@ def test_host_search_caps_requests_and_redacts_credentials(tmp_path, monkeypatch
         with zipfile.ZipFile(path) as archive:
             for name in archive.namelist():
                 assert key.encode() not in archive.read(name), name
+
+
+@pytest.mark.parametrize("status,answer", [(401, "Search failed: Exa request failed."),
+                                         (429, "Search failed: Exa rate limit exceeded.")])
+def test_exa_http_failure_logs_status_without_credentials(tmp_path, monkeypatch, caplog, status, answer):
+    import ethevals.search as search
+    key = "inert-offline-exa-canary"
+    monkeypatch.setenv("EXA_API_KEY", key)
+    client = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda request: httpx.Response(status, text=key))
+    monkeypatch.setattr(search.httpx, "AsyncClient", lambda **kw: client(transport=transport, **kw))
+
+    @solver
+    def failed_search():
+        async def solve(state, generate):
+            result = await exa_tools("https://mcp.exa.ai/mcp", 2)[0](query="Ethereum", objective="Find the spec")
+            state.output = ModelOutput.from_content("mockllm/model", result)
+            return state
+        return solve
+
+    log = eval(Task(dataset=[Sample(input="Search", target="Test")], solver=failed_search(), scorer=match(),
+                    model="mockllm/model"), log_dir=str(tmp_path), display="none")[0]
+    assert log.samples[0].output.completion == answer
+    assert f"Exa HTTP status {status}" in caplog.text
+    assert key not in caplog.text
