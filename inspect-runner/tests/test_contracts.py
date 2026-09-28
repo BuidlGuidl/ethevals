@@ -128,7 +128,29 @@ def test_grader_provider_failure_is_an_error_and_keeps_prior_verdict(scoring_cas
     assert set(row["checks"]) == NAMES
     assert row["checks"]["rubric:uses_openzeppelin"] == {"passed": True, "reason": "Uses standard transfers."}
     assert "503" in row["error_reason"]
-    assert [config.max_retries for config in scoring_case["configs"]] == [0, 0]
+
+
+@pytest.mark.parametrize("status", [429, 503])
+@pytest.mark.parametrize("exhausted", [False, True])
+def test_grader_retries_transient_failures_with_a_bound(scoring_case, monkeypatch, status, exhausted):
+    import httpx
+    from inspect_ai.model._providers.mockllm import MockLLM
+    from tenacity import wait_none
+
+    monkeypatch.setattr(MockLLM, "should_retry", lambda self, error: isinstance(error, httpx.HTTPStatusError))
+    monkeypatch.setattr(MockLLM, "retry_wait", lambda self: wait_none())
+    response = httpx.Response(status, request=httpx.Request("POST", "https://provider.invalid/grade"))
+    error = httpx.HTTPStatusError(f"Provider unavailable: {status}", request=response.request, response=response)
+    # The third failed attempt exhausts provider retries. A later success must remain unread.
+    replies = [YES, error, error, *([error] if exhausted else []), YES]
+    row = scoring_case["run"](replies)
+    assert (row["status"], row["passed"]) == (("error", None) if exhausted else ("passed", True))
+    assert row["checks"]["rubric:uses_openzeppelin"] == {"passed": True, "reason": "Uses standard transfers."}
+    if exhausted:
+        assert "HTTPStatusError" in row["error_reason"]
+    else:
+        assert row["checks"]["rubric:protects_holders"] == {"passed": True, "reason": "Uses standard transfers."}
+        assert row["grader_tokens"] == 400
 
 
 def test_grader_no_is_a_failed_check(scoring_case):

@@ -26,6 +26,8 @@ A target uses `scorers: [{kind: target, target: "8004"}]`.
 A build can use `scorers: [{kind: tests}, {kind: rubric}]`.
 Each kind appears once. Every emitted check must pass for the epoch to pass.
 A target is a nonempty string or a list of nonempty strings. Any listed target can pass.
+Vanilla quizzes allow only one target or a single-item list, because stock Inspect must preserve the exported answer.
+Choices cannot contain blank or whitespace-only entries.
 Quote numbers and hex addresses because YAML can read them as numbers.
 Unknown keys and invalid values report their file and key.
 
@@ -44,6 +46,8 @@ The target scorer accepts these fields:
 A quiz with `choices` requires the `choice` method and letter targets, such as `C`.
 The solver uses Inspect's `multiple_choice()` path without shuffled choices or chain-of-thought prompts.
 Other vanilla quizzes use `generate()` without tools.
+`target_scorer_spec` in `scorers.py` supplies the scorer name and arguments to the runner and HF exporter.
+Both use `quiz_solver_spec` in `actors.py` for the solver.
 Internet quizzes send the same formatted question through Claude Code and use the same target scorer.
 For `match` and `choice`, the reference check only proves that the target matches itself.
 For example, `pattern: "ERC ([0-9]+)"` and `target: "8004"` need `reference: "ERC 8004"`.
@@ -165,7 +169,8 @@ These settings live in `config.yaml`, alongside `max_attempts: 2`.
 Inspect uses the configured prices for uncached input, cache reads, cache writes, and output.
 It checks cost after each call. An in-flight call can exceed its remaining budget.
 The grader defaults to effort `none`, 4,096 output tokens, and a 60-second attempt timeout.
-Grader calls set `max_retries=0`. Invalid replies permit at most two generation calls per question.
+Grader calls set `max_retries=2`, so brief provider failures can recover without repeating the player epoch.
+Inspect applies its backoff between attempts. Invalid replies permit at most two generation calls per question.
 Player limits take precedence over scoring errors and produce a final failed row.
 After a player limit, scoring skips the snapshot and grader.
 `max_tasks` and `max_samples` control concurrency. Both default to four.
@@ -261,3 +266,23 @@ Step 4 can add chain images and private services without changing the agent solv
 It still needs service setup and act reference preparation. No setup script runs in this step.
 
 The [paid ADR test](../README.md#run-the-paid-adr-0002-test) gives exact commands and expected row fields.
+
+## Export and publish commands
+
+From the repository root, export vanilla quizzes with `uv run ethevals export-hf --output out/hf`.
+The output directory must be empty. `--hf-repo` and `--license` set the dataset card values.
+Run the offline proof with `uv run ethevals prove-hf --export out/hf --output out/hf-proof`.
+The proof records observed scores from stock Inspect and the runner in `out/hf-proof/report.json`.
+
+Plan log publication with:
+
+```sh
+uv run ethevals publish-logs --output results/paid \
+  --repo OWNER/REPO --run-id RUN_ID --commit FULL_SOURCE_SHA --dry-run
+```
+
+The dry run writes nothing. Replace `--dry-run` with `--publish` to upload through `gh`.
+After success, the command writes `results/paid/published/results-RUN_ID.jsonl`.
+It skips hidden rows and logs already linked to releases. Keep publication files when reusing a results folder.
+Each command accepts only its own flags. Export, proof, and publish commands require explicit output paths.
+`validate` rejects alternative targets and extra scorers on vanilla quizzes.

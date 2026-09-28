@@ -2,14 +2,19 @@ from dataclasses import dataclass
 from typing import Callable, get_args
 
 from inspect_ai.model import GenerateConfig, Model, ModelInfo, ModelCost, get_model, get_model_info, set_model_info
-from inspect_ai.solver import generate, multiple_choice
+import inspect_ai.solver as inspect_solvers
 
 from .agents import AGENTS, internet_solver
 from .config import Mode
 
 
+def quiz_solver_spec(evaluation):
+    return {"name": "multiple_choice" if evaluation.declaration.choices else "generate"}
+
+
 def quiz_solver(evaluation):
-    return multiple_choice() if evaluation.declaration.choices else generate()
+    spec = quiz_solver_spec(evaluation)
+    return getattr(inspect_solvers, spec["name"])(**spec.get("args", {}))
 
 
 @dataclass

@@ -68,6 +68,8 @@ def load_eval(folder: Path, config: Config) -> Eval:
         if name not in files:
             raise ValueError(f"{folder / name}: required regular file is missing")
     declaration = parse_file(EvalDeclaration, folder / "eval.yaml", files["eval.yaml"])
+    if any(not choice.strip() for choice in declaration.choices or []):
+        raise ValueError(f"{folder / 'eval.yaml'}: choices must not contain blank entries")
     if folder.parent.name not in PILLARS:
         raise ValueError(f"{folder / 'eval.yaml'}: pillar must be one of {sorted(PILLARS)}")
     for name in ("workspace", "scorer"):
@@ -96,6 +98,7 @@ def load_eval(folder: Path, config: Config) -> Eval:
             raise ValueError(f"{path}: {error}") from error
         scorers.append(scorer_config)
         kinds.add(kind)
+    validate_hf_export(declaration, scorers, str(path))
     if "rubric" in kinds and ("tests" not in kinds or [item.kind for item in scorers].index("rubric") < [item.kind for item in scorers].index("tests")):
         raise ValueError(f"{path}: rubric requires tests before it to supply compiled evidence")
     if declaration.type in {"build", "act"} and not (folder / "scorer/solution").is_dir():
@@ -106,3 +109,12 @@ def load_eval(folder: Path, config: Config) -> Eval:
         validate_compose(folder / "compose.yaml", data=files["compose.yaml"])
     return Eval(folder, f"{folder.parent.name}/{folder.name}", content_hash(files),
                 folder.parent.name, declaration, scorers, files)
+
+
+def validate_hf_export(declaration: EvalDeclaration, scorers: list[Declaration], source: str) -> None:
+    if declaration.type != "quiz" or "vanilla" not in declaration.modes:
+        return
+    if len(scorers) != 1 or scorers[0].kind != "target":
+        raise ValueError(f"{source}: HF export requires exactly one target scorer")
+    if isinstance(scorers[0].target, list) and len(scorers[0].target) != 1:
+        raise ValueError(f"{source}: Inspect's HF loader cannot preserve alternative targets")

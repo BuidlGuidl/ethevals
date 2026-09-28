@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { loadBoard, loadEvaluations, parseRows } from "../src/load";
@@ -20,6 +20,7 @@ test("the board reads the merged runner's catalog and reference and empty rows",
       cwd: path.dirname(siteRoot), env, encoding: "utf8", timeout: 60_000,
     });
     assert.equal(result.status, 0, result.error?.message ?? result.stderr + result.stdout);
+    return result.stdout;
   }
   run(["catalog", "--output", path.join(site, ".catalog")]);
   run(["check", "--evals", "evals/concepts/agent-registries", "--epochs", "1", "--output", path.join(root, "results")]);
@@ -36,4 +37,9 @@ test("the board reads the merged runner's catalog and reference and empty rows",
     assert.deepEqual([Object.keys(board.evaluations), board.tables.internet.subjects, board.tables.vanilla.subjects],
       [["building/erc20-points-token", "concepts/agent-registries", "concepts/wei-per-ether"], [], []]);
   }
+  const plan = JSON.parse(run(["publish-logs", "--output", path.join(root, "results/reference"),
+    "--repo", "example/ethevals", "--run-id", "123-1", "--commit", "a".repeat(40), "--dry-run"]));
+  assert.deepEqual(plan.skipped, { published: 0, key_free: 1, stale: 0, skills: 0 });
+  assert.deepEqual(plan.assets, []);
+  assert.equal(existsSync(plan.rows_file), false);
 });

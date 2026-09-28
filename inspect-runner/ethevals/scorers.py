@@ -9,7 +9,8 @@ from typing import Callable, Literal
 from inspect_ai.log import transcript, SampleLimitEvent
 from inspect_ai.model import ChatMessageSystem, ChatMessageUser, ContentText, GenerateConfig, ResponseSchema, get_model
 from inspect_ai.util import sandbox, cost_limit, LimitExceededError, OutputLimitExceededError
-from inspect_ai.scorer import Score, Scorer, Target, accuracy, choice, match, pattern, scorer
+import inspect_ai.scorer as inspect_scorers
+from inspect_ai.scorer import Score, Scorer, Target, accuracy, scorer
 from pydantic import Field, model_validator
 
 from .config import Declaration
@@ -44,13 +45,19 @@ class TargetScorer(Declaration):
         return self
 
 
-def target_scorer(config: TargetScorer, evaluation) -> Scorer:
-    if config.method == "choice":
-        underlying = choice()
+def target_scorer_spec(config: TargetScorer) -> dict:
+    if config.method == "match":
+        args = {"location": config.location, "ignore_case": config.ignore_case, "numeric": config.numeric}
     elif config.method == "pattern":
-        underlying = pattern(config.pattern, ignore_case=config.ignore_case)
+        args = {"pattern": config.pattern, "ignore_case": config.ignore_case}
     else:
-        underlying = match(location=config.location, ignore_case=config.ignore_case, numeric=config.numeric)
+        args = {}
+    return {"name": config.method, "args": args}
+
+
+def target_scorer(config: TargetScorer, evaluation) -> Scorer:
+    spec = target_scorer_spec(config)
+    underlying = getattr(inspect_scorers, spec["name"])(**spec["args"])
 
     async def score(state, target, submission=None):
         # A target list means alternatives, including for a choice quiz.
@@ -283,7 +290,7 @@ def rubric_evidence(files):
 
 GRADER_REQUEST_BYTES = 300000
 GRADER_CALLS = 2
-GRADER_CONFIG = GenerateConfig(attempt_timeout=60, max_retries=0, response_schema=ResponseSchema(
+GRADER_CONFIG = GenerateConfig(attempt_timeout=60, max_retries=2, response_schema=ResponseSchema(
     name="verdict", json_schema={"type": "object", "properties": {
         "passed": {"type": "boolean"}, "reason": {"type": "string"}},
         "required": ["passed", "reason"], "additionalProperties": False}))
