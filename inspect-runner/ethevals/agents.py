@@ -2,29 +2,34 @@ from inspect_ai.agent import as_solver
 from inspect_ai.solver import multiple_choice, solver
 from inspect_ai.tool import MCPServerConfigHTTP
 from inspect_swe import claude_code
+from dataclasses import dataclass
+from typing import Callable
 
 
-HARNESS_VERSIONS = {"claude_code": "2.1.274"}
+@dataclass(frozen=True)
+class Harness:
+    factory: Callable
+    version: str
 
 
 def claude(config, model):
     servers = [MCPServerConfigHTTP(type="http", name="exa", url=config.search_provider)] if config.search_provider else []
     return as_solver(claude_code(
         cwd="/workspace", model_config=model.agent_model_config, effort=model.effort,
-        version=HARNESS_VERSIONS["claude_code"], disallowed_tools=["WebSearch"], mcp_servers=servers,
+        version=AGENTS["claude_code"].version, disallowed_tools=["WebSearch"], mcp_servers=servers,
         retry_uncaught_errors=0,
     ))
 
 
 # Step 3 adds Codex CLI and OpenCode factories here.
-AGENTS = {"claude_code": claude}
+AGENTS = {"claude_code": Harness(claude, "2.1.274")}
 
 
 @solver
 def internet_solver(harness: str, config, model):
     if harness not in AGENTS:
         raise ValueError(f"Harness {harness!r} has no internet solver yet")
-    agent = AGENTS[harness](config, model)
+    agent = AGENTS[harness].factory(config, model)
 
     async def solve(state, generate):
         if state.choices:

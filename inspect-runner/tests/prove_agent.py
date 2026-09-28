@@ -13,6 +13,7 @@ from ethevals.config import load_config
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
 from support import build_task
+from ethevals.preparation import prepare_eval
 
 
 def main():
@@ -24,7 +25,9 @@ def main():
     assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN")), "Strip provider credentials before this proof."
     config = load_config()
     config.models["opus"].model = "mockllm/model"
+    config.grader.model = "mockllm/model"
     evaluation = load_eval(Path(args.eval), config)
+    evaluation = prepare_eval(evaluation, args.output)
     task = build_task(evaluation, config, "opus", "internet", None, 1)
     task.metadata.update(answer_kind=f"scripted_{args.answer}", cost_source="mock", grader_cost_source="mock")
     calls = 0
@@ -46,7 +49,7 @@ def main():
         return ModelOutput.from_content("mockllm/model", "Done.")
 
     def grade(messages, tools, tool_choice, config):
-        request = json.loads(messages[-1].text)
+        request = next(json.loads(message.text) for message in messages if message.text.startswith('{"files"'))
         assert "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol" not in request["files"]
         passed = args.answer == "reference"
         return ModelOutput.from_content("mockllm/model", json.dumps({

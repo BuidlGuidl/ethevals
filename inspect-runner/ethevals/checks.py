@@ -47,7 +47,7 @@ def mock_delay(seconds):
     return solve
 
 
-def check_player(evaluation, answer, delay=0):
+def check_player(evaluation, answer, delay=0, mode=None):
     set_model_info("mockllm/model", ModelInfo(cost=ModelCost(input=0, output=0, input_cache_read=0, input_cache_write=0)))
     if evaluation.declaration.type not in CHECK_SOLVERS:
         raise ValueError(f"type {evaluation.declaration.type!r} has no reference check solver")
@@ -60,7 +60,7 @@ def check_player(evaluation, answer, delay=0):
     return Player(get_model("mockllm/model", custom_outputs=reply), {
         "model": "mockllm/model", "harness": None, "harness_version": None,
         "effort": None, "prices": {}, "cost_source": "mock", "answer_kind": answer,
-    }, lambda evaluation: solve, lambda evaluation: evaluation.declaration.type != "quiz", True)
+    }, lambda evaluation: solve, lambda evaluation: (mode or CHECK_MODES[evaluation.declaration.type]) != "vanilla", True)
 
 
 def check_grader():

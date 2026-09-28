@@ -4,7 +4,7 @@ from typing import Callable
 from inspect_ai.model import GenerateConfig, Model, ModelInfo, ModelCost, get_model, get_model_info, set_model_info
 from inspect_ai.solver import generate, multiple_choice
 
-from .agents import HARNESS_VERSIONS, internet_solver
+from .agents import AGENTS, internet_solver
 
 
 def quiz_solver(evaluation):
@@ -40,7 +40,7 @@ def player(config, key, mode):
     item = config.models[key]
     model, metadata = model_actor(item)
     harness = item.harness if mode == "internet" else None
-    metadata.update(harness=harness, harness_version=HARNESS_VERSIONS.get(harness), answer_kind=None)
+    metadata.update(harness=harness, harness_version=AGENTS[harness].version if harness else None, answer_kind=None)
 
     def solve(evaluation):
         if mode == "vanilla":
@@ -53,5 +53,26 @@ def player(config, key, mode):
 
 
 def grader(config):
-    model, metadata = model_actor(config.models[config.grader], "grader_")
+    model, metadata = model_actor(config.grader, "grader_")
     return Grader(model, metadata)
+
+
+def select_actors(config, models=None, modes=None, answer=None, delay=0):
+    from .checks import CHECK_MODES, check_player, check_grader
+    if modes and set(modes) - {"vanilla", "internet", "skills"}:
+        raise ValueError(f"Unknown modes: {modes}")
+    if answer:
+        grade = check_grader()
+
+        def players(evaluation):
+            selected = modes or [CHECK_MODES[evaluation.declaration.type]]
+            return [(mode, check_player(evaluation, answer, delay, mode))
+                    for mode in dict.fromkeys(evaluation.declaration.modes) if mode in selected]
+    else:
+        grade = grader(config)
+        actors = [(mode, player(config, key, mode)) for mode in dict.fromkeys(modes or ["vanilla"])
+                  for key in models or config.models]
+
+        def players(evaluation):
+            return [(mode, actor) for mode, actor in actors if mode in evaluation.declaration.modes]
+    return players, grade

@@ -14,6 +14,8 @@ from ethevals.files import content_hash
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
 from support import build_task
+from ethevals.preparation import prepare_eval
+from ethevals.sandboxes import runner_exec
 
 
 @solver
@@ -47,19 +49,16 @@ def frozen_writer(underlying):
         result = await underlying(state, target)
         box = sandbox()
         before = await box.read_file("/workspace/src/Counter.sol")
-        await box.exec(["/usr/bin/sleep", "0.2"], user="root", cwd="/")
+        await runner_exec(box, ["/usr/bin/sleep", "0.2"], user="root", cwd="/")
         after = await box.read_file("/workspace/src/Counter.sol")
         assert before == after, (before, after)
-        status = await box.exec(["sh", "-c", 'ps -o stat= -p "$(cat /workspace/writer.pid)"'], user="root", cwd="/")
+        status = await runner_exec(box, ["/bin/sh", "-c", 'ps -o stat= -p "$(cat /workspace/writer.pid)"'], user="root", cwd="/")
         assert status.stdout.strip().startswith("T"), status
         return result
     return score
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
+def run_proof(output):
     assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
     config = load_config()
     original = load_eval(Path("evals/building/erc20-points-token"), config)
@@ -68,9 +67,9 @@ def main():
 import {Test} from "forge-std/Test.sol";
 contract ImageLibraryTest is Test { function testImageLibrary() public pure { assertTrue(true); } }
 '''
+    evaluation = prepare_eval(replace(original, files=files, hash=content_hash(files)), output)
     tasks = []
     for variant in ("reference", "pragma", "setup", "dependency", "snapshot"):
-        evaluation = replace(original, files=files, hash=content_hash(files))
         task = build_task(evaluation, config, None, "internet", "reference", 1)
         task.metadata["answer_kind"] = variant
         task = task_with(task, name=task.name + "-" + variant)
@@ -78,9 +77,9 @@ contract ImageLibraryTest is Test { function testImageLibrary() public pure { as
         if variant == "snapshot":
             task.scorer = [frozen_writer(task.scorer[0])]
         tasks.append(task)
-    eval(tasks, log_dir=str(args.output / "logs"), display="plain", max_tasks=2, max_samples=2,
+    eval(tasks, log_dir=str(output / "logs"), display="plain", max_tasks=2, max_samples=2,
          retry_on_error=0, fail_on_error=False)
-    rows = export_rows(args.output)
+    rows = export_rows(output)
     expected = {"reference": "passed", "pragma": "failed", "setup": "failed", "dependency": "passed", "snapshot": "passed"}
     assert {row["answer_kind"]: row["status"] for row in rows} == expected, rows
     check_sets = [set(row["checks"]) for row in rows]
@@ -91,4 +90,6 @@ contract ImageLibraryTest is Test { function testImageLibrary() public pure { as
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, required=True)
+    run_proof(parser.parse_args().output)

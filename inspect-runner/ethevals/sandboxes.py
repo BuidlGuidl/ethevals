@@ -1,6 +1,7 @@
 import io
 import tarfile
 import re
+import yaml
 from pathlib import Path, PurePosixPath
 
 from inspect_ai.util import sandbox
@@ -11,22 +12,21 @@ IMAGES = Path(__file__).with_name("images")
 MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
 
 
-def compose_file(folder: Path, eval_type: str) -> Path:
-    own = folder / "compose.yaml"
-    path = own if own.exists() else IMAGES / "stock.compose.yaml"
-    if not path.is_file():
-        raise ValueError(f"{path}: no stock compose for type {eval_type!r}")
-    validate_compose(path, stock=not own.exists())
+def compose_file() -> Path:
+    path = IMAGES / "stock.compose.yaml"
+    validate_compose(path, stock=True)
     return path
 
 
-def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = None) -> None:
+def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = None) -> bytes:
     data = read_yaml(path, data)
 
     def reject(message):
         raise ValueError(f"{path}: {message}")
 
     def check_interpolation(value):
+        if type(value) not in {str, int, float, bool, type(None), dict, list}:
+            reject("unsupported YAML scalar type")
         if isinstance(value, str) and re.search(r"\$(?:\{|[A-Za-z_])", value.replace("$$", "")):
             reject("host environment substitution is forbidden")
         if isinstance(value, dict):
@@ -79,6 +79,15 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
             for key in service.get("environment", {})
         ):
             reject(f"service {name}: loader and shell startup environment overrides are forbidden")
+    return yaml.safe_dump(data, sort_keys=True).encode()
+
+
+async def runner_exec(box, command, **kwargs):
+    """Every privileged or scorer command starts with this owned environment."""
+    return await box.exec([
+        "/usr/bin/env", "-i", "HOME=/home/agent", "PATH=/usr/local/bin:/usr/bin:/bin",
+        "LANG=C.UTF-8", *command,
+    ], **kwargs)
 
 
 def unpack_workspace(data: bytes) -> dict[str, bytes]:
@@ -103,7 +112,7 @@ async def workspace_files() -> dict[str, bytes]:
     agent = sandbox("default")
     # Freeze every process owned by the unprivileged agent, including detached
     # writers. Root runs the collector; the agent cannot resume itself.
-    stopped = await agent.exec(["/bin/sh", "-c", """
+    stopped = await runner_exec(agent, ["/bin/sh", "-c", """
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
     /usr/bin/pkill -STOP -u agent
     /usr/bin/ps -u agent -o pid=,stat= | /usr/bin/awk '$1 != 1 && $2 !~ /^[TZ]/ {bad=1} END {exit bad}' && exit 0
@@ -112,15 +121,20 @@ done
 exit 1
 """], user="root", cwd="/", timeout=10)
     if not stopped.success:
-        raise ValueError(f"Cannot stop agent processes: {stopped.stderr}")
-    temporary = await agent.exec(["/usr/bin/mktemp", "-d", "/tmp/ethevals.XXXXXXXXXX"], user="root", cwd="/")
+        raise RuntimeError(f"Cannot stop agent processes: {stopped.stderr}")
+    temporary = await runner_exec(agent, ["/usr/bin/mktemp", "-d", "/tmp/ethevals.XXXXXXXXXX"], user="root", cwd="/")
     if not temporary.success:
         raise RuntimeError(f"Cannot allocate snapshot: {temporary.stderr}")
     path = temporary.stdout.strip() + "/workspace.tar.gz"
-    result = await agent.exec([
-        "/usr/bin/tar", "--exclude=out", "--exclude=cache", "--exclude=.git", "--exclude=node_modules",
-        "-czf", path, "-C", "/workspace", ".",
-    ], user="root", cwd="/", timeout=60)
+    result = await runner_exec(agent, ["/bin/sh", "-c", """
+archive=$1
+set --
+for tree in src lib; do
+    if [ -e "$tree" ] || [ -L "$tree" ]; then set -- "$@" "$tree"; fi
+done
+/usr/bin/tar --anchored --exclude=lib/openzeppelin-contracts --exclude=lib/forge-std \
+    -czf "$archive" --files-from /dev/null "$@"
+""", "snapshot", path], user="root", cwd="/workspace", timeout=60)
     if not result.success:
         raise ValueError(f"Cannot collect workspace: {result.stderr}")
     return unpack_workspace(await agent.read_file(path, text=False))

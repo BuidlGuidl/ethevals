@@ -18,7 +18,7 @@ from inspect_ai.solver import solver
 from ethevals.config import load_config
 from ethevals.loader import eval_hash, load_eval
 from ethevals.rows import results_rows
-from ethevals.runner import run
+from support import run
 from ethevals.checks import mock_delay
 from support import build_task
 from ethevals.files import inline_file
@@ -136,8 +136,7 @@ def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected
 
 
 @scorer(metrics=[accuracy()])
-def with_grader():
-    underlying = named_checks([{"kind": "target", "target": "8004"}], ".", files={})
+def with_grader(underlying):
 
     async def score(state, target):
         await get_model(role="grader").generate("Grade this answer.")
@@ -155,7 +154,7 @@ def test_rows_split_grader_usage_for_the_same_model(folder, tmp_path):
     grade.usage = ModelUsage(input_tokens=7, output_tokens=3, total_tokens=10)
     set_model_info("mockllm/model", ModelInfo(cost=ModelCost(input=1, output=2, input_cache_read=0, input_cache_write=0)))
     task.model = get_model("mockllm/model", custom_outputs=[output])
-    task.scorer = [with_grader()]
+    task.scorer = [with_grader(task.scorer[0])]
     log = eval(task, model_roles={"grader": get_model("mockllm/model", custom_outputs=[grade])},
                log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(read_eval_log(log.location))[0]
@@ -256,13 +255,13 @@ def test_check_reruns_changed_scorer(folder, tmp_path, monkeypatch):
 
     def always_pass(config, folder):
         async def score(state, target, submission=None):
-            return Score(value="C", metadata={"checks": {"answer": {"passed": True, "reason": "Broken scorer."}}})
+            return Score(value="C", metadata={"checks": {config.name: {"passed": True, "reason": "Broken scorer."}}})
         return score
 
     monkeypatch.setitem(SCORERS, "target", replace(SCORERS["target"], build=always_pass))
     assert main() == 1
     empty = json.loads((tmp_path / "results/empty/rows.jsonl").read_text())
-    assert empty["checks"] == {"answer": {"passed": True, "reason": "Broken scorer."}}
+    assert empty["checks"] == {"erc_number": {"passed": True, "reason": "Broken scorer."}}
 
 
 def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_path, monkeypatch):
@@ -348,6 +347,7 @@ def test_store_keeps_old_evals_and_runs_only_edited_eval(folder, tmp_path):
 
 def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path):
     config = load_config()
+    config.grader.model = "mockllm/grader"
     for key, item in config.models.items():
         item.model = f"mockllm/{key}"
     evaluation = load_eval(folder, config)
@@ -355,7 +355,7 @@ def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path
     success, first = run([evaluation], config, output, models=["opus"], epochs=1)
     assert success is True
     config.models["opus"].prices.input = 99.0
-    config.grader = "codex"
+    config.grader.model = "mockllm/codex"
     config.time_limit = 400
     success, second = run([evaluation], config, output, models=["opus"], epochs=1)
     assert success is True

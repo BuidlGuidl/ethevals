@@ -36,6 +36,7 @@ class Eval:
     declaration: EvalDeclaration
     scorers: list[Declaration]
     files: dict[str, bytes]
+    test_checks: tuple[str, ...] = ()
 
     def sample(self) -> Sample:
         # Only workspace files are eligible for copying into a future sandbox.
@@ -43,11 +44,15 @@ class Eval:
             f"/workspace/{name.removeprefix('workspace/')}": inline_file(data)
             for name, data in self.files.items() if name.startswith("workspace/")
         }
-        fields = {}
+        fields, notes = {}, []
         for item in self.scorers:
             fields.update(SCORERS[item.kind].sample_fields(item))
+            supplied, note = SCORERS[item.kind].workspace(item)
+            files.update({f"/workspace/{name}": inline_file(data) for name, data in supplied.items()})
+            if note:
+                notes.append(note)
         return Sample(
-            id=self.id, input=self.declaration.prompt,
+            id=self.id, input="\n".join([self.declaration.prompt, *notes]),
             **fields, choices=self.declaration.choices,
             files=files, metadata={"eval_id": self.id, "eval_hash": self.hash,
                                    "pillar": self.pillar, "type": self.declaration.type},
@@ -91,9 +96,13 @@ def load_eval(folder: Path, config: Config) -> Eval:
             raise ValueError(f"{path}: {error}") from error
         scorers.append(scorer_config)
         kinds.add(kind)
+    if "rubric" in kinds and ("tests" not in kinds or [item.kind for item in scorers].index("rubric") < [item.kind for item in scorers].index("tests")):
+        raise ValueError(f"{path}: rubric requires tests before it to supply compiled evidence")
     if declaration.type in {"build", "act"} and not (folder / "scorer/solution").is_dir():
         raise ValueError(f"{folder}: scorer/solution is required for build and act evals")
-    if (folder / "compose.yaml").exists():
+    if (folder / "compose.yaml").is_dir():
+        raise ValueError(f"{folder / 'compose.yaml'}: must be a regular file")
+    if "compose.yaml" in files:
         validate_compose(folder / "compose.yaml", data=files["compose.yaml"])
     return Eval(folder, f"{folder.parent.name}/{folder.name}", content_hash(files),
                 folder.parent.name, declaration, scorers, files)

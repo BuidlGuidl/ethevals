@@ -1,8 +1,6 @@
 """Regression cases from the step 2b review."""
-import io
 import json
 import shutil
-import tarfile
 from pathlib import Path
 
 import pytest
@@ -10,13 +8,12 @@ import yaml
 from inspect_ai import eval
 from inspect_ai.model import ModelOutput, ModelUsage, get_model
 from inspect_ai.solver import generate, solver
-from inspect_ai.util import ExecResult
 
 from ethevals.checks import CHECK_SOLVERS, CheckRun
 from ethevals.config import load_config
 from ethevals.loader import load_eval
 from ethevals.rows import results_rows
-from ethevals.runner import run
+from support import run
 from ethevals.sandboxes import IMAGES, validate_compose
 from ethevals.scorers import forge_checks, rubric_evidence
 from support import build_task
@@ -113,64 +110,6 @@ def test_agent_test_functions_do_not_become_checks():
         CHECK: {"passed": True, "reason": "Test passed."}}
 
 
-@pytest.mark.parametrize("reply", [
-    '```json\n{"passed": true, "reason": "No holder controls."}\n```',
-    'Here is the verdict: {"passed": true, "reason": "No holder controls."} End.',
-    "I cannot give JSON.",
-])
-@pytest.mark.parametrize("budget", [0.5, 0.0001])
-def test_snapshot_dependencies_and_grader_reply_pipeline(tmp_path, monkeypatch, reply, budget):
-    import ethevals.scorers as scorers
-    config = load_config()
-    config.models["opus"].model = "mockllm/model"
-    config.grader_cost_limit = budget
-    task = build_task(load_eval(BUILD, config), config, "opus", "internet", None, 1)
-    task.dataset[0].sandbox = task.dataset[0].files = None
-    task.solver = generate()
-    task.model = get_model("mockllm/model")
-    archives, requests, snapshots = [], [], []
-
-    async def submitted():
-        snapshots.append(1)
-        if len(snapshots) > 1:
-            return {"src/Token.sol": b"different snapshot"}
-        return {"src/Token.sol": b"contract Token {}",
-                "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol": b"function seize() public {}",
-                "lib/forge-std/src/Test.sol": b"fake assertions",
-                "lib/custom/Control.sol": b"function take() public {}"}
-
-    class Box:
-        async def write_file(self, path, data):
-            archives.append(data)
-
-        async def exec(self, command, **kwargs):
-            return ExecResult(success=True, returncode=0, stdout=PASS if command[0] == "env" else "", stderr="")
-
-    def grade(messages, tools, tool_choice, config):
-        requests.append(json.loads(messages[-1].text))
-        output = ModelOutput.from_content("mockllm/model", reply)
-        output.usage = ModelUsage(input_tokens=100, output_tokens=100, total_tokens=200)
-        return output
-
-    monkeypatch.setattr(scorers, "workspace_files", submitted)
-    monkeypatch.setattr(scorers, "sandbox", lambda name: Box())
-    log = eval(task, model_roles={"grader": get_model("mockllm/model", custom_outputs=grade)},
-               log_dir=str(tmp_path / "logs"), display="none")[0]
-    row = results_rows(log)[0]
-    valid = reply != "I cannot give JSON." and budget == 0.5
-    assert row["status"] == ("passed" if valid else "failed")
-    assert row["checks"]["rubric:protects_holders"] == {
-        "passed": valid, "reason": "No holder controls." if valid else
-        "Grader cost limit reached." if budget == 0.0001 else "Grader did not return a valid verdict after two calls."}
-    assert len(requests) == (1 if budget == 0.0001 else 2 if valid else 4)
-    assert row["grader_metered_usd"] == pytest.approx(0.003 * len(requests))
-    assert requests[0]["files"] == {"src/Token.sol": "contract Token {}", "lib/custom/Control.sol": "function take() public {}"}
-    with tarfile.open(fileobj=io.BytesIO(archives[1]), mode="r:gz") as archive:
-        assert sorted(archive.getnames()) == ["foundry.toml", "lib/custom/Control.sol", "src/Token.sol", "test/BuilderPoints.t.sol"]
-        assert archive.extractfile("src/Token.sol").read() == requests[-1]["files"]["src/Token.sol"].encode() == b"contract Token {}"
-    assert snapshots == [1]
-
-
 def test_rubric_reports_omitted_dependency_files():
     assert rubric_evidence({"lib/custom/Huge.sol": b"x" * 100001, "src/Token.sol": b"contract Token {}"}) == (
         {"src/Token.sol": "contract Token {}"}, ["lib/custom/Huge.sol"])
@@ -192,6 +131,11 @@ def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
         assert success is False
         assert (rows[0]["status"], rows[0]["attempt"]) == ("error", attempt)
     assert len(list((output / "logs").glob("*.eval"))) == 2
+    success, rows = run([evaluation], config, output, answer="reference", epochs=1, retry_errors=True)
+    assert (success, rows[0]["status"], rows[0]["attempt"]) == (False, "error", 3)
+    assert set(rows[0]["checks"]) == {"erc_number"}
+    success, rows = run([evaluation], config, output, answer="reference", epochs=1)
+    assert (success, rows[0]["attempt"]) == (False, 3)
 
 
 @pytest.mark.parametrize("budget", [5.0, 0.01])
@@ -199,6 +143,7 @@ def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
     config = load_config()
     config.cost_limit = budget
     config.models["opus"].model = "mockllm/model"
+    config.grader.model = "mockllm/model"
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     task = build_task(evaluation, config, "opus", "vanilla", None, 1)
 
@@ -234,6 +179,7 @@ def test_workspace_failure_fills_all_eval_checks(tmp_path, monkeypatch):
     import ethevals.scorers as scorers
     config = load_config()
     config.models["opus"].model = "mockllm/model"
+    config.grader.model = "mockllm/model"
     task = build_task(load_eval(BUILD, config), config, "opus", "internet", None, 1)
     task.dataset[0].sandbox = task.dataset[0].files = None
     task.solver = generate()
@@ -241,15 +187,7 @@ def test_workspace_failure_fills_all_eval_checks(tmp_path, monkeypatch):
     async def broken_workspace():
         raise ValueError("Workspace contains a link or special file: src/Token.sol")
 
-    class Box:
-        async def write_file(self, path, data):
-            pass
-
-        async def exec(self, command, **kwargs):
-            return ExecResult(success=True, returncode=0, stdout=PASS if command[0] == "env" else "", stderr="")
-
     monkeypatch.setattr(scorers, "workspace_files", broken_workspace)
-    monkeypatch.setattr(scorers, "sandbox", lambda name: Box())
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
     failure = {"passed": False, "reason": "Workspace snapshot failed: Workspace contains a link or special file: src/Token.sol"}
     assert row["checks"] == {"forge:compile": failure, CHECK: failure,

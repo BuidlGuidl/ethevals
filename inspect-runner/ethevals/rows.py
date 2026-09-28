@@ -27,7 +27,7 @@ def results_rows(log: EvalLog) -> list[dict]:
                 samples.append(EvalSample(id=metadata["eval_id"], epoch=epoch, input="", target="", error=log.error))
     rows = []
     for sample in samples:
-        checks = {}
+        checks = {} if sample.scores else dict((sample.metadata or {}).get("scoring_checks", {}))
         for score in (sample.scores or {}).values():
             for name, check in (score.metadata or {}).get("checks", {}).items():
                 if name in checks:
@@ -35,10 +35,13 @@ def results_rows(log: EvalLog) -> list[dict]:
                 checks[name] = check
         error = sample.error.message if sample.error else None
         error_kind = "execution" if error else None
+        if error:
+            for name in metadata.get("check_names", []):
+                checks.setdefault(name, {"passed": False, "reason": " ".join(f"No verdict: {error}".split())})
         if sample.limit:
             reason = " ".join((f"Epoch reached {sample.limit.type} limit {sample.limit.limit}. "
                                + (sample.limit.reason or "")).split())
-            checks = {name: {"passed": False, "reason": reason} for name in checks}
+            checks = {name: {"passed": False, "reason": reason} for name in metadata.get("check_names", checks)}
         if not checks and not error:
             error_kind, error = "scoring", "The epoch produced no named checks."
         usage = list(sample.model_usage.values())

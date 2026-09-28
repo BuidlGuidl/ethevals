@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from inspect_ai.model import ModelCost, ModelInfo, get_model_info, set_model_info
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
@@ -38,13 +37,20 @@ class Prices(Declaration):
     input_cache_write: float = Field(ge=0)
 
 
-class ModelConfig(Declaration):
+class ModelSettings(Declaration):
     model: str
     effort: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
-    harness: str | None
-    agent_model_config: str | None = None
     price_source: str
     prices: Prices
+
+
+class ModelConfig(ModelSettings):
+    harness: str | None
+    agent_model_config: str | None = None
+
+
+class GraderConfig(ModelSettings):
+    max_tokens: int = Field(gt=0)
 
 
 Mode = Literal["vanilla", "internet", "skills"]
@@ -59,15 +65,13 @@ class Config(Declaration):
     max_attempts: int = Field(gt=0)
     max_tasks: int = Field(default=4, gt=0)
     max_samples: int = Field(default=4, gt=0)
-    grader: str
+    grader: GraderConfig
     search_provider: str | None
     models: dict[str, ModelConfig]
 
     @model_validator(mode="after")
     def check_grader(self):
         from .agents import AGENTS
-        if self.grader not in self.models:
-            raise ValueError("grader must name a configured model")
         if any(key not in {"quiz", "build", "act", "scenario"} or value <= 0 for key, value in self.time_limits.items()):
             raise ValueError("time_limits requires eval types and positive seconds")
         for key, model in self.models.items():
@@ -78,9 +82,3 @@ class Config(Declaration):
 
 def load_config(path: Path | None = None) -> Config:
     return parse_file(Config, path or Path(__file__).with_name("config.yaml"))
-
-
-def register_prices(config: Config) -> None:
-    for item in config.models.values():
-        info = get_model_info(item.model) or ModelInfo()
-        set_model_info(item.model, info.model_copy(update={"cost": ModelCost(**item.prices.model_dump())}))

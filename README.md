@@ -76,6 +76,8 @@ This runner uses OpenRouter for paid calls and has no code path that uses a subs
 
 Repeat the same command with the same output directory.
 The runner reuses completed epochs. Each identity permits at most two executions, including unfinished or errored executions.
+After fixing an error, add `--retry-errors` to grant each selected error epoch one further attempt.
+The flag preserves completed passes and failures.
 The runner flushes each completed epoch to its log.
 The same directory accepts changed evals and selections. Earlier logs remain available.
 Each epoch is identified by its eval hash, agent, mode, and epoch number.
@@ -83,13 +85,16 @@ Price or grader changes never repeat completed agent work.
 Rows retain the prices and grader used at execution time.
 
 Quizzes have a 300-second limit. Builds have a 1,200-second limit.
-The configuration gives the player a $5 cost budget and the grader a separate $0.50 budget per epoch.
+The configuration gives the player a $5 cost budget.
+The grader has separate model, effort, output, and price settings.
+Its epoch budget covers two full-evidence calls per question, with `grader_cost_limit` as a minimum.
 Inspect meters configured prices, including the lower price for cached reads. These prices are estimates until checked.
 Limits stop further calls after usage arrives. An in-flight call can exceed its remaining budget.
 Rows record each role's metered dollars and budget. The runner runs up to four tasks and samples at once.
 An eval can override its time limit with `time_limit` in `eval.yaml`.
-A crash or setup failure produces `status: error`, with `passed: null`, and retries within the two-execution cap.
-A time or cost limit fails the eval's checks and produces a final `status: failed` result.
+A runner, Docker, or grader failure produces `status: error`, with `passed: null`, and retries within the execution cap.
+Grader errors include provider failures, exhausted budgets, and invalid replies after two calls.
+Player time or cost limits fail the eval's checks and produce a final `status: failed` result.
 An incorrect answer produces `status: failed`, with `passed: false`.
 
 ## Read the runner contracts
@@ -109,7 +114,7 @@ uv run ethevals run --evals evals/building/erc20-points-token --models opus --mo
 ```
 
 The quiz uses bare Opus 5.5. The build uses Claude Code 2.1.274 with Opus 5.5 and high effort.
-The fixed `grader: opus` model answers the two rubric questions.
+The separate `grader` configuration selects the model that answers the two rubric questions.
 Web search uses the keyless Exa MCP URL in `search_provider`. Claude Code's built-in WebSearch is disabled.
 The Exa endpoint can rate-limit requests. Agents can also fetch pages and install packages from their containers.
 
@@ -121,11 +126,18 @@ The quiz row has `harness: null` and the `erc_number` check.
 The build row has `harness: claude_code`, eight `forge:` checks, and two `rubric:` checks with reasons.
 The rubric's tokens and cost appear in `grader_tokens` and `grader_cost_usd`.
 Rows with `status: error` need diagnosis. An agent's incorrect code has `status: failed`.
-The Forge checks contain `forge:compile` and the seven test functions from the reference run.
+Before player epochs start, a key-free reference run discovers the seven test functions.
+The runner caches them by eval hash under `inputs/<hash>/checks.json`. `forge:compile` completes the Forge check set.
 Compilation and setup failures retain that check set. Agent-added tests cannot add checks.
 Forge and the rubric read one workspace snapshot after the runner stops the agent's processes.
 The supplied `foundry.toml` defines grading settings and dependency remappings. Agent edits to it do not affect grading.
-The rubric sees other submitted Solidity dependencies. It fails if its evidence is incomplete.
+The rubric reads Forge's compiled source records, with the agent's `src/` files first.
+It excludes unused libraries, private tests, and the runner's libraries.
+The grader receives the files that fit the evidence cap and a list of omitted files.
+Missing evidence does not replace the grader's verdict.
+
+The `tests` scorer supplies Foundry files and the build prompt note. Internet quizzes receive neither.
+Authors must omit `workspace/foundry.toml`; the runner supplies it.
 
 To test resume, kill the build command during its first execution.
 Repeat the same build command:
@@ -150,6 +162,11 @@ env -u OPENROUTER_API_KEY uv run python inspect-runner/tests/prove_agent.py empt
 The reference script sends a Bash tool call that writes the reference solution.
 The empty script leaves the workspace untouched. Both run Forge and the scripted rubric grader.
 The scripts assert the expected row status and named checks.
+The Docker regression tests also cover hostile Compose environments and workspace contents:
+
+```sh
+env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN uv run pytest -q --run-docker -m docker
+```
 
 ## Build the results board
 

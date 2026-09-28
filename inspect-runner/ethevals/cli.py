@@ -6,6 +6,7 @@ from .catalog import write_catalog
 from .config import load_config
 from .loader import load_eval
 from .runner import run
+from .actors import select_actors
 
 
 def positive(value: str) -> int:
@@ -26,6 +27,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("results"))
     parser.add_argument("--answer", choices=["reference", "empty", "default"], help="Use mockllm without an API call.")
     parser.add_argument("--mock-delay", type=float, default=0, help="Pause each mock epoch, for resume checks.")
+    parser.add_argument("--retry-errors", action="store_true", help="Grant one further attempt to each selected error epoch.")
     args = parser.parse_args()
     try:
         config = load_config(args.config)
@@ -55,8 +57,9 @@ def main() -> int:
         passed = True
         for answer in answers:
             output = args.output / answer if args.command == "check" else args.output
-            success, rows = run(evals, config, output, models=args.models, modes=args.modes,
-                                answer=answer, epochs=args.epochs, delay=args.mock_delay, fresh=args.command == "check")
+            players, grade = select_actors(config, args.models, args.modes, answer, args.mock_delay)
+            success, rows = run(evals, config, output, players=players, grade=grade,
+                                epochs=args.epochs, fresh=args.command == "check", retry_errors=args.retry_errors)
             if args.command == "check":
                 success = success and bool(rows) and all(row["passed"] is (answer == "reference") for row in rows)
             passed = passed and success

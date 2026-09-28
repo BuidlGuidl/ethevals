@@ -50,8 +50,9 @@ For example, `pattern: "ERC ([0-9]+)"` and `target: "8004"` need `reference: "ER
 
 The eval hash includes file paths and bytes, including new files that the author has not committed.
 Outside `scorer/`, it excludes `.DS_Store`, `out`, `cache`, `lib`, `__pycache__`, and `.pytest_cache`.
-These names are forbidden anywhere under `scorer/`.
-The runner rejects symlinks before exclusions, including links nested inside ignored directories.
+The build names `out`, `cache`, and `lib` are forbidden anywhere under `scorer/`.
+Finder and Python junk remains ignored there.
+The runner rejects symlinks and hard links before exclusions, including links nested inside ignored directories.
 One validated file manifest supplies hashing, workspace contents, and every scorer input.
 The runner captures the manifest's bytes at load time. Later source edits cannot change that epoch's inputs.
 Other files count regardless of Git status. Custom `.gitignore` rules do not change this policy.
@@ -75,7 +76,9 @@ Task metadata holds the ETH Evals epoch number. `log_epoch` holds Inspect's epoc
 This lets the runner select missing epochs without using Inspect's broader task identity.
 `max_attempts` permits two executions per identity, including errors and interrupted executions recorded in logs.
 After the second error, `run` returns failure without another model call.
-Time and cost limits fail the existing checks with the limit reason. The row's `limit` field records the limit.
+`--retry-errors` grants one further execution to each selected error epoch without deleting logs.
+It never repeats a completed pass or failure. The next ordinary invocation still obeys the configured cap.
+Player time and cost limits fail the existing checks with the limit reason. The row's `limit` field records the limit.
 `check` writes fresh logs on every invocation and checks only the current selection.
 The Python `run()` result also contains only the current selection. `rows.jsonl` contains the whole store.
 
@@ -103,6 +106,10 @@ The Python `run()` result also contains only the current selection. `rows.jsonl`
 The exporter reads complete logs so long reasons survive Inspect's summary truncation.
 It uses `role_usage["grader"]` even when the grader and model under test share a model name.
 Synthetic setup-failure rows have unknown costs for both roles.
+Error rows retain the fixed check names and any verdicts completed before the error.
+Checks without a verdict carry `passed: false` and a `No verdict` reason. The row's verdict remains null.
+Docker failures, broken reference data, and grader failures are errors on the runner's side.
+A grader's explicit `passed: false` is a failed check.
 
 ## Site catalog
 
@@ -114,6 +121,9 @@ The site's normal build runs this command and reads schema v3 rows. See [the sit
 ## Extension hooks
 
 `SCORERS` in `scorers.py` owns each kind's schema, validation, sample fields, reference reply, and scorer factory.
+Each kind also supplies its check names, workspace files, and prompt note.
+Only `tests` supplies `foundry.toml` and the Solidity note. Internet quizzes receive neither.
+A `tests` eval must omit `workspace/foundry.toml`; the loader rejects an author's copy.
 A new kind returns an Inspect `Score` with `metadata["checks"]`.
 Each named check requires a boolean `passed` and a nonempty `reason`.
 `named_checks()` normalizes each reason to one line and passes the epoch only when all checks pass.
@@ -125,28 +135,34 @@ The empty case leaves the workspace untouched.
 Both cases retain the task, scorer registry, log, and results exporter.
 The rubric registry entry sets `free_check=False` and stays out of free checks.
 
-`AGENTS` in `agents.py` owns agent solver factories. Step 3 can add Codex CLI and OpenCode there.
+Each `AGENTS` entry in `agents.py` holds one solver factory and its version. Step 3 can add factories there.
 `actors.py` constructs the player and grader once, with their models, effort, and prices.
 `build_task()` receives these actors. Check-only solvers and delays live in `checks.py`.
 `Eval.sample()` already maps workspace files to `/workspace/` and keeps scorer files separate.
 Vanilla execution clears the file mapping before a plain model call.
 Internet execution sets a Docker sandbox on each sample.
 
-`config.yaml` holds model names, default effort, and the fixed grader selection.
+`config.yaml` holds player model settings and a separate `grader` entry.
+The grader entry has `model`, `effort`, `max_tokens`, `prices`, and `price_source` fields.
 Effort accepts `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
 `validate` rejects other effort values before a paid run.
 It also rejects harness names absent from `AGENTS`. A null harness supports vanilla mode only.
 Only Opus currently declares a harness. The other configured models remain available for vanilla quizzes.
 `agent_model_config` supplies the harness's model description.
-`register_prices()` registers model information before use, including names absent from Inspect's database.
+Actor construction registers prices once, including names absent from Inspect's database.
 `search_provider` holds the Exa MCP URL. A null value disables that MCP server.
 `time_limit` supplies the fallback limit. `time_limits` sets limits by eval type.
 An eval's `time_limit` takes precedence. It remains the main bound on a hung agent.
-`cost_limit` gives the player $5. `grader_cost_limit` gives the rubric grader $0.50 across all its questions and retries.
-Both settings live in `config.yaml`, alongside `max_attempts: 2`.
+`cost_limit` gives the player $5. `grader_cost_limit` sets a $0.50 minimum for the separate grader budget.
+The runner raises that budget to cover every question at the full evidence cap, including two calls and maximum output.
+The estimate assumes one token per escaped input byte and no cache discount.
+It uses the higher input or cache-write price, plus the output price.
+The recorded `grader_cost_limit_usd` is the resulting epoch budget. This is a spending guard, not an expected cost.
+These settings live in `config.yaml`, alongside `max_attempts: 2`.
 Inspect uses the configured prices for uncached input, cache reads, cache writes, and output.
 It checks cost after each call. An in-flight call can exceed its remaining budget.
-Each grader call has a 1,024-output-token limit and a 60-second attempt timeout.
+The grader defaults to effort `none`, 4,096 output tokens, and a 60-second attempt timeout.
+Inspect retains its provider retries and backoff. Invalid reply shapes permit at most two generation calls per question.
 `max_tasks` and `max_samples` control concurrency. Both default to four.
 
 ## Build scoring
@@ -155,7 +171,10 @@ Tests live in `scorer/tests/`. Build and act evals require `scorer/solution/`.
 The runner stops the agent user's processes with SIGSTOP before collecting one snapshot into a fresh root-owned path.
 It checks that those processes have stopped. PID 1 remains available to reap processes during container cleanup.
 Forge and the rubric receive the same captured files. Neither scorer reads the live workspace again.
-The runner rejects archive links, unsafe paths, and special files.
+The snapshot contains only `src/` and `lib/`, excluding the runner-owned library paths before archiving.
+Files outside those trees, including a `.venv`, cannot fail collection.
+Nested paths such as `src/cache/` and `src/out/` remain intact.
+The runner rejects archive links, unsafe paths, and special files inside the captured trees.
 The archive is limited to 50 MiB of file contents and 20,000 files.
 Only `.sol` files under `src/` and `lib/` enter the scorer workspace.
 Submitted `lib/openzeppelin-contracts/` and `lib/forge-std/` copies never enter it.
@@ -170,26 +189,34 @@ Agent test directories and cached output do not enter the scorer workspace.
 Forge runs with a clean environment, `ffi = false`, and no filesystem cheatcode permissions.
 The agent and scorer have separate filesystems with no shared volumes.
 
-The scorer first runs the eval's reference solution in the scorer container.
+Before any player epoch, the runner discovers checks with a key-free reference run in the scorer container.
+It caches the names once per eval hash in `inputs/<hash>/checks.json` and reuses them across epochs.
 Its test functions define `forge:<test path>:<suite>:<function signature>` checks. `forge:compile` always accompanies them.
-The reference must pass. A broken reference produces an infrastructure error and requires an eval fix.
+The reference must pass. A broken reference stops preparation before player work starts and requires an eval fix.
 Forge runs only tests under `test/`. Agent functions outside that expected set cannot add checks.
-Compilation failure fills every Forge check with the compiler reason. A setup failure fills that suite's missing tests.
+Compilation or submission output-limit failure fills every eval check with its reason.
+A setup failure fills that suite's missing tests.
 Workspace failures fail all the eval's Forge and rubric checks with the snapshot reason.
 The fixed set keeps the same denominator across successful and failed submissions.
 Free checks omit rubric questions; paid epochs include them.
 
 `scorer/rubric.md` has one `## stable_name` heading per question, followed by its yes-or-no question.
 Each question becomes `rubric:stable_name`, independent of its position in the file.
-The grader receives the submitted Solidity files used by Forge, including other dependencies under `lib/`.
+The grader receives source contents from Forge's build info, with the agent's `src/` files first.
+Imported dependencies under `lib/` follow. Unused libraries and private tests never enter the evidence.
 It excludes the image's runner-owned dependencies and tells the grader where those dependencies come from.
 It skips files above 100,000 bytes or beyond a 300,000-byte total, then considers smaller later files.
-Every omitted file appears in the grader request. Incomplete evidence always fails the rubric checks.
+Every omitted file appears in the grader request. The grader decides from the available evidence and reports uncertainty.
+The runner retains that verdict even when files exceed the cap.
+Files precede the question in the request, so later questions share a cacheable prefix.
 It receives no tools and must return a boolean `passed` and a one-line `reason` in JSON.
 The request uses a structured response schema. The parser also accepts JSON inside prose or Markdown fences.
-Each question permits two calls. Invalid replies or failed requests retry only the grader and then fail that question.
-Grader budget exhaustion fails the rubric checks. It cannot trigger another agent epoch.
+The parser searches JSON objects for the expected keys, including inside wrappers or after unrelated braces.
+Provider failures, exhausted grader budgets, and two invalid replies produce `status: error`.
+Verdicts completed before a later grader error remain in the row.
+An error can repeat the player epoch within the retry cap. Snapshot persistence and regrading remain deferred.
 Grader calls use Inspect's `grader` role for separate token and cost accounting.
+Scorer options in logs contain only the eval ID and hash. The scorer resolves captured files in process.
 
 ## Compose rules
 
@@ -204,7 +231,14 @@ Custom Docker builds are rejected because their contexts can include scorer file
 Stock image builds use the runner-owned `images/` directory as their context.
 Host environment inheritance is rejected. Service environment values must be explicit.
 Decoded YAML values cannot contain `$VAR` or `${VAR}` substitutions. `$$` remains a literal dollar sign.
-The agent and scorer cannot override loader or shell startup environment variables, which also affect privileged collection commands.
+Only plain strings, numbers, booleans, and null are accepted as YAML scalars. Binary and timestamp values are rejected.
+Compose receives the validated, re-serialized document under `inputs/<hash>/compose.yaml`, never the author's bytes.
+The agent and scorer cannot override loader or shell startup environment variables.
+Every privileged collector command and scorer command uses a runner-owned environment and fixed executable paths.
+Author values such as `TAR_OPTIONS`, `PATH`, and `FOUNDRY_FFI` cannot alter those commands.
+
+The normal pytest suite skips Docker proofs. Run `uv run pytest -q --run-docker -m docker` to include them.
+The proofs cover Compose normalization, collection, compiled evidence, library ownership, and frozen writers.
 
 Step 4 can add chain images and private services without changing the agent solver.
 It still needs service setup and act reference preparation. No setup script runs in this step.
