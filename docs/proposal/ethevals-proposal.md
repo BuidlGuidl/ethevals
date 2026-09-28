@@ -1,8 +1,8 @@
 # ETH Evals system proposal
 
-Labels: **measured** means checked on 2026-09-28; **inferred** means reasoned from what we checked; **guess** means no evidence; **illustrative** means a made-up example.
-
 What already exists, and what we propose.
+
+Labels: **measured** means checked on 2026-09-28; **inferred** means reasoned from what we checked; **guess** means no evidence; **illustrative** means a made-up example.
 
 Research from 2026-09-28 on existing Ethereum eval projects, Hugging Face and Inspect. Unless marked otherwise, facts were checked that day. Companion docs: [publishing ethevals to Hugging Face](./publishing-ethevals-to-hugging-face.md) and [ethevals on Inspect: the ERC-20 example](./ethevals-on-inspect-erc20-example.md).
 
@@ -176,7 +176,7 @@ flowchart LR
         RESULTS --> SITE["our site"]
         CI -->|"auto deploy"| SITE
     end
-    CI -->|"auto publish"| HF["ethereum-foundation/hf-ethevals-dataset<br/>EF org on Hugging Face"]
+    CI -->|"on release: auto publish as HF pull request"| HF["ethereum-foundation/hf-ethevals-dataset<br/>EF org on Hugging Face"]
     CONTRIBUTORS -.->|"add by hand"| HF
 ```
 

@@ -40,7 +40,7 @@ prompt: |
   reply with just the selector, lowercase, starting with 0x. nothing else.
 ```
 
-`grader/answer.txt` holds `0x23b872dd`. That answer is measured: `cast sig "transferFrom(address,address,uint256)"` prints it. The prompt asks for lowercase because our `answer.txt` grader is an exact match after trimming (measured, the draft spec (PR #4)).
+`grader/answer.txt` holds `0x23b872dd`. That answer is measured: `cast sig "transferFrom(address,address,uint256)"` prints it. The prompt asks for lowercase because our `answer.txt` grader is an exact match after trimming (measured, draft spec in PR #4).
 
 ### The build
 
@@ -118,7 +118,7 @@ contract PointsTokenTest is Test {
 }
 ```
 
-One run of the build gives six checks, four from the tests and two from the rubric. The run passes only if all six pass (measured, the draft spec (PR #4)). This eval needs no chain container, because forge runs the tests in its own in-memory EVM (inferred).
+One run of the build gives six checks, four from the tests and two from the rubric. The run passes only if all six pass (measured, draft spec in PR #4). This eval needs no chain container, because forge runs the tests in its own in-memory EVM (inferred).
 
 ## Part 2: what changes per mode
 
