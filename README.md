@@ -25,6 +25,9 @@ docker compose -f inspect-runner/ethevals/images/stock.compose.yaml build defaul
 The image includes Foundry 1.5.1, Solidity 0.8.30, OpenZeppelin 5.4.0, and forge-std 1.9.7.
 The last two dependencies live in a root-owned directory. Submitted copies cannot replace them during grading.
 It also supplies Node 20.11.0 and ripgrep for OpenCode. Rebuild the image after pulling runner changes.
+The image tag hashes `Dockerfile` and `foundry.toml`. Tests reject a tag that no longer matches those inputs.
+After changing either input, run `uv run python inspect-runner/ethevals/images/tag.py`.
+Use its output for both image tags in `stock.compose.yaml`, then rebuild.
 
 ## Run without a key
 
@@ -87,15 +90,35 @@ This guess is not a spending cap. Actual slugs, prices, and paid model behavior 
 
 The agents use Claude Code 2.1.274, Codex CLI 0.158.0, and OpenCode 1.18.33.
 Kimi and GLM share OpenCode. All four models default to high effort in the configuration.
-Claude Code receives its `effort` option. Codex receives `model_reasoning_effort`.
-Codex uses code mode. Its factory converts JSON tool replies into the custom call type that Codex expects.
-Inspect applies the configured reasoning effort to every bridged model request, including OpenCode requests.
-OpenCode uses an Anthropic protocol identifier to reach the bridge, which selects the configured Kimi or GLM model.
-That identifier also affects OpenCode's prompt and tools. It does not select the paid model.
+
+| Agent | CLI identity | CLI effort setting |
+| --- | --- | --- |
+| Claude Code | `claude-opus-5-5` | `CLAUDE_CODE_EFFORT_LEVEL=high` |
+| Codex CLI | `gpt-6-sol` | `model_reasoning_effort="high"` |
+| OpenCode with Kimi | `openrouter/moonshotai/kimi-k3` | Model option `reasoning.effort=high` |
+| OpenCode with GLM | `openrouter/z-ai/glm-5.3` | Model option `reasoning.effort=high` |
+
+`agent_model_config` selects each CLI's identity. OpenCode selects its Kimi prompt for Kimi and its default prompt for GLM.
+Its provider definitions live in [opencode-models.json](inspect-runner/ethevals/images/opencode-models.json).
+Both use OpenRouter's `top_provider` limits of 1,048,576 context tokens and 943,718 output tokens, checked September 28, 2026.
+These are catalog limits. They do not promise that every routed provider supports the same limits.
+Source: [OpenRouter model catalog](https://openrouter.ai/api/v1/models).
+The container gets a dummy OpenRouter credential. Inspect routes model calls to the configured host-side model.
+
+Inspect also sets the configured backend effort. Its default bridge drops the CLI's generation settings before that step.
+The proofs record the raw CLI requests separately, so the backend setting cannot conceal a missing CLI effort.
+Codex uses code mode. A model adapter repairs Inspect 0.3.271's custom-call conversion while preserving its event consumer.
+It converts only declared custom calls with exactly one string `input` and no parse error.
+All agent factories set refusal retries to zero. Inspect's provider retries remain separate.
 
 Each agent gets the Exa HTTP MCP server from `search_provider`.
-Claude Code disallows `WebSearch`, Codex sets `web_search="disabled"`, and OpenCode disables `websearch` in its configuration.
-Exa's keyless endpoint can rate-limit concurrent agents. The containers also permit shell commands and page fetches.
+Claude Code disallows `WebSearch`, and Codex sets `web_search="disabled"`.
+These settings keep search on Exa instead of each provider's hosted search API.
+OpenCode 1.18.33 does not register `websearch` for OpenRouter unless its optional search flags are enabled.
+Its built-in search also calls keyless Exa. The runner leaves its optional search flags unset.
+Claude Code retains `WebFetch`; OpenCode retains `webfetch`. Codex has no native page-fetch tool.
+All four agents retain Exa search and fetch, plus a shell with network access.
+Exa's keyless endpoint can rate-limit concurrent agents.
 
 Inspect also accepts `ANTHROPIC_AUTH_TOKEN`, including a subscription token from `claude setup-token`.
 Using that token this way is against Anthropic's terms.
@@ -191,8 +214,11 @@ env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AU
 Select `opus`, `codex`, `kimi`, or `glm` with `--model`. The default is `opus`.
 The reference script sends a shell tool call that writes the reference solution.
 The empty script leaves the workspace untouched. Both run Forge and the scripted rubric grader.
-The scripts assert the expected row status, named checks, effort, Exa tools, and absence of built-in search.
-The Docker regression tests also cover hostile Compose environments and workspace contents:
+Each proof makes one real Exa search and checks its result.
+The scripts check row status, named checks, raw CLI effort, and absence of built-in search.
+OpenCode proofs also check its model identity and selected system prompt.
+`cli-requests.jsonl` records the CLI requests before Inspect merges model settings.
+The Docker tests run both scripts for all four agents, plus the existing Compose and workspace proofs:
 
 ```sh
 env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN uv run pytest -q --run-docker -m docker

@@ -17,7 +17,7 @@ Modes use the glossary names directly: `vanilla`, `internet`, and `skills`.
 The runner selects only modes that each eval declares.
 `run` defaults to vanilla. `check` selects vanilla for quizzes and internet for other types.
 An eval without the selected mode is skipped. A selection with no eligible evals reports an error.
-The internet mode supports Claude Code. The skills mode is not implemented.
+The internet mode supports Claude Code, Codex CLI, and OpenCode. The skills mode is not implemented.
 The folder path supplies the eval ID and pillar.
 Targets stay under `scorer/`.
 
@@ -44,7 +44,7 @@ The target scorer accepts these fields:
 A quiz with `choices` requires the `choice` method and letter targets, such as `C`.
 The solver uses Inspect's `multiple_choice()` path without shuffled choices or chain-of-thought prompts.
 Other vanilla quizzes use `generate()` without tools.
-Internet quizzes send the same formatted question through Claude Code and use the same target scorer.
+Internet quizzes send the same formatted question through the selected agent and use the same target scorer.
 For `match` and `choice`, the reference check only proves that the target matches itself.
 For example, `pattern: "ERC ([0-9]+)"` and `target: "8004"` need `reference: "ERC 8004"`.
 
@@ -135,7 +135,8 @@ The empty case leaves the workspace untouched.
 Both cases retain the task, scorer registry, log, and results exporter.
 The rubric registry entry sets `free_check=False` and stays out of free checks.
 
-Each `AGENTS` entry in `agents.py` holds one solver factory and its version. Step 3 can add factories there.
+Each `AGENTS` entry in `agents.py` holds one solver factory and its version.
+`Harness.build()` supplies the version and shared Exa server configuration to that factory.
 `actors.py` constructs the player and grader once, with their models, effort, and prices.
 `build_task()` receives these actors. Check-only solvers and delays live in `checks.py`.
 `Eval.sample()` already maps workspace files to `/workspace/` and keeps scorer files separate.
@@ -147,8 +148,8 @@ The grader entry has `model`, `effort`, `max_tokens`, `prices`, and `price_sourc
 Effort accepts `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
 `validate` rejects other effort values before a paid run.
 It also rejects harness names absent from `AGENTS`. A null harness supports vanilla mode only.
-Only Opus currently declares a harness. The other configured models remain available for vanilla quizzes.
-`agent_model_config` supplies the harness's model description.
+All four configured models declare a harness and remain available for vanilla quizzes.
+`agent_model_config` supplies the CLI model identity.
 Actor construction registers prices once, including names absent from Inspect's database.
 `search_provider` holds the Exa MCP URL. A null value disables that MCP server.
 `time_limit` supplies the fallback limit. `time_limits` sets limits by eval type.
@@ -239,15 +240,42 @@ Author values such as `TAR_OPTIONS`, `PATH`, and `FOUNDRY_FFI` cannot alter thos
 
 The normal pytest suite skips Docker proofs. Run `uv run pytest -q --run-docker -m docker` to include them.
 The proofs cover Compose normalization, collection, compiled evidence, library ownership, and frozen writers.
+They also run reference and untouched-workspace scripts through each of the four configured agents.
+Each agent proof makes one real Exa search and records the raw CLI effort in `cli-requests.jsonl`.
+OpenCode proofs check the selected system prompt and model identity.
 
 Step 4 can add chain images and private services without changing the agent solver.
 It still needs service setup and act reference preparation. No setup script runs in this step.
 
 The agent registry includes Claude Code, Codex CLI, and OpenCode, with pinned versions beside their factories.
 Kimi and GLM use the same OpenCode factory. The player supplies the real model and effort to Inspect.
-Codex's factory restores custom tool-call types from the CLI's declarations because OpenRouter returns JSON function calls.
-All three factories configure Exa HTTP MCP tools and disable built-in web search.
+OpenCode receives `openrouter/moonshotai/kimi-k3` or `openrouter/z-ai/glm-5.3` from configuration.
+It selects the Kimi prompt for Kimi and the default prompt for GLM.
+`images/opencode-models.json` declares their provider metadata, including context and output limits.
+The limits use OpenRouter's `top_provider` values checked September 28, 2026.
+See the [agent configuration and sources](../README.md#run-with-openrouter).
+The factory supplies a dummy OpenRouter credential inside the container. The bridge selects the host-side model.
+
+Claude Code gets `CLAUDE_CODE_EFFORT_LEVEL`; Codex gets `model_reasoning_effort`.
+OpenCode gets the model option `reasoning.effort`. All receive the configured effort value, currently `high`.
+Inspect separately applies the backend effort after dropping CLI generation settings.
+The proof records requests before that conversion, without setting effort on its mock model.
+
+Inspect 0.3.271 forwards namespaced custom tools to non-OpenAI providers but does not restore the reply type.
+`CodexModel` converts well-formed replies through the supported `model_aliases` option.
+The bridge still owns generation and delivers events to inspect_swe's `CodexConsumer`.
+Malformed replies remain function calls for Codex to reject. A regression test detects when Inspect fixes the conversion.
+All factories explicitly set `retry_refusals=0`.
+
+All agents get Exa's HTTP MCP search and fetch tools.
+Claude Code disables `WebSearch`; Codex disables `web_search` to avoid provider-hosted search APIs.
+OpenCode's OpenRouter provider does not register `websearch` by default.
+Its built-in search calls the same keyless Exa endpoint when enabled through optional search flags.
+Claude Code keeps `WebFetch`, and OpenCode keeps `webfetch`. Codex has no native page-fetch tool.
+Every agent keeps a shell with network access.
 The stock image includes Node 20.11.0 and ripgrep for OpenCode.
+Its tag hashes `Dockerfile` and `foundry.toml`; tests reject stale tags.
+After changing either input, run `uv run python inspect-runner/ethevals/images/tag.py` and update both stock Compose image tags.
 The bridge downloads and stages the pinned agent binaries at runtime.
 
 The [paid ADR test](../README.md#run-the-paid-adr-0002-test) gives exact commands and expected row fields.

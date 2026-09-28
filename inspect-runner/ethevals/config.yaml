@@ -34,11 +34,13 @@ models:
     model: openrouter/moonshotai/kimi-k3
     effort: high
     harness: opencode
+    agent_model_config: openrouter/moonshotai/kimi-k3
     price_source: guess
     prices: {input: 0.6, output: 2.5, input_cache_read: 0.1, input_cache_write: 0.6}
   glm:
     model: openrouter/z-ai/glm-5.3
     effort: high
     harness: opencode
+    agent_model_config: openrouter/z-ai/glm-5.3
     price_source: guess
     prices: {input: 1.0, output: 3.2, input_cache_read: 0.2, input_cache_write: 1.0}

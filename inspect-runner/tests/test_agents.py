@@ -1,45 +1,40 @@
 import asyncio
 import json
+import inspect
+from pathlib import Path
+import yaml
 
 import pytest
 from pydantic import ValidationError
 from inspect_ai.model import ChatMessageUser, GenerateConfig, ModelOutput, get_model
 from inspect_ai.tool import ToolInfo
+from inspect_ai.agent import AgentState
+from inspect_ai.agent._bridge.types import AgentBridge
+from inspect_ai.agent._bridge.util import bridge_generate, in_bridge_model_generate
+from inspect_ai.agent._bridge.responses_impl import (
+    inspect_responses_api_request_impl, responses_output_items_from_assistant_message, tools_from_responses_tool,
+)
+from inspect_ai.model._openai import chat_tool_calls_from_openai
+from openai.types.chat import ChatCompletionMessage
+from inspect_swe._codex_cli._events.consumer import CodexConsumer
 
 from ethevals import agents
 from ethevals.actors import player
 from ethevals.config import Config, load_config
+from ethevals.images.tag import image_tag
 
 
 @pytest.mark.parametrize("key,harness", [
     ("opus", "claude_code"), ("codex", "codex_cli"),
     ("kimi", "opencode"), ("glm", "opencode"),
 ])
-def test_agent_settings(monkeypatch, key, harness):
+def test_registry_builds_solver(key, harness):
     config = load_config()
-    config.search_provider = "https://example.org/search"
-    config.models[key].effort = "medium"
-    monkeypatch.setattr(agents, harness, lambda **kwargs: kwargs)
-    monkeypatch.setattr(agents, "as_solver", lambda agent: agent)
-    settings = agents.AGENTS[harness].factory(config, config.models[key])
-    assert settings["cwd"] == "/workspace"
-    assert [server.model_dump(exclude_none=True) for server in settings["mcp_servers"]] == [
-        {"type": "http", "name": "exa", "tools": "all", "url": "https://example.org/search"},
-    ]
-    assert settings["version"] == agents.AGENTS[harness].version
-    if harness == "claude_code":
-        assert settings["effort"] == "medium"
-        assert settings["disallowed_tools"] == ["WebSearch"]
-        assert settings["retry_uncaught_errors"] == 0
-    elif harness == "codex_cli":
-        assert settings["config_overrides"] == {"model_reasoning_effort": '"medium"'}
-        assert settings["web_search"] == "disabled"
-        assert settings["model_config"] == "gpt-6-sol"
-    else:
-        assert json.loads(settings["env"]["OPENCODE_CONFIG_CONTENT"]) == {"tools": {"websearch": False}}
-        assert settings["opencode_model"] == "anthropic/claude-sonnet-4-5"
-    config.search_provider = None
-    assert agents.AGENTS[harness].factory(config, config.models[key])["mcp_servers"] == []
+    for search in ["https://example.org/search", None]:
+        config.search_provider = search
+        solve = agents.AGENTS[harness].build(config, config.models[key])
+        assert inspect.iscoroutinefunction(solve)
+        assert list(inspect.signature(solve).parameters) == ["state", "generate"]
 
 
 @pytest.mark.parametrize("key,model,harness", [
@@ -66,19 +61,94 @@ def test_unknown_harness_fails_config_validation():
         Config.model_validate(data)
 
 
-def test_codex_restores_custom_tool_calls_from_json_replies():
-    reply = ModelOutput.for_tool_call("mockllm/model", "exec", {"input": "text(42);"})
-    reply.choices[0].message.tool_calls += ModelOutput.for_tool_call(
-        "mockllm/model", "wait", {"cell_id": "cell-1"},
-    ).choices[0].message.tool_calls
-    model = get_model("mockllm/model", custom_outputs=[reply])
-    output = asyncio.run(agents.codex_tool_types(
-        model, [ChatMessageUser(content="Run the tools.")],
-        [ToolInfo(name="exec", description="Run JavaScript", options={"custom_format": {"type": "text"}}),
-         ToolInfo(name="wait", description="Wait for execution")],
-        "auto", GenerateConfig(),
+@pytest.mark.parametrize("arguments,expected_type,expected", [
+    ('{"input":"text(42);"}', "custom_tool_call", "text(42);"),
+    ('{}', "function_call", {}),
+    ('{"input":', "function_call", {}),
+    ('{"code":"a","input":"b"}', "function_call", {"code": "a", "input": "b"}),
+    ('{"input":7}', "function_call", {"input": 7}),
+])
+def test_codex_parser_to_serializer(arguments, expected_type, expected):
+    tools = tools_from_responses_tool({
+        "type": "namespace", "name": "functions", "description": "Tools", "tools": [
+            {"type": "custom", "name": "exec", "description": "Run JavaScript", "format": {"type": "text"}},
+        ],
+    }, None, None, True)
+    message = ChatCompletionMessage(role="assistant", tool_calls=[{
+        "id": "call_1", "type": "function", "function": {"name": "exec", "arguments": arguments},
+    }])
+    reply = ModelOutput.for_tool_call("mockllm/model", "exec", {})
+    reply.message.tool_calls = chat_tool_calls_from_openai(message, tools)
+    model = agents.CodexModel(get_model("mockllm/model", custom_outputs=[reply], memoize=False))
+    output = asyncio.run(model.generate([ChatMessageUser(content="Run code")], tools=tools))
+    call = responses_output_items_from_assistant_message(output.message)[-1]
+    assert call.type == expected_type
+    assert (call.input if call.type == "custom_tool_call" else json.loads(call.arguments)) == expected
+    assert bool(output.message.tool_calls[0].parse_error) == (arguments == '{"input":')
+
+
+@pytest.mark.parametrize("options", [None, {
+    "custom_format": {"type": "text"}, "__responses_namespace__": ("other", "Other tools"),
+}])
+def test_codex_keeps_bridge_events_and_ordinary_functions(options):
+    events = []
+    markers = []
+
+    class Sink(CodexConsumer):
+        def on_pending(self, event):
+            events.append("pending")
+            super().on_pending(event)
+
+        def on_complete(self, event):
+            events.append("complete")
+            super().on_complete(event)
+
+    def reply(*args):
+        markers.append(in_bridge_model_generate())
+        return ModelOutput.for_tool_call("mockllm/model", "exec", {"input": "ordinary"})
+
+    model = agents.CodexModel(get_model("mockllm/model", custom_outputs=reply, memoize=False))
+    messages = [ChatMessageUser(content="Run code")]
+    bridge = AgentBridge(AgentState(messages=messages), model_event_sink=Sink())
+    output, _ = asyncio.run(bridge_generate(
+        bridge, model, messages, [ToolInfo(name="exec", description="An ordinary function", options=options)], "auto", GenerateConfig(),
     ))
-    assert [(call.function, call.type, call.arguments) for call in output.choices[0].message.tool_calls] == [
-        ("exec", "custom", {"input": "text(42);"}),
-        ("wait", "function", {"cell_id": "cell-1"}),
-    ]
+    assert events == ["pending", "complete"]
+    assert markers == [True]
+    assert output.message.tool_calls[0].type == "function"
+    assert output.message.tool_calls[0].arguments == {"input": "ordinary"}
+
+
+def test_inspect_still_needs_custom_call_adapter():
+    """Delete our adapter when Inspect restores the declared custom type itself."""
+    model = get_model("mockllm/model", custom_outputs=[
+        ModelOutput.for_tool_call("mockllm/model", "exec", {"input": "text(42);"}),
+    ], memoize=False)
+    bridge = AgentBridge(AgentState(messages=[]), model_aliases={"inspect": model})
+    response = asyncio.run(inspect_responses_api_request_impl({
+        "model": "inspect", "input": [{"role": "user", "content": "Run code"}],
+        "tools": [{"type": "namespace", "name": "functions", "description": "Tools", "tools": [
+            {"type": "custom", "name": "exec", "description": "Run JavaScript", "format": {"type": "text"}},
+        ]}],
+    }, None, None, None, bridge))
+    call = response.output[-1]
+    assert call.type == "function_call", "Inspect now restores custom calls. Delete CodexModel and this test."
+    assert json.loads(call.arguments) == {"input": "text(42);"}
+
+
+def test_stock_image_tag_matches_inputs():
+    directory = Path(agents.__file__).with_name("images")
+    compose = yaml.safe_load((directory / "stock.compose.yaml").read_text())
+    assert {service["image"] for service in compose["services"].values()} == {image_tag(directory)}, (
+        "Image inputs changed. Run python inspect-runner/ethevals/images/tag.py and update both compose image tags."
+    )
+
+
+def test_image_tag_changes_with_each_input(tmp_path):
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
+    (tmp_path / "foundry.toml").write_text("[profile.default]\n")
+    original = image_tag(tmp_path)
+    (tmp_path / "Dockerfile").write_text("FROM debian\n")
+    changed = image_tag(tmp_path)
+    (tmp_path / "foundry.toml").write_text("[profile.default]\noptimizer = true\n")
+    assert len({original, changed, image_tag(tmp_path)}) == 3
