@@ -104,6 +104,13 @@ The exporter reads complete logs so long reasons survive Inspect's summary trunc
 It uses `role_usage["grader"]` even when the grader and model under test share a model name.
 Synthetic setup-failure rows have unknown costs for both roles.
 
+## Site catalog
+
+Run `uv run ethevals catalog --output site/.catalog` from the repository root to export public eval declarations.
+The command uses the same loader and captured file manifest as execution and hashing.
+`catalog.json` contains declarations, eval IDs, pillars, and hashes. It excludes scorer contents and workspace files.
+The site's normal build runs this command and reads schema v3 rows. See [the site README](../site/README.md).
+
 ## Extension hooks
 
 `SCORERS` in `scorers.py` owns each kind's schema, validation, sample fields, reference reply, and scorer factory.

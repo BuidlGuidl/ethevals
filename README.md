@@ -150,3 +150,13 @@ env -u OPENROUTER_API_KEY uv run python inspect-runner/tests/prove_agent.py empt
 The reference script sends a Bash tool call that writes the reference solution.
 The empty script leaves the workspace untouched. Both run Forge and the scripted rubric grader.
 The scripts assert the expected row status and named checks.
+
+## Build the results board
+
+From `site/`, run `pnpm install --frozen-lockfile && pnpm build` with Node.js 22 or later.
+Real builds also require uv and Python 3.13 to export the runner's eval catalog.
+The board reads `results/rows.jsonl` by default. `ETHEVALS_ROWS` selects another rows file.
+The site accepts schema v3 rows and uses the runner's catalog for declarations and hashes.
+The static export goes to `site/out/`. Without real rows, it shows an empty state.
+Use `ETHEVALS_SAMPLE=1 pnpm build` for the labelled sample board.
+[The site README](site/README.md) covers viewing the sample, results paths, and log URLs.
