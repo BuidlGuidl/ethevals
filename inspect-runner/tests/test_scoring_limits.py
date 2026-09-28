@@ -1,4 +1,4 @@
-"""Combined-review regressions through production scoring and row export."""
+"""Scoring limits and failure rows through Inspect."""
 import json
 import time
 from dataclasses import replace
@@ -208,14 +208,3 @@ def test_exa_rate_limit_in_transcript_counts_once(scoring_case, code_mode):
     assert (row["status"], row["search_calls"], row["search_failed"], row["search_rate_limited"]) == ("passed", 1, 1, 1)
     assert valid_search_result(result) is False
     assert valid_search_result('Title: ERC-20\nURL: https://ethereum.org/erc20\nContent: Token standard') is True
-
-
-def test_optional_exa_key_only_reaches_exa(monkeypatch):
-    from ethevals.agents import Harness
-    config = load_config()
-    monkeypatch.setenv("EXA_API_KEY", "test key+value")
-    harness = Harness(lambda model, **settings: settings["mcp_servers"], "test")
-    servers = harness.build(config, config.models["opus"])
-    assert servers[0].url == "https://mcp.exa.ai/mcp?exaApiKey=test+key%2Bvalue"
-    config.search_provider = "https://example.org/mcp"
-    assert harness.build(config, config.models["opus"])[0].url == "https://example.org/mcp"

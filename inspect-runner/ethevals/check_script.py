@@ -8,7 +8,7 @@ from inspect_ai.util import sandbox, OutputLimitExceededError
 from inspect_ai.log import transcript
 
 from .config import Declaration
-from .sandboxes import runner_exec
+from .sandboxes import runner_exec, scoring_exec
 from .scoring_base import Submission, SubmissionFailed, checks_score, failed_checks
 
 SETUP_TIMEOUT = 120
@@ -33,7 +33,8 @@ def script_cache_inputs(images):
 
 async def script_result(name, box=None):
     box = box if box is not None else sandbox("chain")
-    result = await runner_exec(box, ["/bin/bash", "-c",
+    execute = scoring_exec if name == "check" else runner_exec
+    result = await execute(box, ["/bin/bash", "-c",
         '/bin/rm -f /eval/script.stdout.pipe /eval/script.stderr.pipe; '
         '/usr/bin/mkfifo /eval/script.stdout.pipe /eval/script.stderr.pipe || exit 125; '
         '{ /usr/bin/head -c 1048577 > /eval/script.stdout; status=$?; /bin/cat > /dev/null; exit "$status"; } < /eval/script.stdout.pipe & out=$!; '

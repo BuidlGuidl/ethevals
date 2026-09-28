@@ -1,6 +1,5 @@
 import argparse
 import json
-import math
 import os
 import subprocess
 from pathlib import Path
@@ -12,8 +11,8 @@ from .runner import run
 from .actors import select_actors
 from .hf import DEFAULT_REPO, write_hf
 from .publish import publish_logs
-from .planning import plan
-from .rows import read_rows
+from .planning import plan, budget_check
+from .rows import previous_rows
 
 
 def positive(value: str) -> int:
@@ -44,7 +43,8 @@ def main() -> int:
         parsers[name].add_argument("--models", nargs="+", help="Model names from config.yaml.")
         parsers[name].add_argument("--answer", choices=["reference", "empty", "default"], help="Use mockllm without an API call.")
         parsers[name].add_argument("--rows", type=Path, help="Committed rows used to find missing epochs.")
-    parsers["plan"].add_argument("--budget", type=float, help="Exit 1 if the worst case exceeds this USD budget.")
+        parsers[name].add_argument("--budget", type=float, help="USD ceiling. Required for missing paid epochs.")
+        parsers[name].add_argument("--wall-seconds", type=float, help="Select epochs within this serial wall-time reserve.")
     parsers["check"].set_defaults(models=None, answer=None)
     parsers["export-hf"].add_argument("--hf-repo", default=os.environ.get("ETHEVALS_HF_REPO", DEFAULT_REPO))
     parsers["export-hf"].add_argument("--license", default=os.environ.get("ETHEVALS_DATASET_LICENSE"), help="HF dataset license identifier. Unset means undecided.")
@@ -82,33 +82,23 @@ def main() -> int:
             for evaluation in evals:
                 print(f"{evaluation.id} {evaluation.hash}")
             return 0
-        if args.models and args.answer:
-            raise ValueError("--models cannot be combined with key-free checks")
-        unknown = set(args.models or []) - config.models.keys()
-        if unknown:
-            raise ValueError(f"Unknown model names: {', '.join(sorted(unknown))}")
         if args.mock_delay < 0 or (args.mock_delay and not (args.answer or args.command == "check")):
             raise ValueError("--mock-delay requires a key-free check and a nonnegative value")
         if args.command == "plan":
-            if args.budget is not None and (not math.isfinite(args.budget) or args.budget < 0):
-                raise ValueError("--budget must be a finite, nonnegative USD amount")
             players, _ = select_actors(config, args.models, args.modes, args.answer, planning=True)
-            report = plan(evals, config, players, read_rows(args.rows or args.output / "rows.jsonl"),
-                          epochs=args.epochs, retry_errors=args.retry_errors)
-            report["budget_usd"] = args.budget
-            report["within_budget"] = args.budget is None or report["worst_case_usd"] <= args.budget
+            report = budget_check(plan(evals, config, players, previous_rows(args.output, args.rows),
+                          epochs=args.epochs, retry_errors=args.retry_errors, wall_seconds=args.wall_seconds), args.budget)
             print(json.dumps(report, indent=2))
             return 0 if report["within_budget"] else 1
-        if args.command == "run" and not args.answer and not os.environ.get("OPENROUTER_API_KEY"):
-            raise ValueError("OPENROUTER_API_KEY is required. Use --answer reference for a key-free epoch.")
         answers = ["reference", "empty"] if args.command == "check" else [args.answer]
         passed = True
         for answer in answers:
             output = args.output / answer if args.command == "check" else args.output
-            players, grade = select_actors(config, args.models, args.modes, answer, args.mock_delay)
-            success, rows = run(evals, config, output, players=players, grade=grade,
+            success, rows = run(evals, config, output, models=args.models, modes=args.modes, answer=answer, delay=args.mock_delay,
                                 epochs=args.epochs, fresh=args.command == "check", retry_errors=args.retry_errors,
-                                rows_file=args.rows if args.command == "run" else None)
+                                rows_file=args.rows if args.command == "run" else None,
+                                budget=args.budget if args.command == "run" else None,
+                                wall_seconds=args.wall_seconds if args.command == "run" else None)
             if args.command == "check":
                 success = success and bool(rows) and all(row["passed"] is (answer == "reference") for row in rows)
             passed = passed and success

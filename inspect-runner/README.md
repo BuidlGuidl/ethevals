@@ -71,8 +71,15 @@ It skips the write when the content is unchanged.
 `--rows results/rows.jsonl` adds committed rows to the resume record without requiring their logs.
 CI uses a fresh output directory and reads only that run's logs.
 After an abrupt kill, the logs remain the recovery source until the next command exports rows.
+The runner also exports rows if `eval()` raises. Both `plan` and `run` fold rows from these logs.
+CI rebuilds the artifact's own rows before publication and commits them with a receipt in `results/runs.json`.
+It uploads release assets afterward. A failed upload leaves paid attempts recorded.
+An unrecorded earlier CI attempt blocks new paid work and names the artifact to recover.
+Retry its publication job before the 14-day artifact expires. See the root README for local recovery commands.
+Publication uses current `main` and current results. Attempt count and completion time decide which row wins.
 The log store only grows. Retry logs never replace earlier logs.
 Rows cover the whole store, with the latest row per eval ID, eval hash, agent, mode, and epoch number.
+The fold chooses the higher attempt count, then `completed_at`. A release link enriches the same observation.
 The agent consists of harness, model, and effort. Vanilla epochs have a null harness.
 Mock answer kinds also distinguish identities so reference and empty answers cannot share results.
 Prices, grader settings, and execution limits do not change an existing epoch's identity.
@@ -93,6 +100,10 @@ The Python `run()` result also contains only the current selection. `rows.jsonl`
 
 `ethevals plan --rows results/rows.jsonl --modes vanilla internet` prints missing epochs without keys, Docker, or model calls.
 It shares epoch selection with `run` and uses the runtime's `cost_limit`, `rubric_budget`, and `max_attempts`.
+`run()` owns the paid gate. A paid run requires `--budget` before provider construction.
+Search adds `search_limit * search_price_usd` to each internet attempt's reserve.
+CI uses `--wall-seconds 16200` within its 330-minute job and reserves 60 minutes for preparation and artifact upload.
+The plan sums wall, scoring, and setup limits without assuming concurrency. Deferred epochs remain missing.
 `--budget USD` exits with code 1 when the worst-case estimate exceeds the budget.
 The plan also lists exhausted errors and an expected-cost estimate from recorded spend.
 See the root README for workflow setup and the limit on this billing estimate.
@@ -161,7 +172,7 @@ Both cases retain the task, scorer registry, log, and results exporter.
 The rubric registry entry sets `free_check=False` and stays out of free checks.
 
 Each `AGENTS` entry in `agents.py` holds one solver factory and its version.
-`Harness.build()` supplies the version and shared Exa server configuration to that factory.
+`Harness.build()` supplies the version and host-side Exa tool bridge to that factory.
 `actors.py` constructs the player and grader once, with their models, effort, and prices.
 `build_task()` receives these actors. Check-only solvers and delays live in `checks.py`.
 `Eval.sample()` already maps workspace files to `/workspace/` and keeps scorer files separate.
@@ -177,8 +188,12 @@ All four configured models declare a harness and remain available for vanilla qu
 `agent_model_config` supplies the CLI model identity.
 Actor construction registers prices once, including names absent from Inspect's database.
 Each model ID has one price schedule across both roles. Config loading rejects conflicting schedules.
-`search_provider` holds the Exa MCP URL. A null value disables that MCP server.
-`EXA_API_KEY` supplies an optional key for the configured `mcp.exa.ai` endpoint. Without it, search uses the keyless endpoint.
+`search_provider` accepts `https://mcp.exa.ai/mcp` or null. Null disables search.
+The host sends optional `EXA_API_KEY` in an HTTP header. The bridge exposes no key to any harness.
+Keyed and keyless requests use the same host-side path. Logs and agent configuration contain no key.
+`search_limit` caps requests at 20 per epoch. Failed requests consume a slot; each request returns at most five results.
+The plan reserves the configured `search_price_usd`, currently a guessed $0.05, for every slot, including keyless runs.
+Check this price before funding a run. Rows retain the limit, price, and search outcome counts.
 `time_limit` supplies the fallback working-time limit. `time_limits` sets working limits by eval type.
 An eval's `time_limit` takes precedence.
 Quizzes allow 300 working seconds; builds and acts allow 1,200. Inspect excludes retry backoff and sandbox waits.
@@ -248,7 +263,10 @@ Forge runs only tests under `test/`. Agent functions outside that expected set c
 Compilation or submission output-limit failure fills every eval check with its reason.
 A failed `constructor()` or `setUp()` fills that suite's missing tests.
 After compilation, unexplained missing names produce `status: error`.
-Signal exits and output without results or a compiler diagnostic also produce errors.
+Unknown signal exits and output without results or a compiler diagnostic also produce errors.
+Invalid Solidity bytes and confirmed OOM kills fail the fixed checks.
+Stock scorer and chain containers have 2 GiB memory limits. Docker state and cgroup counters identify OOM kills.
+Docker exec failures and capture timeouts remain errors. Only a known submission-rule violation raises `SubmissionFailed`.
 Forge streams through readers with a 10 MiB cap per stream and one extra byte to detect overflow.
 The wrapper waits for both reader process IDs before the scorer reads each file.
 The cap applies only to captured output, so Forge can write larger build-info files.
@@ -274,6 +292,7 @@ It receives no tools and must return a boolean `passed` and a one-line `reason` 
 The request uses a structured response schema. The parser requires one JSON object, with optional Markdown fences.
 Prose, wrappers, or quoted objects before a verdict count as invalid replies.
 Provider failures, exhausted grader budgets, and two invalid replies produce `status: error`.
+A schema-valid reply with an empty reason fails that rubric check with a runner-supplied reason.
 Verdicts completed before a later grader error remain in the row.
 An error can repeat the player epoch within the retry cap. Snapshot persistence and regrading remain deferred.
 Grader calls use Inspect's `grader` role for separate token and cost accounting.
@@ -281,7 +300,9 @@ Scorer options in logs contain only the eval ID and hash. The scorer resolves ca
 
 ## Compose rules
 
-Custom compose files use prebuilt images and declare `default` and `scorer` services.
+Custom Compose files declare `default` and `scorer` services.
+`prepare_compose` builds every stock image they name, just as it does for stock Compose files.
+Other service images must exist locally or be pullable. Inspect receives a normalized file without stock build directives.
 Those two services require the stock runner image and its unprivileged `agent` user.
 The `chain` service requires the computed stock chain image name. Other services can choose their own images.
 These rules keep process control and runner-owned dependencies outside the eval author's control.
@@ -416,7 +437,7 @@ The bridge still owns generation and delivers events to inspect_swe's `CodexCons
 Malformed replies remain function calls for Codex to reject. A regression test detects when Inspect fixes the conversion.
 All factories explicitly set `retry_refusals=0`.
 
-All agents get Exa's HTTP MCP search and fetch tools.
+All agents get the host-side `web_search_exa` tool through Inspect's MCP bridge.
 Rows count failed and rate-limited search results, including ordinary tool replies that contain Exa's rate-limit message.
 Agent proofs require a structured result with a title, URL, and content field.
 Claude Code disables `WebSearch`; Codex disables `web_search` to avoid provider-hosted search APIs.

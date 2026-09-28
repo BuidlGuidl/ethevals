@@ -1,11 +1,8 @@
-from inspect_ai.agent import as_solver
+from inspect_ai.agent import as_solver, BridgedToolsSpec
 from inspect_ai.model import Model
 from inspect_ai.solver import multiple_choice, solver
-from inspect_ai.tool import MCPServerConfigHTTP
 from inspect_swe import claude_code, codex_cli, opencode
 import json
-import os
-from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -17,15 +14,12 @@ class Harness:
     version: str
 
     def build(self, config, model):
-        url = config.search_provider
-        if url and os.environ.get("EXA_API_KEY"):
-            parts = urlsplit(url)
-            if parts.hostname == "mcp.exa.ai":
-                query = dict(parse_qsl(parts.query))
-                query["exaApiKey"] = os.environ["EXA_API_KEY"]
-                url = urlunsplit(parts._replace(query=urlencode(query)))
-        servers = [MCPServerConfigHTTP(type="http", name="exa", url=url)] if url else []
-        return self.factory(model, version=self.version, mcp_servers=servers)
+        from .search import web_search_exa
+        # Codex code mode calls MCP from a script, outside a direct model tool proposal.
+        # The host tool enforces the per-epoch request cap for every caller.
+        bridges = [BridgedToolsSpec(name="exa", tools=[web_search_exa(config.search_provider, config.search_limit)],
+                                   require_proposal=False)] if config.search_provider else []
+        return self.factory(model, version=self.version, bridged_tools=bridges)
 
 
 def claude(model, **settings):

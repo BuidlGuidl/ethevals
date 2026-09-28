@@ -7,7 +7,8 @@ from pathlib import Path
 
 
 def publish_logs(output: Path, repo: str, run_id: str, commit: str,
-                 *, current_hashes: dict[str, str], publish: bool = False) -> dict:
+                 *, current_hashes: dict[str, str], publish: bool = False,
+                 rows: list[dict] | None = None, resume: bool = False) -> dict:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*", repo):
         raise ValueError("GitHub repo must have the form owner/name")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", run_id):
@@ -19,7 +20,8 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
     root = output.resolve()
     if "#" in str(root):
         raise ValueError("Output path cannot contain #: gh treats it as an asset label separator")
-    rows = [json.loads(line) for line in (root / "rows.jsonl").read_text().splitlines() if line.strip()]
+    if rows is None:
+        rows = [json.loads(line) for line in (root / "rows.jsonl").read_text().splitlines() if line.strip()]
     published = {
         Path(row["log_file"]).name
         for receipt in (root / "published").glob("results-*.jsonl")
@@ -78,7 +80,12 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
     if publish and assets:
         if destination.exists():
             raise ValueError(f"{destination}: release rows already exist; choose a new run-id")
-        subprocess.run(command, check=True, stdout=subprocess.PIPE, text=True)
+        if resume and subprocess.run(["gh", "release", "view", tag, "--repo", repo],
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0:
+            subprocess.run(["gh", "release", "upload", tag, "--repo", repo, "--clobber",
+                            *[asset["source"] for asset in plan["assets"]]], check=True, stdout=subprocess.PIPE, text=True)
+        else:
+            subprocess.run(command, check=True, stdout=subprocess.PIPE, text=True)
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_suffix(".tmp")
         temporary.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in linked))

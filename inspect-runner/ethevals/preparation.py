@@ -58,7 +58,7 @@ def docker_command(command):
 def check_cache_path(evaluation, output, compose=None):
     path = compose or compose_file(evaluation.declaration.type)
     images = {name: service["image"] for name, service in read_yaml(path)["services"].items()}
-    inputs = [evaluation.hash.encode(), json.dumps(images, sort_keys=True).encode(),
+    inputs = [evaluation.hash.encode(),
               image_tag(IMAGES).encode(), (IMAGES / "foundry.toml").read_bytes(), b"scorer-discovery-v3"]
     if "chain" in images:
         inputs.append(image_tag(IMAGES, "chain").encode())
@@ -72,13 +72,6 @@ def prepare_compose(evaluation, output):
     if "compose.yaml" not in evaluation.files:
         stock = compose_file(evaluation.declaration.type)
         document = yaml.safe_load(stock.read_bytes())
-        built = {name: service for name, service in document["services"].items()
-                 if name not in {"default", "scorer"} and "build" in service}
-        if not built:
-            return stock
-        # Both stock images use names derived from their build inputs.
-        docker_command(["docker", "compose", "-f", str(stock), "build",
-                        *[name for name, service in document["services"].items() if "build" in service]])
         for service in document["services"].values():
             service.pop("build", None)
         data = yaml.safe_dump(document).encode()
@@ -86,6 +79,11 @@ def prepare_compose(evaluation, output):
         data = evaluation.files["compose.yaml"]
     path = output.resolve() / "inputs" / evaluation.hash / "compose.yaml"
     normalized = validate_compose(path, data=data)
+    images = {service["image"] for service in yaml.safe_load(normalized)["services"].values()}
+    stock = compose_file("act")
+    builders = [name for name, service in read_yaml(stock)["services"].items()
+                if "build" in service and service["image"] in images]
+    docker_command(["docker", "compose", "-f", str(stock), "build", *builders])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(normalized)
     return path

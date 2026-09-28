@@ -200,6 +200,11 @@ async def prepare_forge(box, submitted, files):
     if not cleared.success:
         raise RuntimeError(f"Cannot clear scorer workspace: {cleared.stderr}")
     inputs = build_inputs(submitted)
+    for name, data in inputs.items():
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError:
+            raise SubmissionFailed(f"Solidity source is not valid UTF-8: {name}") from None
     inputs.update({"test/" + name.removeprefix("scorer/tests/"): data
                    for name, data in files.items() if name.startswith("scorer/tests/")})
     inputs["foundry.toml"] = (IMAGES / "foundry.toml").read_bytes()
@@ -220,8 +225,9 @@ async def prepare_forge(box, submitted, files):
 
 
 async def forge(box, *args):
+    from .sandboxes import scoring_exec
     # Read bytes separately so Inspect records sizes, never private code frames.
-    result = await runner_exec(box, ["/bin/bash", "-c",
+    result = await scoring_exec(box, ["/bin/bash", "-c",
         '/bin/rm -f /tmp/forge.stdout.pipe /tmp/forge.stderr.pipe; '
         '/usr/bin/mkfifo /tmp/forge.stdout.pipe /tmp/forge.stderr.pipe || exit 125; '
         '{ /usr/bin/head -c 10485761 > /tmp/forge.stdout; status=$?; /bin/cat > /dev/null; exit "$status"; } < /tmp/forge.stdout.pipe & out=$!; '
@@ -312,7 +318,9 @@ def rubric_reply(text: str) -> dict:
     except ValueError:
         reply = None
     if (isinstance(reply, dict) and set(reply) == {"passed", "reason"} and type(reply["passed"]) is bool
-            and isinstance(reply["reason"], str) and reply["reason"].strip()):
+            and isinstance(reply["reason"], str)):
+        if not reply["reason"].strip():
+            return {"passed": False, "reason": "The grader could not justify a verdict."}
         return {"passed": reply["passed"], "reason": " ".join(reply["reason"].split())}
     raise ValueError("Grader must return a single JSON object with boolean passed and nonempty reason.")
 
@@ -475,14 +483,11 @@ def named_checks(eval_id: str, eval_hash: str) -> Scorer:
         submission = Submission()
         try:
             with anyio.fail_after(scoring_seconds(evaluation) + SCORING_OVERHEAD_SECONDS):
-                try:
-                    if any(SCORERS[item.kind].capture for item in selected):
-                        await stop_agent()
-                    for item in selected:
-                        if capture := SCORERS[item.kind].capture:
-                            await capture(item, evaluation, submission)
-                except (ValueError, TimeoutError, tarfile.TarError, OutputLimitExceededError) as error:
-                    raise SubmissionFailed(f"Grading capture failed: {error}") from error
+                if any(SCORERS[item.kind].capture for item in selected):
+                    await stop_agent()
+                for item in selected:
+                    if capture := SCORERS[item.kind].capture:
+                        await capture(item, evaluation, submission)
                 for item in selected:
                     grade = SCORERS[item.kind].build(item, evaluation)
                     result = await grade(state, target, submission)

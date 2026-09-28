@@ -27,7 +27,17 @@ def main():
     parser.add_argument("--model", choices=["opus", "codex", "kimi", "glm"], default="opus")
     parser.add_argument("--eval", default="evals/building/erc20-points-token")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--exa-canary", action="store_true")
     args = parser.parse_args()
+    if args.exa_canary:
+        import ethevals.search as search
+        os.environ["EXA_API_KEY"] = "inert-offline-exa-canary"
+
+        async def offline_exa(url, arguments, key):
+            assert key == "inert-offline-exa-canary"
+            return {"content": [{"type": "text", "text": "Title: ERC-20\nURL: https://ethereum.org\nContent: Test search. " + key}]}
+
+        search.exa_request = offline_exa
     assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN")), "Strip provider credentials before this proof."
     config = load_config()
     config.models[args.model].model = "mockllm/model"
@@ -137,6 +147,12 @@ def main():
     print(json.dumps({"seconds": round(time.monotonic() - started, 2), "bridge_calls": calls, "row": row}), flush=True)
     assert row["status"] == ("passed" if args.answer == "reference" else "failed"), row
     assert search_ok
+    if args.exa_canary:
+        import zipfile
+        for archive in (args.output / "logs").glob("*.eval"):
+            with zipfile.ZipFile(archive) as log_archive:
+                for name in log_archive.namelist():
+                    assert b"inert-offline-exa-canary" not in log_archive.read(name), name
     assert (row["search_calls"], row["search_failed"], row["search_rate_limited"]) == (1, 0, 0), row
     effort = [(request.get("reasoning") or {}).get("effort") or
               (request.get("output_config") or {}).get("effort") or

@@ -66,11 +66,15 @@ class Config(Declaration):
     max_samples: int = Field(default=4, gt=0)
     grader: GraderConfig
     search_provider: str | None
+    search_limit: int = Field(default=20, gt=0)
+    search_price_usd: float = Field(default=0.05, gt=0, allow_inf_nan=False)
     models: dict[str, ModelConfig]
 
     @model_validator(mode="after")
     def check_grader(self):
         from .agents import AGENTS
+        if self.search_provider not in {None, "https://mcp.exa.ai/mcp"}:
+            raise ValueError("search_provider must be the key-free Exa endpoint or null")
         if any(key not in {"quiz", "build", "act", "scenario"} or value <= 0 for key, value in self.time_limits.items()):
             raise ValueError("time_limits requires eval types and positive seconds")
         for key, model in self.models.items():

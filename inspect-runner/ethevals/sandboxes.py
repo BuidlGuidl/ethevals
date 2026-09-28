@@ -3,12 +3,16 @@ import json
 import tarfile
 import re
 import yaml
+import anyio
 from pathlib import Path, PurePosixPath
 
 from inspect_ai.util import sandbox
+from inspect_ai.util._sandbox.events import SandboxEnvironmentProxy
+from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
 
 from .config import read_yaml
 from .images.tag import image_tag
+from .scoring_base import SubmissionFailed
 
 IMAGES = Path(__file__).with_name("images")
 SOLC_VERSIONS = (json.loads((IMAGES / "solc.json").read_bytes())["version"],)
@@ -96,20 +100,54 @@ async def runner_exec(box, command, **kwargs):
     ], **kwargs)
 
 
+async def oom_killed(box):
+    """Check Docker state and the cgroup counter after a scoring process dies."""
+    environment = box._sandbox if isinstance(box, SandboxEnvironmentProxy) else box
+    if not isinstance(environment, DockerSandboxEnvironment):
+        return False
+    project = environment._project
+    with anyio.fail_after(15):
+        result = await anyio.run_process(["docker", "ps", "-aq", "--filter",
+            f"label=com.docker.compose.project={project.name}", "--filter",
+            f"label=com.docker.compose.service={environment._service}"])
+        container = result.stdout.decode().strip()
+        if not container or "\n" in container:
+            raise RuntimeError("Cannot identify scorer container for OOM check.")
+        state = await anyio.run_process(["docker", "inspect", "--format", "{{json .State}}", container])
+        if json.loads(state.stdout)["OOMKilled"]:
+            return True
+        events = await runner_exec(box, ["/bin/cat", "/sys/fs/cgroup/memory.events"], timeout=5)
+        if not events.success:
+            raise RuntimeError("Cannot read scorer memory counters.")
+        return int(dict(line.split() for line in events.stdout.splitlines())["oom_kill"]) > 0
+
+
+async def scoring_exec(box, command, **kwargs):
+    try:
+        result = await runner_exec(box, command, **kwargs)
+    except Exception:
+        if await oom_killed(box):
+            raise SubmissionFailed("Submission exceeded the scorer memory limit.") from None
+        raise
+    if result.returncode in {-9, 137} and await oom_killed(box):
+        raise SubmissionFailed("Submission exceeded the scorer memory limit.")
+    return result
+
+
 def unpack_workspace(data: bytes) -> dict[str, bytes]:
     files, total = {}, 0
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
         for item in archive:
             path = PurePosixPath(item.name)
             if path.is_absolute() or ".." in path.parts:
-                raise ValueError("Workspace contains an unsafe path.")
+                raise SubmissionFailed("Workspace contains an unsafe path.")
             if item.isdir():
                 continue
             if not item.isfile():
-                raise ValueError(f"Workspace contains a link or special file: {item.name}")
+                raise SubmissionFailed(f"Workspace contains a link or special file: {item.name}")
             total += item.size
             if total > MAX_WORKSPACE_BYTES or len(files) >= 20000:
-                raise ValueError("Workspace exceeds the 50 MiB or 20000 file limit.")
+                raise SubmissionFailed("Workspace exceeds the 50 MiB or 20000 file limit.")
             files[str(path)] = archive.extractfile(item).read()
     return files
 
@@ -121,13 +159,18 @@ async def stop_agent():
     stopped = await runner_exec(agent, ["/bin/sh", "-c", """
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
     /usr/bin/pkill -STOP -u agent
-    /usr/bin/ps -u agent -o pid=,stat= | /usr/bin/awk '$1 != 1 && $2 !~ /^[TtZ]/ {bad=1} END {exit bad}' && exit 0
+    status=$?
+    [ "$status" -le 1 ] || exit 125
+    processes=$(/usr/bin/ps -u agent -o pid=,stat=) || exit 125
+    printf '%s\n' "$processes" | /usr/bin/awk '$1 != 1 && $2 !~ /^[TtZ]/ {bad=1} END {exit bad}' && exit 0
     /usr/bin/sleep 0.05
 done
-exit 1
+exit 42
 """], user="root", cwd="/", timeout=10)
+    if stopped.returncode == 42:
+        raise SubmissionFailed("Agent processes kept escaping SIGSTOP.")
     if not stopped.success:
-        raise ValueError(f"Cannot stop agent processes: {stopped.stderr}")
+        raise RuntimeError(f"Cannot stop agent processes: {stopped.stderr}")
 
 
 async def workspace_files() -> dict[str, bytes]:
@@ -146,5 +189,5 @@ done
     -czf "$archive" --files-from /dev/null "$@"
 """, "snapshot", path], user="root", cwd="/workspace", timeout=60)
     if not result.success:
-        raise ValueError(f"Cannot collect workspace: {result.stderr}")
+        raise RuntimeError(f"Cannot collect workspace: {result.stderr}")
     return unpack_workspace(await agent.read_file(path, text=False))

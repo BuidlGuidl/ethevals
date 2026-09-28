@@ -345,28 +345,29 @@ def test_store_keeps_old_evals_and_runs_only_edited_eval(folder, tmp_path):
     assert [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()] == stored
 
 
-def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path):
+def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
     config = load_config()
     config.grader.model = "mockllm/grader"
     for key, item in config.models.items():
         item.model = f"mockllm/{key}"
     evaluation = load_eval(folder, config)
     output = tmp_path / "results"
-    success, first = run([evaluation], config, output, models=["opus"], epochs=1)
+    success, first = run([evaluation], config, output, models=["opus"], epochs=1, budget=100)
     assert success is True
     config.models["opus"].prices.input = 99.0
     config.grader.model = "mockllm/codex"
     config.time_limit = 400
-    success, second = run([evaluation], config, output, models=["opus"], epochs=1)
+    success, second = run([evaluation], config, output, models=["opus"], epochs=1, budget=100)
     assert success is True
     assert second == first
-    success, third = run([evaluation], config, output, models=["codex"], epochs=1)
+    success, third = run([evaluation], config, output, models=["codex"], epochs=1, budget=100)
     assert success is True
     assert third[0]["model"] == "mockllm/codex"
     stored = [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()]
     assert sorted(row["model"] for row in stored) == ["mockllm/codex", "mockllm/opus"]
     config.models["opus"].effort = "low"
-    success, fourth = run([evaluation], config, output, models=["opus"], epochs=1)
+    success, fourth = run([evaluation], config, output, models=["opus"], epochs=1, budget=100)
     assert success is True
     assert fourth[0]["effort"] == "low"
     assert len(list((output / "logs").rglob("*.eval"))) == 3

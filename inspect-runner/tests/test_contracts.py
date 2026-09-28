@@ -333,7 +333,7 @@ def test_check_cache_tracks_image_foundry_and_naming_inputs(tmp_path, monkeypatc
     document["services"]["scorer"]["image"] = "ethevals-solidity:new-version"
     compose = tmp_path / "image.yaml"
     compose.write_text(yaml.safe_dump(document))
-    assert check_cache_path(evaluation, tmp_path, compose) not in {original, changed, changed_dockerfile}
+    assert check_cache_path(evaluation, tmp_path, compose) == changed_dockerfile
 
 
 def test_completed_epochs_skip_discovery_and_other_evals_survive_its_failure(tmp_path, monkeypatch):

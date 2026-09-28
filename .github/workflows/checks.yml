@@ -29,5 +29,4 @@ jobs:
           package-manager-cache: false
       - run: uv sync --frozen
       - run: pnpm --dir site install --frozen-lockfile
-      - run: docker compose -f inspect-runner/ethevals/images/act.compose.yaml build
       - run: uv run python scripts/ci.py checks --output results/ci-checks

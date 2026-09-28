@@ -33,21 +33,25 @@ class Grader:
     metadata: dict
 
 
+def actor_metadata(item, prefix=""):
+    return {prefix + key: value for key, value in {
+        "model": item.model, "effort": item.effort, "prices": item.prices.model_dump(),
+        "cost_source": f"computed:{item.price_source}",
+    }.items()}
+
+
 def model_actor(item, prefix=""):
     info = get_model_info(item.model) or ModelInfo()
     set_model_info(item.model, info.model_copy(update={"cost": ModelCost(**item.prices.model_dump())}))
     model = get_model(item.model, config=GenerateConfig(reasoning_effort=item.effort,
                                                        max_tokens=item.max_tokens if isinstance(item, GraderConfig) else None))
-    return model, {prefix + key: value for key, value in {
-        "model": str(model), "effort": item.effort, "prices": item.prices.model_dump(),
-        "cost_source": f"computed:{item.price_source}",
-    }.items()}
+    return model, actor_metadata(item, prefix)
 
 
 def player(config, key, mode, planning=False):
     item = config.models[key]
     if planning:
-        model, metadata = None, {"model": item.model, "effort": item.effort}
+        model, metadata = None, actor_metadata(item)
     else:
         model, metadata = model_actor(item)
     harness = item.harness if mode == "internet" else None
@@ -72,6 +76,10 @@ def grader(config):
 
 def select_actors(config, models=None, modes=None, answer=None, delay=0, *, planning=False):
     from .checks import CHECK_MODES, check_player, check_grader
+    if models and answer:
+        raise ValueError("--models cannot be combined with --answer")
+    if unknown := set(models or []) - config.models.keys():
+        raise ValueError(f"Unknown model names: {', '.join(sorted(unknown))}")
     if modes and set(modes) - set(get_args(Mode)):
         raise ValueError(f"Unknown modes: {modes}")
     if answer:

@@ -16,7 +16,8 @@ uv sync --frozen
 ```
 
 Docker is required for builds and internet epochs. Vanilla quiz checks need no Docker.
-For build evals and internet quizzes, build the Solidity image before the first epoch:
+Preparation builds the stock images named by each eval's Compose file, including custom Compose files.
+To build the Solidity image ahead of time:
 
 ```sh
 docker compose -f inspect-runner/ethevals/images/stock.compose.yaml build default
@@ -80,13 +81,13 @@ Use `--config path/to/config.yaml` for a separate configuration.
 To run all four agents on the ERC-20 build and both quizzes in the internet mode:
 
 ```sh
-uv run ethevals run --evals evals/building/erc20-points-token evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes internet --epochs 1 --output results/four-agents
+uv run ethevals run --evals evals/building/erc20-points-token evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes internet --epochs 1 --budget 400 --output results/four-agents
 ```
 
 To run all four bare models on both quizzes in the vanilla mode:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes vanilla --epochs 1 --output results/four-models
+uv run ethevals run --evals evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes vanilla --epochs 1 --budget 80 --output results/four-models
 ```
 
 Guess: these commands together cost $5 to $20, including build rubric grading.
@@ -121,7 +122,7 @@ These settings keep search on Exa instead of each provider's hosted search API.
 OpenCode 1.18.33 does not register `websearch` for OpenRouter unless its optional search flags are enabled.
 Its built-in search also calls keyless Exa. The runner leaves its optional search flags unset.
 Claude Code retains `WebFetch`; OpenCode retains `webfetch`. Codex has no native page-fetch tool.
-All four agents retain Exa search and fetch, plus a shell with network access.
+All four agents retain Exa search and a shell with network access for fetching pages.
 Exa's keyless endpoint can rate-limit concurrent agents.
 Set `EXA_API_KEY` to authenticate the configured `mcp.exa.ai` endpoint.
 Rows count search calls, failed results, and rate-limited results in `search_calls`, `search_failed`, and `search_rate_limited`.
@@ -229,13 +230,19 @@ Check the guessed model slug and prices in `inspect-runner/ethevals/config.yaml`
 Run these two commands from the repository root:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries --models opus --modes vanilla --epochs 1 --output results/adr0002
-uv run ethevals run --evals evals/building/erc20-points-token --models opus --modes internet --epochs 1 --output results/adr0002
+uv run ethevals run --evals evals/concepts/agent-registries --models opus --modes vanilla --epochs 1 --budget 10 --output results/adr0002
+uv run ethevals run --evals evals/building/erc20-points-token --models opus --modes internet --epochs 1 --budget 60 --output results/adr0002
 ```
 
 The quiz uses bare Opus 5.5. The build uses Claude Code 2.1.274 with Opus 5.5 and high effort.
 The separate `grader` configuration selects the model that answers the two rubric questions.
-Web search uses the Exa MCP URL in `search_provider`, with an optional `EXA_API_KEY`. Claude Code's built-in WebSearch is disabled.
+All three harnesses use a host-side Exa search tool through Inspect's bridge. Claude Code's built-in WebSearch stays disabled.
+`search_provider` accepts `https://mcp.exa.ai/mcp` or null. Null disables search.
+The host sends optional `EXA_API_KEY` in an HTTP header. The container sees only the bridge address.
+Keyed and keyless requests share this path. Neither agent configuration nor published logs contain the key.
+Each epoch permits `search_limit` requests, currently 20, with at most five results per request.
+Failed requests consume a slot. The plan reserves `search_price_usd`, currently a guessed $0.05, for each slot.
+The reserve also applies to keyless runs. Check the configured price before funding a run.
 The Exa endpoint can rate-limit requests. Agents can also fetch pages and install packages from their containers.
 
 Guess: the pair costs $1 to $5, including rubric grading. This estimate is not a spending cap.
@@ -254,7 +261,10 @@ Missing expected names after compilation are runner errors unless that suite's c
 Discovery runs only for evals with missing epochs. Failures append to `discovery-errors.json`; other evals continue.
 Discovery errors name failed tests and compiler diagnostics.
 Compilation and suite lifecycle failures retain that check set. Agent-added tests cannot add checks.
-Signal exits and Forge output without results or a compiler diagnostic are runner errors.
+Docker exec failures and capture timeouts are runner errors. Unknown Forge exits remain errors.
+Invalid Solidity bytes and confirmed scorer OOM kills fail the fixed checks.
+Both stock scorer containers and the stock chain have a 2 GiB memory limit.
+A schema-valid grader reply without a reason fails that rubric check. Transport and invalid-JSON failures remain errors.
 Forge streams through capped readers. The wrapper waits for both reader processes before the scorer reads their files.
 The cap is 10 MiB per stream, with one extra byte to detect overflow.
 Compilation reasons use the coded diagnostic, without source frames. Only compiler-version failures include the offline compiler note.
@@ -276,7 +286,7 @@ To test resume, kill the build command during its first execution.
 Repeat the same build command:
 
 ```sh
-uv run ethevals run --evals evals/building/erc20-points-token --models opus --modes internet --epochs 1 --output results/adr0002
+uv run ethevals run --evals evals/building/erc20-points-token --models opus --modes internet --epochs 1 --budget 60 --output results/adr0002
 ```
 
 The finished quiz keeps its sample UUID. The unfinished build runs again if its execution cap allows it.
@@ -317,7 +327,7 @@ Use `ETHEVALS_SAMPLE=1 pnpm build` for the labelled sample board.
 
 ## CI and committed results
 
-`results/rows.jsonl` is the committed record. The repository starts with an empty file.
+`results/rows.jsonl` records attempts. `results/runs.json` records recovered CI artifacts.
 Logs, discovery caches, and free-check outputs stay out of Git.
 The site reads this same file. It shows execution errors without a release link because the publisher skips error logs.
 
@@ -328,6 +338,9 @@ The real-agent Docker proofs stay outside PR checks. They download agent CLIs an
 Run them locally with the command in "Prove the agent path without a key".
 
 Each push to `main` starts `Eval results`. Runs share one concurrency group and never cancel an active run.
+Results-only pushes are excluded, so recording a run receipt cannot create a loop of results PRs.
+`queue: max` retains up to 100 pending runs, including manual budget overrides. GitHub cancels arrivals beyond that limit.
+See [GitHub's concurrency rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
 The job checks out the latest `main` after it leaves the queue.
 It also reads committed rows from the pending `ci/results` branch, so an unmerged results PR cannot cause duplicate spending.
 The job plans every configured model in vanilla and internet modes, limited to each eval's declared modes.
@@ -336,13 +349,18 @@ Skills mode remains unimplemented.
 To print the same missing epochs and budget estimate without a key:
 
 ```sh
-uv run ethevals plan --rows results/rows.jsonl --modes vanilla internet --budget 100
+uv run ethevals plan --rows results/rows.jsonl --modes vanilla internet --budget 100 --wall-seconds 16200
 ```
 
 Passed and failed epochs are complete. Errors can use the remaining attempts under `max_attempts`.
 The plan lists errors that exhausted their attempts. A discovery failure leaves its epochs missing and spends no player allowance.
-Each missing epoch reserves the player cost limit plus `rubric_budget(evaluation, config)`, multiplied by its remaining attempts.
-The current build reserves $28.7288 per attempt, or $57.4576 with both attempts left.
+Each epoch reserves player, grader, and search costs for every remaining attempt.
+`run()` owns this gate. Missing paid epochs require `--budget` and a key before it builds a provider.
+`plan` reads the same rows and local logs and uses the same budget check.
+CI reserves 270 minutes for epochs in its 330-minute job. The other 60 minutes cover preparation and artifact upload.
+The plan sums each epoch's wall limit, scoring limit, and 150-second setup allowance without assuming parallel speedups.
+Epochs that do not fit remain missing for the next run. `--wall-seconds` sets this reserve locally.
+The current build reserves $29.7288 per attempt, or $59.4576 with both attempts left, including the search reserve.
 The gate uses this worst-case estimate. Prices remain guesses, and an in-flight player call can exceed its cost limit.
 The gate is not a provider billing cap.
 
@@ -355,13 +373,28 @@ If the estimate exceeds the budget, inspect the saved `plan.json` artifact.
 Then dispatch `Eval results` on `main` with a higher `budget` input.
 Each invocation runs at most one attempt per missing identity. The estimate reserves every remaining attempt.
 
-After execution, a separate job calls step 5's `publish-logs` implementation and uploads eligible logs to a GitHub release.
-It checks out the evaluated commit so later pushes cannot change which new logs qualify for publication.
-Only after publication succeeds does it fold new rows and release links into the committed file.
-The latest row replaces an earlier row with the same identity. Other rows, including stale hashes, remain.
-Error rows retain their attempt counts. Their local logs and discovery reports remain in the 14-day workflow artifact.
-Execution or discovery errors fail the publication job after it records available rows and updates the PR when rows changed.
-If publication fails, recover the artifact before starting another paid run. Rows absent from Git cannot prevent repeat spending.
+The publisher runs even when execution fails or times out, provided checkout recorded the source commit.
+It rebuilds the run's own rows from its logs, then commits those rows and the artifact receipt before uploading logs.
+Release links arrive in a later commit. A failed upload cannot erase recorded attempts.
+The publisher builds its commit from current `main` and folds current results into it.
+Higher attempt counts win, followed by the row's completion time. Argument order cannot change the result.
+Retried old publications preserve newer rows and source. Epoch numbers sort numerically.
+Each paid CI run checks earlier workflow attempts against the receipts before constructing providers.
+If an artifact remains unrecorded, the run stops and names the run to recover.
+Artifacts retain logs and discovery reports for 14 days. A missing or damaged artifact blocks further paid work.
+
+To recover a failed run, download its `eval-run` artifact before it expires.
+Fetch current `main` and `ci/results` into a checkout, then run the publisher with that artifact's identity:
+
+```sh
+uv run python scripts/ci.py publish-results --output recovered/results/ci-run \
+  --repo BuidlGuidl/ethevals --run-id RUN_ID-ATTEMPT \
+  --commit "$(cat recovered/source-sha.txt)" --publish --open-pr
+```
+
+This command writes GitHub results and requires `GH_TOKEN`. Retrying the publication job performs the same recovery.
+Keep the original run ID and attempt. Existing release assets can be uploaded again without repeating any player call.
+Locally, rerun `ethevals run` with the same output folder. Its logs restore completed epochs and attempt counts.
 
 The job appends a commit to `ci/results` and opens a results PR against `main`.
 It retains the previous results branch as a parent, so it never needs a force push.
@@ -403,7 +436,7 @@ uv run python scripts/ci.py release --output out/hf-ci --hf-repo OWNER/DATASET -
 ```
 
 Use a fresh output directory for each invocation. Install the images and site packages before `checks`.
-The mock after-merge run folds its rows locally. The site excludes those rows from scores.
+The mock after-merge command writes only its output folder. It never changes the committed rows file.
 Without `--publish`, publication and HF release commands print plans and make no remote writes.
 For a local paid run that resumes from committed rows, pass `--rows results/rows.jsonl` to `ethevals run`.
 

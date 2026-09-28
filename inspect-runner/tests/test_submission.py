@@ -1,4 +1,4 @@
-"""Regression cases from the step 2b review."""
+"""Submission boundaries, attempt limits, and grader evidence."""
 import json
 import shutil
 from pathlib import Path
@@ -186,7 +186,8 @@ def test_workspace_failure_fills_all_eval_checks(tmp_path, monkeypatch):
     task.solver = generate()
 
     async def broken_workspace():
-        raise ValueError("Workspace contains a link or special file: src/Token.sol")
+        from ethevals.scoring_base import SubmissionFailed
+        raise SubmissionFailed("Workspace contains a link or special file: src/Token.sol")
 
     async def stopped():
         pass
@@ -194,7 +195,7 @@ def test_workspace_failure_fills_all_eval_checks(tmp_path, monkeypatch):
     monkeypatch.setattr(scorers, "stop_agent", stopped)
     monkeypatch.setattr(scorers, "workspace_files", broken_workspace)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    failure = {"passed": False, "reason": "Grading capture failed: Workspace contains a link or special file: src/Token.sol"}
+    failure = {"passed": False, "reason": "Workspace contains a link or special file: src/Token.sol"}
     assert row["checks"] == {"forge:compile": failure, CHECK: failure,
                              "rubric:uses_openzeppelin": failure, "rubric:protects_holders": failure}
     assert (row["status"], row["grader_tokens"]) == ("failed", 0)

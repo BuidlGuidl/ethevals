@@ -71,13 +71,17 @@ pnpm build
 A row with `log_file: results-12345-1/epoch.eval` links to
 `https://github.com/BuidlGuidl/ethevals/releases/download/results-12345-1/epoch.eval`.
 Rows from other runs carry other release tags, so one base reaches all releases.
-CI folds these linked rows into the committed `results/rows.jsonl` file before opening its results PR.
+CI records attempts in `results/rows.jsonl` and artifact receipts in `results/runs.json` before it uploads logs.
+It adds release links afterward. Failed publication leaves scores and attempt counts intact.
+The publisher rebuilds rows from the run artifact's logs, including interrupted attempts.
+An unrecorded earlier artifact blocks paid CI work. Retry its publication job before the 14-day artifact expires.
+The root README gives the local recovery command.
 Execution errors remain visible without log links. Their unpublished logs stay in the workflow artifact.
 The publisher writes linked rows after the upload succeeds, in a file named for the release.
 Its dry run writes nothing. It excludes key-free, stale-hash, skills, and already published logs.
-If `ETHEVALS_LOG_BASE` is set, every shown row must have a `results-<run-id>/<asset>.eval` path.
-Local `logs/` paths fail the build. Sample mode keeps its bundled log links.
-Step 6 must merge published rows by epoch identity before building a board across runs.
+Only `results-<run-id>/<asset>.eval` paths receive release links when `ETHEVALS_LOG_BASE` is set.
+Local `logs/` paths remain visible without links. Sample mode keeps its bundled log links.
+The row fold preserves newer attempts regardless of publication order.
 The site still reads one rows file and rejects duplicate identities.
 The link downloads the `.eval` file. Open its local folder with `inspect view --log-dir path/to/folder`.
 Private repository assets require GitHub access. Public downloads require a public repository.
@@ -104,6 +108,11 @@ An eval score is `passed / scored epochs`.
 An epoch passes only when every named check passes.
 Errors remain visible in the panel but do not enter the denominator.
 Limits count as failed epochs because the runner records them as failed checks.
+Invalid Solidity bytes, confirmed scorer OOM kills, and empty grader reasons also produce failed checks.
+Docker exec failures, capture timeouts, and grader transport failures remain errors.
+The runner's `run()` function requires a budget for paid work. CI calls that same entry point.
+Exa search runs on the host through a tool bridge. Its optional key never enters containers or logs.
+The plan reserves the configured search price for each allowed request and also bounds selected epochs by wall time.
 The panel uses the row's `limit` field to identify limits and displays the runner's check reasons.
 
 A pillar score is the mean of its eval scores.

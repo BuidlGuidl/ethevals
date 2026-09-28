@@ -83,9 +83,6 @@ export function loadBoard(env: Record<string, string | undefined> = process.env,
   if (logBase && !/^https?:\/\/[^/]+(?:\/.*)?$/.test(logBase) && !/^\/(?!\/)/.test(logBase)) {
     throw new Error("ETHEVALS_LOG_BASE must be an HTTP URL or a path starting with one slash.");
   }
-  if (!sample && logBase && shown.some((row) => row.status !== "error" && !/^results-[A-Za-z0-9][A-Za-z0-9_-]{0,99}\/[A-Za-z0-9][A-Za-z0-9_.-]*\.eval$/.test(row.log_file))) {
-    throw new Error(`${filename}: ETHEVALS_LOG_BASE requires published release paths for all shown rows.`);
-  }
   console.log(`${filename}${exists ? "" : " (missing; empty board)"}: ${rows.length} read, ${counts.shown} shown, ${counts.stale} stale, ${counts.keyFree} key-free, ${counts.skills} skills.`);
   return buildBoard(evaluations, shown, sample, logBase);
 }

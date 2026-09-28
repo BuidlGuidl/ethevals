@@ -2,6 +2,7 @@ name: Eval results
 on:
   push:
     branches: [main]
+    paths-ignore: ['results/**']
   workflow_dispatch:
     inputs:
       budget:
@@ -10,8 +11,10 @@ on:
         type: string
 permissions:
   contents: read
+  actions: read # Check earlier run attempts before paid work.
 concurrency:
   group: eval-results
+  queue: max
   cancel-in-progress: false
 jobs:
   run:
@@ -40,6 +43,7 @@ jobs:
           RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: uv run python scripts/ci.py after-merge --budget "$RUN_BUDGET" --restore-results --output results/ci-run
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
@@ -53,6 +57,7 @@ jobs:
   publish:
     name: Publish results
     needs: run
+    if: always() && needs.run.outputs.source != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -61,7 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.run.outputs.source }}
+          ref: main
           fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0

@@ -66,7 +66,7 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
     assert report["missing_epochs"] == 7
     assert [(r["epoch"], r["attempt"], r["remaining_attempts"]) for r in report["missing"] if r["mode"] == "vanilla"] == [(2, 2, 1)]
     assert [(r["epoch"], r["attempt"]) for r in report["exhausted_errors"]] == [(3, 2)]
-    assert report["worst_case_usd"] == 207.3728
+    assert report["worst_case_usd"] == 219.3728
     assert report["within_budget"] is False
     assert report["expected_usd_estimate"] is None
     assert report["history_covered_epochs"] == 1
@@ -108,7 +108,7 @@ def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
     result = cli("scripts/ci.py", "after-merge", "--budget", budget, "--output", output,
                  "--rows", tmp_path / "rows.jsonl", "--evals", ROOT / "evals/concepts/agent-registries",
                  "--models", "opus", "--modes", "vanilla")
-    assert result.returncode == (1 if budget == "0" else 2)
+    assert result.returncode == 2
     assert "OPENROUTER_API_KEY is required" not in result.stderr
     assert not (output / "logs").exists()
     if budget == "0":
@@ -128,7 +128,9 @@ def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path):
     published = cli("scripts/ci.py", "publish-results", "--output", tmp_path / "first",
                     "--repo", "BuidlGuidl/ethevals", "--run-id", "local-1", "--commit", "a" * 40, *common)
     assert published.returncode == 0, published.stderr
-    assert [(r["epoch"], r["status"]) for r in read_rows(rows)] == [(1, "passed")]
+    assert [(r["epoch"], r["status"]) for r in read_rows(tmp_path / "first/rows.jsonl")] == [(1, "passed")]
+    assert not rows.exists()
+    write_rows(rows, read_rows(tmp_path / "first/rows.jsonl"))
     second = cli("scripts/ci.py", "after-merge", "--output", tmp_path / "second", "--answer", "reference",
                  "--epochs", "3", "--budget", "20", *common)
     assert second.returncode == 0, second.stdout + second.stderr
@@ -156,6 +158,10 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path):
 
 
 def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci, "RECEIPTS", tmp_path / "runs.json")
+    monkeypatch.setattr(ci, "restore_results", lambda rows: None)
+    monkeypatch.setattr(ci, "export_rows", lambda output: read_rows(output / "rows.jsonl"))
+    monkeypatch.setattr(ci, "store_rows", lambda output: read_rows(output / "rows.jsonl"))
     config = load_config()
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
     previous = {"eval_id": quiz.id, "eval_hash": "stale", "model": "model", "mode": "vanilla", "epoch": 1,
@@ -176,7 +182,7 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     monkeypatch.setattr("ethevals.publish.subprocess.run", fail)
     with pytest.raises(subprocess.CalledProcessError):
         ci.publish_results(args, [quiz])
-    assert read_rows(rows) == [previous]
+    assert [(r["status"], r.get("attempt")) for r in read_rows(rows)] == [("passed", None), ("error", 2), ("passed", None)]
     monkeypatch.setattr("ethevals.publish.subprocess.run", lambda *a, **kw: subprocess.CompletedProcess(a, 0))
     assert ci.publish_results(args, [quiz]) == 0
     assert sorted((r["status"], r["log_file"]) for r in read_rows(rows)) == [
@@ -205,7 +211,7 @@ def test_failed_discovery_stays_missing_without_using_attempts(tmp_path, monkeyp
     assert json.loads((tmp_path / "discovery-errors.json").read_text())[0]["error"] == "Reference compilation failed"
     report = plan([build], config, players, read_rows(tmp_path / "rows.jsonl"), epochs=1)
     assert [(r["eval_id"], r["attempt"], r["remaining_attempts"], r["worst_case_usd"]) for r in report["missing"]] == [
-        ("building/erc20-points-token", 1, 2, 57.4576)]
+        ("building/erc20-points-token", 1, 2, 59.4576)]
 
 
 def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, monkeypatch):

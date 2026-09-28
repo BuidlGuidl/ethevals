@@ -111,9 +111,11 @@ def results_rows(log: EvalLog) -> list[dict]:
                 "grader_model", "grader_effort", "harness_version", "images", "runner_inputs", "chain_inputs",
                 "cost_limit_usd", "grader_cost_limit_usd", "max_attempts",
                 "working_limit_seconds", "time_limit_seconds", "scoring_limit_seconds",
+                "search_limit", "search_price_usd",
             )},
             "epoch": metadata.get("epoch", sample.epoch),
             "attempt": metadata.get("attempt", 1),
+            "completed_at": sample.completed_at or sample.started_at or metadata.get("created_at", log.eval.created),
             "status": "error" if error else "passed" if passed else "failed",
             "passed": passed,
             "checks": checks,
@@ -161,18 +163,37 @@ def store_rows(output: Path) -> list[dict]:
             attempts[identity] = attempts.get(identity, 0) + 1
             row["attempt"] = max(row["attempt"], attempts[identity])
             latest[identity] = row
-    return sorted(latest.values(), key=lambda row: (
-        row["eval_id"], row["eval_hash"], row["model"], row["mode"], row["effort"] or "", row["epoch"],
-    ))
+    return sorted(latest.values(), key=row_sort_key)
 
 
 def read_rows(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()] if path.exists() else []
 
 
+def row_sort_key(row):
+    identity = epoch_identity(row, row["epoch"])
+    return tuple(value or "" for value in identity[:-1]) + (identity[-1],)
+
+
+def row_version(row):
+    # Release links enrich the same observation. They cannot replace a later attempt.
+    return (row.get("attempt", 1), row.get("completed_at", ""),
+            row.get("status") in {"passed", "failed"},
+            row.get("log_file", "").startswith("results-"), json.dumps(row, sort_keys=True))
+
+
 def fold_rows(*groups: list[dict]) -> list[dict]:
-    latest = {epoch_identity(row, row["epoch"]): row for group in groups for row in group}
-    return sorted(latest.values(), key=lambda row: tuple(str(value or "") for value in epoch_identity(row, row["epoch"])))
+    latest = {}
+    for group in groups:
+        for row in group:
+            identity = epoch_identity(row, row["epoch"])
+            if identity not in latest or row_version(row) > row_version(latest[identity]):
+                latest[identity] = row
+    return sorted(latest.values(), key=row_sort_key)
+
+
+def previous_rows(output: Path, rows_file: Path | None = None) -> list[dict]:
+    return fold_rows(read_rows(rows_file) if rows_file else [], read_rows(output / "rows.jsonl"), store_rows(output))
 
 
 def write_rows(destination: Path, rows: list[dict]) -> None:

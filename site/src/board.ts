@@ -67,7 +67,7 @@ export function subjectKey(subject: Subject): string {
   return JSON.stringify([subject.model, subject.harness, subject.effort]);
 }
 
-function evalCell(evaluation: Evaluation, mode: TableMode, rows: Row[], logBase: string): EvalCell {
+function evalCell(evaluation: Evaluation, mode: TableMode, rows: Row[], logBase: string, sample: boolean): EvalCell {
   const scored = rows.filter((row) => row.status !== "error");
   const passed = scored.filter((row) => row.passed).length;
   return {
@@ -82,7 +82,7 @@ function evalCell(evaluation: Evaluation, mode: TableMode, rows: Row[], logBase:
       cost: epochCost(row), issue: row.error_reason ?? (row.limit
         ? [...new Set(Object.values(row.checks).filter((check) => !check.passed).map((check) => check.reason))].join(" ")
         : ""),
-      logUrl: row.status === "error" ? null : logUrl(logBase, row.log_file),
+      logUrl: row.status === "error" || (!sample && !/^results-[A-Za-z0-9][A-Za-z0-9_-]{0,99}\/[A-Za-z0-9][A-Za-z0-9_.-]*\.eval$/.test(row.log_file)) ? null : logUrl(logBase, row.log_file),
     })),
   };
 }
@@ -122,7 +122,7 @@ export function buildBoard(evaluations: Evaluation[], rows: Row[], sample = fals
         id: evaluation.id,
         cells: Object.fromEntries(columns.map((subject) => {
           const key = subjectKey(subject);
-          return [key, evalCell(evaluation, mode, groups.get(JSON.stringify([evaluation.id, mode, key])) ?? [], logBase)];
+          return [key, evalCell(evaluation, mode, groups.get(JSON.stringify([evaluation.id, mode, key])) ?? [], logBase, sample)];
         })),
       }));
       table.pillars[pillar] = {

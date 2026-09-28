@@ -107,7 +107,8 @@ def test_workspace_archive_rejects_escape(name, link):
             tar.addfile(item, None if link else io.BytesIO(b"ok"))
         return data.getvalue()
     assert unpack_workspace(archive("./src/Token.sol", False)) == {"src/Token.sol": b"ok"}
-    with pytest.raises(ValueError, match="unsafe path|link or special"):
+    from ethevals.scoring_base import SubmissionFailed
+    with pytest.raises(SubmissionFailed, match="unsafe path|link or special"):
         unpack_workspace(archive(name, link))
 
 
