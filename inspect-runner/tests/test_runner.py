@@ -18,8 +18,15 @@ from inspect_ai.solver import solver
 from ethevals.config import load_config
 from ethevals.loader import eval_hash, load_eval
 from ethevals.rows import results_rows
-from ethevals.runner import build_task, mock_delay, run
+from ethevals.runner import run
+from ethevals.checks import mock_delay
+from support import build_task
+from ethevals.files import inline_file
 from ethevals.scorers import named_checks
+
+def scorer_yaml(text):
+    return yaml.safe_dump({"scorers": [yaml.safe_load(text)]})
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -48,7 +55,7 @@ def test_loader_rejects_unknown_keys(folder, file, addition, key):
 @pytest.mark.parametrize("target", ["8004", "1.10", "0x1234", '["8004", 42]'])
 def test_loader_rejects_numeric_targets(folder, target):
     path = folder / "scorer/scorer.yaml"
-    path.write_text(f"kind: target\ntarget: {target}\n")
+    path.write_text(f"scorers:\n  - kind: target\n    target: {target}\n")
     with pytest.raises(ValueError) as error:
         load_eval(folder, load_config())
     assert f"{path}: target" in str(error.value)
@@ -65,12 +72,12 @@ def test_loader_requires_scorer_file(folder):
 def test_loader_preserves_target_and_prompt(folder):
     (folder / "workspace/.gitkeep").unlink()
     (folder / "eval.yaml").write_text("type: quiz\nmotivation: Test a literal answer.\nprompt: Say hello.\nmodes: [vanilla]\n")
-    (folder / "scorer/scorer.yaml").write_text('kind: target\ntarget: ["hello", "hi"]\n')
+    (folder / "scorer/scorer.yaml").write_text(scorer_yaml('kind: target\ntarget: ["hello", "hi"]\n'))
     (folder / "workspace/hello.txt").write_text("public workspace")
     (folder / "scorer/secret.txt").write_text("private scorer")
     sample = load_eval(folder, load_config()).sample()
     assert (sample.id, sample.input, sample.target) == ("concepts/quiz", "Say hello.", ["hello", "hi"])
-    assert sample.files == {"/workspace/hello.txt": str(folder / "workspace/hello.txt")}
+    assert sample.files == {"/workspace/hello.txt": inline_file(b"public workspace")}
 
 
 def test_hash_tracks_every_file_and_name(folder):
@@ -118,7 +125,7 @@ def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
 @pytest.mark.parametrize("method,answer,expected", [("pattern", "ERC 8004", True), ("pattern", "ERC 20", False), ("match", "20", False)])
 def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected):
     path = folder / "scorer/scorer.yaml"
-    path.write_text('kind: target\nname: number\ntarget: "8004"\nmethod: ' + method + ('\npattern: "ERC ([0-9]+)"\n' if method == "pattern" else "\n"))
+    path.write_text(scorer_yaml('kind: target\nname: number\ntarget: "8004"\nmethod: ' + method + ('\npattern: "ERC ([0-9]+)"\n' if method == "pattern" else "\n")))
     config = load_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", answer)])
@@ -130,7 +137,7 @@ def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected
 
 @scorer(metrics=[accuracy()])
 def with_grader():
-    underlying = named_checks([{"kind": "target", "target": "8004"}], ".")
+    underlying = named_checks([{"kind": "target", "target": "8004"}], ".", files={})
 
     async def score(state, target):
         await get_model(role="grader").generate("Grade this answer.")
@@ -184,13 +191,14 @@ def test_time_limit_is_a_failed_check(folder, tmp_path):
     log = eval(task, fail_on_error=False, log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(read_eval_log(log.location))[0]
     assert (row["status"], row["passed"], row["error_kind"]) == ("failed", False, None)
-    assert row["checks"]["runner_time_limit"]["passed"] is False
-    assert "time limit 1" in row["checks"]["runner_time_limit"]["reason"]
+    assert row["checks"]["erc_number"]["passed"] is False
+    assert "time limit 1" in row["checks"]["erc_number"]["reason"]
+    assert row["limit"]["type"] == "time"
 
 
 def test_choice_target_list_accepts_either_letter(folder, tmp_path):
     (folder / "eval.yaml").write_text("type: quiz\nmotivation: Check accepted alternatives.\nprompt: Select a greeting.\nmodes: [vanilla]\nchoices: [hello, hi, goodbye]\n")
-    (folder / "scorer/scorer.yaml").write_text('kind: target\nmethod: choice\ntarget: ["A", "B"]\n')
+    (folder / "scorer/scorer.yaml").write_text(scorer_yaml('kind: target\nmethod: choice\ntarget: ["A", "B"]\n'))
     config = load_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", "ANSWER: B")])
@@ -219,9 +227,9 @@ def cli(*args):
 
 @pytest.mark.parametrize("pattern,reference", [("ERC ([0-9]+)", "ERC 8004"), ("ERC-?([0-9]+)", "ERC-8004")])
 def test_pattern_check_through_cli(folder, tmp_path, pattern, reference):
-    (folder / "scorer/scorer.yaml").write_text(
+    (folder / "scorer/scorer.yaml").write_text(scorer_yaml(
         f'kind: target\ntarget: "8004"\nmethod: pattern\npattern: "{pattern}"\nreference: "{reference}"\n'
-    )
+    ))
     output = tmp_path / "results"
     for invocation in range(2):
         if invocation:
@@ -247,7 +255,7 @@ def test_check_reruns_changed_scorer(folder, tmp_path, monkeypatch):
     assert main() == 0
 
     def always_pass(config, folder):
-        async def score(state, target):
+        async def score(state, target, submission=None):
             return Score(value="C", metadata={"checks": {"answer": {"passed": True, "reason": "Broken scorer."}}})
         return score
 
@@ -258,7 +266,7 @@ def test_check_reruns_changed_scorer(folder, tmp_path, monkeypatch):
 
 
 def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_path, monkeypatch):
-    from ethevals.runner import CHECK_SOLVERS, CheckRun
+    from ethevals.checks import CHECK_SOLVERS, CheckRun
     attempts = 0
 
     @solver
@@ -308,7 +316,7 @@ def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch, kind):
     success, first = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
     assert (first[0]["status"], first[0]["passed"]) == ("failed", False)
-    assert f"{kind} limit" in first[0]["checks"][f"runner_{kind}_limit"]["reason"]
+    assert f"{kind} limit" in first[0]["checks"]["erc_number"]["reason"]
     success, second = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
     assert second == first
@@ -394,7 +402,7 @@ def test_hash_ignores_local_artifacts_but_includes_new_author_files(folder):
     (folder / "workspace/code.sol").write_text("contract New {}")
     assert eval_hash(folder) != original
     assert load_eval(folder, load_config()).sample().files == {
-        "/workspace/code.sol": str(folder / "workspace/code.sol")}
+        "/workspace/code.sol": inline_file(b"contract New {}")}
 
 
 def test_validate_rejects_effort_typo(folder, tmp_path):

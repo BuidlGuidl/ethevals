@@ -12,7 +12,7 @@ from inspect_ai.model import ModelOutput, get_model
 from ethevals.config import load_config
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
-from ethevals.runner import build_task
+from support import build_task
 
 
 def main():
@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--eval", default="evals/building/erc20-points-token")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    assert not os.environ.get("OPENROUTER_API_KEY"), "Strip OPENROUTER_API_KEY before this proof."
+    assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN")), "Strip provider credentials before this proof."
     config = load_config()
     config.models["opus"].model = "mockllm/model"
     evaluation = load_eval(Path(args.eval), config)
@@ -63,7 +63,7 @@ def main():
     print(json.dumps({"seconds": round(time.monotonic() - started, 2), "bridge_calls": calls, "row": row}), flush=True)
     assert row["status"] == ("passed" if args.answer == "reference" else "failed"), row
     if evaluation.declaration.type == "build":
-        assert len([name for name in row["checks"] if name.startswith("forge:")]) == 7, row
+        assert len([name for name in row["checks"] if name.startswith("forge:")]) == 8, row
         assert set(name for name in row["checks"] if name.startswith("rubric:")) == {
             "rubric:uses_openzeppelin", "rubric:protects_holders",
         }, row

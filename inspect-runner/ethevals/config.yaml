@@ -1,7 +1,9 @@
 epochs: 3
 time_limit: 300
 time_limits: {build: 1200, act: 1200, scenario: 900}
-token_limit: 500000
+cost_limit: 5.0
+grader_cost_limit: 0.5
+max_attempts: 2
 max_tasks: 4
 max_samples: 4
 grader: opus
@@ -13,23 +15,24 @@ models:
     model: openrouter/anthropic/claude-opus-5.5
     effort: high
     harness: claude_code
+    agent_model_config: claude-opus-5-5
     price_source: guess
     prices: {input: 5.0, output: 25.0, input_cache_read: 0.5, input_cache_write: 6.25}
   codex:
     model: openrouter/openai/gpt-6-sol
     effort: high
-    harness: codex_cli
+    harness: null
     price_source: guess
     prices: {input: 2.5, output: 15.0, input_cache_read: 0.25, input_cache_write: 2.5}
   kimi:
     model: openrouter/moonshotai/kimi-k3
     effort: high
-    harness: opencode
+    harness: null
     price_source: guess
     prices: {input: 0.6, output: 2.5, input_cache_read: 0.1, input_cache_write: 0.6}
   glm:
     model: openrouter/z-ai/glm-5.3
     effort: high
-    harness: opencode
+    harness: null
     price_source: guess
     prices: {input: 1.0, output: 3.2, input_cache_read: 0.2, input_cache_write: 1.0}

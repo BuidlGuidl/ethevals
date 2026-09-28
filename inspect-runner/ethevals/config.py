@@ -10,9 +10,9 @@ class Declaration(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
-def read_yaml(path: Path) -> dict:
+def read_yaml(path: Path, data: bytes | None = None) -> dict:
     try:
-        value = yaml.safe_load(path.read_text())
+        value = yaml.safe_load(path.read_text() if data is None else data)
     except (OSError, yaml.YAMLError) as error:
         raise ValueError(f"{path}: {error}") from error
     if not isinstance(value, dict):
@@ -20,9 +20,9 @@ def read_yaml(path: Path) -> dict:
     return value
 
 
-def parse_file(schema: type[Declaration], path: Path) -> Declaration:
+def parse_file(schema: type[Declaration], path: Path, data: bytes | None = None) -> Declaration:
     try:
-        return schema.model_validate(read_yaml(path))
+        return schema.model_validate(read_yaml(path, data))
     except ValidationError as error:
         details = "; ".join(
             f"{'.'.join(map(str, item['loc']))}: {item['msg']}"
@@ -41,7 +41,8 @@ class Prices(Declaration):
 class ModelConfig(Declaration):
     model: str
     effort: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
-    harness: str
+    harness: str | None
+    agent_model_config: str | None = None
     price_source: str
     prices: Prices
 
@@ -53,7 +54,9 @@ class Config(Declaration):
     epochs: int = Field(gt=0)
     time_limit: int = Field(gt=0)
     time_limits: dict[str, int] = Field(default_factory=dict)
-    token_limit: int = Field(default=500000, gt=0)
+    cost_limit: float = Field(gt=0)
+    grader_cost_limit: float = Field(gt=0)
+    max_attempts: int = Field(gt=0)
     max_tasks: int = Field(default=4, gt=0)
     max_samples: int = Field(default=4, gt=0)
     grader: str
@@ -62,10 +65,14 @@ class Config(Declaration):
 
     @model_validator(mode="after")
     def check_grader(self):
+        from .agents import AGENTS
         if self.grader not in self.models:
             raise ValueError("grader must name a configured model")
         if any(key not in {"quiz", "build", "act", "scenario"} or value <= 0 for key, value in self.time_limits.items()):
             raise ValueError("time_limits requires eval types and positive seconds")
+        for key, model in self.models.items():
+            if model.harness is not None and model.harness not in AGENTS:
+                raise ValueError(f"models.{key}.harness: unknown harness {model.harness!r}")
         return self
 
 

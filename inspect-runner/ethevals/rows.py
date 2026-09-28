@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from inspect_ai.log import EvalLog, EvalSample, list_eval_logs, read_eval_log
+from inspect_ai.log import EvalLog, EvalSample, EvalError, list_eval_logs, read_eval_log
 
 
 def epoch_identity(metadata: dict, epoch: int) -> tuple:
@@ -15,6 +15,10 @@ def results_rows(log: EvalLog) -> list[dict]:
     metadata = log.eval.metadata or {}
     location = unquote(urlparse(log.location).path) if log.location.startswith("file://") else log.location
     samples = list(log.samples or [])
+    if not samples and not log.error:
+        samples.append(EvalSample(id=metadata["eval_id"], epoch=1, input="", target="",
+                                  error=EvalError(message="Epoch stopped before it produced a result.",
+                                                  traceback="", traceback_ansi="")))
     # Setup failures can end a task before Inspect records any sample.
     if log.error:
         completed = {(sample.id, sample.epoch) for sample in samples}
@@ -32,11 +36,9 @@ def results_rows(log: EvalLog) -> list[dict]:
         error = sample.error.message if sample.error else None
         error_kind = "execution" if error else None
         if sample.limit:
-            checks[f"runner_{sample.limit.type}_limit"] = {
-                "passed": False,
-                "reason": " ".join((f"Epoch reached {sample.limit.type} limit {sample.limit.limit}. "
-                                    + (sample.limit.reason or "")).split()),
-            }
+            reason = " ".join((f"Epoch reached {sample.limit.type} limit {sample.limit.limit}. "
+                               + (sample.limit.reason or "")).split())
+            checks = {name: {"passed": False, "reason": reason} for name in checks}
         if not checks and not error:
             error_kind, error = "scoring", "The epoch produced no named checks."
         usage = list(sample.model_usage.values())
@@ -50,6 +52,7 @@ def results_rows(log: EvalLog) -> list[dict]:
         if grader and grader.total_cost is None and metadata.get("grader_model") != metadata.get("model"):
             model_usage = sample.model_usage.get(metadata.get("model"))
             model_cost = model_usage.total_cost if model_usage else None
+        model_metered, grader_metered = model_cost, grader_cost
         if metadata.get("answer_kind") and usage:
             model_cost, grader_cost = 0.0, 0.0
             model_source, grader_source = "mock", "mock"
@@ -60,22 +63,27 @@ def results_rows(log: EvalLog) -> list[dict]:
                 grader_source = "no_usage"
         passed = None if error else all(check["passed"] for check in checks.values())
         rows.append({
-            "schema_version": 2,
+            "schema_version": 3,
             **{key: metadata.get(key) for key in (
                 "eval_id", "eval_hash", "pillar", "type", "mode", "harness", "model", "effort", "answer_kind",
-                "grader_model", "grader_effort",
+                "grader_model", "grader_effort", "harness_version", "images",
+                "cost_limit_usd", "grader_cost_limit_usd", "max_attempts",
             )},
             "epoch": metadata.get("epoch", sample.epoch),
+            "attempt": metadata.get("attempt", 1),
             "status": "error" if error else "passed" if passed else "failed",
             "passed": passed,
             "checks": checks,
             "error_kind": error_kind,
+            "limit": sample.limit.model_dump() if sample.limit else None,
             "error_reason": " ".join(error.split()) if error else None,
             "model_tokens": total_tokens - grader_tokens,
             "grader_tokens": grader_tokens,
             "total_tokens": total_tokens,
             "token_source": "mock" if metadata.get("answer_kind") else "provider",
             "model_cost_usd": model_cost,
+            "model_metered_usd": model_metered,
+            "grader_metered_usd": grader_metered,
             "model_cost_source": model_source,
             "grader_cost_usd": grader_cost,
             "grader_cost_source": grader_source,
@@ -93,6 +101,7 @@ def results_rows(log: EvalLog) -> list[dict]:
 
 def store_rows(output: Path) -> list[dict]:
     latest = {}
+    attempts = {}
     logs = [read_eval_log(info.name) for info in list_eval_logs(str(output / "logs"))]
     # Inspect's log creation time has only second precision. Samples retain
     # microseconds; task metadata supplies that precision for setup failures.
@@ -104,7 +113,10 @@ def store_rows(output: Path) -> list[dict]:
     for log in sorted(logs, key=lambda log: (created(log), log.location)):
         for row in results_rows(log):
             row["log_file"] = Path(row["log_file"]).resolve().relative_to(output.resolve()).as_posix()
-            latest[epoch_identity(row, row["epoch"])] = row
+            identity = epoch_identity(row, row["epoch"])
+            attempts[identity] = attempts.get(identity, 0) + 1
+            row["attempt"] = max(row["attempt"], attempts[identity])
+            latest[identity] = row
     return sorted(latest.values(), key=lambda row: (
         row["eval_id"], row["eval_hash"], row["model"], row["mode"], row["effort"] or "", row["epoch"],
     ))

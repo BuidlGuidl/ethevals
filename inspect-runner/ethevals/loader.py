@@ -1,4 +1,3 @@
-import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -10,6 +9,7 @@ from pydantic import ValidationError
 from .config import Config, Declaration, Mode, parse_file, read_yaml
 from .scorers import SCORERS
 from .sandboxes import validate_compose
+from .files import manifest, content_hash, inline_file
 
 PILLARS = {"concepts", "transactions", "building", "security"}
 
@@ -23,31 +23,8 @@ class EvalDeclaration(Declaration):
     time_limit: int | None = Field(default=None, gt=0)
 
 
-# These local artifacts never form part of an eval, including before git add.
-IGNORED_NAMES = {".DS_Store", "out", "cache", "lib", "__pycache__", ".pytest_cache"}
-
-
-def eval_files(folder: Path):
-    for path in sorted(folder.iterdir()):
-        if path.name in IGNORED_NAMES:
-            continue
-        if path.is_symlink():
-            raise ValueError(f"{path}: symlinks are not allowed in an eval folder")
-        if path.is_dir():
-            yield from eval_files(path)
-        elif path.is_file():
-            yield path
-
-
 def eval_hash(folder: Path) -> str:
-    digest = hashlib.sha256()
-    for path in eval_files(folder):
-        if path.is_file():
-            name = path.relative_to(folder).as_posix().encode()
-            data = path.read_bytes()
-            digest.update(len(name).to_bytes(8, "big") + name)
-            digest.update(len(data).to_bytes(8, "big") + data)
-    return digest.hexdigest()
+    return content_hash(manifest(folder))
 
 
 @dataclass(frozen=True)
@@ -58,12 +35,13 @@ class Eval:
     pillar: str
     declaration: EvalDeclaration
     scorers: list[Declaration]
+    files: dict[str, bytes]
 
     def sample(self) -> Sample:
         # Only workspace files are eligible for copying into a future sandbox.
         files = {
-            f"/workspace/{path.relative_to(self.folder / 'workspace').as_posix()}": str(path)
-            for path in eval_files(self.folder / "workspace")
+            f"/workspace/{name.removeprefix('workspace/')}": inline_file(data)
+            for name, data in self.files.items() if name.startswith("workspace/")
         }
         fields = {}
         for item in self.scorers:
@@ -77,22 +55,24 @@ class Eval:
 
 
 def load_eval(folder: Path, config: Config) -> Eval:
+    if folder.is_symlink():
+        raise ValueError(f"{folder}: symlinks are not allowed in an eval folder")
     folder = folder.resolve()
-    declaration = parse_file(EvalDeclaration, folder / "eval.yaml")
+    files = manifest(folder)
+    for name in ("eval.yaml", "scorer/scorer.yaml"):
+        if name not in files:
+            raise ValueError(f"{folder / name}: required regular file is missing")
+    declaration = parse_file(EvalDeclaration, folder / "eval.yaml", files["eval.yaml"])
     if folder.parent.name not in PILLARS:
         raise ValueError(f"{folder / 'eval.yaml'}: pillar must be one of {sorted(PILLARS)}")
     for name in ("workspace", "scorer"):
         if not (folder / name).is_dir():
             raise ValueError(f"{folder / name}: {name}: required directory is missing")
     path = folder / "scorer" / "scorer.yaml"
-    raw = read_yaml(path)
-    # Preserve the original single-kind form for existing target evals.
-    if "scorers" in raw:
-        if set(raw) != {"scorers"}:
-            raise ValueError(f"{path}: only scorers is allowed beside a scorer list")
-        items = raw["scorers"]
-    else:
-        items = [raw]
+    raw = read_yaml(path, files["scorer/scorer.yaml"])
+    if set(raw) != {"scorers"}:
+        raise ValueError(f"{path}: expected only scorers; unexpected keys {sorted(set(raw) - {'scorers'})}")
+    items = raw["scorers"]
     if not isinstance(items, list) or not items:
         raise ValueError(f"{path}: scorers must be a nonempty list")
     scorers, kinds = [], set()
@@ -103,7 +83,7 @@ def load_eval(folder: Path, config: Config) -> Eval:
         entry = SCORERS[kind]
         try:
             scorer_config = entry.schema.model_validate(item)
-            entry.validate(scorer_config, declaration, folder)
+            entry.validate(scorer_config, declaration, files)
         except ValidationError as error:
             details = "; ".join(f"{'.'.join(map(str, item['loc']))}: {item['msg']}" for item in error.errors(include_input=False))
             raise ValueError(f"{path}: {details}") from error
@@ -114,6 +94,6 @@ def load_eval(folder: Path, config: Config) -> Eval:
     if declaration.type in {"build", "act"} and not (folder / "scorer/solution").is_dir():
         raise ValueError(f"{folder}: scorer/solution is required for build and act evals")
     if (folder / "compose.yaml").exists():
-        validate_compose(folder / "compose.yaml")
-    return Eval(folder, f"{folder.parent.name}/{folder.name}", eval_hash(folder),
-                folder.parent.name, declaration, scorers)
+        validate_compose(folder / "compose.yaml", data=files["compose.yaml"])
+    return Eval(folder, f"{folder.parent.name}/{folder.name}", content_hash(files),
+                folder.parent.name, declaration, scorers, files)

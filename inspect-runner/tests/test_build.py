@@ -14,9 +14,10 @@ from inspect_ai.util import ExecResult
 from ethevals.config import load_config
 from ethevals.loader import load_eval
 from ethevals.rows import results_rows
-from ethevals.runner import build_task
+from support import build_task
 from ethevals.sandboxes import IMAGES, unpack_workspace, validate_compose
 from ethevals.scorers import forge_checks, rubric_reply
+from ethevals.files import inline_file
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "evals/building/erc20-points-token"
@@ -27,18 +28,19 @@ FORGE_OUTPUT = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {
 
 
 def test_forge_names_and_reasons():
-    assert forge_checks(FORGE_OUTPUT, "", 1) == {
+    assert forge_checks(FORGE_OUTPUT, "", 1, ["forge:test/Token.t.sol:TokenTest:testSupply()", "forge:test/Token.t.sol:TokenTest:testTransfer()"]) == {
+        "forge:compile": {"passed": True, "reason": "Compilation passed."},
         "forge:test/Token.t.sol:TokenTest:testSupply()": {"passed": True, "reason": "Test passed."},
         "forge:test/Token.t.sol:TokenTest:testTransfer()": {"passed": False, "reason": "Wrong recipient balance expected 10"},
     }
 
 
 def test_compiler_error_is_a_failed_check():
-    assert forge_checks("", 'Error: Compiler run failed:\nError (2314): Expected semicolon.\n --> src/Token.sol:4:1', 1) == {
+    assert forge_checks("", 'Error (2314): Expected semicolon.\n --> src/Token.sol:4:1', 1, []) == {
         "forge:compile": {"passed": False, "reason": "Error (2314): Expected semicolon."},
     }
-    with pytest.raises(RuntimeError, match="Could not resolve host"):
-        forge_checks("", "Could not resolve host: binaries.soliditylang.org", 1)
+    assert forge_checks("", "Could not resolve host: binaries.soliditylang.org", 1, []) == {
+        "forge:compile": {"passed": False, "reason": "Could not resolve host: binaries.soliditylang.org"}}
 
 
 def test_rubric_boolean_and_reason():
@@ -55,10 +57,10 @@ def test_agent_sample_contains_only_workspace_files():
     task = build_task(load_eval(BUILD, config), config, "opus", "internet", None, 1)
     sample = task.dataset[0]
     assert sample.files == {
-        "/workspace/foundry.toml": str(BUILD / "workspace/foundry.toml"),
-        "/workspace/src/BuilderPoints.sol": str(BUILD / "workspace/src/BuilderPoints.sol"),
+        "/workspace/foundry.toml": inline_file((IMAGES / "foundry.toml").read_bytes()),
+        "/workspace/src/BuilderPoints.sol": inline_file((BUILD / "workspace/src/BuilderPoints.sol").read_bytes()),
     }
-    assert (sample.sandbox.type, Path(sample.sandbox.config).name) == ("docker", "build.compose.yaml")
+    assert (sample.sandbox.type, Path(sample.sandbox.config).name) == ("docker", "stock.compose.yaml")
 
 
 @pytest.mark.parametrize("extra,reason", [
@@ -68,9 +70,12 @@ def test_agent_sample_contains_only_workspace_files():
     ({"network_mode": "host"}, "forbidden options"),
     ({"build": "."}, "forbidden options"),
     ({"environment": {"KEY": None}}, "inherited host environment"),
+    ({"user": "root"}, "runner image and the agent user"),
+    ({"image": "outside/agent:latest"}, "runner image and the agent user"),
+    ({"environment": {"LD_PRELOAD": "/workspace/inject.so"}}, "startup environment overrides"),
 ])
 def test_unsafe_compose_is_rejected(tmp_path, extra, reason):
-    data = yaml.safe_load((IMAGES / "build.compose.yaml").read_text())
+    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
     data["services"]["default"].pop("build")
     path = tmp_path / "compose.yaml"
     path.write_text(yaml.safe_dump(data))
@@ -82,7 +87,7 @@ def test_unsafe_compose_is_rejected(tmp_path, extra, reason):
 
 
 def test_services_cannot_join_internet(tmp_path):
-    data = yaml.safe_load((IMAGES / "build.compose.yaml").read_text())
+    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
     data["services"]["default"].pop("build")
     data["services"]["chain"] = {"image": "chain:test", "networks": ["private", "internet"]}
     path = tmp_path / "compose.yaml"
@@ -134,7 +139,7 @@ def test_combined_scoring_and_free_check_pipeline(tmp_path, monkeypatch, free_ch
         async def exec(self, command, **kwargs):
             if command[0] in {"tar", "rm"}:
                 return ExecResult(success=True, returncode=0, stdout="", stderr="")
-            if compile_error:
+            if compile_error and len(archives) == 2:
                 return ExecResult(success=False, returncode=1, stdout="", stderr="Error (2314): Expected semicolon.")
             output = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {"testSupply()": {"status": "Success"}}}})
             return ExecResult(success=True, returncode=0, stdout=output, stderr="")
@@ -148,7 +153,11 @@ def test_combined_scoring_and_free_check_pipeline(tmp_path, monkeypatch, free_ch
     log = eval(task, model_roles={"grader": get_model("mockllm/model", custom_outputs=grades)},
                log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(log)[0]
-    expected = {"forge:compile": {"passed": False, "reason": "Error (2314): Expected semicolon."}} if compile_error else {
+    expected = {
+        "forge:compile": {"passed": False, "reason": "Error (2314): Expected semicolon."},
+        "forge:test/Token.t.sol:TokenTest:testSupply()": {"passed": False, "reason": "Error (2314): Expected semicolon."},
+    } if compile_error else {
+        "forge:compile": {"passed": True, "reason": "Compilation passed."},
         "forge:test/Token.t.sol:TokenTest:testSupply()": {"passed": True, "reason": "Test passed."}}
     if not free_check:
         expected.update({
@@ -161,7 +170,7 @@ def test_combined_scoring_and_free_check_pipeline(tmp_path, monkeypatch, free_ch
         assert row["grader_tokens"] == 0
     else:
         assert row["grader_tokens"] > 0
-    with tarfile.open(fileobj=io.BytesIO(archives[0]), mode="r:gz") as archive:
+    with tarfile.open(fileobj=io.BytesIO(archives[1]), mode="r:gz") as archive:
         assert sorted(archive.getnames()) == ["foundry.toml", "src/Token.sol", "test/BuilderPoints.t.sol"]
         assert b"ffi = false" in archive.extractfile("foundry.toml").read()
 
@@ -172,6 +181,6 @@ def test_eval_time_limit_overrides_type(tmp_path):
     path = folder / "eval.yaml"
     path.write_text(path.read_text() + "\ntime_limit: 123\n")
     config = load_config()
-    config.token_limit = 4567
+    config.cost_limit = 0.25
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
-    assert (task.time_limit, task.token_limit) == (123, 4567)
+    assert (task.time_limit, task.cost_limit) == (123, 0.25)

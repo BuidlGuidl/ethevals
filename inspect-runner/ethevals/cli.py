@@ -18,7 +18,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="ethevals")
     parser.add_argument("command", choices=["run", "check", "validate"])
     parser.add_argument("--evals", nargs="+", help="Eval folders. Defaults to evals/*/*.")
-    parser.add_argument("--models", nargs="+", help="Model names from config.yaml. Defaults to all four.")
+    parser.add_argument("--models", nargs="+", help="Model names from config.yaml. Defaults to all configured models.")
     parser.add_argument("--modes", nargs="+", help="Select vanilla, internet, or skills. Run defaults to vanilla; check selects by type.")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--epochs", type=positive)

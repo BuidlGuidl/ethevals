@@ -15,4 +15,9 @@ WORKDIR /workspace
 RUN mkdir src && printf 'pragma solidity =0.8.30; contract Warmup {}\n' > src/Warmup.sol && \
     forge build --use 0.8.30 && rm -rf src out cache
 RUN forge install OpenZeppelin/openzeppelin-contracts@v5.4.0 --no-git
+RUN forge install foundry-rs/forge-std@77041d2ce690e692d6e03cc812b57d1ddaa4d505 --no-git
+USER root
+RUN mkdir -p /opt/ethevals && cp -a /workspace/lib /opt/ethevals/lib && \
+    chown -R root:root /opt/ethevals && chmod -R a-w /opt/ethevals
+USER agent
 CMD ["sleep", "infinity"]

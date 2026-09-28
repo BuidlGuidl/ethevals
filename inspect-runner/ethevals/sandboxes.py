@@ -1,5 +1,6 @@
 import io
 import tarfile
+import re
 from pathlib import Path, PurePosixPath
 
 from inspect_ai.util import sandbox
@@ -12,21 +13,31 @@ MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
 
 def compose_file(folder: Path, eval_type: str) -> Path:
     own = folder / "compose.yaml"
-    path = own if own.exists() else IMAGES / f"{eval_type}.compose.yaml"
+    path = own if own.exists() else IMAGES / "stock.compose.yaml"
     if not path.is_file():
         raise ValueError(f"{path}: no stock compose for type {eval_type!r}")
     validate_compose(path, stock=not own.exists())
     return path
 
 
-def validate_compose(path: Path, *, stock: bool = False) -> None:
-    data = read_yaml(path)
+def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = None) -> None:
+    data = read_yaml(path, data)
 
     def reject(message):
         raise ValueError(f"{path}: {message}")
 
-    if "${" in path.read_text():
-        reject("host environment substitution is forbidden")
+    def check_interpolation(value):
+        if isinstance(value, str) and re.search(r"\$(?:\{|[A-Za-z_])", value.replace("$$", "")):
+            reject("host environment substitution is forbidden")
+        if isinstance(value, dict):
+            for key, child in value.items():
+                check_interpolation(key)
+                check_interpolation(child)
+        elif isinstance(value, list):
+            for child in value:
+                check_interpolation(child)
+
+    check_interpolation(data)
     if set(data) - {"services", "networks", "volumes"}:
         reject("only services, networks, and named volumes are allowed")
     services, networks = data.get("services", {}), data.get("networks", {})
@@ -48,6 +59,10 @@ def validate_compose(path: Path, *, stock: bool = False) -> None:
         extra = set(service) - allowed - ({"build"} if stock else set())
         if extra:
             reject(f"service {name}: forbidden options {sorted(extra)}; privileged containers and host mounts are forbidden")
+        if name in {"default", "scorer"}:
+            runner_image = read_yaml(IMAGES / "stock.compose.yaml")["services"]["default"]["image"]
+            if service.get("image") != runner_image or service.get("user", "agent") != "agent":
+                reject(f"service {name}: requires the runner image and the agent user")
         if service.get("networks") != (["private", "internet"] if name in {"default", "scorer"} else ["private"]):
             reject(f"service {name}: only default and scorer can join internet; all services must join private")
         for volume in service.get("volumes", []):
@@ -59,6 +74,11 @@ def validate_compose(path: Path, *, stock: bool = False) -> None:
             reject(f"service {name}: environment must use explicit mapping values")
         if any(value is None for value in service.get("environment", {}).values()):
             reject(f"service {name}: inherited host environment is forbidden")
+        if name in {"default", "scorer"} and any(
+            key.startswith("LD_") or key in {"BASH_ENV", "ENV", "PYTHONPATH", "PYTHONHOME", "NODE_OPTIONS"}
+            for key in service.get("environment", {})
+        ):
+            reject(f"service {name}: loader and shell startup environment overrides are forbidden")
 
 
 def unpack_workspace(data: bytes) -> dict[str, bytes]:
@@ -81,10 +101,26 @@ def unpack_workspace(data: bytes) -> dict[str, bytes]:
 
 async def workspace_files() -> dict[str, bytes]:
     agent = sandbox("default")
+    # Freeze every process owned by the unprivileged agent, including detached
+    # writers. Root runs the collector; the agent cannot resume itself.
+    stopped = await agent.exec(["/bin/sh", "-c", """
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    /usr/bin/pkill -STOP -u agent
+    /usr/bin/ps -u agent -o pid=,stat= | /usr/bin/awk '$1 != 1 && $2 !~ /^[TZ]/ {bad=1} END {exit bad}' && exit 0
+    /usr/bin/sleep 0.05
+done
+exit 1
+"""], user="root", cwd="/", timeout=10)
+    if not stopped.success:
+        raise ValueError(f"Cannot stop agent processes: {stopped.stderr}")
+    temporary = await agent.exec(["/usr/bin/mktemp", "-d", "/tmp/ethevals.XXXXXXXXXX"], user="root", cwd="/")
+    if not temporary.success:
+        raise RuntimeError(f"Cannot allocate snapshot: {temporary.stderr}")
+    path = temporary.stdout.strip() + "/workspace.tar.gz"
     result = await agent.exec([
-        "tar", "--exclude=out", "--exclude=cache", "--exclude=.git", "--exclude=node_modules",
-        "-czf", "/tmp/ethevals-workspace.tar.gz", "-C", "/workspace", ".",
-    ])
+        "/usr/bin/tar", "--exclude=out", "--exclude=cache", "--exclude=.git", "--exclude=node_modules",
+        "-czf", path, "-C", "/workspace", ".",
+    ], user="root", cwd="/", timeout=60)
     if not result.success:
-        raise RuntimeError(f"Cannot collect workspace: {result.stderr}")
-    return unpack_workspace(await agent.read_file("/tmp/ethevals-workspace.tar.gz", text=False))
+        raise ValueError(f"Cannot collect workspace: {result.stderr}")
+    return unpack_workspace(await agent.read_file(path, text=False))

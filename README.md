@@ -18,10 +18,11 @@ Docker is required for builds and internet epochs. Vanilla quiz checks need no D
 Build the pinned Solidity image before the first build or internet epoch:
 
 ```sh
-docker compose -f inspect-runner/ethevals/images/build.compose.yaml build default
+docker compose -f inspect-runner/ethevals/images/stock.compose.yaml build default
 ```
 
-The image includes Foundry 1.5.1, Solidity 0.8.30, and OpenZeppelin 5.4.0.
+The image includes Foundry 1.5.1, Solidity 0.8.30, OpenZeppelin 5.4.0, and forge-std 1.9.7.
+The last two dependencies live in a root-owned directory. Submitted copies cannot replace them during grading.
 
 ## Run without a key
 
@@ -74,7 +75,7 @@ This runner uses OpenRouter for paid calls and has no code path that uses a subs
 ## Resume an interrupted command
 
 Repeat the same command with the same output directory.
-The runner reuses completed epochs and retries unfinished or errored epochs through Inspect.
+The runner reuses completed epochs. Each identity permits at most two executions, including unfinished or errored executions.
 The runner flushes each completed epoch to its log.
 The same directory accepts changed evals and selections. Earlier logs remain available.
 Each epoch is identified by its eval hash, agent, mode, and epoch number.
@@ -82,10 +83,13 @@ Price or grader changes never repeat completed agent work.
 Rows retain the prices and grader used at execution time.
 
 Quizzes have a 300-second limit. Builds have a 1,200-second limit.
-The configuration caps each epoch at 500,000 total tokens and runs up to four tasks and samples at once.
+The configuration gives the player a $5 cost budget and the grader a separate $0.50 budget per epoch.
+Inspect meters configured prices, including the lower price for cached reads. These prices are estimates until checked.
+Limits stop further calls after usage arrives. An in-flight call can exceed its remaining budget.
+Rows record each role's metered dollars and budget. The runner runs up to four tasks and samples at once.
 An eval can override its time limit with `time_limit` in `eval.yaml`.
-A crash or setup failure produces `status: error`, with `passed: null`, and runs again on the next invocation.
-A time or token limit produces a named failed check and a final `status: failed` result.
+A crash or setup failure produces `status: error`, with `passed: null`, and retries within the two-execution cap.
+A time or cost limit fails the eval's checks and produces a final `status: failed` result.
 An incorrect answer produces `status: failed`, with `passed: false`.
 
 ## Read the runner contracts
@@ -110,14 +114,18 @@ Web search uses the keyless Exa MCP URL in `search_provider`. Claude Code's buil
 The Exa endpoint can rate-limit requests. Agents can also fetch pages and install packages from their containers.
 
 Guess: the pair costs $1 to $5, including rubric grading. This estimate is not a spending cap.
-The token limit counts input and output tokens across calls. Current prices and caching affect the actual cost.
+The cost meter uses the configured prices. The time limit remains the main bound on a hung agent.
 
 Inspect `results/adr0002/rows.jsonl` after both commands finish.
 The quiz row has `harness: null` and the `erc_number` check.
-The build row has `harness: claude_code`, seven `forge:` checks, and two `rubric:` checks with reasons.
+The build row has `harness: claude_code`, eight `forge:` checks, and two `rubric:` checks with reasons.
 The rubric's tokens and cost appear in `grader_tokens` and `grader_cost_usd`.
 Rows with `status: error` need diagnosis. An agent's incorrect code has `status: failed`.
-Compiler errors produce a failed `forge:compile` check.
+The Forge checks contain `forge:compile` and the seven test functions from the reference run.
+Compilation and setup failures retain that check set. Agent-added tests cannot add checks.
+Forge and the rubric read one workspace snapshot after the runner stops the agent's processes.
+The supplied `foundry.toml` defines grading settings and dependency remappings. Agent edits to it do not affect grading.
+The rubric sees other submitted Solidity dependencies. It fails if its evidence is incomplete.
 
 To test resume, kill the build command during its first execution.
 Repeat the same build command:
@@ -126,7 +134,7 @@ Repeat the same build command:
 uv run ethevals run --evals evals/building/erc20-points-token --models opus --modes internet --epochs 1 --output results/adr0002
 ```
 
-The finished quiz keeps its sample UUID. The unfinished build runs again.
+The finished quiz keeps its sample UUID. The unfinished build runs again if its execution cap allows it.
 Repeating either finished command reuses its row, including a final failed result.
 ADR 0002 remains proposed until this paid test succeeds.
 
