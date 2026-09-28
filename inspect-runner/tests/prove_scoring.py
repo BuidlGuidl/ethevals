@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from inspect_ai import eval, task_with
+from inspect_ai.log import read_eval_log
 from inspect_ai.scorer import scorer, accuracy
 from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
@@ -86,6 +87,16 @@ contract ImageLibraryTest is Test { function testImageLibrary() public pure { as
     assert all(names == check_sets[0] for names in check_sets)
     assert len(check_sets[0]) == 9
     assert not any("testFree" in name for name in check_sets[0])
+    for row in rows:
+        log = read_eval_log(str(output / row["log_file"]))
+        events = log.samples[0].events
+        transfers = [event for event in events if event.event == "sandbox" and event.action == "exec"
+                     and "write-submission" in (event.cmd or "")]
+        assert len(transfers) == 1
+        assert transfers[0].input.startswith("binary ("), "Scorer archive contents entered the public log."
+        for event in events:
+            if event.event == "sandbox" and event.action == "read_file" and "/out/build-info/" in event.file:
+                assert event.output.startswith("binary ("), "Private compiler sources entered the public log."
     print("PASS: reference, invalid pragma, constructor failure, edited image libraries, and frozen detached writer.")
 
 

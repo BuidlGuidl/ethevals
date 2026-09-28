@@ -183,7 +183,7 @@ async def prepare_forge(box, submitted, files):
             tar.addfile(item, io.BytesIO(data))
     written = await runner_exec(box, ["/bin/sh", "-c", '/usr/bin/base64 -d > "$1"',
                                      "write-submission", "/tmp/submission.tar.gz"],
-                                input=base64.b64encode(archive.getvalue()).decode())
+                                input=base64.b64encode(archive.getvalue()))
     if not written.success:
         raise RuntimeError(f"Cannot write scorer archive: {written.stderr}")
     copied = await runner_exec(box, ["/usr/bin/tar", "-xzf", "/tmp/submission.tar.gz", "-C", "/workspace"])
@@ -214,7 +214,7 @@ async def compiled_sources(box, submitted):
         raise RuntimeError("Forge produced no build info.")
     sources, eligible = {}, build_inputs(submitted)
     for path in listed.stdout.splitlines():
-        info = json.loads(await box.read_file(path))
+        info = json.loads(await box.read_file(path, text=False))
         for name, source in info["input"]["sources"].items():
             if name in eligible:
                 sources[name] = source["content"].encode()
