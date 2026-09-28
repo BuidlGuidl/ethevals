@@ -85,20 +85,6 @@ The model is asked the question, and a separate grader model compares its reply 
 
 </details>
 
-### Same idea, different names
-
-Each tool has its own word for the same two things (measured in each tool's docs):
-
-| | one question | a set of questions scored together |
-|---|---|---|
-| promptfoo (wallet evals) | a **test** (one entry under `tests:`) | the config file |
-| Inspect (eth-bench) | a **sample** | a **task** |
-| HF dataset | a **row** | a **config** and split, e.g. `concepts` / `test` |
-| HF `eval.yaml` | a row | a **task**, one leaderboard each |
-| Our spec | an **eval** (one folder) | a **pillar** |
-
-So a promptfoo "test" is not an HF "task". A test is one question, the same as a row or a sample. An HF task is a whole set with one leaderboard, like our Concepts pillar (inferred from the definitions).
-
 ### Side by side
 
 | | Austin's ethevals | EthIQ | Wallet evals | eth-bench |
@@ -109,7 +95,14 @@ So a promptfoo "test" is not an HF "task". A test is one question, the same as a
 | Where the data shows | ethevals.com | own site | HF (not loadable) | README |
 | Automation | none | private | none | none |
 
-## Hugging Face
+
+<details>
+
+<summary>
+  
+## A bit about Hugging Face
+
+</summary>
 
 HF hosts two things we care about.
 
@@ -150,7 +143,17 @@ The EF today: the `ethereum-foundation` org is empty, and the AI team publishes 
 
 How we'd publish, step by step, with real examples: [publishing ethevals to Hugging Face](./publishing-ethevals-to-hugging-face.md).
 
-## Inspect
+
+</details>
+
+
+<details>
+
+<summary>
+
+## A bit about Inspect
+    
+</summary>
 
 Inspect fits the **runner** part of our system:
 
@@ -166,9 +169,12 @@ What it doesn't do is ours to build: the site, the automation trigger, and an ev
 
 One eval followed through all three modes, with commands, outputs and automation: [ethevals on Inspect: the ERC-20 example](./ethevals-on-inspect-erc20-example.md).
 
+</details>
+
+
 ## Our proposal
 
-Two repos. **`BuidlGuidl/ethevals`** on GitHub is the source: evals, runner, site and automation. **`ethereum-foundation/hf-ethevals-dataset`** on HF is the published copy the EF owns.
+Two repos: **`BuidlGuidl/ethevals`** on GitHub is the source: evals, runner, site and automation. **`ethereum-foundation/hf-ethevals-dataset`** on HF is the published copy the EF owns.
 
 ```mermaid
 flowchart LR
@@ -208,8 +214,8 @@ ethevals/
 
 Why this system is worth building:
 
-- **Real chain scenarios.** Build evals run the agent against a real local chain in an isolated box, so we measure whether it actually builds and ships working contracts. None of the four projects does this, and it's what the Building pillar needs (inferred).
-- **A framework for every pillar.** Any team adds an eval as a folder, with YAML, Markdown and Solidity tests and no Python. EthIQ-style questions, wallet cases, or eth-bench's false-premise questions all fit one format (inferred).
+- **Real chain scenarios:** Build evals run the agent against a real local chain in an isolated box, so we measure whether it actually builds and ships working contracts. None of the four projects does this, and it's what the Building pillar needs (inferred).
+- **A framework for every pillar:** Any team adds an eval as a folder, with YAML, Markdown and Solidity tests and no Python. EthIQ-style questions, wallet cases, or eth-bench's false-premise questions all fit one format (inferred).
 - **Automated end to end.**
   1. Merge an eval: CI runs it on every model.
   2. Add a model to `models.yaml`: CI runs every eval on it, reusing everything already done.
