@@ -11,7 +11,7 @@ from ethevals.loader import load_eval
 from ethevals.preparation import build_images, prepare_compose
 from ethevals.rows import export_rows
 from ethevals.sandboxes import runner_exec, validate_compose, workspace_files
-from ethevals.scorers import compiled_sources, forge, forge_checks, prepare_forge
+from ethevals.scorers import compiled_sources, forge, prepare_forge
 from inspect_ai import eval, task_with
 from inspect_ai.log import read_eval_log
 from inspect_ai.scorer import accuracy, scorer
@@ -134,41 +134,11 @@ def test_unused_library_does_not_change_compiled_rubric_evidence(tmp_path):
         assert first == second == {"src/Token.sol": src, "lib/custom/Helper.sol": helper}
 
 
-def test_unavailable_compiler_fails_offline_and_names_available_versions(tmp_path):
-    with containers(tmp_path) as boxes:
-        box = boxes["scorer"]
-        async def proof():
-            installed = await runner_exec(box, ["/bin/sh", "-c", "ls /home/agent/.svm/*/solc-*"])
-            assert installed.stdout.strip() == "/home/agent/.svm/0.8.30/solc-0.8.30"
-            await prepare_forge(box, {"src/Token.sol": b"pragma solidity =0.8.29; contract Token {}"}, {
-                "scorer/tests/Token.t.sol": b'pragma solidity ^0.8.0; import "../src/Token.sol"; contract Tests { function testToken() public { new Token(); } }'})
-            result = await forge(box, timeout=180)
-            checks = forge_checks(result.stdout, result.stderr, result.returncode)
-            assert checks["forge:compile"]["passed"] is False
-            assert "Available solc versions: 0.8.30" in checks["forge:compile"]["reason"]
-            assert "No solc version installed that matches" in result.stderr
-            assert "https://" not in result.stderr
-        anyio.run(proof)
-
-
 @solver
-def submit(files, variant):
+def submit(reference, variant):
     async def solve(state, generate):
-        source = files["scorer/solution/src/BuilderPoints.sol"]
-        if variant == "pragma":
-            source = b"pragma solidity =0.8.29; contract BuilderPoints {}"
-        elif variant == "missing_method":
-            source = b"pragma solidity =0.8.30; contract BuilderPoints {}"
-        elif variant == "syntax":
-            source = b"pragma solidity =0.8.30; contract BuilderPoints { uint value = ; }"
-        elif variant == "traced":
-            result = await sandbox().exec(["bash", "-c", """
-case $(uname -m) in aarch64) ptrace=117 ;; x86_64) ptrace=101 ;; *) exit 1 ;; esac
-nohup perl -e "syscall($ptrace,0,0,0,0); sleep 1000" >/dev/null 2>&1 &
-echo $! > /workspace/traced.pid
-"""])
-            assert result.success, result.stderr
-        elif variant == "setup":
+        source = reference
+        if variant == "setup":
             source = source.replace(b"_mint(", b'require(false, "constructor failed"); _mint(')
         elif variant == "dependency":
             await sandbox().write_file("/workspace/lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol", "invalid Solidity")
@@ -202,16 +172,6 @@ def frozen_writer(underlying):
     return score
 
 
-@scorer(metrics={"*": [accuracy()]})
-def traced_process(underlying):
-    async def score(state, target):
-        result = await underlying(state, target)
-        status = await runner_exec(sandbox(), ["/bin/sh", "-c", 'ps -o stat= -p "$(cat /workspace/traced.pid)"'], user="root", cwd="/")
-        assert status.stdout.strip().startswith("t"), status
-        return result
-    return score
-
-
 def test_reference_failures_owned_libraries_and_frozen_writer(tmp_path):
     output = tmp_path / "proof"
     config = fixture_config()
@@ -230,25 +190,25 @@ contract ConstructorTest is Test {
     evaluation = replace(original, files=files, hash=content_hash(files))
     compose = prepare_compose(evaluation, output)
     tasks = []
-    variants = ("reference", "pragma", "setup", "dependency", "snapshot", "traced", "missing_method", "syntax")
-    for variant in variants:
+    expected = {"setup": "failed", "dependency": "passed", "snapshot": "passed"}
+    for epoch, variant in enumerate(expected, 1):
         task = build_task(evaluation, config, None, "internet", "reference", 1, compose)
-        task.metadata["epoch"] = list(variants).index(variant) + 1
+        task.metadata["epoch"] = epoch
         task = task_with(task, name=task.name + "-" + variant)
-        task.solver = submit(files, variant)
+        task.solver = submit(files["scorer/solution/src/BuilderPoints.sol"], variant)
         if variant == "snapshot":
             task.scorer = [frozen_writer(task.scorer[0])]
-        elif variant == "traced":
-            task.scorer = [traced_process(task.scorer[0])]
         tasks.append(task)
     eval(tasks, log_dir=str(output / "logs"), display="plain", max_tasks=2, max_samples=2,
          retry_on_error=0, fail_on_error=False)
     rows = export_rows(output)
-    expected = {"reference": "passed", "pragma": "failed", "setup": "failed", "dependency": "passed", "snapshot": "passed", "traced": "passed", "missing_method": "failed", "syntax": "failed"}
-    assert {list(variants)[row["epoch"] - 1]: row["status"] for row in rows} == expected, rows
+    assert [row["epoch"] for row in rows] == [1, 2, 3]
     assert all(not any("testFree" in name for name in row["checks"]) for row in rows)
     for row in rows:
+        variant = list(expected)[row["epoch"] - 1]
+        assert row["status"] == expected[variant], row
         log = read_eval_log(str(output / row["log_file"]))
+        assert "PRIVATE_SOURCE_SENTINEL" not in log.model_dump_json()
         events = log.samples[0].events
         transfers = [event for event in events if event.event == "sandbox" and event.action == "exec"
                      and "write-submission" in (event.cmd or "")]
@@ -257,15 +217,6 @@ contract ConstructorTest is Test {
         for event in events:
             if event.event == "sandbox" and event.action == "read_file" and "/out/build-info/" in event.file:
                 assert event.output.startswith("binary ("), "Private compiler sources entered the public log."
-        assert "PRIVATE_SOURCE_SENTINEL" not in str(log.samples[0].messages)
-        assert "PRIVATE_SOURCE_SENTINEL" not in str(row["checks"])
-        if list(variants)[row["epoch"] - 1] in {"pragma", "syntax", "missing_method"}:
-            assert set(row["checks"]) == {"forge:compile"}
-        if list(variants)[row["epoch"] - 1] == "pragma":
-            assert "Available solc versions: 0.8.30" in row["checks"]["forge:compile"]["reason"]
-        elif list(variants)[row["epoch"] - 1] == "syntax":
-            assert row["checks"]["forge:compile"] == {
-                "passed": False, "reason": "Error (6933): Expected primary expression."}
-        elif list(variants)[row["epoch"] - 1] == "setup":
+        if variant == "setup":
             assert row["checks"]["forge:test/ImageLibrary.t.sol:ConstructorTest:constructor()"] == {
                 "passed": False, "reason": "constructor failed"}

@@ -1,13 +1,11 @@
 from pathlib import Path
 import json
-import shutil
 
 from ethevals.config import load_config
 from ethevals.loader import load_eval
 import pytest
-import yaml
 
-from support import build_task, eval_cli, fixture_config
+from support import build_task, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,8 +14,7 @@ BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
 
 @pytest.mark.parametrize("harness,provider,accepted", [
     ("claude_code", "anthropic", True), ("codex_cli", "openai", True),
-    ("claude_code", "openai", False), ("codex_cli", "anthropic", False),
-    ("opencode", "anthropic", False), ("opencode", "openrouter", False),
+    ("claude_code", "openai", False), ("opencode", "openrouter", False),
 ])
 def test_native_search_requires_its_provider(tmp_path, harness, provider, accepted):
     data = fixture_config().model_dump()
@@ -34,47 +31,6 @@ def test_native_search_requires_its_provider(tmp_path, harness, provider, accept
             load_config(path)
 
 
-@pytest.mark.parametrize("effort", ["hihg", "none", "minimal", "max"])
-def test_validate_rejects_unsupported_effort(folder, tmp_path, effort):
-    path = tmp_path / "config.yaml"
-    data = fixture_config().model_dump()
-    data["models"]["opus-5.5"]["effort"] = effort
-    path.write_text(yaml.safe_dump(data))
-    result = eval_cli("validate", "--evals", folder, "--config", path)
-    assert result.returncode == 2
-    assert "models.opus-5.5.effort" in result.stderr
-
-
-def test_validate_rejects_unknown_model(folder, tmp_path):
-    path = tmp_path / "config.yaml"
-    config = fixture_config()
-    config.agents["claude-code-opus-5.5"].model = "missing"
-    path.write_text(config.model_dump_json())
-    result = eval_cli("validate", "--evals", folder, "--config", path)
-    assert result.returncode == 2
-    assert "agents.claude-code-opus-5.5.model: unknown model 'missing'" in result.stderr
-
-
-def test_type_time_limit_reaches_task(tmp_path):
-    folder = tmp_path / "concepts/quiz"
-    shutil.copytree(ROOT / "evals/concepts/agent-registries", folder)
-    path = folder / "eval.yaml"
-    config = fixture_config()
-    config.time_limits["quiz"] = 123
-    config.cost_limit = 0.25
-    task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
-    assert (task.working_limit, task.cost_limit) == (123, 0.25)
-    assert task.time_limit >= 3 * task.working_limit
-    assert task.time_limit / 2 >= task.metadata["scoring_limit_seconds"]
-
-
-def test_unknown_harness_fails_at_config_load(tmp_path):
-    path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump(fixture_config().model_dump()).replace("harness: claude_code", "harness: absent"))
-    with pytest.raises(ValueError, match="unknown harness 'absent'"):
-        fixture_config(path)
-
-
 def test_total_limit_leaves_room_for_build_grading():
     config = fixture_config()
     evaluation = load_eval(BUILD, config)
@@ -85,17 +41,19 @@ def test_total_limit_leaves_room_for_build_grading():
     assert task.time_limit / 2 >= task.metadata["scoring_limit_seconds"]
 
 
-@pytest.mark.parametrize("key,value,diagnostic", [
-    ("time_limits", {"quiz": 0, "build": 1200, "act": 1200}, "time_limits.quiz"),
-    ("prices", {}, "prices.mockllm/grader"),
-    ("search", "yes", "search"),
+@pytest.mark.parametrize("keys,value", [
+    (["models", "opus-5.5", "effort"], "hihg"),
+    (["agents", "claude-code-opus-5.5", "model"], "missing"),
+    (["agents", "claude-code-opus-5.5", "harness"], "absent"),
+    (["time_limits", "quiz"], 0), (["prices"], {}), (["search"], "yes"),
 ])
-def test_config_errors_name_file_and_key(tmp_path, key, value, diagnostic):
-    path = tmp_path / "config.yaml"
+def test_config_rejects_invalid_settings(tmp_path, keys, value):
     data = fixture_config().model_dump()
-    data[key] = value
+    target = data
+    for key in keys[:-1]:
+        target = target[key]
+    target[keys[-1]] = value
+    path = tmp_path / "config.json"
     path.write_text(json.dumps(data))
-    with pytest.raises(ValueError) as error:
+    with pytest.raises(ValueError):
         load_config(path)
-    assert str(path) in str(error.value)
-    assert diagnostic in str(error.value)

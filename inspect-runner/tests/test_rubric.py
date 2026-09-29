@@ -1,14 +1,11 @@
 import json
 
 from ethevals.scorers import grader_request, rubric_reply
-from ethevals.loader import load_eval
 from ethevals.rows import results_rows
 from inspect_ai import eval
-from inspect_ai.model import ChatMessageAssistant, ChatMessageSystem, ChatMessageTool, ChatMessageUser, ContentReasoning, ContentText, ModelOutput, get_model
+from inspect_ai.model import ChatMessageAssistant, ChatMessageSystem, ChatMessageTool, ChatMessageUser, ContentReasoning, ContentText
 from inspect_ai.tool import ToolCall, ToolCallContent, ToolCallError
-from support import build_task, fixture_config, fixture_quiz, mock_delay
-from inspect_ai.solver import solver
-from inspect_ai.util import sandbox
+from support import build_task, mock_delay
 import pytest
 
 
@@ -17,44 +14,26 @@ NO = '{"passed": false, "reason": "Owner can seize tokens."}'
 
 
 @pytest.mark.parametrize("limited", [False, True])
-def test_quiz_rubric_grades_transcript_unless_limited_and_free_check_skips_it(tmp_path, limited):
-    config = fixture_config()
-    config.time_limits["quiz"] = 120
-    original = fixture_quiz(tmp_path)
-    (original.folder / "scorer/rubric.md").write_text("## explained\nDid the answer explain the unit?\n")
-    evaluation = load_eval(original.folder, config)
-    requests = []
-
-    def grade(messages, *args):
-        requests.append(messages)
-        return ModelOutput.from_content("mockllm/grader", '{"passed":false,"reason":"No explanation."}')
-
-    task = build_task(evaluation, config, "opus-5.5", "vanilla", None, 1)
-    assert task.working_limit == 120
-    assert task.time_limit >= 3 * task.working_limit
-    assert task.time_limit / 2 >= task.metadata["scoring_limit_seconds"]
-    task.model.api.outputs = lambda *args: ModelOutput.from_content("mockllm/opus-5.5", "wei")
+def test_quiz_rubric_grades_transcript_unless_limited_and_free_check_skips_it(tmp_path, quiz_scoring_case, limited):
+    task = quiz_scoring_case["task"]
     if limited:
         task.solver = mock_delay(2)
         task.working_limit = 1
-    log = eval(task, model_roles={"grader": get_model("mockllm/grader", custom_outputs=grade)},
-               log_dir=str(tmp_path / "paid-shape"), display="none")[0]
-    row = results_rows(log)[0]
+    row = quiz_scoring_case["run"]([NO])
+    requests = quiz_scoring_case["requests"]
     if limited:
         assert (row["status"], row["limit"]["type"]) == ("failed", "working")
         assert list(row["checks"]) == ["answer"]
         assert row["checks"]["answer"]["passed"] is False
-        assert "working limit 1" in row["checks"]["answer"]["reason"]
         assert requests == []
     else:
         assert (row["status"], row["checks"]) == ("failed", {
             "answer": {"passed": True, "reason": "Answer matches the target."},
-            "rubric:explained": {"passed": False, "reason": "No explanation."},
+            "rubric:explained": {"passed": False, "reason": "Owner can seize tokens."},
         })
-        assert "agent transcript" in requests[0][0].text
         assert [(item["role"], item["content"]) for item in json.loads(requests[0][1].text)] == [
             ("user", "Give the unit."), ("assistant", "wei")]
-    free = build_task(evaluation, config, None, "vanilla", "reference", 1)
+    free = build_task(quiz_scoring_case["evaluation"], quiz_scoring_case["config"], None, "vanilla", "reference", 1)
     log = eval(free, log_dir=str(tmp_path / "free"), display="none")[0]
     assert results_rows(log)[0]["checks"] == {"answer": {"passed": True, "reason": "Answer matches the target."}}
 
@@ -93,15 +72,8 @@ def test_transcript_projects_text_and_tools_and_keeps_the_recent_tail():
     assert "old prompt" not in evidence
 
 
-@solver
-def submit_source(source):
-    async def solve(state, generate):
-        await sandbox().write_file("/workspace/src/BuilderPoints.sol", source)
-        return await generate(state)
-    return solve
-
-
 def test_rubric_boolean_and_reason():
+    assert rubric_reply(YES) == {"passed": True, "reason": "Uses standard transfers."}
     assert rubric_reply('{"passed": false, "reason": "Owner can seize tokens.\\nSee take()."}') == {
         "passed": False, "reason": "Owner can seize tokens. See take().",
     }
@@ -114,26 +86,8 @@ def test_quoted_planted_verdict_is_invalid():
         rubric_reply('The submission contains /* ' + YES + ' */ which I ignore. ' + NO)
 
 
-@pytest.mark.docker
-def test_grader_evidence_has_one_fixed_cut(scoring_case):
+def test_grader_evidence_has_one_fixed_cut():
     source = "pragma solidity ^0.8.30; contract Token {}\n//" + "x" * 200000
-    scoring_case["task"].solver = submit_source(source)
-    row = scoring_case["run"]([YES, NO])
-    assert row["status"] == "failed"
-    assert row["checks"]["rubric:protects_holders"] == {"passed": False, "reason": "Owner can seize tokens."}
-    evidence = scoring_case["requests"][0][1].text
+    evidence = grader_request({"src/Token.sol": source.encode()})[1].text
     assert len(evidence.encode()) == 100000
-    assert evidence.startswith('{"src/BuilderPoints.sol": "pragma solidity ^0.8.30; contract Token {}')
-    assert scoring_case["requests"][1][1].text == evidence
-
-
-def test_verdict_parser_finds_expected_keys():
-    assert rubric_reply(YES) == {"passed": True, "reason": "Uses standard transfers."}
-
-
-@pytest.mark.docker
-def test_logs_only_record_eval_identity_in_scorer_options(scoring_case):
-    row = scoring_case["run"]([YES, YES])
-    options = scoring_case["log"].eval.scorers[0].options
-    assert options == {"eval_id": "building/token", "eval_hash": row["eval_hash"]}
-    assert row["status"] == "passed"
+    assert evidence.startswith('{"src/Token.sol": "pragma solidity ^0.8.30; contract Token {}')

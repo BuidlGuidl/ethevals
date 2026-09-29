@@ -1,7 +1,10 @@
 from pathlib import Path
 import json
 
-from ethevals.scorers import forge_checks
+from ethevals.scorers import forge_checks, prepare_forge
+from ethevals.scoring_base import SubmissionFailed
+from inspect_ai.util import ExecResult
+import anyio
 import pytest
 
 
@@ -9,9 +12,6 @@ FORGE_OUTPUT = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {
     "testSupply()": {"status": "Success", "reason": None},
     "testTransfer()": {"status": "Failure", "reason": "Wrong recipient balance\nexpected 10"},
 }}})
-CHECK = "forge:test/Token.t.sol:TokenTest:testSupply()"
-PASS = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {
-    "testSupply()": {"status": "Success"}}}})
 CAPTURES = json.loads((Path(__file__).parent / "fixtures/forge-1.5.1.json").read_text())
 
 
@@ -23,35 +23,18 @@ def test_forge_names_and_reasons():
     }
 
 
-def test_compiler_error_is_a_failed_check():
-    captured = json.loads((Path(__file__).parent / "fixtures/forge-1.5.1.json").read_text())["syntax"]
-    assert forge_checks(**captured) == {
-        "forge:compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},
-    }
+@pytest.mark.parametrize("captured", [CAPTURES[name] for name in ("syntax", "version", "missing_method")] + [
+    {"stdout": "", "stderr": "CompilerError: Stack too deep", "returncode": 1}])
+def test_compiler_error_is_a_failed_check(captured):
+    assert forge_checks(**captured)["forge:compile"]["passed"] is False
 
 
-@pytest.mark.parametrize("diagnostic", [
-    "Error: Encountered invalid solc version =0.8.99. No solc version exists that matches.",
-    "CompilerError: Stack too deep. Try compiling with --via-ir.",
-])
-def test_submission_compile_errors_record_one_check(diagnostic):
-    reason = diagnostic + (" Available solc versions: 0.8.30." if "solc version" in diagnostic else "")
-    assert forge_checks("", diagnostic, 1) == {
-        "forge:compile": {"passed": False, "reason": reason},
-    }
-
-
-def test_pass_compile_and_setup_failure_record_observed_checks():
-    setup = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {
-        "setUp()": {"status": "Failure", "reason": "EvmError: Revert"}}}})
-    assert forge_checks(PASS, "", 0) == {
-        "forge:compile": {"passed": True, "reason": "Compilation passed."},
-        CHECK: {"passed": True, "reason": "Test passed."}}
-    assert forge_checks("", "CompilerError: Stack too deep", 1) == {
-        "forge:compile": {"passed": False, "reason": "CompilerError: Stack too deep"}}
-    assert forge_checks(setup, "", 1) == {
-        "forge:compile": {"passed": True, "reason": "Compilation passed."},
-        "forge:test/Token.t.sol:TokenTest:setUp()": {"passed": False, "reason": "EvmError: Revert"}}
+def test_non_utf8_source_is_a_failed_submission():
+    class Box:
+        async def exec(self, *args, **kwargs):
+            return ExecResult(success=True, returncode=0, stdout="", stderr="")
+    with pytest.raises(SubmissionFailed, match="not valid UTF-8"):
+        anyio.run(prepare_forge, Box(), {"src/X.sol": b"\xff"}, {})
 
 
 def test_captured_constructor_failure_keeps_forge_check_name():

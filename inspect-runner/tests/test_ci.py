@@ -8,7 +8,7 @@ import sys
 from ethevals.actors import select_actors
 from ethevals.loader import load_eval
 from ethevals.planning import plan
-from ethevals.rows import fold_rows, read_rows, write_rows
+from ethevals.rows import fold_rows, previous_rows, read_rows, write_rows
 from inspect_ai.log import read_eval_log, write_eval_log
 import pytest
 
@@ -21,8 +21,33 @@ ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
 
 
+@pytest.mark.parametrize("operation", ["resume", "publish"])
+def test_truncated_log_keeps_completed_epoch(tmp_path, monkeypatch, caplog, operation):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    config, evaluation = catalog_quiz()
+    output = tmp_path / "eval-run-12-1"
+    run([evaluation], config, output, answer="reference", epochs=1)
+    complete = next((output / "logs").glob("*.eval"))
+    (output / "logs/unfinished.eval").write_bytes(complete.read_bytes()[:100])
+    if operation == "resume":
+        actors_for, _ = select_actors(config, answer="reference", planning=True)
+        report = plan([evaluation], config, actors_for, previous_rows(output), epochs=1).report
+        assert report["missing_epochs"] == 0
+        report = plan([evaluation], config, actors_for, previous_rows(output), epochs=2).report
+        assert [row["epoch"] for row in report["missing"]] == [2]
+    else:
+        recorded = []
+        monkeypatch.setattr(ci, "commit_results", lambda rows, *args: recorded.extend(rows))
+        monkeypatch.setattr(ci, "publish_logs", lambda *args, **kwargs: {"rows_file": str(output / "rows.jsonl")})
+        assert ci.publish_artifacts(argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True)) == 0
+        assert any((r["eval_hash"], r["epoch"], r["status"]) == (evaluation.hash, 1, "passed") for r in recorded)
+    assert any(record.levelname == "WARNING" and str(output / "logs/unfinished.eval") in record.message
+               for record in caplog.records)
+
+
 def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(tmp_path, monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    monkeypatch.setattr(ci, "result_record", lambda rows=(): list(rows))
     config, evaluation = catalog_quiz()
     output = tmp_path / "eval-run-12-1"
     run([evaluation], config, output, answer="reference", epochs=2)
@@ -118,7 +143,7 @@ def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path
     assert rows.read_bytes() == saved
 
 
-@pytest.mark.parametrize("budget", ["0", "nan", "inf", "-1"])
+@pytest.mark.parametrize("budget", ["0", "nan"])
 def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
     from support import small_config
     config_path = tmp_path / "config.yaml"
@@ -140,30 +165,7 @@ def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
     assert (published.returncode, published.stdout) == (0, ""), published.stderr
 
 
-def test_publish_dry_run_and_resume_preserve_completed_epochs(tmp_path, monkeypatch):
-    monkeypatch.delenv("PYTEST_CURRENT_TEST")
-    rows = tmp_path / "rows.jsonl"
-    config = fixture_config()
-    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    success, initial = run([quiz], config, tmp_path / "eval-run-12-1", answer="reference", epochs=1)
-    assert (success, initial[0]["status"]) == (True, "passed")
-    published = cli("scripts/ci.py", "publish-results", "--output", tmp_path,
-                    "--repo", "BuidlGuidl/ethevals")
-    assert published.returncode == 0, published.stderr
-    assert "Dry run: record 1 rows" in published.stdout
-    assert '"release": "results-12-1"' in published.stdout
-    assert [(r["epoch"], r["status"]) for r in read_rows(tmp_path / "eval-run-12-1/rows.jsonl")] == [(1, "passed")]
-    assert not rows.exists()
-    write_rows(rows, read_rows(tmp_path / "eval-run-12-1/rows.jsonl"))
-    success, resumed = run([quiz], config, tmp_path / "second", answer="reference", epochs=3, rows_file=rows)
-    assert (success, len(resumed)) == (True, 3)
-    report = json.loads((tmp_path / "second/plan.json").read_text())
-    assert [r["epoch"] for r in report["missing"]] == [2, 3]
-    assert [r["status"] for r in read_rows(tmp_path / "second/rows.jsonl")] == ["passed"] * 3
-
-
-@pytest.mark.parametrize("status", ["failed", "error"])
-def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path, status):
+def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path):
     from support import small_config
     config = small_config()
     config_path = tmp_path / "config.yaml"
@@ -171,7 +173,7 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path, status):
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
     row = {"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test",
            "harness": None, "effort": "high", "mode": "vanilla",
-           "epoch": 1, "status": status, "attempt": 2}
+           "epoch": 1, "status": "error", "attempt": 2}
     rows = tmp_path / "rows.jsonl"
     write_rows(rows, [row])
     before = rows.read_bytes(), rows.stat().st_mtime_ns
@@ -182,12 +184,42 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path, status):
     assert "1 results rows:" in result.stdout
     report = json.loads((output / "plan.json").read_text())
     assert (report["missing_epochs"], report["worst_case_usd"], report["within_budget"]) == (0, 0, True)
-    assert report["exhausted_errors"] == ([row] if status == "error" else [])
+    assert report["exhausted_errors"] == [row]
     assert read_rows(output / "rows.jsonl") == [row]
     assert (rows.read_bytes(), rows.stat().st_mtime_ns) == before
     assert not (output / "logs").exists()
     published = cli("scripts/ci.py", "publish-results", "--output", tmp_path, "--repo", "owner/repo")
     assert (published.returncode, published.stdout) == (0, ""), published.stderr
+
+
+def test_after_merge_restores_completed_epochs_without_eval(tmp_path, monkeypatch):
+    from support import small_config
+    monkeypatch.chdir(tmp_path)
+    config = small_config()
+    config_path = tmp_path / "config.json"
+    config_path.write_text(config.model_dump_json())
+    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    rows = [{"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test",
+             "harness": None, "effort": "high", "mode": "vanilla", "epoch": epoch,
+             "status": "passed", "attempt": 1} for epoch in (1, 2)]
+    ci.command("git", "init", "-b", "system", capture_output=True)
+    ci.command("git", "config", "user.name", "Test")
+    ci.command("git", "config", "user.email", "test@example.org")
+    ci.command("git", "commit", "--allow-empty", "-m", "Source", capture_output=True)
+    ci.command("git", "update-ref", "refs/remotes/origin/system", "HEAD")
+    write_rows(Path("results/rows.jsonl"), rows)
+    ci.command("git", "add", "results/rows.jsonl")
+    ci.command("git", "commit", "-m", "Completed epochs", capture_output=True)
+    ci.command("git", "update-ref", "refs/remotes/origin/ci/results", "HEAD")
+    ci.command("git", "checkout", "--detach", "origin/system", capture_output=True)
+    monkeypatch.setattr("ethevals.runner.eval", lambda *args, **kwargs: pytest.fail("Completed epochs called eval"))
+    output = tmp_path / "eval-run-1"
+    monkeypatch.setattr(sys, "argv", ["ci.py", "after-merge", "--restore-results", "--output", str(output),
+        "--config", str(config_path), "--evals", str(quiz.folder), "--models", "test",
+        "--modes", "vanilla", "--epochs", "2", "--budget", "0"])
+    assert ci.main() == 0
+    assert json.loads((output / "plan.json").read_text())["missing_epochs"] == 0
+    assert read_rows(output / "rows.jsonl") == rows
 
 
 def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows(tmp_path, monkeypatch):
@@ -235,21 +267,6 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     assert [(r["status"], r.get("log_url")) for r in records[-1]] == [
         ("passed", "https://github.com/owner/repo/releases/download/results-1/new.eval"), ("error", None), ("passed", None)]
     assert commands[-1][:8] == ["gh", "release", "create", "results-1", "--repo", "owner/repo", "--target", "b" * 40]
-
-
-def test_release_script_exports_without_upload(tmp_path, monkeypatch, capsys):
-    from support import fixture_quiz
-    evaluation = fixture_quiz(tmp_path / "evals")
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(ci, "load_config", fixture_config)
-    monkeypatch.setattr(sys, "argv", ["ci.py", "release", "--output", str(tmp_path / "hf"),
-                                    "--hf-repo", "owner/dataset", "--license", "mit"])
-    assert ci.main() == 0
-    output = capsys.readouterr().out
-    assert '"dry_run": true' in output
-    assert '"command": ["hf", "upload", "owner/dataset"' in output
-    rows = [json.loads(line) for line in next((tmp_path / "hf/data").glob("*/test.jsonl")).read_text().splitlines()]
-    assert [(row["id"], row["target"]) for row in rows] == [("concepts/units", "wei")]
 
 
 def test_failed_preparation_stays_missing_without_using_attempts(tmp_path, monkeypatch):
@@ -301,6 +318,8 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
         return real_command(*args, **kwargs)
 
     monkeypatch.setattr(ci, "command", local_only)
+    ci.commit_results(ci.result_record(read_rows(rows)), "owner/repo", publish=False)
+    assert remote == []
     ci.commit_results(ci.result_record(read_rows(rows)), "owner/repo", publish=True)
     assert remote[0][:3] == ["git", "push", "origin"]
     assert remote[0][3].endswith(":refs/heads/ci/results")

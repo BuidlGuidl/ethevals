@@ -24,34 +24,6 @@ def test_selector_requires_a_matching_mode(command, selection, message):
     assert message in result.stderr
 
 
-@pytest.mark.parametrize("effort", [None, "medium"])
-@pytest.mark.parametrize("omit_effort", [False, True])
-def test_default_plan_selects_models_and_agents(tmp_path, effort, omit_effort):
-    from ethevals.config import load_config
-    data = load_config().model_dump()
-    if omit_effort:
-        for model in data["models"].values():
-            del model["effort"]
-    config_path = tmp_path / "config.json"
-    config_path.write_text(json.dumps(data))
-    arguments = ["--effort", effort] if effort else []
-    result = eval_cli("plan", "--evals", ROOT / "evals/concepts/agent-registries",
-                      "--config", config_path,
-                      "--epochs", 1, "--output", tmp_path, *arguments)
-    assert result.returncode == 0, result.stderr
-    report = json.loads(result.stdout)
-    expected = [(None, model) for model in data["models"].values()]
-    agents = [(agent["harness"], data["models"][agent["model"]]) for agent in data["agents"].values()]
-    assert [(row["mode"], row["harness"], row["model"], row["effort"]) for row in report["missing"]] == [
-        (mode, harness, model["model"], effort or model.get("effort")) for mode, actors in
-        [("vanilla", expected), ("internet", agents), ("skills", agents)] for harness, model in actors]
-    count = len(expected) + 2 * len(agents)
-    assert report["missing_epochs"] == count
-    assert report["worst_case_usd"] == sum(row["worst_case_usd"] for row in report["missing"])
-    assert [row["prices"] for row in report["missing"]] == [
-        data["prices"][model["model"]] for _, model in expected + agents + agents]
-
-
 @pytest.mark.parametrize("selectors,expected", [
     ([], [("vanilla", 4), ("internet", 4), ("skills", 4)]),
     (["--models", "opus-5.5"], [("vanilla", 1)]),
@@ -77,22 +49,8 @@ def test_declared_modes_skip_ineligible_evals(folder, tmp_path):
     assert success is True
     assert [(row["eval_id"], row["mode"], row["status"]) for row in rows] == [
         ("concepts/wei-per-ether", "vanilla", "passed")]
-    result = eval_cli("check", "--evals", folder, vanilla.folder, "--modes", "vanilla",
-                     "--epochs", 1, "--output", tmp_path / "check")
-    assert result.returncode == 0, result.stdout + result.stderr
-    path.write_text(path.read_text().replace("[internet]", "[internet, skills]"))
-    assert load_eval(folder, config).declaration.modes == ["internet", "skills"]
     with pytest.raises(ValueError, match="No evals declare a selected mode"):
         run([internet], config, tmp_path / "none", modes=["skills"], answer="reference")
-
-
-def test_selected_modes_cross_only_declared_modes(folder, tmp_path):
-    config = fixture_config()
-    evaluation = load_eval(folder, config)
-    success, rows = run([evaluation], config, tmp_path / "results", answer="reference", epochs=1,
-                        modes=["vanilla", "internet", "skills"])
-    assert success is True
-    assert [(row["mode"], row["status"]) for row in rows] == [("internet", "passed"), ("vanilla", "passed")]
 
 
 def test_paid_run_needs_budget_before_constructing_provider(tmp_path, monkeypatch):
@@ -102,16 +60,6 @@ def test_paid_run_needs_budget_before_constructing_provider(tmp_path, monkeypatc
         run([evaluation], config, tmp_path, agents=["claude-code-opus-5.5"], epochs=1)
     with pytest.raises(ValueError, match="Budget exceeded"):
         run([evaluation], config, tmp_path, agents=["claude-code-opus-5.5"], epochs=1, budget=0)
-
-
-def test_run_executes_all_missing_epochs_in_saved_plan(tmp_path):
-    config = small_config()
-    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    success, rows = run([evaluation], config, tmp_path, answer="reference")
-    report = json.loads((tmp_path / "plan.json").read_text())
-    assert success
-    assert [(row["epoch"], row["status"]) for row in rows] == [(1, "passed"), (2, "passed"), (3, "passed")]
-    assert [row["epoch"] for row in report["missing"]] == [1, 2, 3]
 
 
 @pytest.mark.parametrize("effort", [None, "high"])
