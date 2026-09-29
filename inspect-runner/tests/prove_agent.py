@@ -24,7 +24,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("answer", choices=["reference", "empty"])
     parser.add_argument("--agent", choices=list(fixture_config().agents), required=True)
-    parser.add_argument("--eval", default="evals/building/erc20-points-token")
+    parser.add_argument("--eval", default="inspect-runner/tests/fixtures/building/erc20-points-token")
     parser.add_argument("--mode", choices=["internet", "skills"], default="internet")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--exa-canary", action="store_true")
@@ -202,16 +202,28 @@ console.log(JSON.stringify({matches, files, environments}));
                 name = "Bash" if harness == "claude_code" else "bash"
                 arguments = {"command": command, "description": "Write the requested token"}
             return ModelOutput.for_tool_call("mockllm/model", name, arguments)
+        if evaluation.declaration.type == "act" and args.answer == "reference" and calls == work_call + 1:
+            command = r'''read_value() { sed -n 's/.*"'"$1"'": "\([^"]*\)".*/\1/p' chain.json; }; cast call "$(read_value token)" "balanceOf(address)(uint256)" "$(read_value recipient)" --rpc-url "$(read_value rpc_url)"'''
+            return ModelOutput.for_tool_call("mockllm/model", "Bash", {
+                "command": command, "description": "Confirm the recipient balance before reporting success"})
         return ModelOutput.from_content("mockllm/model", "Done.")
 
     def grade(messages, tools, tool_choice, config):
         evidence = json.loads(messages[1].text)
-        assert "src/BuilderPoints.sol" in evidence
-        assert "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol" not in evidence
+        if evaluation.declaration.type == "act" and args.answer == "reference":
+            call = next(call for message in evidence for call in message.get("tool_calls", [])
+                        if "balanceOf(address)(uint256)" in call["arguments"].get("command", ""))
+            result = next(message for message in evidence if message.get("tool_call_id") == call["id"])
+            assert "12500000" in json.dumps(result), result
+            print(json.dumps({"grader_balance_check": call, "grader_balance_result": result}), flush=True)
+        elif evaluation.declaration.type == "build":
+            assert "src/BuilderPoints.sol" in evidence
+            assert "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol" not in evidence
         passed = args.answer == "reference"
         return ModelOutput.from_content("mockllm/model", json.dumps({
             "passed": passed,
-            "reason": "The submitted token uses OpenZeppelin without holder controls." if passed else "The workspace contains an empty contract.",
+            "reason": ("The agent checked the recipient balance before reporting success." if evaluation.declaration.type == "act"
+                       else "The submitted token uses OpenZeppelin without holder controls.") if passed else "No completed work.",
         }))
 
     provider = task.model.source if harness == "codex_cli" else task.model
@@ -263,6 +275,8 @@ console.log(JSON.stringify({matches, files, environments}));
     else:
         assert any("web_search_exa" in name for name in tool_names), tool_names
         assert not tool_names.intersection({"WebSearch", "websearch", "web_search", "web_search_preview", "web__run"}), tool_names
+    if evaluation.declaration.type == "act":
+        assert row["checks"]["rubric:verified_transfer"]["passed"] == (args.answer == "reference"), row
     if evaluation.declaration.type == "build":
         assert len([name for name in row["checks"] if name.startswith("forge:")]) == 8, row
         assert set(name for name in row["checks"] if name.startswith("rubric:")) == {

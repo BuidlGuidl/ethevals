@@ -1,6 +1,12 @@
 import json
 
-from ethevals.scorers import rubric_reply
+from ethevals.scorers import grader_request, rubric_reply
+from ethevals.loader import load_eval
+from ethevals.rows import results_rows
+from inspect_ai import eval
+from inspect_ai.model import ChatMessageAssistant, ChatMessageTool, ChatMessageUser, ModelOutput, get_model
+from inspect_ai.tool import ToolCall
+from support import build_task, fixture_config, fixture_quiz
 from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
 import pytest
@@ -8,6 +14,48 @@ import pytest
 
 YES = '{"passed": true, "reason": "Uses standard transfers."}'
 NO = '{"passed": false, "reason": "Owner can seize tokens."}'
+
+
+def test_quiz_rubric_grades_transcript_after_target_and_free_check_skips_it(tmp_path):
+    config = fixture_config()
+    config.time_limits["quiz"] = 120
+    original = fixture_quiz(tmp_path)
+    (original.folder / "scorer/rubric.md").write_text("## explained\nDid the answer explain the unit?\n")
+    evaluation = load_eval(original.folder, config)
+    requests = []
+
+    def grade(messages, *args):
+        requests.append(messages)
+        return ModelOutput.from_content("mockllm/grader", '{"passed":false,"reason":"No explanation."}')
+
+    task = build_task(evaluation, config, "opus-5.5", "vanilla", None, 1)
+    assert (task.working_limit, task.time_limit, task.metadata["scoring_limit_seconds"]) == (120, 600, 240)
+    task.model.api.outputs = lambda *args: ModelOutput.from_content("mockllm/opus-5.5", "wei")
+    log = eval(task, model_roles={"grader": get_model("mockllm/grader", custom_outputs=grade)},
+               log_dir=str(tmp_path / "paid-shape"), display="none")[0]
+    row = results_rows(log)[0]
+    assert (row["status"], row["checks"]) == ("failed", {
+        "answer": {"passed": True, "reason": "Answer matches the target."},
+        "rubric:explained": {"passed": False, "reason": "No explanation."},
+    })
+    assert "agent transcript" in requests[0][0].text
+    assert [(item["role"], item["content"]) for item in json.loads(requests[0][1].text)] == [
+        ("user", "Give the unit."), ("assistant", "wei")]
+    free = build_task(evaluation, config, None, "vanilla", "reference", 1)
+    log = eval(free, log_dir=str(tmp_path / "free"), display="none")[0]
+    assert results_rows(log)[0]["checks"] == {"answer": {"passed": True, "reason": "Answer matches the target."}}
+
+
+def test_transcript_cap_keeps_recent_tools_and_final_reply():
+    messages = [ChatMessageUser(content="old prompt " + "x" * 100000),
+                ChatMessageAssistant(content="", tool_calls=[ToolCall(id="read", function="Bash", arguments={"command": "cast balance"})]),
+                ChatMessageTool(content="12500000", tool_call_id="read", function="Bash"),
+                ChatMessageAssistant(content="Confirmed: ✓")]
+    evidence = grader_request(messages, transcript=True)[1].text
+    assert len(evidence.encode()) == 100000
+    assert '"command": "cast balance"' in evidence and '"content": "12500000"' in evidence
+    assert '"content": "Confirmed: \\u2713"' in evidence
+    assert "old prompt" not in evidence
 
 
 @solver

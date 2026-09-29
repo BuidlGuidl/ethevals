@@ -54,7 +54,7 @@ Keep all five key variables unset for free work, including the unused `ANTHROPIC
 For the first paid Claude Code test, set `ANTHROPIC_API_KEY` and use:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries evals/building/erc20-points-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
+uv run ethevals run --evals evals/concepts/agent-registries evals/transactions/send-six-decimal-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
 ```
 
 For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-5.5`.

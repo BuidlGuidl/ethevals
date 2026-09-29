@@ -13,7 +13,7 @@ from support import build_task, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "evals/building/erc20-points-token"
+BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
 
 
 @pytest.mark.parametrize("file,addition,key", [
@@ -145,7 +145,7 @@ def test_loaded_eval_uses_captured_files(tmp_path):
 
 def test_quiz_internet_has_no_foundry_files_or_note():
     config = fixture_config()
-    evaluation = load_eval(ROOT / "evals/concepts/wei-per-ether", config)
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/wei-per-ether", config)
     task = build_task(evaluation, config, None, "internet", "reference", 1)
     assert task.dataset[0].input.startswith("How many wei equal one ether?\nYour container has a ")
     assert "Foundry" not in task.dataset[0].input

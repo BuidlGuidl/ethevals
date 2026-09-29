@@ -1,8 +1,9 @@
 # TODO: For real runs, set opus-5.5 and gpt-5.5 effort to high.
 # Omit effort for kimi-k3 and glm-5.3 to use provider defaults.
 # Set grader effort to medium.
-epochs: 3
-time_limits: {quiz: 300, build: 1200, act: 1200}
+# TODO: Use 3 epochs for real runs.
+epochs: 1
+time_limits: {quiz: 120, build: 1200, act: 600}
 cost_limit: 5.0
 max_attempts: 2
 concurrency: 1

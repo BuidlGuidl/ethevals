@@ -32,8 +32,8 @@ uv run ethevals check --evals evals/concepts/agent-registries --output results/a
 Expected final lines for this example:
 
 ```text
-3 results rows: results/author-guide/agent-registries/reference/rows.jsonl
-3 results rows: results/author-guide/agent-registries/empty/rows.jsonl
+1 results rows: results/author-guide/agent-registries/reference/rows.jsonl
+1 results rows: results/author-guide/agent-registries/empty/rows.jsonl
 ```
 
 `check` uses scripted answers, makes no model calls, and skips rubrics.
@@ -89,10 +89,10 @@ Keep `workspace/.gitkeep` so Git preserves the required empty directory.
 
 ### Write a multiple-choice quiz
 
-Copy [wei-per-ether](../evals/concepts/wei-per-ether):
+Copy the [multiple-choice test fixture](../inspect-runner/tests/fixtures/concepts/wei-per-ether):
 
 ```sh
-cp -R evals/concepts/wei-per-ether evals/concepts/my-unit-conversion
+cp -R inspect-runner/tests/fixtures/concepts/wei-per-ether evals/concepts/my-unit-conversion
 eval_dir=evals/concepts/my-unit-conversion
 ```
 
@@ -111,10 +111,10 @@ The runner preserves the order and supplies `ANSWER: C` for this reference.
 
 ### Write a build eval
 
-Copy [erc20-points-token](../evals/building/erc20-points-token):
+Copy the [build test fixture](../inspect-runner/tests/fixtures/building/erc20-points-token):
 
 ```sh
-cp -R evals/building/erc20-points-token evals/building/my-points-token
+cp -R inspect-runner/tests/fixtures/building/erc20-points-token evals/building/my-points-token
 eval_dir=evals/building/my-points-token
 ```
 
@@ -141,7 +141,7 @@ The compiler must already exist in the image.
 If the prompt needs model grading, keep `scorer/rubric.md` with one yes-or-no question per `## name` heading.
 For example, `uses_openzeppelin` asks whether the contract uses OpenZeppelin v5's ERC20 implementation.
 If tests cover the whole prompt, remove the rubric file.
-Rubrics require tests for source evidence.
+Build rubrics use compiled source as evidence.
 See [build scoring](../inspect-runner/README.md#captured-files-and-build-scoring) for the evidence contract.
 
 ### Write an act eval
@@ -153,7 +153,7 @@ cp -R evals/transactions/send-six-decimal-token evals/transactions/my-token-tran
 eval_dir=evals/transactions/my-token-transfer
 ```
 
-The example asks for one signed transfer of 12.5 tokens after reading the token's decimals.
+The example asks for one signed transfer of 12.5 tokens without telling the agent to check decimals.
 Keep `type: act` and `modes: [internet]`.
 
 1. Prepare the chain in [scorer/setup.sh](../evals/transactions/send-six-decimal-token/scorer/setup.sh).
@@ -192,9 +192,25 @@ Return every check on every execution. The runner prefixes names with `script:`.
 The example checks the recipient's balance and the sender's transaction count.
 Crashes, nonzero exits, and malformed JSON are errors, so they cannot satisfy the required untouched failure.
 
+## Add a rubric
+
+Any supported eval type can add `scorer/rubric.md`.
+Use one yes-or-no question per `## name` heading.
+The transaction example asks whether the agent checked on-chain success before reporting it.
+
+The rubric runs after the target, Forge tests, or check script.
+Builds show the grader compiled source, so an agent cannot hide code from grading.
+Other evals show the transcript: tool calls with inputs and outputs, and the final reply.
+The runner excludes system messages from transcript evidence.
+It keeps the first 100,000 bytes of build evidence or the last 100,000 bytes of transcript evidence.
+ASCII JSON escapes make each character one byte; the cut can leave partial JSON.
+The transcript cut preserves the final reply and recent tool results; earlier calls can be absent.
+Every question receives the same evidence, and the grader must state uncertainty when evidence is incomplete.
+Each verdict becomes a named `rubric:` check. Free `check` runs skip all rubrics.
+
 ## Add an extra service if needed
 
-The four examples use stock services and need no `compose.yaml`.
+These examples use stock services and need no `compose.yaml`.
 To add a service, create `compose.yaml` in your eval folder with only extra services and named volumes.
 For example, this file adds an HTTP service at `http://catalog:8080`:
 
@@ -227,15 +243,15 @@ uv run ethevals check --evals "$eval_dir" --output results/author-eval
 ```
 
 `validate` prints the eval ID and hash after it checks the declaration and files.
-`check` runs three reference epochs and three untouched epochs by default.
+The demo config runs one reference epoch and one untouched epoch by default.
 It selects vanilla for quizzes and internet for builds and acts.
 Each invocation runs fresh epochs, even if the output directory exists.
 
 Expected final lines for one eval:
 
 ```text
-3 results rows: results/author-eval/reference/rows.jsonl
-3 results rows: results/author-eval/empty/rows.jsonl
+1 results rows: results/author-eval/reference/rows.jsonl
+1 results rows: results/author-eval/empty/rows.jsonl
 ```
 
 Read both row files.

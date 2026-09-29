@@ -49,7 +49,7 @@ def crash():
     return solve
 
 
-BUILD = ROOT / "evals/building/erc20-points-token"
+BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
 CHECK = "forge:test/Token.t.sol:TokenTest:testSupply()"
 YES = '{"passed": true, "reason": "Uses standard transfers."}'
 NO = '{"passed": false, "reason": "Owner can seize tokens."}'
@@ -616,7 +616,7 @@ def test_non_utf8_source_matches_real_forge_and_fails_checks(tmp_path):
     import anyio
     from ethevals.scorers import forge, prepare_forge
     config = fixture_config()
-    original = load_eval(ROOT / "evals/building/erc20-points-token", config)
+    original = load_eval(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", config)
     source = b"pragma solidity =0.8.30; //\xff\ncontract BuilderPoints {}"
     with containers(tmp_path / "raw") as boxes:
         async def capture():

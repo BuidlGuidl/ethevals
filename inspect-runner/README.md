@@ -13,8 +13,8 @@ The loader selects scorers from files under `scorer/`.
 | --- | --- | --- |
 | Target | `target.yaml` | A quiz check through Inspect's `match`, `pattern`, or `choice`. |
 | Tests | `tests/` | Build checks from Forge, including `forge:compile`. |
-| Rubric | `rubric.md`, with `tests/` | One model verdict per named question after compilation succeeds. |
 | Check script | `check` or `check.<ext>` | Act checks from the script's JSON output. |
+| Rubric | `rubric.md` | One model verdict per named question, after the eval's other scorer. |
 
 Scorers run in the table's order.
 Each returns check names mapped to `C` or `I` in `Score.value`.
@@ -48,9 +48,12 @@ The installed compiler list comes from [solc.json](ethevals/images/solc.json).
 An unavailable compiler fails compilation without a download.
 Scoring disables FFI and filesystem cheatcodes, but retains network access.
 
-Rubric evidence contains compiled source files, with agent source before imported dependencies.
+Build rubric evidence contains compiled source files, with agent source before imported dependencies.
 It excludes private tests, unused libraries, and runner-owned libraries.
-The runner serializes evidence with ASCII escapes and cuts it once at 100,000 bytes.
+Other evals use the agent transcript, including tool-call inputs, tool results, and the final reply, without system messages.
+Evidence uses JSON with ASCII escapes and a 100,000-byte cap.
+Builds keep the prefix; transcripts keep the suffix to preserve the final reply and recent tool results.
+The cut can leave partial JSON or omit earlier calls. The grader must state uncertainty when evidence is incomplete.
 Every rubric question receives that same evidence block with Inspect's cache marker.
 The grader has no tools and returns one JSON object with `passed` and `reason`.
 Two invalid replies produce an error; an empty reason produces a failed check.
@@ -93,9 +96,9 @@ The Python `run()` return value covers the selection; its rows file covers the w
 ## Limits and errors
 
 `config.yaml` supplies working limits by eval type, cost limits, attempt counts, and concurrency.
-`task_limits()` sets the wall backstop to three times the working limit.
+`task_limits()` sets the total limit to the larger of three working limits or one working limit plus two scoring reserves.
 Its scoring reserve adds Forge, script, and grader deadlines plus snapshot overhead.
-Task construction rejects reserves that cannot fit Inspect's scoring window.
+This leaves room for rubric grading within Inspect's half-total scoring window, including quizzes with a 120-second working limit.
 
 The grader reserve uses capped evidence, prompt, question size, and the configured output cap.
 It covers two calls per question and three provider attempts per call.
@@ -122,11 +125,7 @@ Truncated script output can become malformed JSON; truncated Forge output can la
 A Compose preparation failure records `preparation-errors.json` without consuming an epoch attempt.
 A stock image-build failure stops the run with Docker's diagnostic.
 
-`--wall-seconds` reserves preparation once, then admits shortest epochs while their summed bounds fit.
-Each bound includes the task's wall and scoring limits, plus container time for sandbox modes.
-Deferred epochs remain missing for a later run.
-A single epoch that cannot fit an empty window produces a config error.
-These estimates do not enforce a separate preparation deadline.
+Plans reserve a budget for every missing epoch, without a wall-time window or deferral.
 
 ## Compose and agents
 
@@ -176,7 +175,7 @@ The runner reports all missing keys before constructing providers or starting co
 For a first paid Claude Code test, set `ANTHROPIC_API_KEY` and run:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries evals/building/erc20-points-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
+uv run ethevals run --evals evals/concepts/agent-registries evals/transactions/send-six-decimal-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
 ```
 
 For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-5.5`.
@@ -216,14 +215,15 @@ The checker can send further transactions while automining remains active.
 ## CI and publication
 
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
-[results.yml](../.github/workflows/results.yml) queues paid runs after main changes, excluding results-only changes.
+[results.yml](../.github/workflows/results.yml) queues paid runs after `system` changes, excluding results-only changes.
 It uses `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, optional `EXA_API_KEY`, and the `ETHEVALS_BUDGET_USD` repository variable.
 A manual dispatch budget overrides that variable; the fallback budget is zero.
-The paid job has no write token. A separate publisher always runs afterward and holds no model keys.
+The paid job has no write token. A separate publisher runs after completed executions with uploaded artifacts and holds no model keys.
+If CI kills a run at six hours, that run publishes nothing, and the next run executes what is still missing.
 
 `scripts/ci.py after-merge` restores pending results and calls the main runner CLI.
 `publish-results` rebuilds each artifact's rows and records them before any log upload.
-It folds `origin/main`, `origin/ci/results`, and artifact rows onto current main.
+It folds `origin/system`, `origin/ci/results`, and artifact rows onto current `system`.
 Successful uploads add log links and update the results pull request without a force push.
 A retry can reopen a missing pull request without repeating a successful push.
 If publication fails, rerun the workflow before starting another paid run to avoid paying for missing rows again.

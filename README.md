@@ -84,7 +84,7 @@ Each agent declares `search: native` or `search: exa` in the config.
 For a first paid Claude Code test, set `ANTHROPIC_API_KEY` and run:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries evals/building/erc20-points-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
+uv run ethevals run --evals evals/concepts/agent-registries evals/transactions/send-six-decimal-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
 ```
 
 For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-5.5`.

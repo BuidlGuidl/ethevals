@@ -2,6 +2,7 @@ from pathlib import Path
 import argparse
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 
@@ -11,6 +12,7 @@ from ethevals.planning import plan
 from ethevals.rows import fold_rows, read_rows, write_rows
 from inspect_ai.log import read_eval_log, write_eval_log
 import pytest
+import yaml
 
 from support import catalog_quiz, cli, fixture_config, run
 
@@ -19,6 +21,22 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("ci", ROOT / "scripts/ci.py")
 ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
+
+
+@pytest.mark.parametrize("outcome,code,completed", [("success", 0, "completed=true\n"),
+                                                   ("error", 2, "completed=true\n"), ("killed", -15, "")])
+def test_workflow_marks_only_finished_commands_for_publication(tmp_path, outcome, code, completed):
+    workflow = yaml.safe_load((ROOT / ".github/workflows/results.yml").read_text())
+    script = next(step["run"] for step in workflow["jobs"]["run"]["steps"] if step.get("id") == "epochs")
+    uv = tmp_path / "uv"
+    uv.write_text('#!/bin/bash\ncase "$OUTCOME" in error) exit 2;; killed) kill -TERM "$PPID";; esac\n')
+    uv.chmod(0o755)
+    output = tmp_path / "output"
+    result = subprocess.run(["bash", "-e", "-c", script], env={**os.environ,
+        "PATH": str(tmp_path) + os.pathsep + os.environ["PATH"], "OUTCOME": outcome,
+        "GITHUB_OUTPUT": str(output), "RUN_BUDGET": "0"}, capture_output=True, text=True)
+    assert result.returncode == code
+    assert (output.read_text() if output.exists() else "") == completed
 
 
 def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(tmp_path, monkeypatch):
@@ -50,7 +68,7 @@ def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(
 def test_late_publication_retains_current_source_and_newer_rows(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GH_TOKEN", "inert-test-token")
-    ci.command("git", "init", "-b", "main", capture_output=True)
+    ci.command("git", "init", "-b", "system", capture_output=True)
     ci.command("git", "config", "user.name", "Test")
     ci.command("git", "config", "user.email", "test@example.org")
     source = Path("source.txt")
@@ -67,7 +85,7 @@ def test_late_publication_retains_current_source_and_newer_rows(tmp_path, monkey
     ci.command("git", "add", ".")
     ci.command("git", "commit", "-m", "New source and rows", capture_output=True)
     latest = ci.command("git", "rev-parse", "HEAD", capture_output=True).stdout.strip()
-    ci.command("git", "update-ref", "refs/remotes/origin/main", latest)
+    ci.command("git", "update-ref", "refs/remotes/origin/system", latest)
     ci.command("git", "update-ref", "refs/remotes/origin/ci/results", first)
     ci.command("git", "checkout", "--detach", first, capture_output=True)
     real_command, pushed = ci.command, []
@@ -77,6 +95,7 @@ def test_late_publication_retains_current_source_and_newer_rows(tmp_path, monkey
             pushed.append(args[3].split(":")[0])
             return subprocess.CompletedProcess(args, 0)
         if args[0] == "gh":
+            assert args[args.index("--base") + 1] == "system"
             return subprocess.CompletedProcess(args, 0, stdout="[]")
         return real_command(*args, **kwargs)
 
@@ -254,7 +273,7 @@ def test_release_script_exports_without_upload(tmp_path, monkeypatch, capsys):
 
 def test_failed_preparation_stays_missing_without_using_attempts(tmp_path, monkeypatch):
     config = fixture_config()
-    build = load_eval(ROOT / "evals/building/erc20-points-token", config)
+    build = load_eval(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", config)
     agents_for, grade = select_actors(config, answer="reference")
 
     def failed(*args):
@@ -272,7 +291,7 @@ def test_failed_preparation_stays_missing_without_using_attempts(tmp_path, monke
 def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GH_TOKEN", "inert-test-token")
-    ci.command("git", "init", "-b", "main", capture_output=True)
+    ci.command("git", "init", "-b", "system", capture_output=True)
     ci.command("git", "config", "user.name", "Test")
     ci.command("git", "config", "user.email", "test@example.org")
     rows = Path("results/rows.jsonl")
@@ -286,7 +305,7 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
     ci.command("git", "add", ".")
     ci.command("git", "commit", "-m", "Pending results", capture_output=True)
     pending = ci.command("git", "rev-parse", "HEAD", capture_output=True).stdout.strip()
-    ci.command("git", "update-ref", "refs/remotes/origin/main", main)
+    ci.command("git", "update-ref", "refs/remotes/origin/system", main)
     ci.command("git", "update-ref", "refs/remotes/origin/ci/results", pending)
     ci.command("git", "checkout", "--detach", main, capture_output=True)
     ci.restore_results(rows)
@@ -340,11 +359,11 @@ def test_all_artifact_rows_precede_any_upload(tmp_path, monkeypatch):
 def test_retry_opens_pr_after_successful_push(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GH_TOKEN", "offline-unused")
-    ci.command("git", "init", "-b", "main", capture_output=True)
+    ci.command("git", "init", "-b", "system", capture_output=True)
     ci.command("git", "config", "user.name", "Test")
     ci.command("git", "config", "user.email", "test@example.org")
     ci.command("git", "commit", "--allow-empty", "-m", "Initial", capture_output=True)
-    ci.command("git", "update-ref", "refs/remotes/origin/main", "HEAD")
+    ci.command("git", "update-ref", "refs/remotes/origin/system", "HEAD")
     command, pushes, prs = ci.command, [], []
     def remote(*args, **kwargs):
         if args[:2] == ("git", "push"):

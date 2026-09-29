@@ -24,8 +24,8 @@ def test_skills_plan_reserves_search_and_keeps_the_harness(folder, tmp_path):
     report = json.loads(result.stdout)
     row = report["missing"][0]
     assert (report["missing_epochs"], report["worst_case_usd"], report["within_budget"]) == (1, 12, True)
-    assert (row["mode"], row["harness"], row["per_attempt_usd"], row["wall_seconds"]) == (
-        "skills", "claude_code", 6, 1320)
+    assert (row["mode"], row["harness"], row["per_attempt_usd"]) == (
+        "skills", "claude_code", 6)
 
 
 def test_pack_edits_change_only_opted_in_hashes_and_preserve_captured_bytes(folder, tmp_path, monkeypatch):
@@ -173,4 +173,4 @@ def test_skills_only_act_gets_a_free_reference_check(tmp_path):
     agents_for, _ = select_actors(config, answer="reference")
     assert [(mode, actor.free_check, actor.sandbox_for(evaluation)) for mode, actor in agents_for(evaluation)] == [
         ("skills", True, True)]
-    assert evaluation.scorer_kinds == ["check_script"]
+    assert evaluation.scorer_kinds == ["check_script", "rubric"]

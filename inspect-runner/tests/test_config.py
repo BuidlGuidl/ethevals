@@ -11,7 +11,7 @@ from support import build_task, eval_cli, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "evals/building/erc20-points-token"
+BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
 
 
 @pytest.mark.parametrize("harness,provider,accepted", [
@@ -73,12 +73,12 @@ def test_unknown_harness_fails_at_config_load(tmp_path):
         fixture_config(path)
 
 
-def test_build_rejects_scoring_window_that_cannot_fit():
+def test_total_limit_leaves_room_for_build_grading():
     config = fixture_config()
     evaluation = load_eval(BUILD, config)
     config.time_limits["build"] = 300
-    with pytest.raises(ValueError, match="Scoring needs 540 seconds, but Inspect allows 450"):
-        build_task(evaluation, config, None, "internet", "reference", 1)
+    task = build_task(evaluation, config, None, "internet", "reference", 1)
+    assert (task.working_limit, task.time_limit, task.metadata["scoring_limit_seconds"]) == (300, 1380, 540)
 
 
 @pytest.mark.parametrize("key,value,diagnostic", [
