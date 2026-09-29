@@ -68,18 +68,36 @@ The runner rejects that plan before it constructs providers or prepares containe
 Cost limits use configured prices and check usage after calls.
 An in-flight call can exceed the remaining allowance.
 The budget reserve is not a provider billing cap.
+Claude Code's native-search reserve covers `search_limit` calls with up to eight searches each.
+Codex gets the same reserve, but its search count is not capped.
+The runner counts native-search fees from the log and adds them to model token costs.
+Inspect's live cost limit counts tokens only.
 
-## Run with OpenRouter
+## Run with provider keys
 
-Set `OPENROUTER_API_KEY` in your shell, then run the selected plan:
+Set the keys for the selected providers and the grader in your shell.
+Opus and the grader use `ANTHROPIC_API_KEY`. GPT uses `OPENAI_API_KEY`.
+Kimi and GLM use `OPENROUTER_API_KEY` in OpenCode with Exa. `EXA_API_KEY` is optional.
+Claude Code and Codex use their providers' own search.
+Each agent declares `search: native` or `search: exa` in the config.
+
+For a first paid Claude Code test, set `ANTHROPIC_API_KEY` and run:
 
 ```sh
-uv run ethevals run --models opus-5.5 --agents claude-code-opus-5.5 --modes vanilla internet --epochs 1 --budget 100
+uv run ethevals run --evals evals/concepts/agent-registries evals/building/erc20-points-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
 ```
+
+For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-6-sol`.
+The Codex native-search proof currently fails on CLI 0.159.0: GPT-6 sol's Responses Lite mode exposes no search tool.
+Resolve that failure before a paid Codex test. Claude Code 2.1.284 passes the scripted native-search proof.
+Only a paid run proves model access, usable native-search results, grader verdicts, and agreement with the provider's bill.
+The grader uses medium effort and 32,768 output tokens, including thinking, to leave room for its JSON verdict.
 
 Use `--evals` to select folders and `--output` to choose a results directory.
 `--models` selects bare models for vanilla; `--agents` selects agents for internet and skills.
-Each selector requires a matching mode. Without selectors or mode flags, the runner selects every model, agent, and mode.
+An explicit `--modes` must match each selector.
+Without `--modes`, models alone select vanilla, agents alone select internet and skills, and both or neither select all modes.
+An omitted selector includes all entries of its kind in the selected modes.
 `--effort low|medium|high|xhigh` overrides model and agent effort for that invocation.
 Omit a model's `effort` in the config to use its provider's default; rows then record `effort: null`.
 Each eval runs only in modes it declares.

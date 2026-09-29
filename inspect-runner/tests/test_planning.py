@@ -46,7 +46,8 @@ def test_default_plan_selects_models_and_agents(tmp_path, effort, omit_effort):
         (mode, harness, model["model"], effort or model.get("effort")) for mode, actors in
         [("vanilla", expected), ("internet", agents), ("skills", agents)] for harness, model in actors]
     count = len(expected) + 2 * len(agents)
-    search = 2 * len(agents) * data["search_limit"] * data["search_price_usd"] if data["search"] else 0
+    search = 2 * data["search_limit"] * sum(8 * data["native_search_price_usd"] if agent["search"] == "native"
+                                          else data["search_price_usd"] for agent in data["agents"].values()) if data["search"] else 0
     assert (report["missing_epochs"], report["worst_case_usd"]) == (count, (count * data["cost_limit"] + search) * data["max_attempts"])
     assert [row["prices"] for row in report["missing"]] == [
         data["prices"][model["model"]] for _, model in expected + agents + agents]
@@ -246,3 +247,40 @@ def test_build_plan_reserves_capped_grader_requests():
     report = budget_check(plan([evaluation], config, agents_for, [], epochs=1).report, 29.6)
     assert report["missing"][0]["per_attempt_usd"] == 14.75445
     assert (report["worst_case_usd"], report["within_budget"]) == (29.5089, True)
+
+
+@pytest.mark.parametrize("key", ["claude-code-opus-5.5", "codex-cli-gpt-6-sol"])
+def test_plan_reserves_native_searches(key):
+    config, evaluation = catalog_quiz()
+    config.agents[key].search = "native"
+    config.search_limit = 3
+    config.native_search_price_usd = 0.02
+    actors_for, _ = select_actors(config, agents=[key], modes=["internet"], planning=True)
+    report = plan([evaluation], config, actors_for, [], epochs=1).report
+    assert (report["missing"][0]["per_attempt_usd"], report["worst_case_usd"]) == (5.48, 10.96)
+    config.search = False
+    actors_for, _ = select_actors(config, agents=[key], modes=["internet"], planning=True)
+    report = plan([evaluation], config, actors_for, [], epochs=1).report
+    assert (report["missing"][0]["per_attempt_usd"], report["worst_case_usd"]) == (5, 10)
+
+
+@pytest.mark.parametrize("present,missing", [
+    ([], "ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY"),
+    (["OPENAI_API_KEY"], "ANTHROPIC_API_KEY, OPENROUTER_API_KEY"),
+    (["OPENAI_API_KEY", "OPENROUTER_API_KEY"], "ANTHROPIC_API_KEY"),
+])
+def test_paid_run_names_only_missing_provider_keys(tmp_path, monkeypatch, present, missing):
+    config, evaluation = catalog_quiz()
+    for key, provider in [("gpt-6-sol", "openai"), ("kimi-k3", "openrouter")]:
+        model = config.models[key]
+        config.prices[f"{provider}/test"] = config.prices[model.model]
+        model.model = f"{provider}/test"
+    config.grader.model = "anthropic/grader"
+    for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    for key in present:
+        monkeypatch.setenv(key, "inert-test-key")
+    monkeypatch.setattr("ethevals.actors.model_actor", lambda *args: pytest.fail("Provider constructed"))
+    with pytest.raises(ValueError) as error:
+        run([evaluation], config, tmp_path, models=["gpt-6-sol", "kimi-k3"], epochs=1, budget=100)
+    assert str(error.value) == f"Missing provider keys for paid epochs: {missing}"

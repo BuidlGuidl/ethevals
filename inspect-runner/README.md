@@ -79,7 +79,10 @@ The fold selects the higher attempt, then the later completion time.
 A release URL enriches the same observation without replacing a later attempt.
 Logs retain config snapshots, image inputs, prices, and search events.
 `role_usage["grader"]` separates grader costs even when both roles use the same model.
-Search has a planning reserve but no metered row cost.
+The exporter counts native-search fees from model events in the log and adds them to `model_cost_usd`.
+Claude Code counts `web_search` results and excludes fetches. Codex counts all native web-search actions.
+The fee uses the log's `native_search_price_usd`. Unknown token costs remain unknown.
+Exa has a planning reserve but no metered row cost.
 
 Each scheduled epoch uses one Inspect task, sample, and epoch.
 Task metadata stores the ETH Evals epoch and attempt numbers.
@@ -97,6 +100,8 @@ Task construction rejects reserves that cannot fit Inspect's scoring window.
 The grader reserve uses capped evidence, prompt, question size, and the configured output cap.
 It covers two calls per question and three provider attempts per call.
 `rubric_budget()` uses the largest configured input price without a cache discount.
+The direct Anthropic grader uses medium effort and `max_tokens: 32768`, which includes thinking and the JSON verdict.
+The larger output allowance also increases the grader reserve.
 Each grader call has a total deadline that includes provider retry backoff.
 The constants live beside the scorer implementation.
 
@@ -147,13 +152,36 @@ The filter rejects WebSockets and unsigned sends; refusal messages enter the Ins
 `agents.py` defines harness factories and pins their versions.
 `config.yaml` lists `models` with provider slugs and optional effort, and `agents` with harnesses and model keys.
 Each agent's `cli_model` selects its CLI's model identity. Agents inherit effort from their model entry.
+Each agent declares `search: native` or `search: exa`.
+Native search requires Claude Code with an `anthropic/` model or Codex CLI with an `openai/` model.
 `actors.py` sets Inspect's `reasoning_effort` from that entry; `--effort low|medium|high|xhigh` overrides it for a run.
 Omitted effort leaves the provider's default in effect and records `effort: null` in rows.
-`--models` selects vanilla models; `--agents` selects internet and skills agents. Defaults include every model, agent, and mode.
+`--models` selects vanilla models; `--agents` selects internet and skills agents.
+Without `--modes`, one selector selects its matching modes. Both or neither select all modes.
+An omitted selector includes all entries of its kind in the selected modes.
 Model requests pass through Inspect's host bridge.
+Claude Code and Codex use their providers' own search.
+Claude Code sets `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` to `search_limit`; each call allows up to eight searches.
+Codex uses live search. Its search count is not capped.
+The native-search proof currently fails on Codex 0.159.0: GPT-6 sol's Responses Lite mode omits hosted search tools.
+The proof also finds no standalone search tool. Resolve this bridge limitation before a paid Codex test.
+Both native-search agents reserve `search_limit * 8 * native_search_price_usd` per attempt.
+For Codex, that reserve is an allowance, not a worst-case bound. Inspect's live cost limit counts only token costs.
+Setting `search: false` at the config root disables search for every agent.
 Exa search also runs on the host, which alone reads optional `EXA_API_KEY`.
-`search_limit` caps search and fetch calls together; failed calls consume a slot.
+For Exa, `search_limit` caps search and fetch calls together; failed calls consume a slot.
 Per-call caps and hosted tool schemas live in `search.py` and `exa-tools.json`.
+
+Paid runs require `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `OPENROUTER_API_KEY` for each selected provider, plus the grader's provider.
+The runner reports all missing keys before constructing providers or starting containers. Keys stay on the host.
+For a first paid Claude Code test, set `ANTHROPIC_API_KEY` and run:
+
+```sh
+uv run ethevals run --evals evals/concepts/agent-registries evals/building/erc20-points-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
+```
+
+For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-6-sol`.
+Only a paid run proves provider model access, native-search results, sufficient grader output, and fee agreement with the bill.
 
 ## Script contract
 
@@ -190,9 +218,9 @@ The checker can send further transactions while automining remains active.
 
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
 [results.yml](../.github/workflows/results.yml) queues paid runs after main changes, excluding results-only changes.
-It uses `OPENROUTER_API_KEY`, optional `EXA_API_KEY`, and the `ETHEVALS_BUDGET_USD` repository variable.
+It uses `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, optional `EXA_API_KEY`, and the `ETHEVALS_BUDGET_USD` repository variable.
 A manual dispatch budget overrides that variable; the fallback budget is zero.
-The paid job has no write token. A separate publisher always runs afterward.
+The paid job has no write token. A separate publisher always runs afterward and holds no model keys.
 
 `scripts/ci.py after-merge` restores pending results and calls the main runner CLI.
 `publish-results` rebuilds each artifact's rows and records them before any log upload.
@@ -222,9 +250,12 @@ Tests use the config factories in `tests/support.py`.
 The agent proof also remains a command:
 
 ```sh
-uv run python inspect-runner/tests/prove_agent.py reference --agent claude-code-opus-5.5 --exa-canary --output /tmp/agent-reference
-uv run python inspect-runner/tests/prove_agent.py empty --agent claude-code-opus-5.5 --exa-canary --output /tmp/agent-empty
+uv run python inspect-runner/tests/prove_agent.py reference --agent claude-code-opus-5.5 --eval evals/concepts/agent-registries --output /tmp/claude-reference
+uv run python inspect-runner/tests/prove_agent.py reference --agent codex-cli-gpt-6-sol --eval evals/concepts/agent-registries --output /tmp/codex-reference
 ```
 
 Strip provider credentials before these commands.
-`--exa-canary` uses offline search replies and checks that its inert key stays out of containers and logs.
+Claude Code and Codex proofs require native search through mockllm and check the CLI's next request and logged fees.
+Claude Code 2.1.284 passes. Codex 0.159.0 fails because it offers no native search tool.
+OpenCode proofs use Exa.
+`--exa-canary` selects Exa with offline replies and checks that its inert key stays out of containers and logs.

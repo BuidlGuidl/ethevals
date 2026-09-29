@@ -3,6 +3,14 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from inspect_ai.log import EvalLog, EvalSample, EvalError, list_eval_logs, read_eval_log
+from inspect_ai.model import ContentToolUse
+
+
+def native_searches(sample, harness):
+    return sum(1 for event in sample.events if event.event == "model" and event.role != "grader"
+               for choice in event.output.choices if isinstance(choice.message.content, list) for block in choice.message.content
+               if isinstance(block, ContentToolUse) and block.tool_type == "web_search"
+               and (harness == "codex_cli" or harness == "claude_code" and block.name == "web_search"))
 
 
 def epoch_identity(metadata: dict, epoch: int) -> tuple:
@@ -43,6 +51,8 @@ def results_rows(log: EvalLog) -> list[dict]:
         total_cost = sum(item.total_cost for item in usage) if usage and all(item.total_cost is not None for item in usage) else None
         grader_cost = grader.total_cost if grader else 0.0 if usage else None
         model_cost = total_cost - grader_cost if total_cost is not None and grader_cost is not None else None
+        if model_cost is not None and metadata.get("search") == "native":
+            model_cost += native_searches(sample, metadata["harness"]) * metadata["native_search_price_usd"]
         cost_source = metadata.get("cost_source", "unavailable")
         if model_cost is None or grader_cost is None:
             cost_source = "unavailable"

@@ -58,6 +58,7 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
                 "search_limit": config.search_limit if uses_sandbox(mode) and config.search else 0,
                 "search_price_usd": config.search_price_usd,
+                "native_search_price_usd": config.native_search_price_usd,
                 "working_limit_seconds": working_limit, "time_limit_seconds": time_limit,
                 "scoring_limit_seconds": scoring_limit}
     sample.metadata = dict(metadata)
@@ -87,8 +88,13 @@ def run(evals: list[Eval], config: Config, output: Path, *,
     (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     if not report["within_budget"]:
         raise ValueError("Budget exceeded. No agent or grader ran.")
-    if not answer and initial.admitted and not os.environ.get("OPENROUTER_API_KEY"):
-        raise ValueError("OPENROUTER_API_KEY is required for missing paid epochs")
+    if not answer and initial.admitted:
+        providers = {actor.metadata["model"].split("/", 1)[0] for evaluation in evals for _, actor in agents_for(evaluation)}
+        providers.add(config.grader.model.split("/", 1)[0])
+        missing = sorted(key for provider, key in {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY",
+                         "openrouter": "OPENROUTER_API_KEY"}.items() if provider in providers and not os.environ.get(key))
+        if missing:
+            raise ValueError(f"Missing provider keys for paid epochs: {', '.join(missing)}")
     prepared, preparation_errors = {}, []
     if any(item.actor.sandbox_for(item.evaluation) for item in initial.admitted):
         check_capacity(config, [item.evaluation for item in initial.admitted if item.actor.sandbox_for(item.evaluation)])

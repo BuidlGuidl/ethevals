@@ -55,6 +55,7 @@ def actor(config, key, mode, item, agent=None, planning=False):
     if harness == "codex_cli" and not planning:
         model = CodexModel(model)
     metadata.update(harness=harness, harness_version=HARNESSES[harness].version if harness else None)
+    metadata["search"] = agent.search if agent and config.search else None
 
     def solve(evaluation):
         if mode == "vanilla":

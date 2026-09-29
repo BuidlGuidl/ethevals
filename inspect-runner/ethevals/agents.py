@@ -17,28 +17,30 @@ class Harness:
     version: str
     instructions: str
 
-    def build(self, config, cli_model: str, skills=None):
+    def build(self, config, cli_model: str, search, skills=None):
         from .search import exa_tools
         # Codex code mode calls MCP from a script, outside a direct model tool proposal.
         # The host tool enforces the per-epoch request cap for every caller.
         bridges = [BridgedToolsSpec(name="exa", tools=exa_tools(config.search_limit),
-                                   require_proposal=False)] if config.search else []
-        return self.factory(cli_model, version=self.version, bridged_tools=bridges, skills=skills)
+                                   require_proposal=False)] if config.search and search == "exa" else []
+        return self.factory(cli_model, native_search=config.search and search == "native", search_limit=config.search_limit,
+                            version=self.version, bridged_tools=bridges, skills=skills)
 
 
-def claude(cli_model: str, **settings):
+def claude(cli_model: str, *, native_search, search_limit, **settings):
     return as_solver(claude_code(
         cwd="/workspace", model_config=cli_model,
-        disallowed_tools=["WebSearch"], retry_refusals=0, retry_uncaught_errors=0,
+        disallowed_tools=[] if native_search else ["WebSearch"], retry_refusals=0, retry_uncaught_errors=0,
+        env={"CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION": str(search_limit)},
         **settings,
     ))
 
 
-def codex(cli_model: str, **settings):
+def codex(cli_model: str, *, native_search, search_limit, **settings):
     # The active agent is a CodexModel, so every bridge fallback uses it.
     return as_solver(codex_cli(
         cwd="/workspace", model_config=cli_model,
-        web_search="disabled", retry_refusals=0,
+        web_search="live" if native_search else "disabled", retry_refusals=0,
         **settings,
     ))
 
@@ -70,7 +72,7 @@ def restore_codex_calls(output, tools):
     return output
 
 
-def open_code(cli_model: str, **settings):
+def open_code(cli_model: str, *, native_search, search_limit, **settings):
     provider = json.loads((Path(__file__).with_name("images") / "opencode-models.json").read_text())
     return as_solver(opencode(
         cwd="/workspace", retry_refusals=0, opencode_model=cli_model,
@@ -81,8 +83,8 @@ def open_code(cli_model: str, **settings):
 
 
 HARNESSES = {
-    "claude_code": Harness(claude, "2.1.274", "CLAUDE.md"),
-    "codex_cli": Harness(codex, "0.158.0", "AGENTS.md"),
+    "claude_code": Harness(claude, "2.1.284", "CLAUDE.md"),
+    "codex_cli": Harness(codex, "0.159.0", "AGENTS.md"),
     "opencode": Harness(open_code, "1.18.33", "AGENTS.md"),
 }
 
@@ -90,7 +92,7 @@ HARNESSES = {
 @solver
 def internet_solver(config, agent, skills=None):
     harness = HARNESSES[agent.harness]
-    run_agent = harness.build(config, agent.cli_model, skills)
+    run_agent = harness.build(config, agent.cli_model, agent.search, skills)
 
     async def solve(state, generate):
         if skills:

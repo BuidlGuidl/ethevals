@@ -30,7 +30,7 @@ def test_registry_builds_solver(key, harness):
     config = fixture_config()
     for search in [True, False]:
         config.search = search
-        solve = agents.HARNESSES[harness].build(config, config.agents[key].cli_model)
+        solve = agents.HARNESSES[harness].build(config, config.agents[key].cli_model, config.agents[key].search)
         assert inspect.iscoroutinefunction(solve)
         assert list(inspect.signature(solve).parameters) == ["state", "generate"]
 

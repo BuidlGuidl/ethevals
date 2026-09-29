@@ -49,6 +49,7 @@ class AgentConfig(Declaration):
     harness: str
     model: str
     cli_model: str
+    search: Literal["native", "exa"]
 
 
 class GraderConfig(ModelSettings):
@@ -72,6 +73,7 @@ class Config(Declaration):
     search: bool
     search_limit: int = Field(gt=0)
     search_price_usd: float = Field(gt=0, allow_inf_nan=False)
+    native_search_price_usd: float = Field(gt=0, allow_inf_nan=False)
     models: dict[str, ModelSettings]
     agents: dict[str, AgentConfig]
     prices: dict[str, Prices]
@@ -86,6 +88,10 @@ class Config(Declaration):
                 raise ValueError(f"agents.{key}.harness: unknown harness {agent.harness!r}")
             if agent.model not in self.models:
                 raise ValueError(f"agents.{key}.model: unknown model {agent.model!r}")
+            if agent.search == "native" and (agent.harness, self.models[agent.model].model.split("/", 1)[0]) not in {
+                ("claude_code", "anthropic"), ("codex_cli", "openai"),
+            }:
+                raise ValueError(f"agents.{key}.search: native search requires claude_code with anthropic/ or codex_cli with openai/")
         for item in [self.grader, *self.models.values()]:
             if item.model not in self.prices:
                 raise ValueError(f"prices.{item.model}: missing model prices")

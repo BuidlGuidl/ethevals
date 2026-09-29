@@ -14,6 +14,26 @@ ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "evals/building/erc20-points-token"
 
 
+@pytest.mark.parametrize("harness,provider,accepted", [
+    ("claude_code", "anthropic", True), ("codex_cli", "openai", True),
+    ("claude_code", "openai", False), ("codex_cli", "anthropic", False),
+    ("opencode", "anthropic", False), ("opencode", "openrouter", False),
+])
+def test_native_search_requires_its_provider(tmp_path, harness, provider, accepted):
+    data = fixture_config().model_dump()
+    data["models"]["opus-5.5"]["model"] = f"{provider}/test"
+    data["prices"][f"{provider}/test"] = data["prices"]["mockllm/opus-5.5"]
+    data["agents"]["claude-code-opus-5.5"].update(harness=harness, search="native")
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(data))
+    if accepted:
+        config = load_config(path)
+        assert (config.agents["claude-code-opus-5.5"].search, config.models["opus-5.5"].model) == ("native", f"{provider}/test")
+    else:
+        with pytest.raises(ValueError, match="agents.claude-code-opus-5.5.search: native search requires"):
+            load_config(path)
+
+
 @pytest.mark.parametrize("effort", ["hihg", "none", "minimal", "max"])
 def test_validate_rejects_unsupported_effort(folder, tmp_path, effort):
     path = tmp_path / "config.yaml"

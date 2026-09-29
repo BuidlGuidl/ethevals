@@ -11,11 +11,11 @@ from unittest.mock import patch
 
 from inspect_ai import eval
 from inspect_ai.log import read_eval_log
-from inspect_ai.model import ModelOutput, get_model
+from inspect_ai.model import ContentText, ContentToolUse, ModelOutput, get_model
 
 from support import build_task, fixture_config, valid_search_result
 from ethevals.loader import load_eval
-from ethevals.rows import export_rows
+from ethevals.rows import export_rows, native_searches
 from ethevals.preparation import build_images, prepare_compose
 from ethevals.skills import skill_index
 
@@ -89,6 +89,8 @@ console.log(JSON.stringify({matches, files, environments}));
     assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN")), "Strip provider credentials before this proof."
     config = fixture_config()
     settings = config.agents[args.agent]
+    native_search = settings.harness in {"claude_code", "codex_cli"} and not args.exa_canary
+    settings.search = "native" if native_search else "exa"
     model = config.models[settings.model]
     model.model = "mockllm/model"
     config.grader.model = "mockllm/model"
@@ -105,6 +107,8 @@ console.log(JSON.stringify({matches, files, environments}));
     efforts = []
     search_ok = False
     search_call = 2 if harness == "codex_cli" else 1
+    work_call = search_call + 1 + (native_search and harness == "claude_code")
+    search_marker = "native-search-proof-8004"
 
     def capture(original):
         def record(data):
@@ -136,7 +140,30 @@ console.log(JSON.stringify({matches, files, environments}));
             return ModelOutput.for_tool_call("mockllm/model", "exec", {
                 "input": "text(ALL_TOOLS.map(tool => tool.name));",
             })
-        if calls == search_call:
+        if native_search and calls < work_call:
+            if harness == "claude_code" and calls == 1:
+                assert "WebSearch" in tool_names, tool_names
+                return ModelOutput.for_tool_call("mockllm/model", "WebSearch", {"query": "Ethereum ERC-8004"})
+            search_tool = next((tool for tool in tools if tool.name == "web_search"), None)
+            assert search_tool is not None, f"{harness} offered no native web_search tool: {sorted(tool_names)}"
+            if harness == "claude_code":
+                assert search_tool.options["anthropic"]["max_uses"] == 8, search_tool
+            else:
+                assert "openai" in search_tool.options, search_tool
+            print(json.dumps({"native_search_tool": search_tool.model_dump(mode="json")}), flush=True)
+            result = json.dumps([{"type": "web_search_result", "url": "https://eips.ethereum.org/EIPS/eip-8004",
+                                  "title": search_marker, "encrypted_content": "cHJvb2Y="}])
+            block = ContentToolUse(tool_type="web_search", id="srvtoolu_native_proof", name="web_search" if harness == "claude_code" else "search",
+                                   arguments=json.dumps({"type": "search", "query": search_marker}), result=result)
+            output = ModelOutput.from_content("mockllm/model", search_marker) if harness == "claude_code" else ModelOutput.for_tool_call(
+                "mockllm/model", "exec", {"input": "text(ALL_TOOLS.map(tool => tool.name));"})
+            output.message.content = [block, ContentText(text=search_marker)]
+            return output
+        if native_search and calls == work_call:
+            assert search_marker in json.dumps(requests[-1]), "The CLI did not return the native search result."
+            search_ok = True
+            print(json.dumps({"native_search_received_by_cli": harness, "marker": search_marker}), flush=True)
+        if not native_search and calls == search_call:
             arguments = {"query": "site:ethereum.org ERC-20 token standard", "numResults": 1,
                          "objective": "Find the official ERC-20 token standard and its methods."}
             if harness == "codex_cli":
@@ -144,7 +171,7 @@ console.log(JSON.stringify({matches, files, environments}));
             else:
                 name = next(name for name in tool_names if "web_search_exa" in name)
             return ModelOutput.for_tool_call("mockllm/model", name, arguments)
-        if calls == search_call + 1:
+        if not native_search and calls == work_call:
             result = next(message for message in reversed(messages) if message.role == "tool")
             assert not result.error, result
             assert valid_search_result(result.text), result.text
@@ -155,7 +182,7 @@ console.log(JSON.stringify({matches, files, environments}));
             if args.answer == "empty":
                 return ModelOutput.from_content("mockllm/model", "No answer.")
             return ModelOutput.from_content("mockllm/model", "ANSWER: C" if evaluation.declaration.choices else "8004")
-        if calls == search_call + 1 and args.answer == "reference":
+        if calls == work_call and args.answer == "reference":
             if evaluation.declaration.type == "act":
                 solution = evaluation.files["scorer/solution/run.sh"]
                 encoded = base64.b64encode(solution).decode()
@@ -205,6 +232,11 @@ console.log(JSON.stringify({matches, files, environments}));
     assert search_ok
     assert row["mode"] == args.mode, row
     log = read_eval_log(logs[0].location, resolve_attachments=True)
+    if native_search:
+        assert native_searches(log.samples[0], harness) == 1
+        usage = sum(item.total_cost for item in log.samples[0].model_usage.values())
+        assert abs(row["model_cost_usd"] - (usage - row["grader_cost_usd"] + 0.01)) < 1e-9
+        print(json.dumps({"native_search_count": 1, "native_search_fee_usd": 0.01}), flush=True)
     request = next(event for event in log.samples[0].events if event.event == "model")
     (args.output / "first-request.json").write_text(request.model_dump_json(indent=2))
     messages = "\n".join(message.text for message in request.input)
@@ -226,8 +258,11 @@ console.log(JSON.stringify({matches, files, environments}));
                     assert b"inert-offline-exa-canary" not in log_archive.read(name), name
     print(json.dumps({"bridge_effort": efforts, "cli_models": [request["model"] for request in requests]}), flush=True)
     assert efforts and all(value == model.effort for value in efforts), efforts
-    assert any("web_search_exa" in name for name in tool_names), tool_names
-    assert not tool_names.intersection({"WebSearch", "websearch", "web_search", "web_search_preview", "web__run"}), tool_names
+    if native_search:
+        assert not any("exa" in name for name in tool_names), tool_names
+    else:
+        assert any("web_search_exa" in name for name in tool_names), tool_names
+        assert not tool_names.intersection({"WebSearch", "websearch", "web_search", "web_search_preview", "web__run"}), tool_names
     if evaluation.declaration.type == "build":
         assert len([name for name in row["checks"] if name.startswith("forge:")]) == 8, row
         assert set(name for name in row["checks"] if name.startswith("rubric:")) == {
