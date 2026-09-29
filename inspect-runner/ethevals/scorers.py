@@ -248,9 +248,10 @@ def rubric_budget(evaluation, config):
     # Byte-level tokenizers cannot use more than one input token per byte.
     # Reserve every attempt, including abandoned attempts absent from usage.
     settings = config.grader
-    input_price = max(settings.prices.input, settings.prices.input_cache_write, settings.prices.input_cache_read)
+    prices = config.prices[settings.model]
+    input_price = max(prices.input, prices.input_cache_write, prices.input_cache_read)
     return len(rubric_questions(evaluation.files)) * GRADER_CALLS * (1 + GRADER_CONFIG.max_retries) * (
-        GRADER_REQUEST_BYTES * input_price + settings.max_tokens * settings.prices.output) / 1_000_000
+        GRADER_REQUEST_BYTES * input_price + settings.max_tokens * prices.output) / 1_000_000
 
 
 @scorer(metrics={"*": [accuracy()]})

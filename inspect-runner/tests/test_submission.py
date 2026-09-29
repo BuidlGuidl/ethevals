@@ -10,7 +10,7 @@ from inspect_ai.model import ModelOutput, ModelUsage, get_model
 from inspect_ai.solver import generate, solver
 
 from ethevals.checks import CHECK_SOLVERS, CheckRun
-from ethevals.config import load_config
+from support import load_config
 from ethevals.loader import load_eval
 from ethevals.rows import results_rows
 from support import run
@@ -128,7 +128,7 @@ def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
 def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
     config = load_config()
     config.cost_limit = budget
-    config.models["opus"].model = "mockllm/model"
+    config.agents["opus"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     task = build_task(evaluation, config, "opus", "vanilla", None, 1)
@@ -149,14 +149,14 @@ def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
     task.solver = forty_calls()
     task.model = get_model("mockllm/model", custom_outputs=reply)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert (row["status"], row["model_tokens"]) == (("passed", 840000) if budget == 5.0 else ("failed", 21000))
-    assert row["model_metered_usd"] == pytest.approx(1.58 if budget == 5.0 else 0.0395)
-    assert row["grader_metered_usd"] == 0
+    assert (row["status"], row["total_tokens"]) == (("passed", 840000) if budget == 5.0 else ("failed", 21000))
+    assert row["model_cost_usd"] == pytest.approx(1.58 if budget == 5.0 else 0.0395)
+    assert row["grader_cost_usd"] == 0
 
 
 def test_unknown_harness_fails_at_config_load(tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text((ROOT / "inspect-runner/ethevals/config.yaml").read_text().replace("harness: claude_code", "harness: absent"))
+    path.write_text(yaml.safe_dump(load_config().model_dump()).replace("harness: claude_code", "harness: absent"))
     with pytest.raises(ValueError, match="unknown harness 'absent'"):
         load_config(path)
 

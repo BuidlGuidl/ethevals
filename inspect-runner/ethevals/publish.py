@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def publish_logs(output: Path, repo: str, run_id: str, commit: str,
-                 *, current_hashes: dict[str, str], publish: bool = False,
+                 *, publish: bool = False,
                  rows: list[dict] | None = None, resume: bool = False) -> dict:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*", repo):
         raise ValueError("GitHub repo must have the form owner/name")
@@ -30,22 +30,13 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
     }
     assets = {}
     linked = []
-    skipped = {"published": 0, "key_free": 0, "stale": 0, "skills": 0}
+    skipped = {"published": 0}
     for line, row in enumerate(rows, 1):
-        if row.get("answer_kind") is not None or row.get("token_source") == "mock":
-            skipped["key_free"] += 1
-            continue
-        if row["eval_id"] not in current_hashes or current_hashes[row["eval_id"]] != row.get("eval_hash"):
-            skipped["stale"] += 1
-            continue
-        if row["mode"] == "skills":
-            skipped["skills"] += 1
-            continue
         if row.get("status") not in {"passed", "failed"}:
             skipped["non_final"] = skipped.get("non_final", 0) + 1
             continue
         relative = Path(row["log_file"])
-        if re.fullmatch(r"results-[A-Za-z0-9][A-Za-z0-9_-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]*\.eval", row["log_file"]) or relative.name in published:
+        if row.get("log_url") or relative.name in published:
             skipped["published"] += 1
             continue
         if relative.is_absolute() or relative.parts[:1] != ("logs",) or ".." in relative.parts:
@@ -65,7 +56,7 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
         asset = assets.setdefault(name, {"name": name, "source": str(source),
                                         "url": f"{base}/{tag}/{name}", "rows": []})
         asset["rows"].append({"line": line, **{key: row[key] for key in ("eval_id", "model", "mode", "epoch")}})
-        linked.append({**row, "log_file": f"{tag}/{name}"})
+        linked.append({**row, "log_url": asset["url"]})
     if len(assets) > 1000:
         raise ValueError("A release accepts at most 1000 assets; split the results run")
     command = ["gh", "release", "create", tag, "--repo", repo, "--target", commit,

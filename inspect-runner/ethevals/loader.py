@@ -20,7 +20,6 @@ class EvalDeclaration(Declaration):
     type: Literal["quiz", "scenario", "build", "act"]
     modes: list[Mode] = Field(min_length=1)
     choices: list[str] | None = Field(default=None, min_length=2, max_length=26)
-    time_limit: int | None = Field(default=None, gt=0)
 
 
 def eval_hash(folder: Path) -> str:
@@ -68,6 +67,8 @@ def load_eval(folder: Path, config: Config) -> Eval:
     if "eval.yaml" not in files:
         raise ValueError(f"{folder / 'eval.yaml'}: required regular file is missing")
     declaration = parse_file(EvalDeclaration, folder / "eval.yaml", files["eval.yaml"])
+    if declaration.type == "scenario":
+        raise ValueError(f"{folder / 'eval.yaml'}: type: scenario is not supported yet")
     if any(not choice.strip() for choice in declaration.choices or []):
         raise ValueError(f"{folder / 'eval.yaml'}: choices must not contain blank entries")
     if folder.parent.name not in PILLARS:

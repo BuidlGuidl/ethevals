@@ -3,7 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Board, { Detail } from "../app/board";
-import { buildBoard, epochCost, logUrl, subjectKey, type Evaluation, type Row, type Subject } from "../src/board";
+import { buildBoard, epochCost, subjectKey, type Evaluation, type Row, type Subject } from "../src/board";
 import { loadBoard, parseRows } from "../src/load";
 
 const evaluation: Evaluation = {
@@ -13,12 +13,12 @@ const evaluation: Evaluation = {
 const subject = { model: "model-a", harness: "harness-a", effort: "high" };
 function row(overrides: Partial<Row> = {}): Row {
   return {
-    schema_version: 3, eval_id: "concepts/units", eval_hash: "current", pillar: "concepts", type: "quiz",
-    ...subject, mode: "internet", answer_kind: null, epoch: 1, status: "passed", passed: true,
+    schema_version: 4, attempt: 1, completed_at: "2026-09-29T00:00:00Z", eval_id: "concepts/units", eval_hash: "current", type: "quiz",
+    ...subject, mode: "internet", epoch: 1, status: "passed",
     checks: { answer: { passed: true, reason: "The answer matches." } }, error_kind: null, error_reason: null,
-    total_tokens: 100, token_source: "provider", model_cost_usd: 0.2, grader_cost_usd: 0.05,
-    model_cost_source: "computed", grader_cost_source: "computed", total_seconds: 8, working_seconds: 7,
-    log_file: "logs/epoch.eval", limit: null, ...overrides,
+    total_tokens: 100, model_cost_usd: 0.2, grader_cost_usd: 0.05,
+    cost_source: "computed", total_seconds: 8, working_seconds: 7,
+    log_file: "logs/epoch.eval", log_url: null, limit: null, ...overrides,
   };
 }
 
@@ -26,8 +26,8 @@ function getCell(evaluation: Evaluation, subject: Subject, mode: "internet" | "v
   return buildBoard([evaluation], rows).tables[mode].pillars[evaluation.pillar].evals[0].cells[subjectKey(subject)];
 }
 
-const failure = { status: "failed", passed: false, checks: { answer: { passed: false, reason: "The answer differs." } } } as const;
-const error = { status: "error", passed: null, checks: {}, error_kind: "execution", error_reason: "Sandbox stopped." } as const;
+const failure = { status: "failed", checks: { answer: { passed: false, reason: "The answer differs." } } } as const;
+const error = { status: "error", checks: {}, error_kind: "execution", error_reason: "Sandbox stopped." } as const;
 
 test("a score counts passed epochs and excludes errors, while retaining their details", () => {
   const cell = getCell(evaluation, subject, "internet", [row(), row({ epoch: 2 }), row({ epoch: 3, ...failure }), row({ epoch: 4, ...error })]);
@@ -119,18 +119,10 @@ test("cost adds both roles and keeps a missing price unknown", () => {
   assert.equal(epochCost(row({ model_cost_usd: 0, grader_cost_usd: 0 })), 0);
 });
 
-test("log links resolve from one base and cannot escape it", () => {
-  assert.equal(logUrl("https://example.org/release/", "logs/epoch one.eval"), "https://example.org/release/logs/epoch%20one.eval");
-  assert.equal(logUrl("/results", "logs/epoch.eval"), "/results/logs/epoch.eval");
-  assert.equal(logUrl("", "logs/epoch.eval"), null);
-  assert.equal(logUrl("/results", "../secret"), null);
-  assert.equal(logUrl("/results", "https://elsewhere.test/a"), null);
-});
-
 test("row parsing keeps long named-check reasons and reports malformed verdicts with a line number", () => {
   const reason = "The expected answer differs. ".repeat(60).trim();
   assert.equal(parseRows(JSON.stringify(row({ ...failure, checks: { answer: { passed: false, reason } } })), "results.jsonl", [evaluation])[0].checks.answer.reason, reason);
-  assert.throws(() => parseRows(`\n${JSON.stringify(row({ passed: false }))}`, "results.jsonl", [evaluation]), /results.jsonl:2:.*[\s\S]*Status, verdict, and checks disagree/);
+  assert.throws(() => parseRows(`\n${JSON.stringify(row({ status: "invalid" as Row["status"] }))}`, "results.jsonl", [evaluation]), /results.jsonl:2:.*[\s\S]*status/);
 });
 
 test("sample loading is explicit and produces scores from fixture rows and catalog", () => {

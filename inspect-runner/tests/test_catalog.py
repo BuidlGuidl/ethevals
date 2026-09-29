@@ -23,5 +23,5 @@ def test_catalog_exports_a_loaded_eval(tmp_path):
         "id": "concepts/units",
         "hash": "a1d1e1a5ef44c9e62560659297fd0c1771b030d190cc2b30ab14a5eeaab47d68",
         "pillar": "concepts", "type": "quiz", "motivation": "Check units.",
-        "prompt": "How many wei?", "modes": ["vanilla", "internet"], "choices": None, "time_limit": None,
+        "prompt": "How many wei?", "modes": ["vanilla", "internet"], "choices": None,
     }]

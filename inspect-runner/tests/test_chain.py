@@ -7,7 +7,7 @@ import pytest
 
 from ethevals.images import rpc_filter
 from ethevals.loader import load_eval
-from ethevals.config import load_config
+from support import load_config
 from ethevals.sandboxes import compose_file, validate_compose
 
 

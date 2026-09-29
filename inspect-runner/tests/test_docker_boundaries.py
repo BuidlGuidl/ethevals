@@ -7,7 +7,7 @@ import yaml
 from inspect_ai import eval
 
 from ethevals.checks import check_grader
-from ethevals.config import load_config
+from support import load_config
 from ethevals.files import content_hash
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
@@ -49,7 +49,7 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
     from ethevals.sandboxes import runner_exec
     from ethevals.actors import player
     config = load_config()
-    config.models["opus"].model = "mockllm/model"
+    config.agents["opus"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     compose = prepare_compose(evaluation, tmp_path)
@@ -72,7 +72,7 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
     monkeypatch.setitem(agents.AGENTS, "claude_code", agents.Harness(lambda *a, **kw: killed, "proof"))
     task = build_task(evaluation, config, player(config, "opus", "internet"), check_grader(), "internet", 1, compose)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert (row["status"], row["passed"]) == ("error", None), row
+    assert row["status"] == "error", row
     assert f"Error executing claude code agent {cli_code}" in row["error_reason"]
 
 
@@ -96,7 +96,7 @@ def test_non_utf8_source_matches_real_forge_and_fails_checks(tmp_path):
     evaluation = replace(original, files=files, hash=content_hash(files))
     success, rows = run([evaluation], config, tmp_path / "scored", answer="empty", epochs=1)
     assert success
-    assert (rows[0]["status"], rows[0]["passed"]) == ("failed", False)
+    assert (rows[0]["status"], (None if rows[0]["status"] == "error" else rows[0]["status"] == "passed")) == ("failed", False)
     assert {check["reason"] for check in rows[0]["checks"].values()} == {"Solidity source is not valid UTF-8: src/BuilderPoints.sol"}
 
 

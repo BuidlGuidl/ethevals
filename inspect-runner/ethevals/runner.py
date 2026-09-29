@@ -21,7 +21,7 @@ from .images.tag import image_inputs, image_tag
 
 
 def task_limits(evaluation, config):
-    working_limit = evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit)
+    working_limit = config.time_limits[evaluation.declaration.type]
     time_limit = working_limit * 3
     forge_seconds = 180
     questions = len(rubric_questions(evaluation.files)) if "rubric" in evaluation.scorer_kinds else 0
@@ -58,7 +58,7 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
                 "chain_inputs": image_inputs(image="chain") if images.get("chain") == image_tag(image="chain") else {},
                 "cost_limit_usd": config.cost_limit,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
-                "search_limit": config.search_limit if mode == "internet" and config.search_provider else 0,
+                "search_limit": config.search_limit if mode == "internet" and config.search else 0,
                 "search_price_usd": config.search_price_usd,
                 "working_limit_seconds": working_limit, "time_limit_seconds": time_limit,
                 "scoring_limit_seconds": scoring_limit}
@@ -78,10 +78,10 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
 
 def run(evals: list[Eval], config: Config, output: Path, *,
         epochs: int | None = None, fresh: bool = False, retry_errors: bool = False,
-        rows_file: Path | None = None, models=None, modes=None, answer=None, delay=0,
+        rows_file: Path | None = None, agents=None, modes=None, answer=None,
         budget=None, wall_seconds=None) -> tuple[bool, list[dict]]:
     previous = previous_rows(output, rows_file)
-    players, _ = select_actors(config, models, modes, answer, delay, planning=True)
+    players, _ = select_actors(config, agents, modes, answer, planning=True)
     initial = plan(evals, config, players, previous, wall_seconds=wall_seconds,
                    epochs=epochs, fresh=fresh, retry_errors=retry_errors)
     report = budget_check(initial.report, budget, required=not answer)
@@ -106,7 +106,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
             logging.getLogger(__name__).error("%s: container preparation failed: %s", evaluation.id, error)
     tasks = []
     if prepared:
-        players, grade = select_actors(config, models, modes, answer, delay)
+        players, grade = select_actors(config, agents, modes, answer)
         actors = {evaluation.id: {(mode, actor.key): actor for mode, actor in players(evaluation)}
                   for evaluation in evals}
         for original, mode, planned_actor, epoch, attempt in initial.admitted:
@@ -123,7 +123,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         error_path.write_text(json.dumps(previous_errors + preparation_errors, indent=2) + "\n")
     try:
         if tasks:
-            concurrency = min(config.max_tasks, config.max_samples)
+            concurrency = config.concurrency
             eval(tasks, log_dir=str(output / "logs"), model_roles={"grader": grade.model},
                  retry_on_error=0, fail_on_error=False, max_samples=concurrency,
                  max_tasks=concurrency, max_sandboxes=concurrency, log_buffer=1, display="plain")

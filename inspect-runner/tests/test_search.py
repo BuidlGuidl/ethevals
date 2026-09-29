@@ -13,20 +13,6 @@ from inspect_ai.solver import solver
 from ethevals.search import exa_tools
 
 
-def test_search_cap_has_its_own_row_counter():
-    from inspect_ai.log import EvalSample
-    from inspect_ai.model import ChatMessageAssistant, ChatMessageTool
-    from inspect_ai.tool import ToolCall
-    from ethevals.rows import search_failures
-    sample = EvalSample(id="search", epoch=1, input="", target="", messages=[
-        ChatMessageAssistant(content="", tool_calls=[ToolCall(id="1", function="web_fetch_exa", arguments={}),
-                                                    ToolCall(id="2", function="web_search_exa", arguments={})]),
-        ChatMessageTool(content="Search failed: epoch search cap reached.", tool_call_id="1"),
-        ChatMessageTool(content="Search failed: Exa rate limit exceeded.", tool_call_id="2"),
-    ])
-    assert search_failures(sample) == {"search_calls": 2, "search_failed": 2, "search_rate_limited": 1, "search_capped": 1}
-
-
 @pytest.mark.live_exa
 def test_bridge_matches_keyless_hosted_tools():
     from inspect_ai.tool import ToolDef
@@ -37,7 +23,7 @@ def test_bridge_matches_keyless_hosted_tools():
     hosted = payload["result"]["tools"]
     from ethevals.search import TOOLS, CAP_DESCRIPTION
     assert TOOLS == hosted
-    tools = [ToolDef(tool) for tool in exa_tools("https://mcp.exa.ai/mcp", 20)]
+    tools = [ToolDef(tool) for tool in exa_tools(20)]
     assert [tool.name for tool in tools] == ["web_search_exa", "web_fetch_exa"]
     for actual, expected in zip(tools, hosted, strict=True):
         assert actual.name == expected["name"]
@@ -63,7 +49,7 @@ def test_host_search_caps_requests_and_redacts_credentials(tmp_path, monkeypatch
     @solver
     def searches():
         async def solve(state, generate):
-            search, fetch = exa_tools("https://mcp.exa.ai/mcp", 2)
+            search, fetch = exa_tools(2)
             answers = [await search(query="Ethereum", objective="Find the protocol spec"),
                        await fetch(urls=["https://ethereum.org"]),
                        await search(query="Ethereum", objective="Find the protocol spec")]
@@ -100,7 +86,7 @@ def test_exa_http_failure_logs_status_without_credentials(tmp_path, monkeypatch,
     @solver
     def failed_search():
         async def solve(state, generate):
-            result = await exa_tools("https://mcp.exa.ai/mcp", 2)[0](query="Ethereum", objective="Find the spec")
+            result = await exa_tools(2)[0](query="Ethereum", objective="Find the spec")
             state.output = ModelOutput.from_content("mockllm/model", result)
             return state
         return solve
@@ -123,7 +109,7 @@ def test_search_clamps_results_and_rejects_large_fetch_batches(tmp_path, monkeyp
     @solver
     def capped():
         async def solve(state, generate):
-            search, fetch = exa_tools("https://mcp.exa.ai/mcp", 20)
+            search, fetch = exa_tools(20)
             answers = [await search(query="Ethereum", objective="Find specs", numResults=200),
                        await search(query="Ethereum", objective="Find specs", numResults=-2),
                        await fetch(urls=["https://ethereum.org"] * 6),

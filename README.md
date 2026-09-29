@@ -75,19 +75,19 @@ uv run ethevals run --output results/paid
 ```
 
 The default selects all four configured models and three epochs for every quiz in the vanilla mode.
-To select a subset, use `--evals`, `--models opus codex`, `--modes vanilla`, or `--epochs 1`.
+To select a subset, use `--evals`, `--agents opus codex`, `--modes vanilla`, or `--epochs 1`.
 Use `--config path/to/config.yaml` for a separate configuration.
 
 To run all four agents on the ERC-20 build and both quizzes in the internet mode:
 
 ```sh
-uv run ethevals run --evals evals/building/erc20-points-token evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes internet --epochs 1 --budget 400 --output results/four-agents
+uv run ethevals run --evals evals/building/erc20-points-token evals/concepts/agent-registries evals/concepts/wei-per-ether --agents opus codex kimi glm --modes internet --epochs 1 --budget 400 --output results/four-agents
 ```
 
 To run all four bare models on both quizzes in the vanilla mode:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries evals/concepts/wei-per-ether --models opus codex kimi glm --modes vanilla --epochs 1 --budget 80 --output results/four-models
+uv run ethevals run --evals evals/concepts/agent-registries evals/concepts/wei-per-ether --agents opus codex kimi glm --modes vanilla --epochs 1 --budget 80 --output results/four-models
 ```
 
 Guess: these commands together cost $5 to $20, including build rubric grading.
@@ -142,19 +142,19 @@ The runner flushes each completed epoch to its log.
 The same directory accepts changed evals and selections. Earlier logs remain available.
 Each epoch is identified by its eval hash, agent, mode, and epoch number.
 Price or grader changes never repeat completed agent work.
-Rows retain the prices and grader used at execution time.
+Logs retain the prices and grader used at execution time.
 
 Quizzes allow 300 seconds of working time. Builds and acts allow 1,200 seconds.
 Inspect excludes provider retry backoff and sandbox waits from working time.
 The wall-clock backstop is three times the working limit: 900 seconds for quizzes and 3,600 seconds for builds and acts.
 The configuration gives the player a $5 cost budget.
 The grader has separate model, effort, and output settings. Each model ID has one price schedule across both roles.
-Config loading rejects conflicting prices for the same model ID.
+The `prices` map stores each model ID once.
 Each grader request uses an evidence block cut once at 100,000 ASCII bytes.
 The allowance reserves 300,000 input tokens and the maximum output for every provider attempt.
 Each question permits two generation calls, each with two retries: at most six provider attempts per question.
 The formula is `questions * 2 * 3 * (300000 * max(input, cache_read, cache_write) + max_tokens * output) / 1000000`.
-At the configured prices, the two-question build reserves $23.7288. Rows record this ceiling as `grader_cost_limit_usd`.
+At the configured prices, the two-question build reserves $23.7288. Logs record this ceiling as `grader_cost_limit_usd`.
 Inspect meters completed requests separately. The ceiling also covers abandoned attempts that do not appear in usage.
 Each grader call has a 60-second total deadline, including backoff, and a 20-second attempt timeout.
 The two-question build permits 240 seconds of grading plus 180 seconds of Forge execution.
@@ -164,14 +164,14 @@ Act scoring has a 240-second total deadline, including its 120-second check scri
 Task creation rejects scoring bounds that cannot fit inside Inspect's scoring window, half the wall-clock backstop.
 Inspect meters configured prices, including the lower price for cached reads. These prices are estimates until checked.
 Limits stop further calls after usage arrives. An in-flight call can exceed its remaining budget.
-Rows record each role's metered dollars and budget. The runner runs up to two tasks and samples at once.
-An eval can override its time limit with `time_limit` in `eval.yaml`.
-A runner, Docker, or grader failure produces `status: error`, with `passed: null`, and retries within the execution cap.
+Rows record each role's metered dollars. The `concurrency` setting controls parallel epochs.
+The `time_limits` map sets working time by eval type.
+A runner, Docker, or grader failure produces `status: error`, and retries within the execution cap.
 Grader errors include provider failures, exhausted budgets, and invalid replies after two calls.
 Player working-time or cost limits fail the eval's checks and produce a final `status: failed` result.
-These limits take precedence over scoring errors. The runner skips the snapshot and grader after a player limit.
+Rows retain any error that Inspect records. The runner skips the snapshot and grader after a player limit.
 An operator stop or a wall-clock stop before the working limit produces `status: error`.
-An incorrect answer produces `status: failed`, with `passed: false`.
+An incorrect answer produces `status: failed`.
 
 ## Read the runner contracts
 
@@ -232,14 +232,14 @@ Check the guessed model slug and prices in `inspect-runner/ethevals/config.yaml`
 Run these two commands from the repository root:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries --models opus --modes vanilla --epochs 1 --budget 10 --output results/adr0002
-uv run ethevals run --evals evals/building/erc20-points-token --models opus --modes internet --epochs 1 --budget 60 --output results/adr0002
+uv run ethevals run --evals evals/concepts/agent-registries --agents opus --modes vanilla --epochs 1 --budget 10 --output results/adr0002
+uv run ethevals run --evals evals/building/erc20-points-token --agents opus --modes internet --epochs 1 --budget 60 --output results/adr0002
 ```
 
 The quiz uses bare Opus 5.5. The build uses Claude Code 2.1.274 with Opus 5.5 and high effort.
 The separate `grader` configuration selects the model that answers the two rubric questions.
 All three harnesses use a host-side Exa search tool through Inspect's bridge. Claude Code's built-in WebSearch stays disabled.
-`search_provider` accepts `https://mcp.exa.ai/mcp` or null. Null disables search.
+`search` enables or disables Exa. The endpoint is fixed in `search.py`.
 The host sends optional `EXA_API_KEY` in an HTTP header. The container sees only the bridge address.
 Keyed and keyless requests share this path. Neither agent configuration nor published logs contain the key.
 Each epoch permits `search_limit` requests, currently 20, shared across search and fetch.
@@ -270,7 +270,7 @@ Custom Compose files must use the same limits. The capacity check derives its re
 One concurrent epoch reserves at most 5.25 GiB. CI and this Mac use one task, sample, and sandbox at a time.
 The private GitHub runner has 2 CPUs, 8 GB of RAM, and 14 GB of disk.
 Local runs also check Docker's memory capacity before preparation, with at least 1 GiB left for the host.
-Reduce `max_tasks` or `max_samples` when the Docker VM has less memory.
+Reduce `concurrency` when the Docker VM has less memory.
 Memory limits remain on every container. Out-of-memory failures remain Inspect errors.
 Task notes tell the agent its memory limit.
 
@@ -295,7 +295,7 @@ To test resume, kill the build command during its first execution.
 Repeat the same build command:
 
 ```sh
-uv run ethevals run --evals evals/building/erc20-points-token --models opus --modes internet --epochs 1 --budget 60 --output results/adr0002
+uv run ethevals run --evals evals/building/erc20-points-token --agents opus --modes internet --epochs 1 --budget 60 --output results/adr0002
 ```
 
 The finished quiz keeps its sample UUID. The unfinished build runs again if its execution cap allows it.
@@ -351,7 +351,7 @@ env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AU
 From `site/`, run `pnpm install --frozen-lockfile && pnpm build` with Node.js 22 or later.
 Real builds also require uv and Python 3.13 to export the runner's eval catalog.
 The board reads `results/rows.jsonl` by default. `ETHEVALS_ROWS` selects another rows file.
-The site accepts schema v3 rows and uses the runner's catalog for declarations and hashes.
+The site accepts schema v4 rows and uses the runner's catalog for declarations and hashes.
 The static export goes to `site/out/`. Without real rows, it shows an empty state.
 Use `ETHEVALS_SAMPLE=1 pnpm build` for the labelled sample board.
 [The site README](site/README.md) covers viewing the sample, results paths, and log URLs.
@@ -402,10 +402,9 @@ Set up GitHub and Hugging Face once:
 - Enable [Allow GitHub Actions to create and approve pull requests](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-your-repository).
 - Allow the built-in token to write releases and `ci/results`, and to open pull requests. Keep force pushes disabled.
 - Add the repository secret `OPENROUTER_API_KEY`. Check the configured model slugs and prices before funding runs.
-- Optionally add `EXA_API_KEY` to reduce keyless search rate limits. Rows count failed and rate-limited searches.
+- Optionally add `EXA_API_KEY` to reduce keyless search rate limits. Search calls remain in the Inspect log.
 - Set the repository variable `ETHEVALS_BUDGET_USD` after reviewing the plan. Leaving it unset keeps the budget at zero.
 - Create the HF dataset repository and choose its license. Add a write-scoped token for that dataset as `HF_TOKEN`.
-- For release log links, set `ETHEVALS_LOG_BASE=https://github.com/BuidlGuidl/ethevals/releases/download` in the site build environment.
 
 `BuidlGuidl/ethevals` is private. Release asset downloads require GitHub access, and Actions minutes use the organization's quota.
 
@@ -413,38 +412,35 @@ The workflows call local scripts. To run their free paths:
 
 ```sh
 uv run python scripts/ci.py checks --output results/ci-checks
-uv run python scripts/ci.py after-merge --answer reference --budget 1000 --output results/local-ci
-uv run ethevals publish-logs --output results/local-ci --repo BuidlGuidl/ethevals --run-id local-proof --commit "$(git rev-parse HEAD)"
+uv run ethevals check --output results/local-check
 uv run python scripts/ci.py release --output out/hf-ci --hf-repo OWNER/DATASET --license CHOSEN_LICENSE
 ```
 
 Use a fresh output directory for each invocation. Install the images and site packages before `checks`.
-The mock after-merge command writes only its output folder. It never changes the committed rows file.
 Without `--publish`, publication and HF release commands print plans and make no remote writes.
 For a local paid run that resumes from committed rows, pass `--rows results/rows.jsonl` to `ethevals run`.
 
 ## Publish full logs
 
-Publish one GitHub release per results run. Only unpublished logs for rows the site shows become assets.
+Publish one GitHub release per results run. Unpublished logs for scored rows become assets.
 Choose a unique run ID, such as a CI run ID and attempt number.
 Use the full source commit SHA as `--commit`.
 
 ```sh
 uv run ethevals publish-logs --output results/paid \
-  --repo BuidlGuidl/ethevals --run-id 12345-1 --commit FULL_COMMIT_SHA --dry-run
+  --repo BuidlGuidl/ethevals --run-id 12345-1 --commit FULL_COMMIT_SHA
 ```
 
 The default is a dry run. It writes nothing and makes no network calls.
 It prints a JSON plan with the release tag, the `gh` command, and each asset's rows and URL.
-The plan reports skipped rows by reason. It excludes key-free, stale-hash, skills, and non-final error rows.
-The command loads current eval hashes from `evals/*/*`. Use `--evals` and `--config` to select other evals or settings.
+The plan reports skipped rows by reason. It excludes non-final error rows.
 It skips release-linked rows and logs named in earlier `published/results-*.jsonl` files.
 Keep those files when reusing a results folder. An empty plan creates no release or rows file.
 
-To publish that run, repeat the command with `--publish` instead of `--dry-run`.
+To publish that run, repeat the command with `--publish` .
 The command uses your authenticated `gh` session to create the release and upload its assets.
 After the upload succeeds, it writes `results/paid/published/results-12345-1.jsonl`.
-Each linked row stores `results-12345-1/<filename>.eval` in `log_file`.
+Each linked row stores the full release asset URL in `log_url`.
 The original rows and logs stay available for resume. A failed publish writes no linked rows.
 It sets `--latest=false` so results releases do not replace a software release marked latest.
 It refuses missing logs, unsafe asset names, paths containing `#`, more than 1,000 assets, and files of 2 GiB or more.
@@ -452,8 +448,7 @@ An existing release tag makes `gh release create` fail. The command never replac
 After a partial upload failure, inspect the release before retrying. Use a new run ID for a replacement release.
 
 Install the linked rows in the site's results file only after publication succeeds.
-Set `ETHEVALS_LOG_BASE=https://github.com/BuidlGuidl/ethevals/releases/download` when building the site.
-That base reaches every results release. A link downloads the full `.eval` file.
+The row URL downloads the full `.eval` file.
 Save the file in a local folder, then run `uv run inspect view --log-dir path/to/folder`.
 A private repository requires GitHub access to download its assets. Public log downloads require a public repository.
 
@@ -506,13 +501,13 @@ Run the local proof without provider keys:
 
 ```sh
 env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN \
-  uv run ethevals prove-hf --export out/hf --output out/hf-proof
+  uv run pytest -q inspect-runner/tests/test_outputs.py -k hf_proof
 ```
 
 The proof calls Inspect's `task_create_from_hf` with local replacements for Hub downloads and dataset reads.
 Inspect resolves the solver and scorer specs itself. The proof also checks default JSONL loading against the runner.
 The runner and exporter share `target_scorer_spec` in `scorers.py` and `quiz_solver_spec` in `actors.py`.
 Reference answers must pass. Wrong answers must fail.
-It records observed verdicts in `out/hf-proof/report.json` and prints them as JSON.
-Proof logs must stay outside the dataset directory. Pytest runs the same proof.
+The test records observed verdicts in its temporary output directory.
+Proof logs stay outside the dataset directory.
 The hosted `hf/` download path remains untested until the dataset exists on HF.

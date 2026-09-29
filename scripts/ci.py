@@ -10,9 +10,9 @@ import tempfile
 
 from inspect_ai.log import read_eval_log
 
+from ethevals.cli import positive
 from ethevals.config import load_config
 from ethevals.hf import DEFAULT_REPO, write_hf
-from ethevals.hf_proof import prove
 from ethevals.loader import load_eval
 from ethevals.publish import publish_logs
 from ethevals.rows import fold_rows, read_rows, write_rows, store_rows
@@ -52,7 +52,7 @@ def after_merge(args, evals, config):
     args.output.mkdir(parents=True)
     if args.restore_results:
         restore_results(args.rows)
-    success, _ = run(evals, config, args.output, models=args.models, modes=args.modes, answer=args.answer,
+    success, _ = run(evals, config, args.output, agents=args.agents, modes=args.modes,
                      rows_file=args.rows, epochs=args.epochs, budget=args.budget,
                      wall_seconds=args.wall_seconds)
     print(f"{len(read_rows(args.output / 'rows.jsonl'))} rows after the run; execution success: {success}")
@@ -122,7 +122,6 @@ def publish_artifacts(args):
             commit = read_eval_log(str(logs[0]), header_only=True).eval.revision.commit
             commit = command("git", "rev-parse", commit, capture_output=True).stdout.strip()
             report = publish_logs(output, args.repo, output.name.removeprefix("eval-run-"), commit,
-                                  current_hashes={row["eval_id"]: row["eval_hash"] for row in own_rows},
                                   publish=args.publish, rows=own_rows, resume=True)
             print(json.dumps(report, indent=2))
             if own_rows:
@@ -143,7 +142,6 @@ def checks(args, evals):
     command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
             "--ignore=inspect-runner/tests/test_agent_docker.py")
     write_hf(evals, args.output / "hf", DEFAULT_REPO, None)
-    prove(args.output / "hf", evals, args.output / "hf-proof", load_config())
     for task in ("test", "typecheck", "lint", "build"):
         command("pnpm", task, cwd="site")
     return 0
@@ -164,38 +162,35 @@ def release(args, evals):
 
 def main():
     parser = argparse.ArgumentParser()
-    options = argparse.ArgumentParser(add_help=False)
-    options.add_argument("--output", type=Path)
-    options.add_argument("--config", type=Path)
-    options.add_argument("--evals", nargs="+")
-    options.add_argument("--models", nargs="+")
-    options.add_argument("--modes", nargs="+", default=["vanilla", "internet"])
-    options.add_argument("--epochs", type=int)
-    options.add_argument("--answer", choices=["reference", "empty", "default"])
-    options.add_argument("--budget", type=float, default=0)
-    options.add_argument("--wall-seconds", type=float, default=16200)
-    options.add_argument("--restore-results", action="store_true")
-    options.add_argument("--repo")
-    options.add_argument("--publish", action="store_true")
-    options.add_argument("--hf-repo", default=DEFAULT_REPO)
-    options.add_argument("--license")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("checks", "after-merge", "publish-results", "release"):
-        command_parser = commands.add_parser(name, parents=[options])
-        if name == "after-merge":
-            command_parser.add_argument("--rows", type=Path, default=Path("results/rows.jsonl"))
+    checks_parser = commands.add_parser("checks")
+    checks_parser.add_argument("--output", type=Path, required=True)
+    run_parser = commands.add_parser("after-merge")
+    for name in ("config", "output", "rows"):
+        run_parser.add_argument("--" + name, type=Path, required=name == "output",
+                                default=Path("results/rows.jsonl") if name == "rows" else None)
+    run_parser.add_argument("--evals", nargs="+")
+    run_parser.add_argument("--agents", nargs="+")
+    run_parser.add_argument("--modes", nargs="+")
+    run_parser.add_argument("--epochs", type=positive)
+    run_parser.add_argument("--budget", type=float)
+    run_parser.add_argument("--wall-seconds", type=float)
+    run_parser.add_argument("--restore-results", action="store_true")
+    publisher = commands.add_parser("publish-results")
+    publisher.add_argument("--output", type=Path, required=True)
+    publisher.add_argument("--repo", required=True)
+    publisher.add_argument("--publish", action="store_true")
+    release_parser = commands.add_parser("release")
+    release_parser.add_argument("--output", type=Path, required=True)
+    release_parser.add_argument("--hf-repo", default=os.environ.get("ETHEVALS_HF_REPO", DEFAULT_REPO))
+    release_parser.add_argument("--license", default=os.environ.get("ETHEVALS_DATASET_LICENSE"))
+    release_parser.add_argument("--publish", action="store_true")
     args = parser.parse_args()
-    if args.epochs is not None and args.epochs < 1:
-        parser.error("--epochs must be at least 1")
-    if args.command == "publish-results" and not args.repo:
-        parser.error("This command requires --repo")
-    if not args.output:
-        parser.error("This command requires --output")
     try:
         if args.command == "publish-results":
             return publish_artifacts(args)
-        config = load_config(args.config)
-        evals = [load_eval(Path(path), config) for path in args.evals or sorted(Path("evals").glob("*/*"))]
+        config = load_config(getattr(args, "config", None))
+        evals = [load_eval(Path(path), config) for path in getattr(args, "evals", None) or sorted(Path("evals").glob("*/*"))]
         if args.command == "after-merge":
             return after_merge(args, evals, config)
         return {"checks": checks, "release": release}[args.command](args, evals)

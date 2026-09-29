@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from ethevals.config import load_config
+from support import load_config
 from ethevals.loader import load_eval
 from support import build_task
 from ethevals.sandboxes import IMAGES, unpack_workspace, validate_compose
@@ -47,7 +47,7 @@ def test_rubric_boolean_and_reason():
 
 def test_agent_sample_contains_only_workspace_files():
     config = load_config()
-    config.models["opus"].model = "mockllm/model"
+    config.agents["opus"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     task = build_task(load_eval(BUILD, config), config, "opus", "internet", None, 1)
     sample = task.dataset[0]
@@ -74,7 +74,7 @@ def test_concurrency_must_fit_docker_memory(monkeypatch):
     monkeypatch.setattr("ethevals.preparation.docker_command", lambda args: SimpleNamespace(stdout=str(8 * 1024**3)))
     config = load_config()
     check_capacity(config)
-    config.max_tasks = config.max_samples = 3
+    config.concurrency = 3
     with pytest.raises(ValueError, match="5.25 GiB per concurrent epoch plus 1 GiB for the host"):
         check_capacity(config)
 
@@ -133,12 +133,12 @@ def test_workspace_archive_rejects_escape(name, link):
         unpack_workspace(archive(name, link))
 
 
-def test_eval_time_limit_overrides_type(tmp_path):
+def test_type_time_limit_reaches_task(tmp_path):
     folder = tmp_path / "concepts/quiz"
     shutil.copytree(ROOT / "evals/concepts/agent-registries", folder)
     path = folder / "eval.yaml"
-    path.write_text(path.read_text() + "\ntime_limit: 123\n")
     config = load_config()
+    config.time_limits["quiz"] = 123
     config.cost_limit = 0.25
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     assert (task.working_limit, task.time_limit, task.cost_limit) == (123, 369, 0.25)

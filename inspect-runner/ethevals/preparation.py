@@ -60,7 +60,7 @@ def prepare_compose(evaluation, output):
 
 def check_capacity(config):
     memory = int(docker_command(["docker", "info", "--format", "{{.MemTotal}}"]).stdout)
-    concurrency = min(config.max_tasks, config.max_samples)
+    concurrency = config.concurrency
     services = read_yaml(IMAGES / "act.compose.yaml")["services"]
     per_epoch = sum(int(service["mem_limit"][:-1]) * {"g": 1024**3, "m": 1024**2}[service["mem_limit"][-1]]
                     for service in services.values())

@@ -12,12 +12,12 @@ from inspect_ai.dataset import json_dataset
 from inspect_ai.log import read_eval_log
 from inspect_ai.model import ModelOutput, get_model
 
-from .checks import check_player, check_grader
-from .config import Config
-from .loader import Eval
-from .rows import results_rows
-from .runner import build_task
-from .scorers import target_reference
+from ethevals.checks import check_player, check_grader
+from ethevals.config import Config
+from ethevals.loader import Eval
+from ethevals.rows import results_rows
+from ethevals.runner import build_task
+from ethevals.scorers import target_reference
 
 
 def local_hf_tasks(export: Path, task_id: str | None = None):
@@ -57,8 +57,8 @@ def prove(export: Path, evaluations: list[Eval], output: Path, config: Config) -
         for sample, hf_sample in zip(direct, stock.dataset, strict=True):
             evaluation = evaluations[sample.id]
             reference = target_reference(evaluation.target, evaluation.declaration)
-            for answer_kind, answer in [("reference", reference), ("wrong", "An incorrect answer.")]:
-                observed = {"config": declaration["config"], "eval_id": sample.id, "answer": answer_kind}
+            for variant, answer in [("reference", reference), ("wrong", "An incorrect answer.")]:
+                observed = {"config": declaration["config"], "eval_id": sample.id, "answer": variant}
 
                 def model():
                     return get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", answer)])
@@ -74,9 +74,9 @@ def prove(export: Path, evaluations: list[Eval], output: Path, config: Config) -
                 runner.model = model()
                 log = read_eval_log(eval(runner, log_dir=str(output / "logs"), display="none")[0].location)
                 rows = results_rows(log)
-                if len(rows) != 1 or rows[0]["passed"] is None:
+                if len(rows) != 1 or rows[0]["status"] == "error":
                     raise ValueError(f"{sample.id}: runner did not produce one verdict: {rows}")
-                observed["runner"] = "C" if rows[0]["passed"] else "I"
+                observed["runner"] = "C" if rows[0]["status"] == "passed" else "I"
                 report.append(observed)
     output.mkdir(parents=True, exist_ok=True)
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")

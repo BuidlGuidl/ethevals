@@ -1,47 +1,40 @@
 epochs: 3
-time_limit: 300
-time_limits: {build: 1200, act: 1200, scenario: 900}
+time_limits: {quiz: 300, build: 1200, act: 1200}
 cost_limit: 5.0
 max_attempts: 2
-max_tasks: 1
-max_samples: 1
+concurrency: 1
 grader:
   model: openrouter/anthropic/claude-opus-5.5
   effort: none
   max_tokens: 4096
-  price_source: guess
-  prices: {input: 5.0, output: 25.0, input_cache_read: 0.5, input_cache_write: 6.25}
-search_provider: https://mcp.exa.ai/mcp
+search: true
 search_limit: 20
 search_price_usd: 0.05 # Reserve at the cap: 10 search results or 5 fetched pages. Check before funding.
 # Model slugs and all prices are guesses. Check them before a paid epoch.
 # Prices are USD per million tokens, including separate cache rates.
-models:
+agents:
   opus:
     model: openrouter/anthropic/claude-opus-5.5
     effort: high
     harness: claude_code
     agent_model_config: claude-opus-5-5
-    price_source: guess
-    prices: {input: 5.0, output: 25.0, input_cache_read: 0.5, input_cache_write: 6.25}
   codex:
     model: openrouter/openai/gpt-6-sol
     effort: high
     harness: codex_cli
     agent_model_config: gpt-6-sol
-    price_source: guess
-    prices: {input: 2.5, output: 15.0, input_cache_read: 0.25, input_cache_write: 2.5}
   kimi:
     model: openrouter/moonshotai/kimi-k3
     effort: high
     harness: opencode
     agent_model_config: openrouter/moonshotai/kimi-k3
-    price_source: guess
-    prices: {input: 0.6, output: 2.5, input_cache_read: 0.1, input_cache_write: 0.6}
   glm:
     model: openrouter/z-ai/glm-5.3
     effort: high
     harness: opencode
     agent_model_config: openrouter/z-ai/glm-5.3
-    price_source: guess
-    prices: {input: 1.0, output: 3.2, input_cache_read: 0.2, input_cache_write: 1.0}
+prices:
+  openrouter/anthropic/claude-opus-5.5: {input: 5.0, output: 25.0, input_cache_read: 0.5, input_cache_write: 6.25}
+  openrouter/openai/gpt-6-sol: {input: 2.5, output: 15.0, input_cache_read: 0.25, input_cache_write: 2.5}
+  openrouter/moonshotai/kimi-k3: {input: 0.6, output: 2.5, input_cache_read: 0.1, input_cache_write: 0.6}
+  openrouter/z-ai/glm-5.3: {input: 1.0, output: 3.2, input_cache_read: 0.2, input_cache_write: 1.0}

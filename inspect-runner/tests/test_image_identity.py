@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from ethevals.config import load_config
+from support import load_config
 from ethevals.images.tag import BUILD_INPUTS, image_tag
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
