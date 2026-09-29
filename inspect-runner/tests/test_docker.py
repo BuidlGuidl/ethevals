@@ -190,6 +190,8 @@ def test_forge_output_file_has_a_size_cap(tmp_path, monkeypatch):
     original = scorers.runner_exec
     with containers(tmp_path) as boxes:
         async def noisy_forge(box, args, **kwargs):
+            if "/usr/local/bin/forge" not in args:
+                return await original(box, args, **kwargs)
             position = args.index("/usr/local/bin/forge")
             args = args[:position] + ["/usr/bin/perl", "-e", 'print "x" x (12 * 1024 * 1024)']
             return await original(box, args, **kwargs)
