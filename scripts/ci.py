@@ -8,12 +8,14 @@ import subprocess
 import sys
 import tempfile
 
+from inspect_ai.log import read_eval_log
+
 from ethevals.config import load_config
 from ethevals.hf import DEFAULT_REPO, write_hf
 from ethevals.hf_proof import prove
 from ethevals.loader import load_eval
 from ethevals.publish import publish_logs
-from ethevals.rows import fold_rows, read_rows, write_rows, export_rows, store_rows
+from ethevals.rows import fold_rows, read_rows, write_rows, store_rows
 from ethevals.runner import run
 from ethevals.sandboxes import IMAGES, validate_compose
 
@@ -48,13 +50,11 @@ def after_merge(args, evals, config):
     if args.output.exists():
         raise ValueError("Use a fresh output directory for each CI run")
     args.output.mkdir(parents=True)
-    (args.output / "execution.json").write_text(json.dumps({"success": False}) + "\n")
     if args.restore_results:
         restore_results(args.rows)
     success, _ = run(evals, config, args.output, models=args.models, modes=args.modes, answer=args.answer,
                      rows_file=args.rows, epochs=args.epochs, budget=args.budget,
                      wall_seconds=args.wall_seconds)
-    (args.output / "execution.json").write_text(json.dumps({"success": success}) + "\n")
     print(f"{len(read_rows(args.output / 'rows.jsonl'))} rows after the run; execution success: {success}")
     return 0
 
@@ -108,7 +108,6 @@ def publish_artifacts(args):
     # Rebuild each attempt from its own logs, even if the run timed out.
     records, rows = [], []
     for output in sorted(args.output.glob("eval-run-*")):
-        export_rows(output)
         own_rows = store_rows(output)
         rows = fold_rows(rows, own_rows)
         records.append((output, own_rows))
@@ -117,17 +116,18 @@ def publish_artifacts(args):
     status = 0
     for output, own_rows in records:
         try:
-            report = publish_logs(output, args.repo, output.name.removeprefix("eval-run-"), args.commit,
+            logs = sorted((output / "logs").glob("*.eval"))
+            if not logs:
+                continue
+            commit = read_eval_log(str(logs[0]), header_only=True).eval.revision.commit
+            commit = command("git", "rev-parse", commit, capture_output=True).stdout.strip()
+            report = publish_logs(output, args.repo, output.name.removeprefix("eval-run-"), commit,
                                   current_hashes={row["eval_id"]: row["eval_hash"] for row in own_rows},
                                   publish=args.publish, rows=own_rows, resume=True)
             print(json.dumps(report, indent=2))
             if own_rows:
                 commit_results(result_record(fold_rows(own_rows, read_rows(Path(report["rows_file"])))),
                                args.repo, args.publish)
-            execution = output / "execution.json"
-            if execution.exists() and not json.loads(execution.read_text())["success"]:
-                print("Results retained. Some evals have execution or discovery errors.", file=sys.stderr)
-                status = 1
         except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
             print(f"{output}: publication failed: {error}", file=sys.stderr)
             status = 1
@@ -176,7 +176,6 @@ def main():
     options.add_argument("--wall-seconds", type=float, default=16200)
     options.add_argument("--restore-results", action="store_true")
     options.add_argument("--repo")
-    options.add_argument("--commit")
     options.add_argument("--publish", action="store_true")
     options.add_argument("--hf-repo", default=DEFAULT_REPO)
     options.add_argument("--license")
@@ -188,8 +187,8 @@ def main():
     args = parser.parse_args()
     if args.epochs is not None and args.epochs < 1:
         parser.error("--epochs must be at least 1")
-    if args.command == "publish-results" and not (args.repo and args.commit):
-        parser.error("This command requires --repo and --commit")
+    if args.command == "publish-results" and not args.repo:
+        parser.error("This command requires --repo")
     if not args.output:
         parser.error("This command requires --output")
     try:

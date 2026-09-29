@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 import pytest
+from inspect_ai.log import read_eval_log, write_eval_log
 
 from ethevals.actors import select_actors
 from ethevals.config import load_config
@@ -24,7 +25,8 @@ spec.loader.exec_module(ci)
 
 def cli(*args):
     environment = {key: value for key, value in os.environ.items() if key not in {
-        "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY", "GH_TOKEN", "HF_TOKEN"}}
+        "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY", "GH_TOKEN", "HF_TOKEN",
+        "PYTEST_CURRENT_TEST"}}
     return subprocess.run([sys.executable, *map(str, args)], cwd=ROOT, env=environment,
                           capture_output=True, text=True, timeout=60)
 
@@ -96,10 +98,14 @@ def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path
 
 @pytest.mark.parametrize("budget", ["0", "nan", "inf", "-1"])
 def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
-    output = tmp_path / "run"
+    from test_recovery import small_config
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(small_config().model_dump_json())
+    output = tmp_path / "eval-run-1"
     result = cli("scripts/ci.py", "after-merge", "--budget", budget, "--output", output,
+                 "--config", config_path,
                  "--rows", tmp_path / "rows.jsonl", "--evals", ROOT / "evals/concepts/agent-registries",
-                 "--models", "opus", "--modes", "vanilla")
+                 "--models", "test", "--modes", "vanilla")
     assert result.returncode == 2
     assert "OPENROUTER_API_KEY is required" not in result.stderr
     assert not (output / "logs").exists()
@@ -109,6 +115,8 @@ def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
         assert "No player or grader ran" in result.stderr
     else:
         assert "finite, nonnegative" in result.stderr
+    published = cli("scripts/ci.py", "publish-results", "--output", tmp_path, "--repo", "owner/repo")
+    assert (published.returncode, published.stdout) == (0, ""), published.stderr
 
 
 def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path):
@@ -118,7 +126,7 @@ def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path):
                 "--epochs", "1", "--budget", "10", *common)
     assert first.returncode == 0, first.stdout + first.stderr
     published = cli("scripts/ci.py", "publish-results", "--output", tmp_path,
-                    "--repo", "BuidlGuidl/ethevals", "--commit", "a" * 40)
+                    "--repo", "BuidlGuidl/ethevals")
     assert published.returncode == 0, published.stderr
     assert "Dry run: record 1 rows" in published.stdout
     assert '"release": "results-12-1"' in published.stdout
@@ -133,28 +141,38 @@ def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path):
     assert [r["status"] for r in read_rows(tmp_path / "second/rows.jsonl")] == ["passed"] * 3
 
 
-def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path):
-    quiz = load_eval(ROOT / "evals/concepts/agent-registries", load_config())
-    row = {"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "openrouter/anthropic/claude-opus-5.5",
+@pytest.mark.parametrize("status", ["failed", "error"])
+def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path, status):
+    from test_recovery import small_config
+    config = small_config()
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(config.model_dump_json())
+    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    row = {"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test",
            "harness": None, "effort": "high", "mode": "vanilla", "answer_kind": None,
-           "epoch": 1, "status": "failed", "attempt": 1}
+           "epoch": 1, "status": status, "attempt": 2}
     rows = tmp_path / "rows.jsonl"
     write_rows(rows, [row])
     before = rows.read_bytes(), rows.stat().st_mtime_ns
-    result = cli("scripts/ci.py", "after-merge", "--output", tmp_path / "run", "--rows", rows,
-                 "--evals", quiz.folder, "--models", "opus", "--modes", "vanilla", "--epochs", "1", "--budget", "0")
+    output = tmp_path / "eval-run-1"
+    result = cli("scripts/ci.py", "after-merge", "--output", output, "--rows", rows, "--config", config_path,
+                 "--evals", quiz.folder, "--models", "test", "--modes", "vanilla", "--epochs", "1", "--budget", "0")
     assert result.returncode == 0, result.stderr
-    report = json.loads((tmp_path / "run/plan.json").read_text())
+    assert "execution success: True" in result.stdout
+    report = json.loads((output / "plan.json").read_text())
     assert (report["missing_epochs"], report["worst_case_usd"], report["within_budget"]) == (0, 0, True)
-    assert read_rows(tmp_path / "run/rows.jsonl") == [row]
+    assert report["exhausted_errors"] == ([row] if status == "error" else [])
+    assert read_rows(output / "rows.jsonl") == [row]
     assert (rows.read_bytes(), rows.stat().st_mtime_ns) == before
-    assert not (tmp_path / "run/logs").exists()
+    assert not (output / "logs").exists()
+    published = cli("scripts/ci.py", "publish-results", "--output", tmp_path, "--repo", "owner/repo")
+    assert (published.returncode, published.stdout) == (0, ""), published.stderr
 
 
 def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows(tmp_path, monkeypatch):
-    monkeypatch.setattr(ci, "export_rows", lambda output: read_rows(output / "rows.jsonl"))
-    monkeypatch.setattr(ci, "store_rows", lambda output: read_rows(output / "rows.jsonl"))
-    config = load_config()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")  # Inspect omits Git revisions under pytest.
+    from test_recovery import small_config
+    config = small_config()
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
     previous = {"eval_id": quiz.id, "eval_hash": "stale", "model": "model", "mode": "vanilla", "epoch": 1,
                 "status": "passed", "log_file": "results-old/old.eval"}
@@ -164,22 +182,36 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     write_rows(rows, [previous])
     write_rows(output / "rows.jsonl", [new, error])
     (output / "logs").mkdir()
-    (output / "logs/new.eval").write_bytes(b"fixture log")
+    run([quiz], config, tmp_path / "seed", answer="reference", epochs=1)
+    log = read_eval_log(str(next((tmp_path / "seed/logs").glob("*.eval"))))
+    log.eval.revision.commit = "b" * 40
+    write_eval_log(log, str(output / "logs/new.eval"))
+    monkeypatch.setattr(ci, "store_rows", lambda output: read_rows(output / "rows.jsonl"))
     records = []
     monkeypatch.setattr(ci, "stored_file", lambda ref, path: json.dumps(previous) + "\n" if str(path).endswith("rows.jsonl") else "{}")
     monkeypatch.setattr(ci, "commit_results", lambda rows, *args: records.append(rows))
-    args = argparse.Namespace(output=tmp_path, repo="owner/repo", commit="a" * 40, publish=True)
+    args = argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True)
 
-    def fail(*args, **kwargs):
+    real_subprocess = subprocess.run
+    def fail(command, **kwargs):
+        if command[0] == "git":
+            return real_subprocess(command, **kwargs)
         raise subprocess.CalledProcessError(1, "gh")
 
     monkeypatch.setattr("ethevals.publish.subprocess.run", fail)
     assert ci.publish_artifacts(args) == 1
     assert [(r["status"], r.get("attempt")) for r in records[0]] == [("passed", None), ("error", 2), ("passed", None)]
-    monkeypatch.setattr("ethevals.publish.subprocess.run", lambda *a, **kw: subprocess.CompletedProcess(a, 0))
+    commands = []
+    def upload(command, **kwargs):
+        if command[0] == "git":
+            return real_subprocess(command, **kwargs)
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 1 if command[2] == "view" else 0)
+    monkeypatch.setattr("ethevals.publish.subprocess.run", upload)
     assert ci.publish_artifacts(args) == 0
     assert sorted((r["status"], r["log_file"]) for r in records[-1]) == [
         ("error", "logs/new.eval"), ("passed", "results-1/new.eval"), ("passed", "results-old/old.eval")]
+    assert commands[-1][:8] == ["gh", "release", "create", "results-1", "--repo", "owner/repo", "--target", "b" * 40]
 
 
 def test_release_script_exports_without_upload(tmp_path):
@@ -251,6 +283,7 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
 
 
 def test_all_artifact_rows_precede_any_upload(tmp_path, monkeypatch):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
     config = load_config()
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     first, second = tmp_path / "eval-run-12-1", tmp_path / "eval-run-12-2"
@@ -269,8 +302,7 @@ def test_all_artifact_rows_precede_any_upload(tmp_path, monkeypatch):
             raise RuntimeError("Old artifact upload failed")
         return {"rows_file": str(output / "rows.jsonl")}
     monkeypatch.setattr(ci, "publish_logs", upload)
-    assert ci.publish_artifacts(argparse.Namespace(output=tmp_path, repo="owner/repo",
-                                                  commit="a" * 40, publish=True)) == 1
+    assert ci.publish_artifacts(argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True)) == 1
     assert uploads == [("12-1", [1]), ("12-2", [2])]
     assert [(r["epoch"], r["status"]) for r in stored] == [(1, "passed"), (2, "passed")]
 

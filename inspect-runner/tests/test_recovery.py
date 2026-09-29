@@ -51,6 +51,7 @@ def test_runner_exception_after_eval_retains_rows_and_plan_reads_logs(tmp_path, 
 
 
 def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(tmp_path, monkeypatch):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
     config, evaluation = quiz()
     output = tmp_path / "eval-run-12-1"
     run([evaluation], config, output, answer="reference", epochs=2)
@@ -67,7 +68,7 @@ def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(
         raise RuntimeError("Release upload failed")
 
     monkeypatch.setattr(ci, "publish_logs", failed)
-    args = argparse.Namespace(output=tmp_path, repo="owner/repo", commit="a" * 40, publish=True)
+    args = argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True)
     assert ci.publish_artifacts(args) == 1
     assert sorted((r["status"], r["attempt"]) for r in persisted[0]) == [("error", 2), ("passed", 1)]
     players, _ = select_actors(config, answer="reference", planning=True)
@@ -119,13 +120,13 @@ def test_plan_rejects_one_epoch_larger_than_empty_window():
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     players, _ = select_actors(config, modes=["vanilla"], planning=True)
     with pytest.raises(ValueError, match="Config error: a single epoch.*concepts/agent-registries"):
-        plan([evaluation], config, players, [], wall_seconds=2000)
+        plan([evaluation], config, players, [], wall_seconds=1900)
 
 
 def test_run_executes_saved_plan(tmp_path):
     config = small_config()
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    success, rows = run([evaluation], config, tmp_path, answer="reference", wall_seconds=2600)
+    success, rows = run([evaluation], config, tmp_path, answer="reference", wall_seconds=2150)
     report = json.loads((tmp_path / "plan.json").read_text())
     assert success
     assert [(row["epoch"], row["status"]) for row in rows] == [(1, "passed"), (2, "passed")]
@@ -146,9 +147,22 @@ def test_run_prepares_only_initially_admitted_evals(tmp_path, monkeypatch):
         return original(evaluation, *args)
 
     monkeypatch.setattr(runner, "prepare_eval", prepare)
-    success, rows = run([evaluation, deferred], config, tmp_path, answer="reference", epochs=1, wall_seconds=2200)
+    success, rows = run([evaluation, deferred], config, tmp_path, answer="reference", epochs=1, wall_seconds=2000)
     assert (success, [(row["eval_id"], row["status"]) for row in rows]) == (
         True, [("concepts/agent-registries", "passed")])
+
+
+@pytest.mark.parametrize("folder, mode, seconds", [
+    ("building/erc20-points-token", "internet", 3840),
+    ("concepts/agent-registries", "vanilla", 3120),
+])
+def test_plan_includes_scoring_and_only_sandbox_container_time(folder, mode, seconds):
+    config = small_config()
+    config.time_limit = 1000
+    evaluation = load_eval(ROOT / "evals" / folder, config)
+    players, _ = select_actors(config, modes=[mode], planning=True)
+    report = plan([evaluation], config, players, [], epochs=1).report
+    assert [(row["eval_id"], row["wall_seconds"]) for row in report["missing"]] == [(folder, seconds)]
 
 
 def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path, monkeypatch):

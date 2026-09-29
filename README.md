@@ -393,7 +393,8 @@ The budget check runs before preparation or provider construction and also guard
 A manual dispatch can supply a different `budget`.
 
 CI uses a 16,200-second window, with 1,800 seconds for job preparation.
-Each epoch reserves its Inspect time limit plus 300 seconds for container startup and cleanup.
+Each epoch reserves its Inspect time limit plus its scoring limit.
+Sandbox epochs add 300 seconds for container startup and cleanup.
 Shortest epochs run first while their total fits the remaining window.
 An epoch that cannot fit an empty window is a config error.
 Only admitted evals enter preparation; deferred epochs stay missing for the next run.

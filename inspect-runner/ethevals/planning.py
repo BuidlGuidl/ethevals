@@ -22,6 +22,7 @@ class Epoch(NamedTuple):
 class Plan:
     report: dict
     admitted: list[Epoch]
+    selected: set
 
 
 def budget_check(report, budget, *, required=False):
@@ -33,9 +34,10 @@ def budget_check(report, budget, *, required=False):
     return report
 
 
-def epoch_seconds(evaluation, config, actor):
-    working = evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit)
-    return 3 * working + CONTAINER_SECONDS
+def epoch_seconds(item, config):
+    from .runner import task_limits
+    _, time_limit, scoring_limit = task_limits(item.evaluation, config)
+    return time_limit + scoring_limit + (CONTAINER_SECONDS if item.actor.sandbox_for(item.evaluation) else 0)
 
 
 def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, retry_errors=False):
@@ -59,17 +61,15 @@ def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, 
     return selected, pending, exhausted
 
 
-def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, fresh=False, wall_seconds=None,
-         selection=None):
+def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, fresh=False, wall_seconds=None):
     if wall_seconds is not None and (not math.isfinite(wall_seconds) or wall_seconds <= 0):
         raise ValueError("Wall seconds must be finite and positive")
-    selection = selection or epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
-    _, pending, exhausted = selection
+    selected, pending, exhausted = epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
     missing, deferred, admitted = [], [], []
     reserved = PREPARATION_SECONDS if pending else 0
-    for item in sorted(pending, key=lambda item: epoch_seconds(item.evaluation, config, item.actor)):
+    for item in sorted(pending, key=lambda item: epoch_seconds(item, config)):
         evaluation, mode, actor, epoch, attempt = item
-        seconds = epoch_seconds(evaluation, config, actor)
+        seconds = epoch_seconds(item, config)
         if wall_seconds is not None and PREPARATION_SECONDS + seconds > wall_seconds:
             raise ValueError(f"Config error: a single epoch of {evaluation.id} needs {seconds} seconds plus "
                              f"{PREPARATION_SECONDS} seconds for preparation; --wall-seconds is {wall_seconds:g}")
@@ -91,4 +91,4 @@ def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, f
     return Plan({"missing": missing, "missing_epochs": len(missing),
                  "deferred": deferred, "deferred_epochs": len(deferred), "wall_seconds": wall_seconds,
                  "reserved_wall_seconds": reserved, "exhausted_errors": exhausted,
-                 "worst_case_usd": round(sum(row["worst_case_usd"] for row in missing), 8)}, admitted)
+                 "worst_case_usd": round(sum(row["worst_case_usd"] for row in missing), 8)}, admitted, selected)

@@ -127,16 +127,16 @@ def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
     config = load_config()
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     output = tmp_path / "results"
-    for attempt in [1, 2, 2]:
+    for attempt, expected_success in [(1, False), (2, False), (2, True)]:
         success, rows = run([evaluation], config, output, answer="reference", epochs=1)
-        assert success is False
+        assert success is expected_success
         assert (rows[0]["status"], rows[0]["attempt"]) == ("error", attempt)
     assert len(list((output / "logs").glob("*.eval"))) == 2
     success, rows = run([evaluation], config, output, answer="reference", epochs=1, retry_errors=True)
     assert (success, rows[0]["status"], rows[0]["attempt"]) == (False, "error", 3)
     assert set(rows[0]["checks"]) == {"erc_number"}
     success, rows = run([evaluation], config, output, answer="reference", epochs=1)
-    assert (success, rows[0]["attempt"]) == (False, 3)
+    assert (success, rows[0]["attempt"]) == (True, 3)
 
 
 @pytest.mark.parametrize("budget", [5.0, 0.01])

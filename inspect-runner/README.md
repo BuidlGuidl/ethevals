@@ -75,7 +75,6 @@ The runner also exports rows if `eval()` raises. Both `plan` and `run` fold rows
 CI rebuilds rows from each run's logs and commits them before log uploads.
 The publisher folds those rows with `origin/main` and `origin/ci/results`.
 It builds the results commit on current `origin/main`, even when its checkout is older.
-If publication fails, rerun the publish job before the 14-day artifact expires.
 See the root README for workflow setup.
 The log store only grows. Retry logs never replace earlier logs.
 Rows cover the whole store, with the latest row per eval ID, eval hash, agent, mode, and epoch number.
@@ -90,7 +89,7 @@ Each scheduled epoch has one Inspect task with one sample and one Inspect epoch.
 Task metadata holds the ETH Evals epoch number. `log_epoch` holds Inspect's epoch number.
 This lets the runner select missing epochs without using Inspect's broader task identity.
 `max_attempts` permits two executions per identity, including errors and interrupted executions recorded in logs.
-After the second error, `run` returns failure without another model call.
+After the second error, the plan lists the exhausted epoch without another model call.
 `--retry-errors` grants one further execution to each selected error epoch without deleting logs.
 It never repeats a completed pass or failure. The next ordinary invocation still obeys the configured cap.
 Player working-time and cost limits fail the existing checks with the limit reason. The row's `limit` field records the limit.
@@ -102,14 +101,6 @@ The Python `run()` result also contains only the current selection. `rows.jsonl`
 It shares epoch selection with `run` and uses the runtime's `cost_limit`, `rubric_budget`, and `max_attempts`.
 `run()` owns the paid gate. A paid run requires `--budget` before provider construction.
 Search adds `search_limit * search_price_usd` to each internet attempt's reserve.
-CI uses `--wall-seconds 16200` for preparation and epochs within its 330-minute job.
-The execution step has a 310-minute deadline, which leaves 20 minutes for artifact upload.
-The job reserves 1,800 seconds for preparation.
-Each epoch reserves its Inspect time limit plus 300 seconds for container startup and cleanup.
-Shortest epochs run first while their sum fits the remaining window.
-An epoch that cannot fit an empty window is a config error.
-The runner plans once and prepares only admitted evals.
-Deferred epochs remain missing for the next run.
 `plan --budget USD` exits with code 1 when the worst-case cost exceeds the budget.
 The plan also lists exhausted errors.
 See the root README for the limits of this cost estimate.

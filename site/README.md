@@ -73,7 +73,6 @@ A row with `log_file: results-12345-1/epoch.eval` links to
 Rows from other runs carry other release tags, so one base reaches all releases.
 CI records attempts before log uploads and adds release links afterward.
 The publisher rebuilds rows from each run's logs, including interrupted attempts.
-If publication fails, rerun the publish job before the 14-day artifact expires.
 The root README describes the paid CI path.
 Execution errors remain visible without log links. Their unpublished logs stay in the workflow artifact.
 The publisher writes linked rows after the upload succeeds, in a file named for the release.
@@ -128,14 +127,6 @@ The root README lists each CLI's scripted proof with an agent Forge build. Long 
 CI and this Mac run one task at a time, with at most 5.25 GiB of container limits.
 The Mac's Docker VM reports 8,217,686,016 bytes. Capacity checks derive the reserve from Compose limits.
 Local concurrency also must fit Docker's memory capacity, with at least 1 GiB left for the host.
-Admission uses the list-scheduling bound after it deducts measured preparation and discovery time.
-Sandbox epochs include 180 seconds for startup, 60 for cleanup, and a fixed 120-second workspace-copy allowance.
-Inspect copies files outside our deadline; that allowance is not enforced. Act setup adds 150 seconds.
-Task initialization and final cleanup each have a 60-second deadline, charged once per distinct Compose file.
-Slow sample cleanup logs a warning and preserves scored rows. Final task cleanup retries leftover containers.
-The standalone CI plan admits 12 of 72 epochs and reserves 12,240 seconds with zero preparation time.
-Admission takes shortest whole groups first: one eval, mode, and epoch across every configured model.
-Each group admits all remaining cells or none. A budget below the cheapest group stops before preparation.
 The execution step stops after 310 minutes within the 330-minute job.
 
 Two deliberate fail-closed rules produce failed checks: author script crashes or malformed replies, and an agent's own container OOM.
