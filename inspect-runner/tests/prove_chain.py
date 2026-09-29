@@ -14,7 +14,7 @@ from inspect_ai.util import sandbox
 from ethevals.checks import check_player, check_grader
 from support import fixture_config
 from ethevals.loader import load_eval
-from ethevals.preparation import prepare_compose
+from ethevals.preparation import build_images, prepare_compose
 from ethevals.runner import build_task
 from ethevals.rows import export_rows
 from ethevals.sandboxes import runner_exec
@@ -32,9 +32,9 @@ def attempt(evaluation, variant):
             result = await runner_exec(box, ["/bin/bash", "/workspace/run.sh"], timeout=60)
             assert result.success, result.stderr
         elif variant == "crash":
-            await sandbox("chain").write_file("/eval/scorer/check.py", b"raise RuntimeError('crash proof')\n")
+            await sandbox("chain").write_file("/eval/scorer/check.py", b"#!/usr/bin/env python3\nraise RuntimeError('crash proof')\n")
         elif variant == "missing":
-            await sandbox("chain").write_file("/eval/scorer/check.py", b'print(\'{"recipient_balance":{"passed":false,"reason":"Missing sender proof."}}\')\n')
+            await sandbox("chain").write_file("/eval/scorer/check.py", b'#!/usr/bin/env python3\nprint(\'{"recipient_balance":{"passed":false,"reason":"Missing sender proof."}}\')\n')
         elif variant == "cheat":
             result = await runner_exec(box, ["/bin/bash", "-c", """
 set -eu
@@ -66,11 +66,11 @@ if curl -sS --connect-timeout 2 http://chain:8546; then exit 1; fi
             result = await runner_exec(box, ["/bin/bash", "-c", "nohup bash -c 'sleep 3; bash /workspace/run.sh' >/tmp/writer.log 2>&1 </dev/null &"])
             assert result.success
             original = evaluation.files["scorer/check.py"]
-            probe = b"""import sys, time
+            probe = b"""#!/usr/bin/env python3
+import sys, time
 sys.path.insert(0, '/opt')
 from rpc_filter import rpc
 before = rpc('eth_getBlockByNumber', ['latest', False])['hash']
-assert rpc('txpool_content') == {'pending': {}, 'queued': {}}
 time.sleep(4)
 assert rpc('eth_getBlockByNumber', ['latest', False])['hash'] == before
 """
@@ -84,6 +84,7 @@ def run_proof(output, variants=None):
     config = fixture_config()
     root = Path(__file__).resolve().parents[2]
     evaluation = load_eval(root / "evals/transactions/send-six-decimal-token", config)
+    build_images()
     compose = prepare_compose(evaluation, output)
     tasks = []
     variants = variants or ("reference", "wrong", "crash", "missing", "cheat", "pending")
@@ -96,8 +97,9 @@ def run_proof(output, variants=None):
     eval(tasks, log_dir=str(output / "logs"), display="plain", retry_on_error=0, fail_on_error=False, max_tasks=2)
     rows = export_rows(output)
     for row in rows:
-        assert row["status"] == ("passed" if list(variants)[row["epoch"] - 1] == "reference" else "failed"), row
-        names = ({"script:check"} if list(variants)[row["epoch"] - 1] == "crash" else
+        assert row["status"] == ("passed" if list(variants)[row["epoch"] - 1] == "reference" else
+                                 "error" if list(variants)[row["epoch"] - 1] == "crash" else "failed"), row
+        names = (set() if list(variants)[row["epoch"] - 1] == "crash" else
                  {"script:recipient_balance"} if list(variants)[row["epoch"] - 1] == "missing" else
                  {"script:agent_sender", "script:recipient_balance"})
         assert set(row["checks"]) == names

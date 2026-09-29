@@ -185,7 +185,6 @@ def test_verdict_parser_finds_expected_keys():
 
 def test_compose_rejects_binary_yaml(tmp_path):
     document = yaml.safe_load((IMAGES / "stock.compose.yaml").read_bytes())
-    document["services"]["default"].pop("build")
     document["services"]["default"]["environment"] = {"TOKEN": b"$SECRET_PROBE"}
     with pytest.raises(ValueError, match="unsupported YAML scalar"):
         validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump(document).encode())
@@ -194,10 +193,10 @@ def test_compose_rejects_binary_yaml(tmp_path):
 def test_compose_runs_the_normalized_captured_document(tmp_path):
     config = fixture_config()
     evaluation = load_eval(BUILD, config)
-    raw = (IMAGES / "stock.compose.yaml").read_bytes().replace(b"    build: .\n", b"") + b"# author bytes\n"
+    raw = b"services:\n  database:\n    image: postgres:17\n    mem_limit: 512m\n# author bytes\n"
     evaluation = replace(evaluation, files={**evaluation.files, "compose.yaml": raw})
     path = prepare_compose(evaluation, tmp_path)
-    assert path.read_bytes() == yaml.safe_dump(yaml.safe_load(raw), sort_keys=True).encode()
+    assert yaml.safe_load(path.read_bytes())["services"]["database"] == {"image": "postgres:17", "mem_limit": "512m", "networks": ["private"]}
     assert path.read_bytes() != raw
 
 

@@ -125,7 +125,7 @@ def compiler_diagnostic(stdout: str, stderr: str) -> str | None:
         reason = next((line for line in lines if line.startswith("CompilerError:")), None)
     version = next((line for line in lines if re.search(r"No solc version|invalid solc version|incompatible versions", line, re.I)), None)
     if reason is None and version:
-        reason = f"{version} Scoring is offline. Available solc versions: {', '.join(SOLC_VERSIONS)}."
+        reason = f"{version} Available solc versions: {', '.join(SOLC_VERSIONS)}."
     return reason
 
 

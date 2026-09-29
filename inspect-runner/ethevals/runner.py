@@ -15,8 +15,7 @@ from .rows import epoch_identity, export_rows, previous_rows
 from .planning import plan, budget_check
 from .scorers import EVALUATIONS, SCORERS, rubric_budget, rubric_questions, GRADER_CALLS, GRADER_CONFIG, FORGE_SECONDS
 from .check_script import CHECK_SECONDS
-from .sandboxes import compose_file
-from .preparation import prepare_compose, check_capacity
+from .preparation import build_images, prepare_compose, check_capacity
 from .images.tag import image_inputs, image_tag
 
 SCORING_OVERHEAD_SECONDS = 120
@@ -36,7 +35,7 @@ def task_limits(evaluation, config):
 
 
 def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
-               mode: str, epochs: int, compose: Path | None = None) -> Task:
+               mode: str, epochs: int, compose: Path | None) -> Task:
     if mode == "skills":
         raise ValueError("The skills mode is not implemented yet")
     if mode not in evaluation.declaration.modes:
@@ -44,10 +43,10 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     sample = evaluation.sample()
     images = {}
     if player.sandbox_for(evaluation):
-        compose = compose or compose_file(evaluation.declaration.type)
+        services = read_yaml(compose)["services"]
         sample.sandbox = SandboxEnvironmentSpec(type="ethevals_docker", config=str(compose))
-        images = {name: service["image"] for name, service in read_yaml(compose)["services"].items()}
-        limit = read_yaml(compose)["services"]["default"]["mem_limit"]
+        images = {name: service["image"] for name, service in services.items()}
+        limit = services["default"]["mem_limit"]
         sample.input += f"\nYour container has a {limit} memory limit, shared by the CLI and its tools. Exceeding it can end the epoch with an error.\n"
     else:
         sample.files = None
@@ -94,7 +93,8 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         raise ValueError("OPENROUTER_API_KEY is required for missing paid epochs")
     prepared, preparation_errors = {}, []
     if any(item.actor.sandbox_for(item.evaluation) for item in initial.admitted):
-        check_capacity(config)
+        check_capacity(config, [item.evaluation for item in initial.admitted if item.actor.sandbox_for(item.evaluation)])
+        build_images()
     for evaluation in evals:
         work = [item for item in initial.admitted if item.evaluation.id == evaluation.id]
         if not work:

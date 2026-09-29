@@ -7,7 +7,7 @@ from pydantic import Field
 
 from .config import Config, Declaration, Mode, parse_file
 from .scorers import TargetScorer, rubric_questions
-from .check_script import validate_script
+from .check_script import script_path, validate_script
 from .sandboxes import IMAGES, SOLC_VERSIONS, validate_compose
 from .files import manifest, content_hash, inline_file
 
@@ -47,7 +47,7 @@ class Eval:
         if "tests" in self.scorer_kinds:
             files["/workspace/foundry.toml"] = inline_file((IMAGES / "foundry.toml").read_bytes())
             notes.append(
-                f"Scoring is offline. Available solc versions: {', '.join(SOLC_VERSIONS)}. "
+                f"Available solc versions: {', '.join(SOLC_VERSIONS)}. "
                 "Grading uses the supplied foundry.toml. Changes to compiler settings or remappings do not affect grading. "
                 "OpenZeppelin and forge-std come from the image. Other Solidity dependencies must use relative imports under src/ or lib/."
             )
@@ -80,7 +80,7 @@ def load_eval(folder: Path, config: Config) -> Eval:
         ("target", "scorer/target.yaml" in files),
         ("tests", (folder / "scorer/tests").is_dir()),
         ("rubric", "scorer/rubric.md" in files),
-        ("check_script", "scorer/check.py" in files),
+        ("check_script", script_path(files, "check") is not None),
     ) if present]
     allowed = {"quiz": {"target"}, "build": {"tests", "rubric"}, "act": {"check_script"}, "scenario": set()}
     if not kinds or set(kinds) - allowed[declaration.type]:

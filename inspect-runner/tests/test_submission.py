@@ -28,7 +28,6 @@ PASS = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {
 @pytest.mark.parametrize("value", ["$SECRET_PROBE", "${SECRET_PROBE}", "$$literal/$SECRET_PROBE"])
 def test_compose_rejects_both_interpolation_forms(tmp_path, value):
     data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
-    data["services"]["default"].pop("build")
     data["services"]["default"]["environment"] = {"LEAK": value}
     path = tmp_path / "compose.yaml"
     path.write_text(yaml.safe_dump(data))
@@ -37,15 +36,13 @@ def test_compose_rejects_both_interpolation_forms(tmp_path, value):
 
 
 def test_compose_checks_decoded_values_and_allows_literal_dollars(tmp_path):
-    text = (IMAGES / "stock.compose.yaml").read_text().replace("    build: .\n", "")
-    text = text.replace("    init: true", '    environment: {VALUE: "\\u0024SECRET_PROBE"}\n    init: true', 1)
+    text = 'services:\n  extra:\n    image: postgres:17\n    mem_limit: 512m\n    environment: {VALUE: "\\u0024SECRET_PROBE"}\n'
     path = tmp_path / "compose.yaml"
     path.write_text(text)
     with pytest.raises(ValueError, match="host environment substitution"):
         validate_compose(path)
     path.write_text(text.replace('\\u0024SECRET_PROBE', '$$SECRET_PROBE'))
-    validate_compose(path)
-    assert load_eval(BUILD, fixture_config()).id == "building/erc20-points-token"
+    assert yaml.safe_load(validate_compose(path))["services"]["extra"]["environment"] == {"VALUE": "$$SECRET_PROBE"}
 
 
 @pytest.mark.parametrize("name", ["scorer/tests/cache", "workspace/cache", "workspace/lib/cache"])
@@ -82,7 +79,7 @@ def test_eval_root_cannot_be_a_symlink(tmp_path):
     "CompilerError: Stack too deep. Try compiling with --via-ir.",
 ])
 def test_submission_compile_errors_record_one_check(diagnostic):
-    reason = diagnostic + (" Scoring is offline. Available solc versions: 0.8.30." if "solc version" in diagnostic else "")
+    reason = diagnostic + (" Available solc versions: 0.8.30." if "solc version" in diagnostic else "")
     assert forge_checks("", diagnostic, 1) == {
         "forge:compile": {"passed": False, "reason": reason},
     }

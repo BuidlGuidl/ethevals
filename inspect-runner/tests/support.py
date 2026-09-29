@@ -9,11 +9,18 @@ from ethevals.checks import check_player, check_grader
 from ethevals.config import Config, load_config as read_config
 from ethevals.runner import build_task as actor_task
 from ethevals.runner import run
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from ethevals.preparation import prepare_compose
+
+INPUTS = TemporaryDirectory()
 
 
 def build_task(evaluation, config, key, mode, answer, epochs, compose=None):
     actor = check_player(evaluation, answer, mode=mode) if answer else player(config, key, mode)
     grade = check_grader() if answer else grader(config)
+    if compose is None and actor.sandbox_for(evaluation):
+        compose = prepare_compose(evaluation, Path(INPUTS.name))
     return actor_task(evaluation, config, actor, grade, mode, epochs, compose)
 
 

@@ -18,7 +18,7 @@ from support import valid_search_result
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
 from support import build_task
-from ethevals.preparation import prepare_compose
+from ethevals.preparation import build_images, prepare_compose
 
 
 def main():
@@ -91,6 +91,7 @@ console.log(JSON.stringify({matches, files, environments}));
     config.agents[args.model].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(Path(args.eval), config)
+    build_images()
     compose = prepare_compose(evaluation, args.output)
     task = build_task(evaluation, config, args.model, "internet", None, 1, compose)
     task.metadata.update(free_check=True, cost_source="mock", grader_cost_source="mock")

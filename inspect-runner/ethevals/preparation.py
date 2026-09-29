@@ -8,8 +8,8 @@ import yaml
 
 from .scorers import EVALUATIONS
 from .check_script import setup_script
-from .sandboxes import IMAGES, compose_file, validate_compose
-from .config import read_yaml
+from .sandboxes import IMAGES, merged_compose, memory_bytes
+from .images.tag import image_tag
 
 
 @sandboxenv(name="ethevals_docker")
@@ -37,32 +37,23 @@ def docker_command(command):
         raise RuntimeError(f"Docker failed: {(error.stderr or error.stdout or str(error))[-8192:]}") from error
 
 
+def build_images():
+    for image, dockerfile in (("runner", "Dockerfile"), ("chain", "Chain.Dockerfile")):
+        docker_command(["docker", "build", "-f", str(IMAGES / dockerfile), "-t", image_tag(IMAGES, image), str(IMAGES)])
+
+
 def prepare_compose(evaluation, output):
-    if "compose.yaml" not in evaluation.files:
-        stock = compose_file(evaluation.declaration.type)
-        document = yaml.safe_load(stock.read_bytes())
-        for service in document["services"].values():
-            service.pop("build", None)
-        data = yaml.safe_dump(document).encode()
-    else:
-        data = evaluation.files["compose.yaml"]
+    document = merged_compose(evaluation)
     path = output.resolve() / "inputs" / evaluation.hash / "compose.yaml"
-    normalized = validate_compose(path, data=data)
-    images = {service["image"] for service in yaml.safe_load(normalized)["services"].values()}
-    stock = compose_file("act")
-    builders = [name for name, service in read_yaml(stock)["services"].items()
-                if "build" in service and service["image"] in images]
-    docker_command(["docker", "compose", "-f", str(stock), "build", *builders])
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(normalized)
+    path.write_text(yaml.safe_dump(document))
     return path
 
 
-def check_capacity(config):
+def check_capacity(config, evaluations):
     memory = int(docker_command(["docker", "info", "--format", "{{.MemTotal}}"]).stdout)
     concurrency = config.concurrency
-    services = read_yaml(IMAGES / "act.compose.yaml")["services"]
-    per_epoch = sum(int(service["mem_limit"][:-1]) * {"g": 1024**3, "m": 1024**2}[service["mem_limit"][-1]]
-                    for service in services.values())
+    per_epoch = max(sum(memory_bytes(service["mem_limit"]) for service in merged_compose(evaluation)["services"].values())
+                    for evaluation in evaluations)
     if concurrency * per_epoch + 1024**3 > memory:
         raise ValueError(f"Docker memory must cover {per_epoch / 1024**3:g} GiB per concurrent epoch plus 1 GiB for the host. Reduce concurrency.")

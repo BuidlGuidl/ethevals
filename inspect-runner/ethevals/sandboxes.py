@@ -18,11 +18,10 @@ MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
 
 def compose_file(eval_type=None) -> Path:
     path = IMAGES / ("act.compose.yaml" if eval_type == "act" else "stock.compose.yaml")
-    validate_compose(path, stock=True)
     return path
 
 
-def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = None) -> bytes:
+def validate_compose(path: Path, *, data: bytes | None = None) -> bytes:
     data = read_yaml(path, data)
 
     def reject(message):
@@ -42,14 +41,11 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
                 check_interpolation(child)
 
     check_interpolation(data)
-    if set(data) - {"services", "networks", "volumes"}:
-        reject("only services, networks, and named volumes are allowed")
-    services, networks = data.get("services", {}), data.get("networks", {})
-    if not isinstance(services, dict) or not {"default", "scorer"} <= services.keys():
-        reject("services must include default and scorer")
-    if networks != {"private": {"internal": True, "driver_opts": {
-            "com.docker.network.bridge.inhibit_ipv4": "true"}}, "internet": {}}:
-        reject("networks must declare private with internal: true and inhibit_ipv4: 'true', and internet: {}")
+    if set(data) - {"services", "volumes"}:
+        reject("only extra services and named volumes are allowed")
+    services = data.get("services", {})
+    if not isinstance(services, dict) or {"default", "scorer", "chain"} & services.keys():
+        reject("default, scorer, and chain belong to the runner")
     volumes = data.get("volumes") or {}
     if not isinstance(volumes, dict):
         reject("volumes must be a mapping")
@@ -58,41 +54,43 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
             reject(f"volume {name}: host paths, external volumes, and driver options are forbidden")
     allowed = {"image", "init", "command", "entrypoint", "working_dir", "user", "environment",
                "networks", "volumes", "depends_on", "healthcheck", "mem_limit", "cpus"}
-    if len(services) > 3:
-        reject("at most three services fit the per-epoch memory budget")
-    limits = read_yaml(IMAGES / "act.compose.yaml")["services"]
     for name, service in services.items():
         if not isinstance(service, dict):
             reject(f"service {name}: must be a mapping")
-        extra = set(service) - allowed - ({"build"} if stock else set())
+        extra = set(service) - allowed
         if extra:
             reject(f"service {name}: forbidden options {sorted(extra)}; privileged containers and host mounts are forbidden")
-        required = limits.get(name, limits["chain"])["mem_limit"]
-        if service.get("mem_limit") != required:
-            reject(f"service {name}: requires mem_limit: {required}")
-        if name in {"default", "scorer"}:
-            runner_image = image_tag(IMAGES)
-            if service.get("image") != runner_image or service.get("user", "agent") != "agent":
-                reject(f"service {name}: requires the runner image and the agent user; expected {runner_image}")
-        if name == "chain" and service.get("image") != image_tag(IMAGES, "chain"):
-            reject(f"service chain: requires the chain image {image_tag(IMAGES, 'chain')}")
-        if service.get("networks") != (["private", "internet"] if name == "default" else ["private"]):
-            reject(f"service {name}: only default can join internet; all services must join private")
+        if memory_bytes(service.get("mem_limit", 0)) <= 0:
+            reject(f"service {name}: requires a positive mem_limit")
+        if service.get("networks", ["private"]) != ["private"]:
+            reject(f"service {name}: only the private network is allowed")
+        service["networks"] = ["private"]
         for volume in service.get("volumes", []):
-            if name in {"default", "scorer"}:
-                reject(f"service {name}: volumes are forbidden to keep agent and scorer files separate")
             if not isinstance(volume, dict) or volume.get("type") != "volume" or volume.get("source") not in volumes:
                 reject(f"service {name}: host mounts are forbidden; use a declared named volume")
         if not isinstance(service.get("environment", {}), dict):
             reject(f"service {name}: environment must use explicit mapping values")
         if any(value is None for value in service.get("environment", {}).values()):
             reject(f"service {name}: inherited host environment is forbidden")
-        if name in {"default", "scorer"} and any(
-            key.startswith("LD_") or key in {"BASH_ENV", "ENV", "PYTHONPATH", "PYTHONHOME", "NODE_OPTIONS"}
-            for key in service.get("environment", {})
-        ):
-            reject(f"service {name}: loader and shell startup environment overrides are forbidden")
     return yaml.safe_dump(data, sort_keys=True).encode()
+
+
+def memory_bytes(value):
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([bkmg]?)b?", str(value).lower())
+    if not match:
+        raise ValueError(f"Invalid mem_limit: {value}")
+    return int(float(match[1]) * {"": 1, "b": 1, "k": 1024, "m": 1024**2, "g": 1024**3}[match[2]])
+
+
+def merged_compose(evaluation):
+    document = read_yaml(compose_file(evaluation.declaration.type))
+    for name, service in document["services"].items():
+        service["image"] = image_tag(IMAGES, "chain" if name == "chain" else "runner")
+    if "compose.yaml" in evaluation.files:
+        extra = yaml.safe_load(validate_compose(evaluation.folder / "compose.yaml", data=evaluation.files["compose.yaml"]))
+        document["services"].update(extra.get("services", {}))
+        document["volumes"] = extra.get("volumes", {})
+    return document
 
 
 async def runner_exec(box, command, **kwargs):

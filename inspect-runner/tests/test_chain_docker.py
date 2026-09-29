@@ -9,7 +9,6 @@ from pathlib import Path
 
 import anyio
 import pytest
-import yaml
 from inspect_ai import eval
 from inspect_ai.solver import solver
 
@@ -19,7 +18,7 @@ from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.runner import build_task
 from ethevals.rows import results_rows
-from ethevals.sandboxes import IMAGES, validate_compose
+from ethevals.sandboxes import IMAGES
 from ethevals.images.tag import image_tag
 
 pytestmark = pytest.mark.docker
@@ -59,61 +58,20 @@ def test_expensive_signed_transaction_cannot_change_captured_state():
         assert "result" in value["tx"]
 
 
-
-
-def test_private_compose_network_blocks_host_and_keeps_chain_reachable(tmp_path):
-    prefix = "chain-net-" + uuid.uuid4().hex[:12]
-    listener = prefix + "-host"
-    server = "from http.server import BaseHTTPRequestHandler,HTTPServer\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200);self.end_headers();self.wfile.write(b'review-owned-host-sentinel')\nHTTPServer(('0.0.0.0',18973),H).serve_forever()"
-    document = yaml.safe_load((IMAGES / "act.compose.yaml").read_bytes())
-    for service in document["services"].values():
-        service.pop("build", None)
-    path = tmp_path / "compose.yaml"
-    path.write_bytes(validate_compose(path, data=yaml.safe_dump(document).encode()))
-    compose = ("compose", "-p", prefix, "-f", str(path))
-    try:
-        docker("run", "-d", "--name", listener, "--network", "host", "--entrypoint", "python3", IMAGE, "-c", server)
-        docker(*compose, "up", "-d", "--wait")
-        network = json.loads(docker("network", "inspect", prefix + "_private").stdout)[0]
-        gateway = network["IPAM"]["Config"][0]["Gateway"]
-        # The scorer can use the public RPC; the chain cannot reach host services or the internet.
-        result = docker(*compose, "exec", "-T", "scorer", "cast", "chain-id", "--rpc-url", "http://chain:8545")
-        assert result.stdout.strip() == "31337"
-        probe = f"import socket\nfor host in ['{gateway}','1.1.1.1']:\n try:\n  socket.create_connection((host,18973 if host=='{gateway}' else 443),timeout=2)\n except OSError:\n  print(host+': blocked')\n else:\n  raise AssertionError(host+': reachable')"
-        result = docker(*compose, "exec", "-T", "chain", "python3", "-c", probe)
-        assert result.stdout.splitlines() == [gateway + ": blocked", "1.1.1.1: blocked"]
-        # Reproduce the same listener access with the original network rule.
-        docker(*compose, "down", "--volumes")
-        del document["networks"]["private"]["driver_opts"]
-        path.write_text(yaml.safe_dump(document))
-        docker(*compose, "up", "-d", "--wait")
-        network = json.loads(docker("network", "inspect", prefix + "_private").stdout)[0]
-        gateway = network["IPAM"]["Config"][0]["Gateway"]
-        result = docker(*compose, "exec", "-T", "chain", "python3", "-c",
-                        f"import urllib.request; print(urllib.request.urlopen('http://{gateway}:18973',timeout=3).read().decode())")
-        assert result.stdout.strip() == "review-owned-host-sentinel"
-    finally:
-        docker(*compose, "down", "--volumes", check=False)
-        docker("rm", "-f", listener, check=False)
-
-
-def test_reference_runs_without_internet_and_receives_setup_files(tmp_path):
+def test_reference_and_scripts_have_internet_and_receive_setup_files(tmp_path):
     config = fixture_config()
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
-    guard = b'''set -eu
-test -s /workspace/chain.json
-if curl --noproxy '*' --silent --connect-timeout 2 --max-time 3 https://1.1.1.1 >/dev/null; then
-    echo 'Reference has internet access' >&2
-    exit 1
-fi
-'''
-    evaluation = replace(evaluation, files={**evaluation.files,
-                         "scorer/solution/run.sh": guard + evaluation.files["scorer/solution/run.sh"]})
+    probe = b"import urllib.request; assert urllib.request.urlopen('https://example.com', timeout=15).status == 200\n"
+    files = {**evaluation.files}
+    files["scorer/setup.sh"] = files["scorer/setup.sh"].replace(b"set -euo pipefail", b"set -euo pipefail\npython3 -c \"" + probe.strip() + b"\"")
+    files["scorer/check.py"] = files["scorer/check.py"].replace(b"import json", probe + b"import json")
+    files["scorer/solution/run.sh"] = b"set -eu\ncurl --fail --silent --max-time 15 https://example.com >/dev/null\n" + files["scorer/solution/run.sh"]
+    evaluation = replace(evaluation, files=files)
     compose = prepare_compose(evaluation, tmp_path)
     task = build_task(evaluation, config, check_player(evaluation, "reference"), check_grader(), "internet", 1, compose)
-    log = eval(task, log_dir=str(tmp_path / "offline"), display="none", retry_on_error=0)[0]
+    log = eval(task, log_dir=str(tmp_path / "online"), display="none", retry_on_error=0)[0]
     row = results_rows(log)[0]
-    assert row["status"] == "passed"
+    assert row["status"] == "passed", row
     assert row["checks"]["script:recipient_balance"] == {"passed": True, "reason": "Recipient holds 12500000 base units; expected 12500000."}
 
 
@@ -131,18 +89,17 @@ def amd64_smoke(image):
                 break
             time.sleep(.1)
         docker("exec", chain, "mkdir", "-p", "/eval/scorer")
-        for name in ("setup.py", "check.py", "Token.sol"):
+        for name in ("setup.sh", "check.py", "Token.sol"):
             docker("cp", str(fixture / "scorer" / name), chain + ":/eval/scorer/" + name)
-        setup = json.loads(docker("exec", chain, "env", "RPC_URL=http://127.0.0.1:8546", "SOLC=/opt/solc", "python3", "/eval/scorer/setup.py").stdout)
+        setup = json.loads(docker("exec", chain, "env", "RPC_URL=http://127.0.0.1:8546", "PUBLIC_RPC_URL=http://chain:8545", "SOLC=/opt/solc", "bash", "/eval/scorer/setup.sh").stdout)
         docker("exec", "-u", "root", reference, "mkdir", "/workspace")
         docker("exec", "-i", "-u", "root", reference, "bash", "-c", "cat > /workspace/chain.json", input=setup["files"]["chain.json"])
         docker("exec", "-i", "-w", "/workspace", reference, "bash", input=(fixture / "scorer/solution/run.sh").read_text())
-        boundary = json.loads(docker("exec", chain, "python3", "/opt/rpc_filter.py", "--freeze").stdout)
         checks = json.loads(docker("exec", chain, "env", "RPC_URL=http://127.0.0.1:8546", "python3", "/eval/scorer/check.py").stdout)
         assert checks == {
             "recipient_balance": {"passed": True, "reason": "Recipient holds 12500000 base units; expected 12500000."},
             "agent_sender": {"passed": True, "reason": "One transaction came from the agent key."}}
-        return {"boundary": boundary, "checks": checks}
+        return {"checks": checks}
     finally:
         docker("rm", "-f", chain, reference, check=False)
         docker("network", "rm", prefix, check=False)
@@ -165,16 +122,13 @@ def test_clean_builder_needs_no_runner_image_and_amd64_smoke():
 
 def test_broken_chain_build_reports_dockers_message(tmp_path, monkeypatch):
     import ethevals.preparation as preparation
-    document = yaml.safe_load((IMAGES / "act.compose.yaml").read_bytes())
-    document["services"]["default"].pop("build")
-    document["services"]["chain"]["build"]["context"] = str(tmp_path)
-    (tmp_path / "Chain.Dockerfile").write_text(f"FROM {IMAGE}\nRUN echo chain-build-canary >&2; exit 73\n")
-    stock = tmp_path / "act.compose.yaml"
-    stock.write_text(yaml.safe_dump(document))
-    monkeypatch.setattr(preparation, "compose_file", lambda _: stock)
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
+    import shutil
+    images = tmp_path / "images"
+    shutil.copytree(IMAGES, images)
+    (images / "Chain.Dockerfile").write_text(f"FROM {IMAGE}\nRUN echo chain-build-canary >&2; exit 73\n")
+    monkeypatch.setattr(preparation, "IMAGES", images)
     with pytest.raises(RuntimeError, match="chain-build-canary"):
-        prepare_compose(evaluation, tmp_path / "out")
+        preparation.build_images()
 
 
 @solver
@@ -189,8 +143,8 @@ def test_slow_setup_preserves_player_time(tmp_path):
     config = fixture_config()
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
     files = {**evaluation.files,
-             "scorer/setup.py": b'import time; time.sleep(31); print(\'{"files": {}}\')',
-             "scorer/check.py": b'print(\'{"ran":{"passed":true,"reason":"Player reached grading."}}\')'}
+             "scorer/setup.sh": b'#!/usr/bin/env python3\nimport time; time.sleep(31); print(\'{"files": {}}\')',
+             "scorer/check.py": b'#!/usr/bin/env python3\nprint(\'{"ran":{"passed":true,"reason":"Player reached grading."}}\')'}
     evaluation = replace(evaluation, files=files)
     compose = prepare_compose(evaluation, tmp_path)
     player = replace(check_player(evaluation, "empty"), solver_for=lambda _: slow_player())

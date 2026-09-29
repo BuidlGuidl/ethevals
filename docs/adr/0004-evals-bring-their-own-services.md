@@ -1,16 +1,29 @@
 # Evals bring their own services
 
-An eval that needs more than the agent's own container ships a `compose.yaml`. The anvil chain is the first shared image. A team whose task needs a validator, a database, or an indexer adds it the same way, with no change to the runner. An eval without `compose.yaml` gets the stock file for its type.
+An eval's optional `compose.yaml` lists only its extra services and named volumes.
+The runner merges them into the stock file for that eval's type.
+The runner owns `default`, `scorer`, `chain`, and the networks.
+It writes stock image tags from `images/tag.py` into the merged file.
+A runner image change never changes the eval hash.
 
-Every `compose.yaml` follows the same rules:
+Every author's service sets a positive `mem_limit` and joins only the private network.
+The runner sums the merged file's memory limits before starting work.
+There is no service-count cap or fixed limit for an extra service.
+CI rejects privileged containers, host mounts, host namespaces, and custom builds.
+Services can use declared named volumes.
+Authors must pin extra-service images by `@sha256:` digest; the runner does not enforce this.
 
-- The agent's service is named `default`.
-- The agent, the scorer, and the other services share a private network. Only the agent and the scorer also have internet.
-- The scorer has internet so Forge can fetch the compiler that matches the agent's `pragma`. It uses our `foundry.toml` with `ffi = false`, so the agent's code can't run shell commands during scoring.
-- CI rejects `privileged` containers and host mounts, because outside teams' files run in our CI.
+The agent, scorer, and chain containers also have internet.
+The agent's code runs with network access during grading, and scorer files are public.
+Check and setup scripts run inside the chain container and can read live sources.
+The unfiltered Anvil RPC listens only on loopback inside that container.
+The agent reaches the chain through its RPC allowlist and cannot call chain controls.
 
-Inspect passes one compose file per eval, so each eval's file is complete, copied from a template. It can't extend a shared base.
+Scoring uses the compiler installed in the image.
+Foundry's `offline = true` prevents compiler downloads while allowing tests to call RPC endpoints.
+The runner's `foundry.toml` disables FFI and filesystem permissions during scoring.
 
 ## Considered options
 
-- Anvil built into the runner, declared as `chain:` in `eval.yaml`: a smaller format, but any service besides a chain would need a runner change.
+- A complete compose file per eval repeats runner services and changes eval hashes whenever stock images change.
+- A `chain` key in `eval.yaml` requires runner changes for each new service type.

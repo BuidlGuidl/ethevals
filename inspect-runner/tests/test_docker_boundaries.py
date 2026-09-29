@@ -19,27 +19,22 @@ pytestmark = pytest.mark.docker
 
 
 @pytest.mark.parametrize("script,status,reason", [
-    (b'print("x" * (11 * 1024 * 1024))', "failed", "malformed JSON"),
-    (b'print("not JSON")', "failed", "malformed JSON"),
-    (b'raise ValueError("bad amount")', "failed", "ValueError: bad amount"),
-    (b'import os, signal; os.kill(os.getpid(), signal.SIGKILL)', "error", "exit code 137"),
+    (b'print("x" * (11 * 1024 * 1024))', "error", "malformed JSON"),
+    (b'print("not JSON")', "error", "malformed JSON"),
+    (b'raise ValueError("bad amount")', "error", "ValueError: bad amount"),
+    (b'import os, signal; os.kill(os.getpid(), signal.SIGKILL)', "error", "exited 137"),
 ])
 def test_check_script_failures_through_task(tmp_path, script, status, reason):
     import shutil
     config = fixture_config()
     folder = tmp_path / "transactions/script"
     shutil.copytree(ROOT / "evals/transactions/send-six-decimal-token", folder)
-    (folder / "scorer/check.py").write_bytes(script)
+    (folder / "scorer/check.py").write_bytes(b"#!/usr/bin/env python3\n" + script)
     evaluation = load_eval(folder, config)
     success, rows = run([evaluation], config, tmp_path / "results", answer="empty", epochs=1)
     row = rows[0]
     assert (success, row["status"]) == (status != "error", status)
-    if status == "failed":
-        assert set(row["checks"]) == {"script:check"}
-        assert row["checks"]["script:check"]["passed"] is False
-        assert reason in row["checks"]["script:check"]["reason"]
-    else:
-        assert reason in row["error_reason"]
+    assert reason in row["error_reason"]
 
 
 @pytest.mark.parametrize("local_oom,cli_code", [(True, 137), (False, 137), (True, 1)])
@@ -113,18 +108,11 @@ def test_custom_compose_prepares_stock_images_for_check_and_run(tmp_path, monkey
     dockerfile = images / "Dockerfile"
     dockerfile.write_text(dockerfile.read_text() + "\nLABEL build-proof=" + uuid.uuid4().hex + "\n")
     tag = image_tag(images)
-    for path in images.glob("*.compose.yaml"):
-        data = yaml.safe_load(path.read_bytes())
-        for name in ("default", "scorer"):
-            data["services"][name]["image"] = tag
-        path.write_text(yaml.safe_dump(data))
     monkeypatch.setattr(preparation, "IMAGES", images)
     monkeypatch.setattr(sandboxes, "IMAGES", images)
     folder = tmp_path / "evals/building/custom"
     shutil.copytree(ROOT / "evals/building/erc20-points-token", folder)
-    document = yaml.safe_load((images / "stock.compose.yaml").read_bytes())
-    document["services"]["default"].pop("build")
-    (folder / "compose.yaml").write_text(yaml.safe_dump(document))
+    (folder / "compose.yaml").write_text("services:\n  extra:\n    image: " + tag + "\n    mem_limit: 64m\n")
     config = fixture_config()
     evaluation = load_eval(folder, config)
     for output, fresh in [(tmp_path / "pr", True), (tmp_path / "after-merge", False)]:

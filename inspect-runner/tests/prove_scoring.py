@@ -15,6 +15,7 @@ from ethevals.files import content_hash
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
 from support import build_task
+from ethevals.preparation import build_images, prepare_compose
 from ethevals.sandboxes import runner_exec
 
 
@@ -93,11 +94,13 @@ contract ConstructorTest is Test {
     function testConstructed() public view { assertEq(token.totalSupply(), 1_000_000 ether); }
 }
 '''
+    build_images()
     evaluation = replace(original, files=files, hash=content_hash(files))
+    compose = prepare_compose(evaluation, output)
     tasks = []
     variants = ("reference", "pragma", "setup", "dependency", "snapshot", "traced", "missing_method", "syntax")
     for variant in variants:
-        task = build_task(evaluation, config, None, "internet", "reference", 1)
+        task = build_task(evaluation, config, None, "internet", "reference", 1, compose)
         task.metadata["epoch"] = list(variants).index(variant) + 1
         task = task_with(task, name=task.name + "-" + variant)
         task.solver = submit(files, variant)

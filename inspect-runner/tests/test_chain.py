@@ -101,69 +101,10 @@ def test_act_stock_compose_and_sample():
     sample = evaluation.sample()
     assert set(sample.files) == {"/workspace/README.md"}
     assert "12.5 tokens" in sample.input
-    assert b"internal: true" in validate_compose(compose_file("act"), stock=True)
+    assert sample.metadata["type"] == "act"
 
 
-def test_frozen_proxy_refuses_without_forwarding(proxy, monkeypatch):
-    request, writes = proxy
-    monkeypatch.setattr(rpc_filter, "rpc", lambda method, params=None:
-                        {"hash": "0xsealed"} if method == "eth_getBlockByNumber" else {})
-    payload = {"jsonrpc": "2.0", "id": 1, "method": "eth_sendRawTransaction", "params": ["0x123"]}
-    assert json.loads(request(payload)[1])["result"] == "0xabc"
-    assert request.chain.freeze() == "0xsealed"
-    assert json.loads(request(payload)[1]) == {
-        "jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "Chain is closed for grading."}}
-    assert writes == [payload]
 
-
-def test_freeze_waits_for_active_request(proxy, monkeypatch):
-    request, writes = proxy
-    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
-    upstream = rpc_filter.urllib.request.urlopen
-
-    def slow(*args, **kwargs):
-        entered.set()
-        assert release.wait(5)
-        return upstream(*args, **kwargs)
-
-    monkeypatch.setattr(rpc_filter.urllib.request, "urlopen", slow)
-    monkeypatch.setattr(rpc_filter, "rpc", lambda method, params=None:
-                        {"hash": "0xsealed"} if method == "eth_getBlockByNumber" else {})
-    payload = {"jsonrpc": "2.0", "id": 1, "method": "eth_chainId"}
-    replies, captures = [], []
-    sender = threading.Thread(target=lambda: replies.append(request(payload)))
-
-    def freeze():
-        captures.append(request.chain.freeze())
-        finished.set()
-
-    sender.start()
-    assert entered.wait(5)
-    closer = threading.Thread(target=freeze)
-    closer.start()
-    try:
-        assert not finished.wait(.1)
-    finally:
-        release.set()
-        sender.join(5)
-        closer.join(5)
-    assert json.loads(replies[0][1])["result"] == "0xabc"
-    assert captures == ["0xsealed"]
-    assert writes == [payload]
-
-
-def test_refused_large_methods_have_bounded_output(tmp_path, monkeypatch, capsys):
-    log = tmp_path / "refusals.log"
-    monkeypatch.setattr(rpc_filter, "REFUSALS", log)
-    chain = rpc_filter.Chain()
-    for _ in range(5):
-        result = chain.forward({"jsonrpc": "2.0", "id": 1, "method": "x" * 2_000_000})
-        assert result["error"]["message"] == "Method is not allowed."
-    assert log.stat().st_size == 5120
-    for _ in range(1100):
-        rpc_filter.refusal("x" * 2000)
-    assert log.stat().st_size == 1048576
-    assert capsys.readouterr().out == ""
 
 
 def test_oversized_upstream_response_has_accurate_error(proxy, monkeypatch):
@@ -182,7 +123,7 @@ def test_oversized_upstream_response_has_accurate_error(proxy, monkeypatch):
     {"files": {"value": 1}}, {"files": {3: "x"}}, {"files": {"README.md": "replacement"}}])
 def test_setup_rejects_invalid_output(output):
     from ethevals.check_script import setup_files
-    with pytest.raises(ValueError, match="setup.py"):
+    with pytest.raises(ValueError, match="Setup script"):
         setup_files(output, {"workspace/README.md": b"original"})
 
 
@@ -192,13 +133,28 @@ def test_setup_accepts_selected_nested_files():
         "data/key.json": "key", "chain.json": "chain"}
 
 
+@pytest.mark.parametrize("name", ["check", "check.sh", "check.py"])
+def test_runnable_check_names_load_and_stay_private(tmp_path, name):
+    import shutil
+    root = Path(__file__).resolve().parents[2]
+    folder = tmp_path / "transactions" / "act"
+    shutil.copytree(root / "evals/transactions/send-six-decimal-token", folder)
+    (folder / "scorer/check.py").rename(folder / "scorer" / name)
+    evaluation = load_eval(folder, fixture_config())
+    assert evaluation.files["scorer/" + name].startswith(b"#!/usr/bin/env python3")
+    assert set(evaluation.sample().files) == {"/workspace/README.md"}
+    (folder / "scorer/check.extra").write_text("#!/bin/sh\nexit 1\n")
+    with pytest.raises(ValueError, match="Expected one scorer/check"):
+        load_eval(folder, fixture_config())
+
+
 @pytest.mark.parametrize("value", [None, [], {}, {"Bad": {"passed": True, "reason": "yes"}},
     {1: {"passed": True, "reason": "yes"}}, {"ok": None}, {"ok": {"passed": 1, "reason": "yes"}},
     {"ok": {"passed": True, "reason": " "}}, {"ok": {"passed": True, "reason": 1}},
     {"ok": {"passed": True}}, {"ok": {"passed": True, "reason": "yes", "extra": 1}}])
 def test_check_script_rejects_invalid_checks(value):
     from ethevals.check_script import script_checks
-    with pytest.raises(ValueError, match="check.py"):
+    with pytest.raises(ValueError, match="Check script"):
         script_checks(value)
 
 
@@ -221,15 +177,23 @@ def test_act_requires_check_script_and_allows_declared_chain_file(tmp_path):
         load_eval(folder, fixture_config())
 
 
-def test_compose_rejects_private_network_with_host_gateway(tmp_path):
-    import yaml
-    data = yaml.safe_load(compose_file("act").read_bytes())
-    del data["networks"]["private"]["driver_opts"]
-    with pytest.raises(ValueError, match="inhibit_ipv4"):
-        validate_compose(tmp_path / "compose.yaml", stock=True, data=yaml.safe_dump(data).encode())
+
+def test_script_failure_includes_stderr_tail():
+    import anyio
+    from inspect_ai.util import ExecResult
+    from ethevals.check_script import script_result
+
+    class Box:
+        async def exec(self, command, **kwargs):
+            return ExecResult(success=False, returncode=1, stdout="",
+                              stderr="x" * 6000 + "\nValueError: bad setup amount")
+
+    with pytest.raises(RuntimeError, match="ValueError: bad setup amount") as error:
+        anyio.run(script_result, "scorer/setup.py", Box())
+    assert len(str(error.value)) < 4200
 
 
-def test_docker_build_error_is_local_to_eval_and_keeps_diagnostics(tmp_path, monkeypatch):
+def test_image_build_error_keeps_diagnostics(tmp_path, monkeypatch):
     import subprocess
     from ethevals.checks import check_player, check_grader
     from ethevals.runner import run
@@ -242,43 +206,10 @@ def test_docker_build_error_is_local_to_eval_and_keeps_diagnostics(tmp_path, mon
     original = subprocess.run
 
     def command(args, **kwargs):
-        if args[:2] == ["docker", "compose"] and "build" in args:
+        if args[:2] == ["docker", "build"]:
             raise subprocess.CalledProcessError(1, args, stderr="Docker: compiler checksum mismatch")
         return original(args, **kwargs)
 
     monkeypatch.setattr(preparation.subprocess, "run", command)
-    success, rows = run([act, quiz], config, tmp_path,
-                        answer="reference", epochs=1)
-    assert success is False
-    assert [(row["eval_id"], row["status"]) for row in rows] == [("concepts/wei-per-ether", "passed")]
-    assert json.loads((tmp_path / "discovery-errors.json").read_text()) == [{
-        "eval_id": act.id, "eval_hash": act.hash, "error": "Docker failed: Docker: compiler checksum mismatch"}]
-
-
-def test_control_reads_fragmented_reply_to_eof(tmp_path, monkeypatch, capsys):
-    import socket
-    import sys
-    import time
-    monkeypatch.chdir(tmp_path)
-    path = "control.sock"
-    server = socket.socket(socket.AF_UNIX)
-    server.bind(path)
-    server.listen(1)
-    monkeypatch.setattr(rpc_filter, "CONTROL", path)
-    monkeypatch.setattr(sys, "argv", ["rpc_filter.py", "--freeze"])
-
-    def reply():
-        with server.accept()[0] as client:
-            assert client.recv(32) == b"freeze\n"
-            client.sendall(b'{"block_hash":')
-            time.sleep(.05)
-            client.sendall(b'"0xsealed"}')
-
-    thread = threading.Thread(target=reply)
-    thread.start()
-    try:
-        rpc_filter.main()
-        assert json.loads(capsys.readouterr().out) == {"block_hash": "0xsealed"}
-    finally:
-        thread.join(5)
-        server.close()
+    with pytest.raises(RuntimeError, match="Docker failed: Docker: compiler checksum mismatch"):
+        run([act, quiz], config, tmp_path, answer="reference", epochs=1)

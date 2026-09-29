@@ -196,6 +196,7 @@ def test_choice_target_list_accepts_either_letter(folder, tmp_path):
     config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "internet", "reference", 1)
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", "ANSWER: B")])
+    task.dataset[0].sandbox = task.dataset[0].files = None
     log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(read_eval_log(log.location))[0]
     assert row["checks"] == {"answer": {"passed": True, "reason": "Answer matches the target."}}
@@ -370,6 +371,8 @@ def test_hash_ignores_local_artifacts_but_includes_new_author_files(folder):
     original = eval_hash(folder)
     (folder / ".DS_Store").write_bytes(b"Finder")
     for name in ["out", "cache", "lib", "__pycache__"]:
+        (folder / name).mkdir()
+        (folder / name / "generated").write_text("local artifact")
         path = folder / "workspace" / name
         path.mkdir()
         (path / "generated").write_text("local artifact")
@@ -378,6 +381,16 @@ def test_hash_ignores_local_artifacts_but_includes_new_author_files(folder):
     assert eval_hash(folder) != original
     assert load_eval(folder, fixture_config()).sample().files == {
         "/workspace/code.sol": inline_file(b"contract New {}")}
+    for name in ("lib", "out", "cache"):
+        path = folder / "workspace/src" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(name)
+    sample = load_eval(folder, fixture_config()).sample()
+    assert {name: sample.files["/workspace/src/" + name] for name in ("lib", "out", "cache")} == {
+        "lib": inline_file(b"lib"), "out": inline_file(b"out"), "cache": inline_file(b"cache")}
+    (folder / "workspace/src/scorer").mkdir()
+    (folder / "workspace/src/scorer/lib").write_text("nested")
+    assert load_eval(folder, fixture_config()).sample().files["/workspace/src/scorer/lib"] == inline_file(b"nested")
 
 
 def test_validate_rejects_effort_typo(folder, tmp_path):

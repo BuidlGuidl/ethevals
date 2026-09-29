@@ -26,27 +26,16 @@ def quiz_check_solver(evaluation, answer):
 
 
 @solver
-def build_workspace(evaluation, answer):
+def solution(evaluation, answer):
     async def solve(state, generate):
         if answer == "reference":
-            for name, data in evaluation.files.items():
-                if name.startswith("scorer/solution/"):
-                    await sandbox().write_file("/workspace/" + name.removeprefix("scorer/solution/"), data)
+            await run_solution(evaluation, sandbox())
         return await generate(state)
     return solve
 
 
-@solver
-def act_solution(evaluation, answer):
-    async def solve(state, generate):
-        if answer == "reference":
-            await run_solution(evaluation)
-        return await generate(state)
-    return solve
-
-
-CHECK_SOLVERS = {"quiz": quiz_check_solver, "build": lambda evaluation, answer: CheckRun(build_workspace(evaluation, answer)),
-                 "act": lambda evaluation, answer: CheckRun(act_solution(evaluation, answer))}
+CHECK_SOLVERS = {"quiz": quiz_check_solver, "build": lambda evaluation, answer: CheckRun(solution(evaluation, answer)),
+                 "act": lambda evaluation, answer: CheckRun(solution(evaluation, answer))}
 CHECK_MODES = {"quiz": "vanilla", "build": "internet", "act": "internet"}
 
 
