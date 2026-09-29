@@ -11,7 +11,7 @@ from inspect_ai.dataset import json_dataset
 from inspect_ai.log import read_eval_log
 from inspect_ai.model import ModelOutput, get_model
 
-from support import load_config
+from support import fixture_config
 from ethevals.hf import write_hf
 from ethevals.loader import load_eval
 from ethevals.publish import publish_logs
@@ -20,7 +20,7 @@ from hf_proof import local_hf_tasks, prove
 from support import build_task
 
 ROOT = Path(__file__).resolve().parents[2]
-EVALUATION = load_eval(ROOT / "evals/concepts/agent-registries", load_config())
+EVALUATION = load_eval(ROOT / "evals/concepts/agent-registries", fixture_config())
 
 
 def quiz(tmp_path, name="units", *, modes=None, choices=None, **scorer):
@@ -30,7 +30,7 @@ def quiz(tmp_path, name="units", *, modes=None, choices=None, **scorer):
     (folder / "eval.yaml").write_text(yaml.safe_dump({"type": "quiz", "motivation": "Check units.",
         "prompt": "Give the unit.", "modes": modes or ["vanilla"], "choices": choices}))
     (folder / "scorer/target.yaml").write_text(yaml.safe_dump({"target": "wei", **scorer}))
-    return load_eval(folder, load_config())
+    return load_eval(folder, fixture_config())
 
 
 def test_hf_cli_exports_fixture_rows_card_and_benchmark(tmp_path):
@@ -54,7 +54,7 @@ def test_hf_cli_exports_fixture_rows_card_and_benchmark(tmp_path):
         for sample in dataset:
             observed[sample.id] = (sample.target, sample.choices, sample.metadata["pillar"],
                                    spec.solvers[0].name, spec.scorers[0].name, spec.scorers[0].args)
-            assert sample.metadata["eval_hash"] == load_eval(ROOT / "evals" / sample.id, load_config()).hash
+            assert sample.metadata["eval_hash"] == load_eval(ROOT / "evals" / sample.id, fixture_config()).hash
     assert observed == {
         "concepts/agent-registries": ("8004", None, "concepts", "generate", "match",
                                      {"location": "exact", "ignore_case": True, "numeric": False}),
@@ -110,7 +110,7 @@ def test_hf_task_matches_runner_for_the_same_answer(tmp_path, settings, answer, 
     task.model = model()
     log = read_eval_log(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0].location)
     assert [score.value for score in log.samples[0].scores.values()] == [expected]
-    runner = build_task(evaluation, load_config(), None, "vanilla", "reference", 1)
+    runner = build_task(evaluation, fixture_config(), None, "vanilla", "reference", 1)
     runner.model = model()
     rows = results_rows(read_eval_log(eval(runner, log_dir=str(tmp_path / "logs"), display="none")[0].location))
     assert [(None if row["status"] == "error" else row["status"] == "passed") for row in rows] == [expected == "C"]
@@ -118,8 +118,8 @@ def test_hf_task_matches_runner_for_the_same_answer(tmp_path, settings, answer, 
 
 def test_hf_proof_covers_every_fixture_task(tmp_path):
     folders = sorted((ROOT / "evals").glob("*/*"))
-    write_hf([load_eval(folder, load_config()) for folder in folders], tmp_path / "hf")
-    report = prove(tmp_path / "hf", [load_eval(folder, load_config()) for folder in folders], tmp_path / "proof", load_config())
+    write_hf([load_eval(folder, fixture_config()) for folder in folders], tmp_path / "hf")
+    report = prove(tmp_path / "hf", [load_eval(folder, fixture_config()) for folder in folders], tmp_path / "proof", fixture_config())
     assert json.loads((tmp_path / "proof/report.json").read_text()) == report
     assert sorted((row["eval_id"], row["answer"], row["json_dataset"], row["hf_loader"], row["runner"]) for row in report) == [
         ("concepts/agent-registries", "reference", "C", "C", "C"),
@@ -136,7 +136,7 @@ def test_changing_fixture_scorer_updates_runner_and_export(tmp_path):
         settings = yaml.safe_load(path.read_text())
         settings["location"] = location
         path.write_text(yaml.safe_dump(settings))
-        evaluation = load_eval(evaluation.folder, load_config())
+        evaluation = load_eval(evaluation.folder, fixture_config())
         output = tmp_path / location
         write_hf([evaluation], output)
         spec = yaml.safe_load((output / "eval.yaml").read_text())["tasks"][0]
@@ -144,7 +144,7 @@ def test_changing_fixture_scorer_updates_runner_and_export(tmp_path):
             "location": location, "ignore_case": True, "numeric": False}}]
         assert spec["solvers"] == [{"name": "generate", "args": {}}]
         exported = local_hf_tasks(output)[0]
-        runner = build_task(evaluation, load_config(), None, "vanilla", "reference", 1)
+        runner = build_task(evaluation, fixture_config(), None, "vanilla", "reference", 1)
         for task in (exported, runner):
             task.model = get_model("mockllm/model", custom_outputs=[
                 ModelOutput.from_content("mockllm/model", "The unit is wei")])
@@ -298,7 +298,7 @@ def test_proof_records_observed_verdicts_before_reporting_mismatch(tmp_path, mon
     write_hf([evaluation], tmp_path / "hf")
     monkeypatch.setattr("hf_proof.target_reference", lambda *args: "wrong unit")
     with pytest.raises(ValueError, match="HF parity mismatch"):
-        prove(tmp_path / "hf", [evaluation], tmp_path / "proof", load_config())
+        prove(tmp_path / "hf", [evaluation], tmp_path / "proof", fixture_config())
     report = json.loads((tmp_path / "proof/report.json").read_text())
     assert [(row["answer"], row["json_dataset"], row["hf_loader"], row["runner"]) for row in report] == [
         ("reference", "I", "I", "I"), ("wrong", "I", "I", "I")]

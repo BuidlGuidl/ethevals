@@ -11,12 +11,12 @@ const evaluation = {
   prompt: "How many wei?", motivation: "Check units.", modes: ["internet", "vanilla", "skills"], choices: null,
 };
 const paid: Row = {
-  schema_version: 4, attempt: 1, completed_at: "2026-09-29T00:00:00Z", eval_id: "concepts/units", eval_hash: "current", type: "quiz",
+  schema_version: 4, eval_id: "concepts/units", eval_hash: "current", type: "quiz",
   model: "model-a", harness: "harness-a", effort: "high", mode: "internet",
   epoch: 1, status: "passed", checks: { answer: { passed: true, reason: "Matches." } },
   error_kind: null, error_reason: null, total_tokens: 100,
   model_cost_usd: 0.2, grader_cost_usd: 0.05, cost_source: "computed",
-  total_seconds: 8, working_seconds: 7, log_file: "logs/epoch.eval", log_url: null, limit: null,
+  total_seconds: 8, working_seconds: 7, log_url: null, limit: null,
 };
 
 function fixture(t: TestContext) {
@@ -37,7 +37,7 @@ function fixture(t: TestContext) {
 
 for (const [name, change, message] of [
   ["undeclared mode", { mode: "vanilla", harness: null }, "does not declare this mode"],
-  ["wrong type", { type: "scenario" }, "type differs"],
+  ["wrong type", { type: "act" }, "type differs"],
   ["internet without harness", { harness: null }, "require a harness"],
   ["vanilla with harness", { mode: "vanilla" }, "cannot have a harness"],
   ["vanilla non-quiz", { mode: "vanilla", harness: null, type: "build" }, "require a quiz"],
@@ -141,7 +141,7 @@ test("default site paths do not depend on the process working directory", () => 
 test("committed errors remain visible without unpublished release links", (t) => {
   const f = fixture(t);
   f.write([{ log_url: "https://github.com/example/ethevals/releases/download/results-1/epoch.eval" }, { epoch: 2, status: "error",
-    error_kind: "execution", error_reason: "Provider unavailable.", log_file: "logs/error.eval" }]);
+    error_kind: "execution", error_reason: "Provider unavailable." }]);
   const board = loadBoard({}, f.site);
   const cell = board.tables.internet.pillars.concepts.evals[0].cells['["model-a","harness-a","high"]'];
   assert.deepEqual([cell.passed, cell.total, cell.errors], [1, 1, 1]);

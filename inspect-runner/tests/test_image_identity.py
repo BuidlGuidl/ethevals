@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from support import load_config
+from support import fixture_config
 from ethevals.images.tag import BUILD_INPUTS, image_tag
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
@@ -26,7 +26,7 @@ def test_build_inputs_rename_images_and_reject_stale_compose(tmp_path, monkeypat
     shutil.copytree(IMAGES, images)
     monkeypatch.setattr(preparation, "IMAGES", images)
     monkeypatch.setattr(sandboxes, "IMAGES", images)
-    evaluation = load_eval(ROOT / "evals" / eval_path, load_config())
+    evaluation = load_eval(ROOT / "evals" / eval_path, fixture_config())
     original = image_tag(images, image)
     foundry = images / "foundry.toml"
     foundry.write_text(foundry.read_text() + "optimizer = true\n")

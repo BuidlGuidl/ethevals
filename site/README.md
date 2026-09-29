@@ -103,7 +103,7 @@ An eval score is `passed / scored epochs`.
 An epoch passes only when every named check passes.
 Errors remain visible in the panel but do not enter the denominator.
 Limits count as failed epochs because the runner records them as failed checks.
-Invalid Solidity bytes, confirmed scorer OOM kills, and empty grader reasons also produce failed checks.
+Invalid Solidity bytes and empty grader reasons also produce failed checks.
 Docker exec failures, capture timeouts, and grader transport failures remain errors.
 The runner's `run()` function requires a budget for paid work. CI calls that same entry point.
 Exa search runs on the host through a tool bridge. Its optional key never enters containers or logs.
@@ -125,10 +125,6 @@ The Mac's Docker VM reports 8,217,686,016 bytes. Capacity checks derive the rese
 Local concurrency also must fit Docker's memory capacity, with at least 1 GiB left for the host.
 The execution step stops after 310 minutes within the 330-minute job.
 
-Two deliberate fail-closed rules produce failed checks: author script crashes or malformed replies, and an agent's own container OOM.
-Author exit 125 is a failed check. The wrapper records that status separately from its own errors.
-OOM attribution requires both local memory counters to rise during the command. Ordinary failed tests need no second memory exec.
-Missing scripts, wrapper failures, host timeouts, and host kills remain errors.
 The [classification table](../README.md#failure-classification) gives the full rule.
 The panel uses the row's `limit` field to identify limits and displays the runner's check reasons.
 

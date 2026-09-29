@@ -15,7 +15,7 @@ from inspect_ai.model import ModelCost, ModelInfo, ModelOutput, ModelUsage, get_
 from inspect_ai.scorer import accuracy, scorer
 from inspect_ai.solver import solver
 
-from support import load_config
+from support import fixture_config
 from ethevals.loader import eval_hash, load_eval
 from ethevals.rows import results_rows
 from support import run
@@ -42,7 +42,7 @@ def test_loader_rejects_unknown_keys(folder, file, addition, key):
     path = folder / file
     path.write_text(path.read_text() + addition)
     with pytest.raises(ValueError) as error:
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
     assert str(path) in str(error.value)
     assert key in str(error.value)
 
@@ -52,7 +52,7 @@ def test_loader_rejects_numeric_targets(folder, target):
     path = folder / "scorer/target.yaml"
     path.write_text(f"target: {target}\n")
     with pytest.raises(ValueError) as error:
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
     assert f"{path}: target" in str(error.value)
 
 
@@ -60,7 +60,7 @@ def test_loader_requires_scorer_file(folder):
     path = folder / "scorer/target.yaml"
     path.unlink()
     with pytest.raises(ValueError) as error:
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
     assert str(path.parent) in str(error.value)
 
 
@@ -70,7 +70,7 @@ def test_loader_preserves_target_and_prompt(folder):
     (folder / "scorer/target.yaml").write_text('target: ["hello", "hi"]\n')
     (folder / "workspace/hello.txt").write_text("public workspace")
     (folder / "scorer/secret.txt").write_text("private scorer")
-    sample = load_eval(folder, load_config()).sample()
+    sample = load_eval(folder, fixture_config()).sample()
     assert (sample.id, sample.input, sample.target) == ("concepts/quiz", "Say hello.", ["hello", "hi"])
     assert sample.files == {"/workspace/hello.txt": inline_file(b"public workspace")}
 
@@ -90,9 +90,9 @@ def test_hash_tracks_every_file_and_name(folder):
     assert eval_hash(folder) == original
 
 
-@pytest.mark.parametrize("answer,expected", [("reference", True), ("empty", False), ("default", False)])
+@pytest.mark.parametrize("answer,expected", [("reference", True), ("empty", False)])
 def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
-    config = load_config()
+    config = fixture_config()
     evals = [load_eval(path, config) for path in sorted((ROOT / "evals/concepts").iterdir())]
     output = tmp_path / answer
     success, rows = run(evals, config, output, answer=answer)
@@ -121,7 +121,7 @@ def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
 def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected):
     path = folder / "scorer/target.yaml"
     path.write_text('name: number\ntarget: "8004"\nmethod: ' + method + ('\npattern: "ERC ([0-9]+)"\n' if method == "pattern" else "\n"))
-    config = load_config()
+    config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", answer)])
     log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
@@ -140,7 +140,7 @@ def with_grader(underlying):
 
 
 def test_rows_split_grader_usage_for_the_same_model(folder, tmp_path):
-    config = load_config()
+    config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.metadata.update(cost_source="computed:test", grader_cost_source="computed:grader", prices={"input": 1, "output": 2})
     output = ModelOutput.from_content("mockllm/model", "8004")
@@ -168,7 +168,7 @@ def crash():
 
 
 def test_error_is_distinct_from_failed_answer(folder, tmp_path):
-    config = load_config()
+    config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.solver = crash()
     log = eval(task, fail_on_error=False, log_dir=str(tmp_path / "logs"), display="none")[0]
@@ -178,7 +178,7 @@ def test_error_is_distinct_from_failed_answer(folder, tmp_path):
 
 
 def test_working_limit_is_a_failed_check(folder, tmp_path):
-    config = load_config()
+    config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.solver = mock_delay(2)
     task.working_limit = 1
@@ -193,7 +193,7 @@ def test_working_limit_is_a_failed_check(folder, tmp_path):
 def test_choice_target_list_accepts_either_letter(folder, tmp_path):
     (folder / "eval.yaml").write_text("type: quiz\nmotivation: Check accepted alternatives.\nprompt: Select a greeting.\nmodes: [internet]\nchoices: [hello, hi, goodbye]\n")
     (folder / "scorer/target.yaml").write_text('target: ["A", "B"]\n')
-    config = load_config()
+    config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "internet", "reference", 1)
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", "ANSWER: B")])
     log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
@@ -202,7 +202,7 @@ def test_choice_target_list_accepts_either_letter(folder, tmp_path):
 
 
 def test_completed_epochs_are_reused(folder, tmp_path):
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(folder, config)
     first_success, first = run([evaluation], config, tmp_path / "results", answer="reference")
     second_success, second = run([evaluation], config, tmp_path / "results", answer="reference")
@@ -253,7 +253,7 @@ def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_
         return solve
 
     monkeypatch.setitem(CHECK_SOLVERS, "quiz", lambda evaluation, answer: CheckRun(crash_once(), "8004"))
-    config = load_config()
+    config = fixture_config()
     config.concurrency = 1
     evaluation = load_eval(folder, config)
     output = tmp_path / "results"
@@ -283,7 +283,7 @@ def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch, kind):
         return task
 
     monkeypatch.setattr(runner, "build_task", limited)
-    config = load_config()
+    config = fixture_config()
     output = tmp_path / "results"
     evaluation = load_eval(folder, config)
     success, first = run([evaluation], config, output, answer="reference", epochs=1)
@@ -296,7 +296,7 @@ def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch, kind):
 
 
 def test_store_keeps_old_evals_and_runs_only_edited_eval(folder, tmp_path):
-    config = load_config()
+    config = fixture_config()
     other = tmp_path / "concepts/other"
     shutil.copytree(folder, other)
     output = tmp_path / "results"
@@ -321,7 +321,7 @@ def test_store_keeps_old_evals_and_runs_only_edited_eval(folder, tmp_path):
 
 def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
-    config = load_config()
+    config = fixture_config()
     config.grader.model = "mockllm/grader"
     for key, item in config.agents.items():
         item.model = f"mockllm/{key}"
@@ -350,7 +350,7 @@ def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path
 def test_declared_modes_skip_ineligible_evals(folder, tmp_path):
     path = folder / "eval.yaml"
     path.write_text(path.read_text().replace("[vanilla, internet]", "[internet]"))
-    config = load_config()
+    config = fixture_config()
     vanilla = load_eval(ROOT / "evals/concepts/wei-per-ether", config)
     internet = load_eval(folder, config)
     success, rows = run([internet, vanilla], config, tmp_path / "results", answer="reference", epochs=1)
@@ -376,20 +376,20 @@ def test_hash_ignores_local_artifacts_but_includes_new_author_files(folder):
     assert eval_hash(folder) == original
     (folder / "workspace/code.sol").write_text("contract New {}")
     assert eval_hash(folder) != original
-    assert load_eval(folder, load_config()).sample().files == {
+    assert load_eval(folder, fixture_config()).sample().files == {
         "/workspace/code.sol": inline_file(b"contract New {}")}
 
 
 def test_validate_rejects_effort_typo(folder, tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump(load_config().model_dump()).replace("effort: high", "effort: hihg"))
+    path.write_text(yaml.safe_dump(fixture_config().model_dump()).replace("effort: high", "effort: hihg"))
     result = cli("validate", "--evals", folder, "--config", path)
     assert result.returncode == 2
     assert "agents.opus.effort" in result.stderr
 
 
 def test_selected_modes_cross_only_declared_modes(folder, tmp_path):
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(folder, config)
     success, rows = run([evaluation], config, tmp_path / "results", answer="reference", epochs=1,
                         modes=["vanilla", "internet", "skills"])
@@ -397,27 +397,9 @@ def test_selected_modes_cross_only_declared_modes(folder, tmp_path):
     assert [(row["mode"], row["status"]) for row in rows] == [("internet", "passed"), ("vanilla", "passed")]
 
 
-def test_unknown_grader_cost_keeps_known_model_cost(folder, tmp_path):
-    config = load_config()
-    task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
-    log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
-    log.eval.metadata.update(model="mockllm/agent", grader_model="mockllm/grader",
-                             cost_source="computed:test", grader_cost_source="computed:grader")
-    # The exporter consumes persisted usage, including an unpriced grader.
-    log.samples[0].model_usage = {
-        "mockllm/agent": ModelUsage(input_tokens=10, output_tokens=4, total_tokens=14, total_cost=0.000018),
-        "mockllm/grader": ModelUsage(input_tokens=7, output_tokens=3, total_tokens=10),
-    }
-    log.samples[0].role_usage = {"grader": ModelUsage(input_tokens=7, output_tokens=3, total_tokens=10)}
-    row = results_rows(log)[0]
-    assert (row["model_cost_usd"], row["cost_source"]) == (0.000018, "unavailable")
-    assert (row["grader_cost_usd"], row["cost_source"]) == (None, "unavailable")
-    assert row["total_tokens"] == 24
-
-
 def test_setup_failure_has_unknown_cost(folder, tmp_path):
     from inspect_ai.log import EvalError
-    config = load_config()
+    config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
     # A task-level failure has no sample usage to assign to either role.
@@ -433,7 +415,7 @@ def test_setup_failure_has_unknown_cost(folder, tmp_path):
 
 def test_kill_and_resume_keeps_completed_epochs(folder, tmp_path):
     output = tmp_path / "results"
-    config = load_config()
+    config = fixture_config()
     config.concurrency = 1
     config_path = tmp_path / "serial.yaml"
     config_path.write_text(yaml.safe_dump(config.model_dump()))

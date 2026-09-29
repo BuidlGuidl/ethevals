@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const mode = z.enum(["vanilla", "internet", "skills"]);
-const evalType = z.enum(["quiz", "scenario", "build", "act"]);
+const evalType = z.enum(["quiz", "build", "act"]);
 const count = z.number().int().nonnegative();
 const measure = z.number().nonnegative().nullable();
 export const rowSchema = z.object({
@@ -25,10 +25,7 @@ export const rowSchema = z.object({
   total_seconds: measure,
   working_seconds: measure,
   cost_source: z.string(),
-  attempt: z.number().int().positive(),
-  completed_at: z.string().min(1),
   log_url: z.string().regex(/^(https?:\/\/|\/(?!\/))/).nullable(),
-  log_file: z.string().min(1),
 });
 
 

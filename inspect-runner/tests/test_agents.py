@@ -21,7 +21,7 @@ from inspect_swe._codex_cli._events.consumer import CodexConsumer
 from ethevals import agents
 from ethevals.actors import player
 from ethevals.config import Config
-from support import load_config
+from support import fixture_config
 from ethevals.images.tag import image_tag
 
 
@@ -30,7 +30,7 @@ from ethevals.images.tag import image_tag
     ("kimi", "opencode"), ("glm", "opencode"),
 ])
 def test_registry_builds_solver(key, harness):
-    config = load_config()
+    config = fixture_config()
     for search in [True, False]:
         config.search = search
         solve = agents.AGENTS[harness].build(config, config.agents[key])
@@ -44,7 +44,7 @@ def test_registry_builds_solver(key, harness):
     ("glm", "openrouter/z-ai/glm-5.3", "opencode"),
 ])
 def test_player_selects_model_and_effort(key, model, harness):
-    config = load_config()
+    config = fixture_config()
     config.agents[key].model = "mockllm/model"
     config.agents[key].effort = "low"
     actor = player(config, key, "internet")
@@ -55,7 +55,7 @@ def test_player_selects_model_and_effort(key, model, harness):
 
 
 def test_unknown_harness_fails_config_validation():
-    data = load_config().model_dump()
+    data = fixture_config().model_dump()
     data["agents"]["codex"]["harness"] = "missing"
     with pytest.raises(ValidationError, match="agents.codex.harness: unknown harness 'missing'"):
         Config.model_validate(data)
@@ -141,7 +141,7 @@ def test_codex_active_player_adapts_every_bridge_model(tmp_path, requested, monk
     from inspect_ai import Task, eval
     from inspect_ai.dataset import Sample
     from inspect_ai.solver import solver
-    config = load_config()
+    config = fixture_config()
     config.agents["codex"].model = "mockllm/model"
     actor = player(config, "codex", "internet")
     monkeypatch.setattr(actor.model.source.api, "outputs", lambda *args: ModelOutput.for_tool_call(

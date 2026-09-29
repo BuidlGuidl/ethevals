@@ -7,7 +7,7 @@ import pytest
 
 from ethevals.images import rpc_filter
 from ethevals.loader import load_eval
-from support import load_config
+from support import fixture_config
 from ethevals.sandboxes import compose_file, validate_compose
 
 
@@ -97,7 +97,7 @@ def test_filter_rejects_websocket_beacon_and_non_json(proxy):
 
 def test_act_stock_compose_and_sample():
     root = Path(__file__).resolve().parents[2]
-    evaluation = load_eval(root / "evals/transactions/send-six-decimal-token", load_config())
+    evaluation = load_eval(root / "evals/transactions/send-six-decimal-token", fixture_config())
     sample = evaluation.sample()
     assert set(sample.files) == {"/workspace/README.md"}
     assert "12.5 tokens" in sample.input
@@ -214,11 +214,11 @@ def test_act_requires_check_script_and_allows_declared_chain_file(tmp_path):
     folder = tmp_path / "transactions" / "act"
     shutil.copytree(root / "evals/transactions/send-six-decimal-token", folder)
     (folder / "workspace/chain.json").write_text("declared input")
-    assert load_eval(folder, load_config()).files["workspace/chain.json"] == b"declared input"
+    assert load_eval(folder, fixture_config()).files["workspace/chain.json"] == b"declared input"
     (folder / "scorer/tests").mkdir()
     (folder / "scorer/tests/Test.t.sol").write_text("contract Test {}")
     with pytest.raises(ValueError, match="scorer files do not match type act"):
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
 
 
 def test_compose_rejects_private_network_with_host_gateway(tmp_path):
@@ -236,7 +236,7 @@ def test_docker_build_error_is_local_to_eval_and_keeps_diagnostics(tmp_path, mon
     import ethevals.preparation as preparation
 
     root = Path(__file__).resolve().parents[2]
-    config = load_config()
+    config = fixture_config()
     act = load_eval(root / "evals/transactions/send-six-decimal-token", config)
     quiz = load_eval(root / "evals/concepts/wei-per-ether", config)
     original = subprocess.run

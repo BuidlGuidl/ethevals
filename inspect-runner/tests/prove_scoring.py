@@ -10,7 +10,7 @@ from inspect_ai.scorer import scorer, accuracy
 from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
 
-from support import load_config
+from support import fixture_config
 from ethevals.files import content_hash
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
@@ -81,7 +81,7 @@ def traced_process(underlying):
 
 def run_proof(output):
     assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
-    config = load_config()
+    config = fixture_config()
     original = load_eval(Path("evals/building/erc20-points-token"), config)
     files = dict(original.files)
     files["scorer/tests/ImageLibrary.t.sol"] = b'''pragma solidity ^0.8.30;

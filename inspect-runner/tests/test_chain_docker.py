@@ -14,7 +14,7 @@ from inspect_ai import eval
 from inspect_ai.solver import solver
 
 from ethevals.checks import check_player, check_grader
-from support import load_config
+from support import fixture_config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.runner import build_task
@@ -98,7 +98,7 @@ def test_private_compose_network_blocks_host_and_keeps_chain_reachable(tmp_path)
 
 
 def test_reference_runs_without_internet_and_receives_setup_files(tmp_path):
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
     guard = b'''set -eu
 test -s /workspace/chain.json
@@ -172,7 +172,7 @@ def test_broken_chain_build_reports_dockers_message(tmp_path, monkeypatch):
     stock = tmp_path / "act.compose.yaml"
     stock.write_text(yaml.safe_dump(document))
     monkeypatch.setattr(preparation, "compose_file", lambda _: stock)
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", load_config())
+    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
     with pytest.raises(RuntimeError, match="chain-build-canary"):
         prepare_compose(evaluation, tmp_path / "out")
 
@@ -186,7 +186,7 @@ def slow_player():
 
 
 def test_slow_setup_preserves_player_time(tmp_path):
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
     files = {**evaluation.files,
              "scorer/setup.py": b'import time; time.sleep(31); print(\'{"files": {}}\')',

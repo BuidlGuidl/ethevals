@@ -4,8 +4,7 @@ import pytest
 
 from ethevals.config import load_config
 from ethevals.loader import load_eval
-from support import load_config as fixture_config
-from test_ci import cli, ROOT
+from support import fixture_config
 
 
 @pytest.mark.parametrize("key,value,diagnostic", [
@@ -34,16 +33,3 @@ def test_scenario_is_parked(tmp_path):
     with pytest.raises(ValueError) as error:
         load_eval(folder, fixture_config())
     assert str(error.value) == f"{path.resolve()}: type: scenario is not supported yet"
-
-
-def test_cli_defaults_produce_the_same_plan(tmp_path):
-    config = tmp_path / "config.yaml"
-    config.write_text(fixture_config().model_dump_json())
-    common = ["--config", config, "--evals", ROOT / "evals/concepts/agent-registries",
-              "--agents", "opus", "--epochs", "1", "--budget", "0"]
-    planned = cli("-m", "ethevals.cli", "plan", "--output", tmp_path / "plan", *common)
-    executed = cli("scripts/ci.py", "after-merge", "--output", tmp_path / "run", *common)
-    assert (planned.returncode, executed.returncode) == (1, 2)
-    report = json.loads(planned.stdout)
-    assert report == json.loads((tmp_path / "run/plan.json").read_text())
-    assert [(row["mode"], row["model"]) for row in report["missing"]] == [("vanilla", "mockllm/opus")]

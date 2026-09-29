@@ -159,8 +159,9 @@ function Epochs({ rows, data }: { rows: Epoch[]; data: BoardData }) {
       {!Object.keys(epoch.checks).length && <p className="muted">No checks completed.</p>}
       <p className="subline">Time includes setup. Total tokens include the model and grader.</p>
       <div className="cost-detail">
-        <p>Model: <span className="mono">{money(epoch.model_cost_usd)}</span> <span className="muted">· {epoch.cost_source}</span></p>
-        <p>Grader: <span className="mono">{money(epoch.grader_cost_usd)}</span> <span className="muted">· {epoch.cost_source}</span></p>
+        <p>Model: <span className="mono">{money(epoch.model_cost_usd)}</span></p>
+        <p>Grader: <span className="mono">{money(epoch.grader_cost_usd)}</span></p>
+        <p className="muted">{epoch.cost_source}</p>
       </div>
       {href ? <a href={href} target="_blank" rel="noreferrer">{data.sample ? "Open sample log" : "Open full log"}</a>
         : <p className="muted">Full log not published.</p>}

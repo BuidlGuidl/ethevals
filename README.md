@@ -53,11 +53,10 @@ Results go to `results/reference/rows.jsonl` and `results/empty/rows.jsonl`.
 Their `logs/` folders hold the full Inspect logs.
 Mock token counts are synthetic. Mock cost is zero.
 
-To check one folder or choose an answer:
+To validate one folder:
 
 ```sh
 env -u OPENROUTER_API_KEY uv run ethevals validate --evals evals/concepts/agent-registries
-env -u OPENROUTER_API_KEY uv run ethevals run --answer default --output results/default
 ```
 
 `run` succeeds when execution succeeds, even when an answer fails its checks.
@@ -198,8 +197,6 @@ Write `scorer/solution/run.sh` to sign and send through the public RPC URL, usin
 The reference runs in the offline scorer, which also receives the workspace and setup's selected files.
 Author scripts can reach the private containers. They cannot reach the host or internet.
 Compose requires `internal: true` and `com.docker.network.bridge.inhibit_ipv4: "true"` on the private network.
-The runner discovers check names from that reference before any agent epoch.
-Wrong amounts, missing verdicts, and crashed check scripts keep the same check set.
 
 The stock chain uses Anvil 1.5.1 behind an RPC allowlist in the same container.
 Anvil listens on localhost. The agent can read chain state and send signed raw transactions through the filter.
@@ -262,6 +259,7 @@ The rubric's tokens and cost appear in `grader_tokens` and `grader_cost_usd`.
 Rows with `status: error` need diagnosis. An agent's incorrect code has `status: failed`.
 Forge test functions supply check names during scoring. Authors never list them.
 Compilation failure records one failed `forge:compile` check with the compiler's diagnostic.
+Every submission-level failure in a build records a failed `forge:compile` check.
 Constructor and setup failures use the names Forge reports.
 Docker transport failures and unknown Forge exits remain errors.
 Invalid Solidity bytes fail compilation.
@@ -275,7 +273,8 @@ Memory limits remain on every container. Out-of-memory failures remain Inspect e
 Task notes tell the agent its memory limit.
 
 A schema-valid grader reply without a reason fails that rubric check. Transport and invalid-JSON failures remain errors.
-Inspect caps each exec stream at 10 MiB. If Inspect raises an output-limit error, scoring records a failed check.
+Inspect keeps the last 10 MiB of each exec stream. Oversized check-script output fails as malformed JSON.
+Oversized Forge output is an error.
 Compilation reasons use the coded diagnostic, without source frames. Only compiler-version failures include the offline compiler note.
 Forge and the rubric read one workspace snapshot after the runner stops the agent's processes.
 The supplied `foundry.toml` defines grading settings and dependency remappings. Agent edits to it do not affect grading.

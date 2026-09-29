@@ -2,7 +2,6 @@
 from inspect_ai.event import SampleLimitEvent
 from inspect_ai.log import transcript
 from inspect_ai.scorer import Score
-from inspect_ai.util import OutputLimitExceededError
 
 
 def checks_score(checks):
@@ -24,8 +23,6 @@ def scoring_boundary(name, score):
                     raise RuntimeError(f"Epoch stopped by {limit.type} before its working limit. {limit.message}")
                 raise SubmissionFailed(f"Epoch reached {limit.type} limit {limit.limit}. {limit.message}")
             return await score(state, target)
-        except OutputLimitExceededError:
-            reason = "Submission output was too large. Inspect allows 10 MiB per exec stream."
         except SubmissionFailed as error:
             reason = str(error)
         return checks_score({name: {"passed": False, "reason": reason}})

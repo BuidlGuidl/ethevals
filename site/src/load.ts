@@ -8,7 +8,7 @@ import { siteRoot } from "./paths";
 // This checks the JSON transport. The runner owns eval declarations and hashes.
 const catalogSchema = z.array(z.object({
   id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
-  type: z.enum(["quiz", "scenario", "build", "act"]),
+  type: z.enum(["quiz", "build", "act"]),
   motivation: z.string().min(1), prompt: z.string().min(1),
   choices: z.array(z.string()).nullable().transform((value) => value ?? []),
   modes: z.array(z.enum(["vanilla", "internet", "skills"])).min(1),

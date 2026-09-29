@@ -12,7 +12,7 @@ from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
 
 from ethevals.checks import check_player, check_grader
-from support import load_config
+from support import fixture_config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.runner import build_task
@@ -81,7 +81,7 @@ assert rpc('eth_getBlockByNumber', ['latest', False])['hash'] == before
 
 def run_proof(output, variants=None):
     assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
-    config = load_config()
+    config = fixture_config()
     root = Path(__file__).resolve().parents[2]
     evaluation = load_eval(root / "evals/transactions/send-six-decimal-token", config)
     compose = prepare_compose(evaluation, output)

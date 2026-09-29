@@ -10,7 +10,7 @@ from inspect_ai.log import read_eval_log, write_eval_log
 
 from ethevals.actors import select_actors
 from ethevals.config import Config
-from support import load_config
+from support import fixture_config
 from ethevals.loader import load_eval
 from ethevals.planning import plan
 from ethevals.rows import epoch_identity, fold_rows, previous_rows, read_rows, write_rows
@@ -19,7 +19,7 @@ from test_ci import ci, ROOT
 
 
 def quiz():
-    config = load_config()
+    config = fixture_config()
     return config, load_eval(ROOT / "evals/concepts/agent-registries", config)
 
 
@@ -91,7 +91,7 @@ def small_config():
     prices = dict(input=1, output=1, input_cache_read=1, input_cache_write=1)
     model = dict(model="mockllm/test", effort="high")
     return Config(epochs=3, time_limits={"quiz": 10, "build": 1200, "act": 1200}, cost_limit=2, max_attempts=2,
-                  concurrency=1, search=False, prices={"mockllm/test": prices}, price_source="test",
+                  concurrency=1, search=False, search_limit=20, search_price_usd=0.05, prices={"mockllm/test": prices},
                   grader={**model, "max_tokens": 10},
                   agents={"test": {**model, "harness": None}})
 

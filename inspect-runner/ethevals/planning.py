@@ -36,7 +36,7 @@ def budget_check(report, budget, *, required=False):
 
 def epoch_seconds(item, config):
     from .runner import task_limits
-    _, time_limit, scoring_limit, _ = task_limits(item.evaluation, config)
+    _, time_limit, scoring_limit = task_limits(item.evaluation, config)
     return time_limit + scoring_limit + (CONTAINER_SECONDS if item.actor.sandbox_for(item.evaluation) else 0)
 
 

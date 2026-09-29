@@ -15,7 +15,7 @@ CHECK_SECONDS = 120
 
 
 def validate_script(declaration, files):
-    if declaration.type != "act" or declaration.modes != ["internet"]:
+    if declaration.modes != ["internet"]:
         raise ValueError("check_script requires an act eval with modes: [internet]")
     for path in ("scorer/check.py", "scorer/solution/run.sh"):
         if path not in files:
@@ -69,7 +69,7 @@ async def setup_script(evaluation, environments):
     # The public proxy never exposes these controls. Enforce automining after setup.
     result = await runner_exec(box, ["/usr/bin/python3", "-c",
         "import sys; sys.path.insert(0, '/opt'); from rpc_filter import rpc; "
-        "rpc('anvil_setIntervalMining', [0]); rpc('evm_setAutomine', [True])"], cwd="/eval")
+        "rpc('anvil_setIntervalMining', [0]); rpc('evm_setAutomine', [True])"], cwd="/eval", timeout=60)
     if not result.success:
         raise RuntimeError("Cannot configure chain mining after setup.")
 

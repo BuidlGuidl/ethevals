@@ -7,7 +7,7 @@ import yaml
 from inspect_ai import eval
 
 from ethevals.checks import check_grader
-from support import load_config
+from support import fixture_config
 from ethevals.files import content_hash
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
@@ -26,7 +26,7 @@ pytestmark = pytest.mark.docker
 ])
 def test_check_script_failures_through_task(tmp_path, script, status, reason):
     import shutil
-    config = load_config()
+    config = fixture_config()
     folder = tmp_path / "transactions/script"
     shutil.copytree(ROOT / "evals/transactions/send-six-decimal-token", folder)
     (folder / "scorer/check.py").write_bytes(script)
@@ -48,7 +48,7 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
     from inspect_ai.util import sandbox
     from ethevals.sandboxes import runner_exec
     from ethevals.actors import player
-    config = load_config()
+    config = fixture_config()
     config.agents["opus"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
@@ -79,7 +79,7 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
 def test_non_utf8_source_matches_real_forge_and_fails_checks(tmp_path):
     import anyio
     from ethevals.scorers import forge, prepare_forge
-    config = load_config()
+    config = fixture_config()
     original = load_eval(ROOT / "evals/building/erc20-points-token", config)
     source = b"pragma solidity =0.8.30; //\xff\ncontract BuilderPoints {}"
     with containers(tmp_path / "raw") as boxes:
@@ -125,7 +125,7 @@ def test_custom_compose_prepares_stock_images_for_check_and_run(tmp_path, monkey
     document = yaml.safe_load((images / "stock.compose.yaml").read_bytes())
     document["services"]["default"].pop("build")
     (folder / "compose.yaml").write_text(yaml.safe_dump(document))
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(folder, config)
     for output, fresh in [(tmp_path / "pr", True), (tmp_path / "after-merge", False)]:
         success, rows = run([evaluation], config, output, answer="reference", epochs=1, fresh=fresh)

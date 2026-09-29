@@ -20,7 +20,7 @@ class CheckRun:
 def quiz_check_solver(evaluation, answer):
     replies = {
         "reference": target_reference(evaluation.target, evaluation.declaration),
-        "empty": "", "default": "Default output from mockllm/model",
+        "empty": "",
     }
     return CheckRun(quiz_solver(evaluation), replies[answer])
 

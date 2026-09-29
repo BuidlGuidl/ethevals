@@ -18,6 +18,8 @@ from .sandboxes import IMAGES, SOLC_VERSIONS, workspace_files, runner_exec, scor
 from .scoring_base import SubmissionFailed, checks_score, scoring_boundary
 from .check_script import check_script_scorer
 
+FORGE_SECONDS = 180
+
 
 class TargetScorer(Declaration):
     name: str = Field(default="answer", pattern=r"^[a-z][a-z0-9_]*$")
@@ -197,14 +199,14 @@ async def compiled_sources(box):
 
 
 @scorer(metrics={"*": [accuracy()]})
-def tests_scorer(eval_id, eval_hash, timeout):
+def tests_scorer(eval_id, eval_hash):
     evaluation = EVALUATIONS[(eval_id, eval_hash)]
 
     async def score(state, target):
         await stop_agent()
         box = sandbox("scorer")
         await prepare_forge(box, await workspace_files(), evaluation.files)
-        result = await forge(box, timeout=timeout)
+        result = await forge(box, timeout=FORGE_SECONDS)
         return checks_score(forge_checks(result.stdout, result.stderr, result.returncode))
     return scoring_boundary("forge:compile", score)
 
@@ -223,7 +225,6 @@ def rubric_reply(text: str) -> dict:
     raise ValueError("Grader must return a single JSON object with boolean passed and nonempty reason.")
 
 
-GRADER_REQUEST_BYTES = 300000
 EVIDENCE_BYTES = 100000
 GRADER_CALLS = 2
 GRADER_CONFIG = GenerateConfig(timeout=60, attempt_timeout=20, max_retries=2, response_schema=ResponseSchema(
@@ -250,8 +251,10 @@ def rubric_budget(evaluation, config):
     settings = config.grader
     prices = config.prices[settings.model]
     input_price = max(prices.input, prices.input_cache_write, prices.input_cache_read)
-    return len(rubric_questions(evaluation.files)) * GRADER_CALLS * (1 + GRADER_CONFIG.max_retries) * (
-        GRADER_REQUEST_BYTES * input_price + settings.max_tokens * prices.output) / 1_000_000
+    questions = rubric_questions(evaluation.files)
+    request_bytes = EVIDENCE_BYTES + len(grader_request({})[0].text.encode()) + max(len(question.encode()) for question in questions.values())
+    return len(questions) * GRADER_CALLS * (1 + GRADER_CONFIG.max_retries) * (
+        request_bytes * input_price + settings.max_tokens * prices.output) / 1_000_000
 
 
 @scorer(metrics={"*": [accuracy()]})
@@ -285,7 +288,7 @@ def rubric_scorer(eval_id, eval_hash):
         except LimitExceededError as error:
             raise RuntimeError("Grader cost limit reached.") from error
         return checks_score(checks)
-    return scoring_boundary("rubric", score)
+    return score
 
 
 SCORERS = {"target": target_scorer, "tests": tests_scorer,

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from support import load_config
+from support import fixture_config
 from ethevals.loader import load_eval
 from support import build_task
 from ethevals.sandboxes import IMAGES, unpack_workspace, validate_compose
@@ -46,7 +46,7 @@ def test_rubric_boolean_and_reason():
 
 
 def test_agent_sample_contains_only_workspace_files():
-    config = load_config()
+    config = fixture_config()
     config.agents["opus"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     task = build_task(load_eval(BUILD, config), config, "opus", "internet", None, 1)
@@ -72,7 +72,7 @@ def test_concurrency_must_fit_docker_memory(monkeypatch):
     from types import SimpleNamespace
     from ethevals.preparation import check_capacity
     monkeypatch.setattr("ethevals.preparation.docker_command", lambda args: SimpleNamespace(stdout=str(8 * 1024**3)))
-    config = load_config()
+    config = fixture_config()
     check_capacity(config)
     config.concurrency = 3
     with pytest.raises(ValueError, match="5.25 GiB per concurrent epoch plus 1 GiB for the host"):
@@ -137,7 +137,7 @@ def test_type_time_limit_reaches_task(tmp_path):
     folder = tmp_path / "concepts/quiz"
     shutil.copytree(ROOT / "evals/concepts/agent-registries", folder)
     path = folder / "eval.yaml"
-    config = load_config()
+    config = fixture_config()
     config.time_limits["quiz"] = 123
     config.cost_limit = 0.25
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)

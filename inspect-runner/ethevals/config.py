@@ -63,14 +63,13 @@ class Config(Declaration):
     time_limits: dict[Literal["quiz", "build", "act"], Annotated[int, Field(gt=0)]]
     cost_limit: float = Field(gt=0)
     max_attempts: int = Field(gt=0)
-    concurrency: int = Field(default=2, gt=0)
+    concurrency: int = Field(gt=0)
     grader: GraderConfig
     search: bool
-    search_limit: int = Field(default=20, gt=0)
-    search_price_usd: float = Field(default=0.05, gt=0, allow_inf_nan=False)
+    search_limit: int = Field(gt=0)
+    search_price_usd: float = Field(gt=0, allow_inf_nan=False)
     agents: dict[str, ModelConfig]
     prices: dict[str, Prices]
-    price_source: str = "guess"
 
     @model_validator(mode="after")
     def check_grader(self):

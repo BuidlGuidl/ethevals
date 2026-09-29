@@ -86,7 +86,6 @@ The log store only grows. Retry logs never replace earlier logs.
 Rows cover the whole store, with the latest row per eval ID, eval hash, agent, mode, and epoch number.
 The fold chooses the higher attempt count, then `completed_at`. A release link enriches the same observation.
 The agent consists of harness, model, and effort. Vanilla epochs have a null harness.
-Mock answer kinds also distinguish identities so reference and empty answers cannot share results.
 Prices, grader settings, and execution limits do not change an existing epoch's identity.
 Their recorded values describe the execution that produced the row.
 Changing a limit applies to missing epochs. A completed limit failure remains final.
@@ -159,7 +158,6 @@ A factory returns a `CheckRun` with a solver and a mock reply.
 The build factory copies `scorer/solution/` for the reference case.
 The empty case leaves the workspace untouched.
 Both cases retain the task, scorer registry, log, and results exporter.
-The rubric registry entry sets `free_check=False` and stays out of free checks.
 
 Each `AGENTS` entry in `agents.py` holds one solver factory and its version.
 `Harness.build()` supplies the version and host-side Exa tool bridge to that factory.
@@ -256,7 +254,8 @@ That runner has 2 CPUs and 14 GB of disk. Local concurrency must also fit Docker
 The capacity check reserves another 1 GiB for the host before preparation.
 Container memory failures remain Inspect errors. Task notes tell the agent its memory limit.
 Each exec has its own timeout. `task_limits()` supplies the Task, planning, and Forge limits.
-Inspect caps each exec stream at 10 MiB. If Inspect raises an output-limit error, scoring records a failed check.
+Inspect keeps the last 10 MiB of each exec stream. Oversized check-script output fails as malformed JSON.
+Oversized Forge output is an error.
 Compilation reasons use the coded diagnostic. Compiler-version failures include the offline compiler note.
 Workspace failures record one failed `forge:compile` check and skip the rubric.
 Free checks omit rubric questions; paid epochs include them.

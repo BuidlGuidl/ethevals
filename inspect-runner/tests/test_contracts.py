@@ -12,7 +12,7 @@ from inspect_ai.model import GenerateConfig, ModelOutput, ModelUsage, get_model
 from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
 
-from support import load_config
+from support import fixture_config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.rows import results_rows
@@ -27,7 +27,7 @@ CHECK = "forge:test/Token.t.sol:TokenTest:testSupply()"
 
 @pytest.fixture
 def scoring_case(tmp_path):
-    config = load_config()
+    config = fixture_config()
     config.agents["opus"].model = "mockllm/player"
     config.grader.model = "mockllm/grader"
     folder = tmp_path / "building/token"
@@ -179,9 +179,8 @@ def test_grader_evidence_has_one_fixed_cut(scoring_case):
     assert scoring_case["requests"][1][1].text == evidence
 
 
-@pytest.mark.parametrize("text", [YES])
-def test_verdict_parser_finds_expected_keys(text):
-    assert rubric_reply(text) == {"passed": True, "reason": "Uses standard transfers."}
+def test_verdict_parser_finds_expected_keys():
+    assert rubric_reply(YES) == {"passed": True, "reason": "Uses standard transfers."}
 
 
 def test_compose_rejects_binary_yaml(tmp_path):
@@ -193,7 +192,7 @@ def test_compose_rejects_binary_yaml(tmp_path):
 
 
 def test_compose_runs_the_normalized_captured_document(tmp_path):
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(BUILD, config)
     raw = (IMAGES / "stock.compose.yaml").read_bytes().replace(b"    build: .\n", b"") + b"# author bytes\n"
     evaluation = replace(evaluation, files={**evaluation.files, "compose.yaml": raw})
@@ -203,7 +202,7 @@ def test_compose_runs_the_normalized_captured_document(tmp_path):
 
 
 def test_quiz_internet_has_no_foundry_files_or_note():
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(ROOT / "evals/concepts/wei-per-ether", config)
     task = build_task(evaluation, config, None, "internet", "reference", 1)
     assert task.dataset[0].input.startswith("How many wei equal one ether?\nYour container has a ")
@@ -217,7 +216,7 @@ def test_author_foundry_file_is_rejected(tmp_path):
     shutil.copytree(BUILD, folder)
     (folder / "workspace/foundry.toml").write_text("[profile.default]\nffi=true\n")
     with pytest.raises(ValueError, match="runner-owned"):
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
 
 
 def test_hard_link_is_rejected(tmp_path):
@@ -227,13 +226,13 @@ def test_hard_link_is_rejected(tmp_path):
     outside.write_text("inert sentinel")
     os.link(outside, folder / "workspace/probe.txt")
     with pytest.raises(ValueError, match="hard links"):
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
 
 
 def test_finder_junk_under_scorer_does_not_change_hash(tmp_path):
     folder = tmp_path / "building/token"
     shutil.copytree(BUILD, folder)
-    config = load_config()
+    config = fixture_config()
     before = load_eval(folder, config)
     (folder / "scorer/.DS_Store").write_bytes(b"Finder metadata")
     after = load_eval(folder, config)
@@ -246,7 +245,7 @@ def test_compose_directory_reports_a_load_error(tmp_path):
     shutil.copytree(BUILD, folder)
     (folder / "compose.yaml").mkdir()
     with pytest.raises(ValueError, match="must be a regular file"):
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
 
 
 @pytest.mark.docker

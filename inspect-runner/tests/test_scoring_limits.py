@@ -7,7 +7,7 @@ from inspect_ai import eval
 from inspect_ai.model import ModelOutput, get_model
 from inspect_ai.solver import solver
 
-from support import load_config
+from support import fixture_config
 from ethevals.loader import load_eval
 from ethevals.rows import results_rows
 from ethevals.scorers import forge_checks
@@ -17,7 +17,7 @@ from test_contracts import scoring_case, YES, BUILD
 CAPTURES = json.loads((Path(__file__).parent / "fixtures/forge-1.5.1.json").read_text())
 
 
-def test_captured_constructor_failure_fills_suite_checks():
+def test_captured_constructor_failure_keeps_forge_check_name():
     assert forge_checks(**CAPTURES["constructor"]) == {
         "forge:compile": {"passed": True, "reason": "Compilation passed."},
         "forge:test/Token.t.sol:Tests:constructor()": {"passed": False, "reason": "bad submission"},
@@ -56,7 +56,7 @@ def test_slow_provider_stops_at_total_grader_deadline(scoring_case, monkeypatch,
 
 
 def test_build_rejects_scoring_window_that_cannot_fit():
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(BUILD, config)
     config.time_limits["build"] = 300
     with pytest.raises(ValueError, match="Scoring needs 540 seconds, but Inspect allows 450"):
@@ -93,7 +93,7 @@ def test_provider_backoff_does_not_spend_working_limit(tmp_path, monkeypatch):
     import httpx
     from inspect_ai.model._providers.mockllm import MockLLM
     from tenacity import wait_fixed
-    config = load_config()
+    config = fixture_config()
     config.time_limits["quiz"] = 1
     evaluation = load_eval(BUILD.parents[1] / "concepts/wei-per-ether", config)
     task = build_task(evaluation, config, None, "vanilla", "reference", 1)

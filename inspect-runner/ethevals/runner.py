@@ -13,25 +13,26 @@ from .config import Config, read_yaml
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
 from .planning import plan, budget_check
-from .scorers import EVALUATIONS, SCORERS, rubric_budget, rubric_questions, GRADER_CALLS, GRADER_CONFIG
+from .scorers import EVALUATIONS, SCORERS, rubric_budget, rubric_questions, GRADER_CALLS, GRADER_CONFIG, FORGE_SECONDS
 from .check_script import CHECK_SECONDS
 from .sandboxes import compose_file
 from .preparation import prepare_compose, check_capacity
 from .images.tag import image_inputs, image_tag
 
+SCORING_OVERHEAD_SECONDS = 120
+
 
 def task_limits(evaluation, config):
     working_limit = config.time_limits[evaluation.declaration.type]
     time_limit = working_limit * 3
-    forge_seconds = 180
     questions = len(rubric_questions(evaluation.files)) if "rubric" in evaluation.scorer_kinds else 0
-    scoring_seconds = ((forge_seconds if "tests" in evaluation.scorer_kinds else 0)
+    scoring_seconds = ((FORGE_SECONDS if "tests" in evaluation.scorer_kinds else 0)
                        + (CHECK_SECONDS if "check_script" in evaluation.scorer_kinds else 0)
                        + questions * GRADER_CALLS * GRADER_CONFIG.timeout)
-    scoring_limit = scoring_seconds + 120
+    scoring_limit = scoring_seconds + SCORING_OVERHEAD_SECONDS
     if scoring_seconds and scoring_limit >= time_limit / 2:
         raise ValueError(f"Scoring needs {scoring_limit} seconds, but Inspect allows {time_limit / 2}.")
-    return working_limit, time_limit, scoring_limit, forge_seconds
+    return working_limit, time_limit, scoring_limit
 
 
 def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
@@ -50,7 +51,7 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
         sample.input += f"\nYour container has a {limit} memory limit, shared by the CLI and its tools. Exceeding it can end the epoch with an error.\n"
     else:
         sample.files = None
-    working_limit, time_limit, scoring_limit, forge_seconds = task_limits(evaluation, config)
+    working_limit, time_limit, scoring_limit = task_limits(evaluation, config)
     metadata = {**sample.metadata, **player.metadata, **grader.metadata,
                 "created_at": datetime.now(timezone.utc).isoformat(), "mode": mode,
                 "images": images,
@@ -68,7 +69,7 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     return Task(
         name=f"{evaluation.id.replace('/', '-')}-{identity}",
         version=evaluation.hash, dataset=[sample], solver=player.solver_for(evaluation),
-        scorer=[SCORERS[kind](evaluation.id, evaluation.hash, **({"timeout": forge_seconds} if kind == "tests" else {}))
+        scorer=[SCORERS[kind](evaluation.id, evaluation.hash)
                 for kind in evaluation.scorer_kinds if not (player.free_check and kind == "rubric")],
         model=player.model, epochs=epochs,
         working_limit=working_limit, time_limit=time_limit,

@@ -12,7 +12,7 @@ from unittest.mock import patch
 from inspect_ai import eval
 from inspect_ai.model import ModelOutput, get_model
 
-from support import load_config
+from support import fixture_config
 from ethevals.agents import CodexModel
 from support import valid_search_result
 from ethevals.loader import load_eval
@@ -87,7 +87,7 @@ console.log(JSON.stringify({matches, files, environments}));
 
         search.exa_request = offline_exa
     assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN")), "Strip provider credentials before this proof."
-    config = load_config()
+    config = fixture_config()
     config.agents[args.model].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(Path(args.eval), config)

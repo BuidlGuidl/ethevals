@@ -12,7 +12,7 @@ import pytest
 import yaml
 from inspect_ai.util import ExecResult
 
-from support import load_config
+from support import fixture_config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.sandboxes import IMAGES, runner_exec, validate_compose, workspace_files
@@ -59,7 +59,7 @@ def containers(tmp_path, environment=None):
     data["services"]["default"].pop("build")
     for service in data["services"].values():
         service["environment"] = environment or {}
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", load_config())
+    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", fixture_config())
     evaluation = replace(evaluation, files={**evaluation.files, "compose.yaml": yaml.safe_dump(data).encode()})
     path = prepare_compose(evaluation, tmp_path)
     prefix = ["docker", "compose", "-p", "proof-" + uuid.uuid4().hex[:12], "-f", str(path)]
@@ -81,7 +81,7 @@ def test_compose_sees_only_the_normalized_document(tmp_path):
         validate_compose(tmp_path / "binary.yaml", data=yaml.safe_dump(data).encode())
     data["services"]["default"]["environment"] = {"TOKEN": "$$SECRET_PROBE"}
     raw = yaml.safe_dump(data).encode() + b"# author comment\n"
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", load_config())
+    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", fixture_config())
     path = prepare_compose(replace(evaluation, files={**evaluation.files, "compose.yaml": raw}), tmp_path)
     result = command(["docker", "compose", "-f", str(path), "config", "--format", "json"],
                      env={**os.environ, "SECRET_PROBE": "inert-canary"})

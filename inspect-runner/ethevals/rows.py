@@ -43,10 +43,6 @@ def results_rows(log: EvalLog) -> list[dict]:
         total_cost = sum(item.total_cost for item in usage) if usage and all(item.total_cost is not None for item in usage) else None
         grader_cost = grader.total_cost if grader else 0.0 if usage else None
         model_cost = total_cost - grader_cost if total_cost is not None and grader_cost is not None else None
-        # A grader with unknown prices must not erase a separately metered model.
-        if grader and grader.total_cost is None and metadata.get("grader_model") != metadata.get("model"):
-            model_usage = sample.model_usage.get(metadata.get("model"))
-            model_cost = model_usage.total_cost if model_usage else None
         cost_source = metadata.get("cost_source", "unavailable")
         if model_cost is None or grader_cost is None:
             cost_source = "unavailable"

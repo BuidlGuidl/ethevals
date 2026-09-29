@@ -22,18 +22,20 @@ def positive(value: str) -> int:
     return number
 
 
-def main() -> int:
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(prog="ethevals")
     commands = parser.add_subparsers(dest="command", required=True)
     parsers = {name: commands.add_parser(name) for name in
                ("run", "plan", "check", "validate", "catalog", "export-hf", "publish-logs")}
-    for name, command in parsers.items():
-        if name != "publish-logs":
-            command.add_argument("--evals", nargs="+", help="Eval folders. Defaults to evals/*/*.")
-            command.add_argument("--config", type=Path)
-        if name != "validate":
-            command.add_argument("--output", type=Path, required=name in {"export-hf", "publish-logs"},
-                                 default=Path("results") if name in {"run", "plan", "catalog"} else Path("results/check") if name == "check" else None)
+    for name in ("run", "plan", "check", "validate", "catalog", "export-hf"):
+        parsers[name].add_argument("--evals", nargs="+", help="Eval folders. Defaults to evals/*/*.")
+        parsers[name].add_argument("--config", type=Path)
+    parsers["run"].add_argument("--output", type=Path, default=Path("results"))
+    parsers["plan"].add_argument("--output", type=Path, default=Path("results"))
+    parsers["check"].add_argument("--output", type=Path, default=Path("results/check"))
+    parsers["catalog"].add_argument("--output", type=Path, default=Path("results"))
+    parsers["export-hf"].add_argument("--output", type=Path, required=True)
+    parsers["publish-logs"].add_argument("--output", type=Path, required=True)
     for name in ("run", "plan", "check"):
         command = parsers[name]
         command.add_argument("--modes", nargs="+", help="Select vanilla, internet, or skills.")
@@ -52,7 +54,11 @@ def main() -> int:
     publisher.add_argument("--run-id", required=True, help="Unique results run ID. The release tag is results-<run-id>.")
     publisher.add_argument("--commit", required=True, help="Full source commit SHA for the release tag.")
     publisher.add_argument("--publish", action="store_true", help="Create the GitHub release and upload referenced logs with gh.")
-    args = parser.parse_args()
+    return parser, parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    parser, args = parse_args(argv)
     try:
         if args.command == "publish-logs":
             print(json.dumps(publish_logs(args.output, args.repo, args.run_id, args.commit,

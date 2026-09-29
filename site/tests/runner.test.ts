@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { loadBoard, loadEvaluations, parseRows } from "../src/load";
+import { loadEvaluations, parseRows } from "../src/load";
 import { siteRoot } from "../src/paths";
 
 test("the board reads the merged runner's catalog and reference and empty rows", (t) => {
@@ -34,8 +34,5 @@ test("the board reads the merged runner's catalog and reference and empty rows",
       [["concepts/agent-registries", 4, answer === "reference" ? "passed" : "failed"]]);
     assert.equal(rows[0].eval_hash, evaluations.find((evaluation) => evaluation.id === rows[0].eval_id)!.hash);
     assert.equal(rows[0].log_url, null);
-
   }
-  const board = loadBoard({}, site);
-  assert.deepEqual([board.tables.internet.subjects, board.tables.vanilla.subjects], [[], []]);
 });

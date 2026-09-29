@@ -10,7 +10,7 @@ from inspect_ai.model import ModelOutput, ModelUsage, get_model
 from inspect_ai.solver import generate, solver
 
 from ethevals.checks import CHECK_SOLVERS, CheckRun
-from support import load_config
+from support import fixture_config
 from ethevals.loader import load_eval
 from ethevals.rows import results_rows
 from support import run
@@ -45,7 +45,7 @@ def test_compose_checks_decoded_values_and_allows_literal_dollars(tmp_path):
         validate_compose(path)
     path.write_text(text.replace('\\u0024SECRET_PROBE', '$$SECRET_PROBE'))
     validate_compose(path)
-    assert load_eval(BUILD, load_config()).id == "building/erc20-points-token"
+    assert load_eval(BUILD, fixture_config()).id == "building/erc20-points-token"
 
 
 @pytest.mark.parametrize("name", ["scorer/tests/cache", "workspace/cache", "workspace/lib/cache"])
@@ -56,7 +56,7 @@ def test_reserved_symlinks_are_rejected_before_read(tmp_path, name):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.symlink_to(tmp_path / "host-secret")
     with pytest.raises(ValueError, match="symlinks"):
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
 
 
 def test_reserved_scorer_directory_is_rejected(tmp_path):
@@ -66,7 +66,7 @@ def test_reserved_scorer_directory_is_rejected(tmp_path):
     path.parent.mkdir()
     path.write_text("contract Extra { function testFree() public {} }")
     with pytest.raises(ValueError, match="reserved names"):
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
 
 
 def test_eval_root_cannot_be_a_symlink(tmp_path):
@@ -74,7 +74,7 @@ def test_eval_root_cannot_be_a_symlink(tmp_path):
     folder.parent.mkdir()
     folder.symlink_to(BUILD, target_is_directory=True)
     with pytest.raises(ValueError, match="symlinks"):
-        load_eval(folder, load_config())
+        load_eval(folder, fixture_config())
 
 
 @pytest.mark.parametrize("diagnostic", [
@@ -109,7 +109,7 @@ def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
         return solve
 
     monkeypatch.setitem(CHECK_SOLVERS, "quiz", lambda evaluation, answer: CheckRun(crash()))
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     output = tmp_path / "results"
     for attempt, expected_success in [(1, False), (2, False), (2, True)]:
@@ -126,7 +126,7 @@ def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("budget", [5.0, 0.01])
 def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
-    config = load_config()
+    config = fixture_config()
     config.cost_limit = budget
     config.agents["opus"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
@@ -156,15 +156,15 @@ def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
 
 def test_unknown_harness_fails_at_config_load(tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump(load_config().model_dump()).replace("harness: claude_code", "harness: absent"))
+    path.write_text(yaml.safe_dump(fixture_config().model_dump()).replace("harness: claude_code", "harness: absent"))
     with pytest.raises(ValueError, match="unknown harness 'absent'"):
-        load_config(path)
+        fixture_config(path)
 
 
 def test_loaded_eval_uses_captured_files(tmp_path):
     folder = tmp_path / "building/token"
     shutil.copytree(BUILD, folder)
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(folder, config)
     (folder / "workspace/src/BuilderPoints.sol").write_text("modified after loading")
     (folder / "scorer/rubric.md").write_text("## replaced\nWrong question")

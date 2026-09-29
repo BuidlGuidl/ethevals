@@ -5,7 +5,7 @@ export const pillars = ["concepts", "transactions", "building", "security"] as c
 export type Pillar = (typeof pillars)[number];
 export type Mode = "vanilla" | "internet" | "skills";
 export type TableMode = Exclude<Mode, "skills">;
-export type EvalType = "quiz" | "scenario" | "build" | "act";
+export type EvalType = "quiz" | "build" | "act";
 
 export interface Evaluation {
   id: string;

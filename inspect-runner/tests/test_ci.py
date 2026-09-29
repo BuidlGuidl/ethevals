@@ -11,9 +11,9 @@ import pytest
 from inspect_ai.log import read_eval_log, write_eval_log
 
 from ethevals.actors import select_actors
-from support import load_config
+from support import fixture_config
 from ethevals.loader import load_eval
-from ethevals.planning import plan
+from ethevals.planning import plan, budget_check
 from ethevals.rows import fold_rows, read_rows, write_rows
 from ethevals.runner import run
 
@@ -69,8 +69,17 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
     assert (report["worst_case_usd"], report["within_budget"]) == (2, False)
 
 
+def test_build_plan_reserves_capped_grader_requests():
+    config = fixture_config()
+    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
+    players, _ = select_actors(config, ["opus"], ["internet"], planning=True)
+    report = budget_check(plan([evaluation], config, players, [], epochs=1).report, 29.6)
+    assert report["missing"][0]["per_attempt_usd"] == 14.75445
+    assert (report["worst_case_usd"], report["within_budget"]) == (29.5089, True)
+
+
 def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path, monkeypatch):
-    config = load_config()
+    config = fixture_config()
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
     players, grade = select_actors(config, answer="reference")
     success, initial = run([quiz], config, tmp_path / "seed", answer="reference", epochs=1)
@@ -119,10 +128,10 @@ def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
     assert (published.returncode, published.stdout) == (0, ""), published.stderr
 
 
-def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path, monkeypatch):
+def test_publish_dry_run_and_resume_preserve_completed_epochs(tmp_path, monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST")
     rows = tmp_path / "rows.jsonl"
-    config = load_config()
+    config = fixture_config()
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
     success, initial = run([quiz], config, tmp_path / "eval-run-12-1", answer="reference", epochs=1)
     assert (success, initial[0]["status"]) == (True, "passed")
@@ -158,7 +167,7 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path, status):
     result = cli("scripts/ci.py", "after-merge", "--output", output, "--rows", rows, "--config", config_path,
                  "--evals", quiz.folder, "--agents", "test", "--modes", "vanilla", "--epochs", "1", "--budget", "0")
     assert result.returncode == 0, result.stderr
-    assert "execution success: True" in result.stdout
+    assert "1 results rows:" in result.stdout
     report = json.loads((output / "plan.json").read_text())
     assert (report["missing_epochs"], report["worst_case_usd"], report["within_budget"]) == (0, 0, True)
     assert report["exhausted_errors"] == ([row] if status == "error" else [])
@@ -211,6 +220,8 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     assert ci.publish_artifacts(args) == 0
     assert sorted((r["status"], r["log_file"]) for r in records[-1]) == [
         ("error", "logs/new.eval"), ("passed", "logs/new.eval"), ("passed", "results-old/old.eval")]
+    assert [(r["status"], r.get("log_url")) for r in records[-1]] == [
+        ("passed", "https://github.com/owner/repo/releases/download/results-1/new.eval"), ("error", None), ("passed", None)]
     assert commands[-1][:8] == ["gh", "release", "create", "results-1", "--repo", "owner/repo", "--target", "b" * 40]
 
 
@@ -223,7 +234,7 @@ def test_release_script_exports_without_upload(tmp_path):
 
 
 def test_failed_preparation_stays_missing_without_using_attempts(tmp_path, monkeypatch):
-    config = load_config()
+    config = fixture_config()
     build = load_eval(ROOT / "evals/building/erc20-points-token", config)
     players, grade = select_actors(config, answer="reference")
 
@@ -284,7 +295,7 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
 
 def test_all_artifact_rows_precede_any_upload(tmp_path, monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST")
-    config = load_config()
+    config = fixture_config()
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     first, second = tmp_path / "eval-run-12-1", tmp_path / "eval-run-12-2"
     run([evaluation], config, first, answer="reference", epochs=1)

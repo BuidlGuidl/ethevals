@@ -55,18 +55,6 @@
     "choices": null
   },
   {
-    "type": "scenario",
-    "motivation": "Check whether an agent identifies a withdrawal flaw and explains its impact.",
-    "prompt": "Review the vault contract in the workspace. Explain any withdrawal flaw and propose a fix.",
-    "modes": [
-      "internet"
-    ],
-    "id": "security/contract-review",
-    "pillar": "security",
-    "hash": "75e830be3ab14fea46bd04e55b8a5d40cfd3e3ea264c2948f3e8636e06534d22",
-    "choices": null
-  },
-  {
     "type": "act",
     "motivation": "Check whether an agent sends the requested value to the right recipient.",
     "prompt": "Send 0.01 ether to the recipient in the workspace on the local chain. Record the transaction hash.",

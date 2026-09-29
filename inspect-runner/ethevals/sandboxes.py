@@ -97,7 +97,6 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
 
 async def runner_exec(box, command, **kwargs):
     """Every privileged or scorer command starts with this owned environment."""
-    kwargs.setdefault("timeout", 60)
     return await box.exec([
         "/usr/bin/env", "-i", "HOME=/home/agent", "PATH=/usr/local/bin:/usr/bin:/bin",
         "LANG=C.UTF-8", *command,

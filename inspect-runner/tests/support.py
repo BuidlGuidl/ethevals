@@ -25,7 +25,7 @@ def mock_delay(seconds):
     return solve
 
 
-def load_config(path=None):
+def fixture_config(path=None):
     if path is not None:
         return read_config(path)
     prices = dict(input=5.0, output=25.0, input_cache_read=0.5, input_cache_write=6.25)
@@ -35,9 +35,9 @@ def load_config(path=None):
                   ("codex", "codex_cli", "gpt-6-sol"), ("kimi", "opencode", "openrouter/moonshotai/kimi-k3"),
                   ("glm", "opencode", "openrouter/z-ai/glm-5.3")]}
     return Config(epochs=3, time_limits={"quiz": 300, "build": 1200, "act": 1200},
-                  cost_limit=5.0, max_attempts=2, concurrency=1, search=True,
+                  cost_limit=5.0, max_attempts=2, concurrency=1, search=True, search_limit=20, search_price_usd=0.05,
                   grader=dict(model="mockllm/grader", effort="none", max_tokens=4096),
-                  agents=agents, price_source="test",
+                  agents=agents,
                   prices={name: prices for name in [*(item["model"] for item in agents.values()),
                                                     "mockllm/grader", "mockllm/model", "mockllm/player",
                                                     "mockllm/shared"]})

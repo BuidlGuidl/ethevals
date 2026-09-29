@@ -13,12 +13,12 @@ const evaluation: Evaluation = {
 const subject = { model: "model-a", harness: "harness-a", effort: "high" };
 function row(overrides: Partial<Row> = {}): Row {
   return {
-    schema_version: 4, attempt: 1, completed_at: "2026-09-29T00:00:00Z", eval_id: "concepts/units", eval_hash: "current", type: "quiz",
+    schema_version: 4, eval_id: "concepts/units", eval_hash: "current", type: "quiz",
     ...subject, mode: "internet", epoch: 1, status: "passed",
     checks: { answer: { passed: true, reason: "The answer matches." } }, error_kind: null, error_reason: null,
     total_tokens: 100, model_cost_usd: 0.2, grader_cost_usd: 0.05,
     cost_source: "computed", total_seconds: 8, working_seconds: 7,
-    log_file: "logs/epoch.eval", log_url: null, limit: null, ...overrides,
+    log_url: null, limit: null, ...overrides,
   };
 }
 

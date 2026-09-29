@@ -37,7 +37,7 @@ class Grader:
 def actor_metadata(item, config, prefix=""):
     return {prefix + key: value for key, value in {
         "model": item.model, "effort": item.effort, "prices": config.prices[item.model].model_dump(),
-        "cost_source": f"computed:{config.price_source}",
+        "cost_source": "computed:guess",
     }.items()}
 
 
@@ -77,8 +77,6 @@ def grader(config):
 
 def select_actors(config, agents=None, modes=None, answer=None, *, planning=False):
     from .checks import CHECK_MODES, check_player, check_grader
-    if agents and answer:
-        raise ValueError("--agents cannot be combined with --answer")
     if unknown := set(agents or []) - config.agents.keys():
         raise ValueError(f"Unknown agent names: {', '.join(sorted(unknown))}")
     if modes and set(modes) - set(get_args(Mode)):
