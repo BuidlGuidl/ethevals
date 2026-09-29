@@ -199,6 +199,7 @@ The skills mode adds the repo's Ethereum skills pack to the internet mode.
 
 `run` succeeds when execution succeeds, even when an agent fails its checks.
 Repeat the command to resume missing epochs.
+A log that can't be read, such as one cut off by a killed run, is skipped with a warning, and its epoch runs again.
 Completed passes and failures remain final.
 Errors can run again within `max_attempts`; `--retry-errors` grants one further execution per selected error epoch.
 The runner reads committed results from `results/rows.jsonl` by default.

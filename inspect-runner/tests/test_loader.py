@@ -100,11 +100,13 @@ def test_catalog_exports_a_loaded_eval(tmp_path, config_path):
 @pytest.mark.parametrize("file,content", [
     ("eval.yaml", "type: quiz\nprompt: Hello\nmotivation: Test\nmodes: [vanilla]\nextra: true\n"),
     ("eval.yaml", "type: scenario\nprompt: Hello\nmotivation: Test\nmodes: [internet]\n"),
+    ("eval.yaml", "type: quiz\nprompt: Hello\nmotivation: Test\nmodes: [vanilla]\nchoices: [wei, ' ', ether]\n"),
     ("scorer/target.yaml", "target: wei\nextra: true\n"),
     ("scorer/target.yaml", "target: 8004\n"),
     ("scorer/target.yaml", None),
 ])
 def test_loader_rejects_broken_declarations(folder, file, content):
+    (folder / "scorer/target.yaml").write_text("target: A\n")
     path = folder / file
     path.write_text(content) if content is not None else path.unlink()
     with pytest.raises(ValueError):
@@ -112,7 +114,7 @@ def test_loader_rejects_broken_declarations(folder, file, content):
 
 
 @pytest.mark.parametrize("name,kind", [
-    ("scorer/tests/cache", "symlink"), ("workspace/probe.txt", "hardlink"),
+    ("workspace/notes.txt", "symlink"), ("workspace/probe.txt", "hardlink"),
     ("workspace/foundry.toml", "file"), ("scorer/tests/lib/Extra.t.sol", "file"),
 ])
 def test_loader_rejects_unsafe_author_files(tmp_path, name, kind):
@@ -121,6 +123,7 @@ def test_loader_rejects_unsafe_author_files(tmp_path, name, kind):
     path = folder / name
     path.parent.mkdir(parents=True, exist_ok=True)
     if kind == "symlink":
+        (tmp_path / "host-secret").write_text("private host data")
         path.symlink_to(tmp_path / "host-secret")
     elif kind == "hardlink":
         outside = tmp_path / "outside.txt"
@@ -129,4 +132,11 @@ def test_loader_rejects_unsafe_author_files(tmp_path, name, kind):
     else:
         path.write_text("runner-owned path")
     with pytest.raises(ValueError):
+        load_eval(folder, fixture_config())
+
+
+def test_eval_root_cannot_be_a_symlink(tmp_path):
+    folder = tmp_path / "linked"
+    folder.symlink_to(BUILD)
+    with pytest.raises(ValueError, match="symlinks"):
         load_eval(folder, fixture_config())

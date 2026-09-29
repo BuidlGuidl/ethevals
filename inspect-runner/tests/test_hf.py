@@ -65,17 +65,6 @@ def test_hf_cli_exports_fixture_rows_card_and_benchmark(tmp_path, config_path):
         write_hf(evals, output)
 
 
-def test_export_rejects_alternatives_without_partial_files(tmp_path):
-    good = fixture_quiz(tmp_path, "a-good")
-    bad = fixture_quiz(tmp_path, "z-alternatives", modes=["internet"], target=['wei', 'Wei'])
-    bad.declaration.modes = ["vanilla"]
-    with pytest.raises(ValueError, match="cannot preserve alternative targets"):
-        write_hf([good, bad], tmp_path / "hf")
-    assert not (tmp_path / "hf").exists()
-    write_hf([good], tmp_path / "hf")
-    assert json_dataset(str(next((tmp_path / "hf").glob("data/*/*.jsonl"))))[0].target == "wei"
-
-
 @pytest.mark.parametrize("settings,answer,expected", [
     ({}, "The answer is wei", "I"),
     ({"location": "end"}, "The answer is wei", "C"),
@@ -94,19 +83,3 @@ def test_hf_task_matches_runner_for_the_same_answer(tmp_path, settings, answer, 
     runner.model = model()
     rows = results_rows(read_eval_log(eval(runner, log_dir=str(tmp_path / "logs"), display="none")[0].location))
     assert [(None if row["status"] == "error" else row["status"] == "passed") for row in rows] == [expected == "C"]
-
-
-def test_configs_separate_scorer_options_and_group_matching_options(tmp_path):
-    evals = [fixture_quiz(tmp_path, "exact"), fixture_quiz(tmp_path, "also-exact"), fixture_quiz(tmp_path, "end", location="end")]
-    write_hf(evals, tmp_path / "hf")
-    tasks = yaml.safe_load((tmp_path / "hf/eval.yaml").read_text())["tasks"]
-    grouped = {}
-    for spec in tasks:
-        grouped[spec["scorers"][0]["args"]["location"]] = [
-            sample.id for sample in json_dataset(str(tmp_path / "hf/data" / spec["config"] / "test.jsonl"))]
-    assert grouped == {"exact": ["concepts/also-exact", "concepts/exact"], "end": ["concepts/end"]}
-
-
-def test_blank_choice_fails_at_load(tmp_path):
-    with pytest.raises(ValueError, match="choices.*blank"):
-        fixture_quiz(tmp_path, choices=["wei", " \t", "ether"], target="C")

@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -75,7 +76,12 @@ def results_rows(log: EvalLog) -> list[dict]:
 def store_rows(output: Path) -> list[dict]:
     latest = {}
     attempts = {}
-    logs = [read_eval_log(info.name) for info in list_eval_logs(str(output / "logs"))]
+    logs = []
+    for info in list_eval_logs(str(output / "logs")):
+        try:
+            logs.append(read_eval_log(info.name))
+        except ValueError as error:
+            logging.getLogger(__name__).warning("Skipping unreadable log %s: %s", info.name, error)
     # Inspect's log creation time has only second precision. Samples retain
     # microseconds; task metadata supplies that precision for setup failures.
     def created(log):

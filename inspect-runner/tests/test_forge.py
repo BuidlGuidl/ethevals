@@ -1,7 +1,10 @@
 from pathlib import Path
 import json
 
-from ethevals.scorers import forge_checks
+from ethevals.scorers import forge_checks, prepare_forge
+from ethevals.scoring_base import SubmissionFailed
+from inspect_ai.util import ExecResult
+import anyio
 import pytest
 
 
@@ -20,11 +23,18 @@ def test_forge_names_and_reasons():
     }
 
 
-def test_compiler_error_is_a_failed_check():
-    captured = json.loads((Path(__file__).parent / "fixtures/forge-1.5.1.json").read_text())["syntax"]
-    assert forge_checks(**captured) == {
-        "forge:compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},
-    }
+@pytest.mark.parametrize("captured", [CAPTURES[name] for name in ("syntax", "version", "missing_method")] + [
+    {"stdout": "", "stderr": "CompilerError: Stack too deep", "returncode": 1}])
+def test_compiler_error_is_a_failed_check(captured):
+    assert forge_checks(**captured)["forge:compile"]["passed"] is False
+
+
+def test_non_utf8_source_is_a_failed_submission():
+    class Box:
+        async def exec(self, *args, **kwargs):
+            return ExecResult(success=True, returncode=0, stdout="", stderr="")
+    with pytest.raises(SubmissionFailed, match="not valid UTF-8"):
+        anyio.run(prepare_forge, Box(), {"src/X.sol": b"\xff"}, {})
 
 
 def test_captured_constructor_failure_keeps_forge_check_name():

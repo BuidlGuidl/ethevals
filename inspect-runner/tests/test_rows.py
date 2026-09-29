@@ -239,6 +239,8 @@ def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
 @pytest.mark.parametrize("reply", [RuntimeError("Provider unavailable"), "No JSON."])
 def test_grader_failure_retains_primary_score(quiz_scoring_case, reply):
     row = quiz_scoring_case["run"]([reply, reply])
+    if reply == "No JSON.":
+        assert len(quiz_scoring_case["requests"]) == 2
     assert row["status"] == "error"
     assert row["checks"] == {"answer": {"passed": True, "reason": "Answer matches the target."}}
 

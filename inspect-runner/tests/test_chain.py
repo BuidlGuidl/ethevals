@@ -46,7 +46,7 @@ def proxy(monkeypatch):
     thread.join()
 
 
-@pytest.mark.parametrize("method", ["eth_sendUnsignedTransaction", "anvil_setBalance"])
+@pytest.mark.parametrize("method", ["eth_sendUnsignedTransaction", "hardhat_setBalance"])
 def test_filter_refuses_keyless_sends_and_controls(proxy, method):
     request, writes = proxy
     status, body = request({"jsonrpc": "2.0", "id": 7, "method": method, "params": []})

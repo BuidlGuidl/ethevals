@@ -1,12 +1,13 @@
 import io
 import tarfile
 
-from ethevals.sandboxes import IMAGES, unpack_workspace, validate_compose
+from ethevals.sandboxes import unpack_workspace, validate_compose
 import pytest
 import yaml
 
 @pytest.mark.parametrize("extra,reason", [
     ({"privileged": True}, "privileged"),
+    ({"volumes": ["/tmp:/host"]}, "host mounts"),
     ({"volumes": [{"type": "bind", "source": "/tmp", "target": "/host"}]}, "host mounts"),
     ({"network_mode": "host"}, "forbidden options"),
     ({"build": "."}, "forbidden options"),
@@ -20,10 +21,9 @@ def test_unsafe_compose_is_rejected(tmp_path, extra, reason):
         validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump(data).encode())
 
 
-@pytest.mark.parametrize("name", ["scorer"])
-def test_author_cannot_replace_runner_services(tmp_path, name):
+def test_author_cannot_replace_runner_services(tmp_path):
     with pytest.raises(ValueError, match="belong to the runner"):
-        validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump({"services": {name: {}}}).encode())
+        validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump({"services": {"scorer": {}}}).encode())
 
 
 @pytest.mark.parametrize("name,link", [("../scorer/secret", False), ("src/Escape.sol", True)])
@@ -45,10 +45,9 @@ def test_workspace_archive_rejects_escape(name, link):
         unpack_workspace(archive(name, link))
 
 
-@pytest.mark.parametrize("value", ["$SECRET_PROBE", "${SECRET_PROBE}"])
+@pytest.mark.parametrize("value", ["$SECRET_PROBE", "${SECRET_PROBE}", "$$literal/$SECRET_PROBE"])
 def test_compose_rejects_both_interpolation_forms(tmp_path, value):
-    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
-    data["services"]["default"]["environment"] = {"LEAK": value}
+    data = {"services": {"extra": {"image": "postgres:17", "mem_limit": "512m", "environment": {"LEAK": value}}}}
     path = tmp_path / "compose.yaml"
     path.write_text(yaml.safe_dump(data))
     with pytest.raises(ValueError, match="host environment substitution"):
@@ -62,4 +61,6 @@ def test_compose_checks_decoded_values_and_allows_literal_dollars(tmp_path):
     with pytest.raises(ValueError, match="host environment substitution"):
         validate_compose(path)
     path.write_text(text.replace('\\u0024SECRET_PROBE', '$$SECRET_PROBE'))
-    assert yaml.safe_load(validate_compose(path))["services"]["extra"]["environment"] == {"VALUE": "$$SECRET_PROBE"}
+    service = yaml.safe_load(validate_compose(path))["services"]["extra"]
+    assert service["environment"] == {"VALUE": "$$SECRET_PROBE"}
+    assert service["networks"] == ["private"]

@@ -31,8 +31,7 @@ def test_optional_effort_reaches_model_call(monkeypatch, mode, key, effort):
     assert (output.completion, observed, actor.metadata["effort"]) == ("8004", [effort], effort)
 
 
-@pytest.mark.parametrize("requested", ["gpt-5.5"])
-def test_codex_active_agent_adapts_every_bridge_model(tmp_path, requested, monkeypatch):
+def test_codex_agent_serializes_custom_calls_through_bridge(tmp_path, monkeypatch):
     from inspect_ai import Task, eval
     from inspect_ai.dataset import Sample
     from inspect_ai.solver import solver
@@ -49,7 +48,7 @@ def test_codex_active_agent_adapts_every_bridge_model(tmp_path, requested, monke
         async def solve(state, generate):
             bridge = AgentBridge(AgentState(messages=[]), model="inspect")
             response = await inspect_responses_api_request_impl({
-                "model": requested, "input": [{"role": "user", "content": "Run code"}],
+                "model": "gpt-5.5", "input": [{"role": "user", "content": "Run code"}],
                 "tools": [{"type": "namespace", "name": "functions", "description": "Tools", "tools": [
                     {"type": "custom", "name": "exec", "description": "Run JavaScript", "format": {"type": "text"}},
                 ]}],

@@ -20,15 +20,14 @@ def test_setup_accepts_selected_nested_files():
         "data/key.json": "key", "chain.json": "chain"}
 
 
-@pytest.mark.parametrize("name", ["check.sh"])
-def test_runnable_check_names_load_and_stay_private(tmp_path, name):
+def test_runnable_check_names_load_and_stay_private(tmp_path):
     import shutil
     root = Path(__file__).resolve().parents[2]
     folder = tmp_path / "transactions" / "act"
     shutil.copytree(root / "evals/transactions/send-six-decimal-token", folder)
-    (folder / "scorer/check.py").rename(folder / "scorer" / name)
+    (folder / "scorer/check.py").rename(folder / "scorer/check.sh")
     evaluation = load_eval(folder, fixture_config())
-    assert evaluation.files["scorer/" + name].startswith(b"#!/usr/bin/env python3")
+    assert evaluation.files["scorer/check.sh"].startswith(b"#!/usr/bin/env python3")
     assert set(evaluation.sample().files) == {"/workspace/README.md"}
     (folder / "scorer/check.extra").write_text("#!/bin/sh\nexit 1\n")
     with pytest.raises(ValueError, match="Expected one scorer/check"):

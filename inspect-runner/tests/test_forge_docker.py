@@ -135,9 +135,9 @@ def test_unused_library_does_not_change_compiled_rubric_evidence(tmp_path):
 
 
 @solver
-def submit(files, variant):
+def submit(reference, variant):
     async def solve(state, generate):
-        source = files["scorer/solution/src/BuilderPoints.sol"]
+        source = reference
         if variant == "setup":
             source = source.replace(b"_mint(", b'require(false, "constructor failed"); _mint(')
         elif variant == "dependency":
@@ -190,23 +190,25 @@ contract ConstructorTest is Test {
     evaluation = replace(original, files=files, hash=content_hash(files))
     compose = prepare_compose(evaluation, output)
     tasks = []
-    variants = ("setup", "dependency", "snapshot")
-    for variant in variants:
+    expected = {"setup": "failed", "dependency": "passed", "snapshot": "passed"}
+    for epoch, variant in enumerate(expected, 1):
         task = build_task(evaluation, config, None, "internet", "reference", 1, compose)
-        task.metadata["epoch"] = list(variants).index(variant) + 1
+        task.metadata["epoch"] = epoch
         task = task_with(task, name=task.name + "-" + variant)
-        task.solver = submit(files, variant)
+        task.solver = submit(files["scorer/solution/src/BuilderPoints.sol"], variant)
         if variant == "snapshot":
             task.scorer = [frozen_writer(task.scorer[0])]
         tasks.append(task)
     eval(tasks, log_dir=str(output / "logs"), display="plain", max_tasks=2, max_samples=2,
          retry_on_error=0, fail_on_error=False)
     rows = export_rows(output)
-    expected = {"setup": "failed", "dependency": "passed", "snapshot": "passed"}
-    assert {list(variants)[row["epoch"] - 1]: row["status"] for row in rows} == expected, rows
+    assert [row["epoch"] for row in rows] == [1, 2, 3]
     assert all(not any("testFree" in name for name in row["checks"]) for row in rows)
     for row in rows:
+        variant = list(expected)[row["epoch"] - 1]
+        assert row["status"] == expected[variant], row
         log = read_eval_log(str(output / row["log_file"]))
+        assert "PRIVATE_SOURCE_SENTINEL" not in log.model_dump_json()
         events = log.samples[0].events
         transfers = [event for event in events if event.event == "sandbox" and event.action == "exec"
                      and "write-submission" in (event.cmd or "")]
@@ -215,8 +217,6 @@ contract ConstructorTest is Test {
         for event in events:
             if event.event == "sandbox" and event.action == "read_file" and "/out/build-info/" in event.file:
                 assert event.output.startswith("binary ("), "Private compiler sources entered the public log."
-        assert "PRIVATE_SOURCE_SENTINEL" not in str(log.samples[0].messages)
-        assert "PRIVATE_SOURCE_SENTINEL" not in str(row["checks"])
-        if list(variants)[row["epoch"] - 1] == "setup":
+        if variant == "setup":
             assert row["checks"]["forge:test/ImageLibrary.t.sol:ConstructorTest:constructor()"] == {
                 "passed": False, "reason": "constructor failed"}
