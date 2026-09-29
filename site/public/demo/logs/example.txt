@@ -1,0 +1,10 @@
+ETH Evals demo log
+
+This is an invented transcript for the demo board. It is not an Inspect log.
+Every demo epoch links here to demonstrate the full-log link.
+
+Prompt: How many wei equal one ether?
+Demo model reply: ANSWER: C
+Check: answer
+Verdict: Pass
+Reason: The answer selects 10^18 wei.

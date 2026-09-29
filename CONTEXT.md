@@ -15,7 +15,7 @@ The program that drives a model, with its own tools, system prompt, and loop. Cl
 The language model inside an agent, or on its own in the vanilla mode.
 
 **Mode**:
-What an agent or model can reach during an epoch. Each eval lists the modes it runs in. The mode names are not final.
+What an agent or model can reach during an epoch. Each eval lists the modes it runs in.
 
 **Vanilla**:
 A mode where a bare model answers a quiz through a plain API call, with no harness and no tools.
@@ -24,7 +24,7 @@ A mode where a bare model answers a quiz through a plain API call, with no harne
 A mode where an agent works as it normally would, with the web, a shell, its workspace, and the eval's services. No Ethereum skills are installed.
 
 **Skills**:
-The internet mode with Ethereum skills installed.
+The internet mode with Ethereum skills installed. Not supported yet.
 
 ## What an eval is made of
 
@@ -71,7 +71,7 @@ _Avoid_: judge
 A runnable file under `scorer/`, named `check` or `check.<ext>`, that inspects the chain or workspace after the agent finishes. Its shebang selects the language. It can use the internet and reports named checks with `passed` and `reason` values. A script error is an eval error.
 
 **Reference solution**:
-A working answer that ships with a build or act eval. It proves the scorer can pass.
+A working answer that ships with a build or act eval. It proves the automated checks can pass.
 _Avoid_: golden answer, oracle
 
 **Motivation**:
@@ -81,21 +81,24 @@ _Avoid_: notes, description
 ## How evals are scored
 
 **Epoch**:
-One attempt by one agent, or one bare model, at one eval in one mode. An epoch passes only if every check passes.
-_Avoid_: run, attempt, trial
+One evaluation of one agent, or one bare model, on one eval in one mode. An epoch passes only if every check passes.
+_Avoid_: run, trial
+
+**Attempt**:
+A re-run of the same epoch after an error. The results row counts the initial execution as attempt 1.
 
 **Check**:
 One named thing the scorer decides about an epoch, recorded as pass or fail with a one-line reason.
 
 **Score**:
-The share of epochs that passed, with an error bar from repeated epochs.
+The share of scored epochs that passed. Errors do not enter the denominator. The board shows counts, without error bars.
 _Avoid_: partial score
 
 **Eval hash**:
-A fingerprint of every file in an eval folder. Results recorded under an older hash no longer describe the eval.
+A fingerprint of captured file paths and bytes in an eval folder, excluding local artifacts. Results under an older hash do not describe the current eval.
 
 **Results row**:
-The record of one epoch: which eval, agent, and mode, which checks passed, and what the epoch cost. It links to the log.
+The latest record of one epoch: its eval, agent, mode, checks, and cost. It names the local log and links to published logs.
 
 **Log**:
 The full record of an epoch, including the transcript.
@@ -108,14 +111,14 @@ The area of Ethereum an eval covers: Concepts, Transactions, Building, or Securi
 _Avoid_: category, stage, track
 
 **Type**:
-What the agent does in an eval. It says nothing about how the eval is scored.
+What the agent does in an eval. Each supported type allows a fixed set of scorer kinds.
 _Avoid_: kind
 
 **Quiz**:
 A type where the agent answers a question that has one fixed answer.
 
 **Scenario**:
-A type where the agent works through a situation, such as reviewing a contract, and writes up what it finds.
+A type where the agent works through a situation, such as reviewing a contract, and writes up what it finds. Not supported yet.
 
 **Build**:
 A type where the agent writes code in its workspace.
@@ -126,10 +129,10 @@ A type where the agent changes chain state by sending transactions.
 ## What the system publishes
 
 **Agent table**:
-Scores for agents in the internet and skills modes.
+Scores for agents in the internet mode. The skills mode is not supported yet.
 
 **Knowledge table**:
-Scores for bare models in the vanilla mode.
+Scores for bare models on quizzes in the vanilla mode.
 
 **Dataset**:
 The quiz evals that run in the vanilla mode, published to Hugging Face as JSONL, one line per eval with its prompt and target.

@@ -80,8 +80,8 @@ def main(argv=None) -> int:
                 print(f"{evaluation.id} {evaluation.hash}")
             return 0
         if args.command == "plan":
-            players, _ = select_actors(config, args.agents, args.modes, planning=True)
-            report = budget_check(plan(evals, config, players, previous_rows(args.output, args.rows),
+            agents_for, _ = select_actors(config, args.agents, args.modes, planning=True)
+            report = budget_check(plan(evals, config, agents_for, previous_rows(args.output, args.rows),
                           epochs=args.epochs, retry_errors=args.retry_errors, wall_seconds=args.wall_seconds).report, args.budget)
             print(json.dumps(report, indent=2))
             return 0 if report["within_budget"] else 1

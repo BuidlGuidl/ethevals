@@ -8,7 +8,7 @@ from pathlib import Path
 from inspect_ai import Task, eval, task_with
 from inspect_ai.util import SandboxEnvironmentSpec
 
-from .actors import Player, Grader, select_actors
+from .actors import Agent, Grader, select_actors
 from .config import Config, read_yaml
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
@@ -34,7 +34,7 @@ def task_limits(evaluation, config):
     return working_limit, time_limit, scoring_limit
 
 
-def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
+def build_task(evaluation: Eval, config: Config, agent: Agent, grader: Grader,
                mode: str, epochs: int, compose: Path | None) -> Task:
     if mode == "skills":
         raise ValueError("The skills mode is not implemented yet")
@@ -42,7 +42,7 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
         raise ValueError(f"{evaluation.folder / 'eval.yaml'}: modes: {mode!r} is not declared")
     sample = evaluation.sample()
     images = {}
-    if player.sandbox_for(evaluation):
+    if agent.sandbox_for(evaluation):
         services = read_yaml(compose)["services"]
         sample.sandbox = SandboxEnvironmentSpec(type="ethevals_docker", config=str(compose))
         images = {name: service["image"] for name, service in services.items()}
@@ -51,7 +51,7 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     else:
         sample.files = None
     working_limit, time_limit, scoring_limit = task_limits(evaluation, config)
-    metadata = {**sample.metadata, **player.metadata, **grader.metadata,
+    metadata = {**sample.metadata, **agent.metadata, **grader.metadata,
                 "created_at": datetime.now(timezone.utc).isoformat(), "mode": mode,
                 "images": images,
                 "runner_inputs": image_inputs() if images else {},
@@ -67,10 +67,10 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     identity = hashlib.sha256(json.dumps(epoch_identity(metadata, 0)).encode()).hexdigest()[:16]
     return Task(
         name=f"{evaluation.id.replace('/', '-')}-{identity}",
-        version=evaluation.hash, dataset=[sample], solver=player.solver_for(evaluation),
+        version=evaluation.hash, dataset=[sample], solver=agent.solver_for(evaluation),
         scorer=[SCORERS[kind](evaluation.id, evaluation.hash)
-                for kind in evaluation.scorer_kinds if not (player.free_check and kind == "rubric")],
-        model=player.model, epochs=epochs,
+                for kind in evaluation.scorer_kinds if not (agent.free_check and kind == "rubric")],
+        model=agent.model, epochs=epochs,
         working_limit=working_limit, time_limit=time_limit,
         cost_limit=config.cost_limit, metadata=metadata,
     )
@@ -81,14 +81,14 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         rows_file: Path | None = None, agents=None, modes=None, answer=None,
         budget=None, wall_seconds=None) -> tuple[bool, list[dict]]:
     previous = previous_rows(output, rows_file)
-    players, _ = select_actors(config, agents, modes, answer, planning=True)
-    initial = plan(evals, config, players, previous, wall_seconds=wall_seconds,
+    agents_for, _ = select_actors(config, agents, modes, answer, planning=True)
+    initial = plan(evals, config, agents_for, previous, wall_seconds=wall_seconds,
                    epochs=epochs, fresh=fresh, retry_errors=retry_errors)
     report = budget_check(initial.report, budget, required=not answer)
     output.mkdir(parents=True, exist_ok=True)
     (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     if not report["within_budget"]:
-        raise ValueError("Budget exceeded. No player or grader ran.")
+        raise ValueError("Budget exceeded. No agent or grader ran.")
     if not answer and initial.admitted and not os.environ.get("OPENROUTER_API_KEY"):
         raise ValueError("OPENROUTER_API_KEY is required for missing paid epochs")
     prepared, preparation_errors = {}, []
@@ -107,8 +107,8 @@ def run(evals: list[Eval], config: Config, output: Path, *,
             logging.getLogger(__name__).error("%s: container preparation failed: %s", evaluation.id, error)
     tasks = []
     if prepared:
-        players, grade = select_actors(config, agents, modes, answer)
-        actors = {evaluation.id: {(mode, actor.key): actor for mode, actor in players(evaluation)}
+        agents_for, grade = select_actors(config, agents, modes, answer)
+        actors = {evaluation.id: {(mode, actor.key): actor for mode, actor in agents_for(evaluation)}
                   for evaluation in evals}
         for original, mode, planned_actor, epoch, attempt in initial.admitted:
             if original.id not in prepared:
@@ -118,7 +118,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
             task = build_task(evaluation, config, actor, grade, mode, 1, compose)
             task.metadata.update(epoch=epoch, attempt=attempt)
             tasks.append(task_with(task, name=f"{task.name}-epoch-{epoch}"))
-    error_path = output / "discovery-errors.json"
+    error_path = output / "preparation-errors.json"
     if preparation_errors:
         previous_errors = json.loads(error_path.read_text()) if error_path.exists() else []
         error_path.write_text(json.dumps(previous_errors + preparation_errors, indent=2) + "\n")

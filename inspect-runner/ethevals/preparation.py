@@ -1,4 +1,4 @@
-"""Prepare containers and run setup before player epochs."""
+"""Prepare containers and run setup before agent epochs."""
 import subprocess
 
 import anyio

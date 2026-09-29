@@ -1,48 +1,22 @@
-import io
-import json
-import tarfile
-import shutil
+from dataclasses import replace
 from pathlib import Path
+import io
+import shutil
+import tarfile
 
+from ethevals.files import inline_file
+from ethevals.loader import load_eval
+from ethevals.preparation import prepare_compose
+from ethevals.sandboxes import IMAGES, unpack_workspace, validate_compose
 import pytest
 import yaml
 
-from support import fixture_config
-from ethevals.loader import load_eval
+from conftest import fixture_config
 from support import build_task
-from ethevals.sandboxes import IMAGES, unpack_workspace, validate_compose
-from ethevals.scorers import forge_checks, rubric_reply
-from ethevals.files import inline_file
+
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "evals/building/erc20-points-token"
-FORGE_OUTPUT = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {
-    "testSupply()": {"status": "Success", "reason": None},
-    "testTransfer()": {"status": "Failure", "reason": "Wrong recipient balance\nexpected 10"},
-}}})
-
-
-def test_forge_names_and_reasons():
-    assert forge_checks(FORGE_OUTPUT, "", 1) == {
-        "forge:compile": {"passed": True, "reason": "Compilation passed."},
-        "forge:test/Token.t.sol:TokenTest:testSupply()": {"passed": True, "reason": "Test passed."},
-        "forge:test/Token.t.sol:TokenTest:testTransfer()": {"passed": False, "reason": "Wrong recipient balance expected 10"},
-    }
-
-
-def test_compiler_error_is_a_failed_check():
-    captured = json.loads((Path(__file__).parent / "fixtures/forge-1.5.1.json").read_text())["syntax"]
-    assert forge_checks(**captured) == {
-        "forge:compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},
-    }
-
-
-def test_rubric_boolean_and_reason():
-    assert rubric_reply('{"passed": false, "reason": "Owner can seize tokens.\\nSee take()."}') == {
-        "passed": False, "reason": "Owner can seize tokens. See take().",
-    }
-    with pytest.raises(ValueError, match="boolean"):
-        rubric_reply('{"passed": "yes", "reason": "Fine"}')
 
 
 def test_agent_sample_contains_only_workspace_files():
@@ -129,12 +103,58 @@ def test_workspace_archive_rejects_escape(name, link):
         unpack_workspace(archive(name, link))
 
 
-def test_type_time_limit_reaches_task(tmp_path):
-    folder = tmp_path / "concepts/quiz"
-    shutil.copytree(ROOT / "evals/concepts/agent-registries", folder)
-    path = folder / "eval.yaml"
+@pytest.mark.parametrize("value", ["$SECRET_PROBE", "${SECRET_PROBE}", "$$literal/$SECRET_PROBE"])
+def test_compose_rejects_both_interpolation_forms(tmp_path, value):
+    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
+    data["services"]["default"]["environment"] = {"LEAK": value}
+    path = tmp_path / "compose.yaml"
+    path.write_text(yaml.safe_dump(data))
+    with pytest.raises(ValueError, match="host environment substitution"):
+        validate_compose(path)
+
+
+def test_compose_checks_decoded_values_and_allows_literal_dollars(tmp_path):
+    text = 'services:\n  extra:\n    image: postgres:17\n    mem_limit: 512m\n    environment: {VALUE: "\\u0024SECRET_PROBE"}\n'
+    path = tmp_path / "compose.yaml"
+    path.write_text(text)
+    with pytest.raises(ValueError, match="host environment substitution"):
+        validate_compose(path)
+    path.write_text(text.replace('\\u0024SECRET_PROBE', '$$SECRET_PROBE'))
+    assert yaml.safe_load(validate_compose(path))["services"]["extra"]["environment"] == {"VALUE": "$$SECRET_PROBE"}
+
+
+def test_compose_rejects_binary_yaml(tmp_path):
+    document = yaml.safe_load((IMAGES / "stock.compose.yaml").read_bytes())
+    document["services"]["default"]["environment"] = {"TOKEN": b"$SECRET_PROBE"}
+    with pytest.raises(ValueError, match="unsupported YAML scalar"):
+        validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump(document).encode())
+
+
+def test_compose_runs_the_normalized_captured_document(tmp_path):
     config = fixture_config()
-    config.time_limits["quiz"] = 123
-    config.cost_limit = 0.25
-    task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
-    assert (task.working_limit, task.time_limit, task.cost_limit) == (123, 369, 0.25)
+    evaluation = load_eval(BUILD, config)
+    raw = b"services:\n  database:\n    image: postgres:17\n    mem_limit: 512m\n# author bytes\n"
+    evaluation = replace(evaluation, files={**evaluation.files, "compose.yaml": raw})
+    path = prepare_compose(evaluation, tmp_path)
+    assert yaml.safe_load(path.read_bytes())["services"]["database"] == {"image": "postgres:17", "mem_limit": "512m", "networks": ["private"]}
+    assert path.read_bytes() != raw
+
+
+def test_runner_image_changes_leave_eval_hash_unchanged(tmp_path, monkeypatch):
+    import ethevals.sandboxes as sandboxes
+    from ethevals.sandboxes import merged_compose
+    images = tmp_path / "images"
+    shutil.copytree(IMAGES, images)
+    monkeypatch.setattr(sandboxes, "IMAGES", images)
+    folder = tmp_path / "building" / "extra"
+    shutil.copytree(ROOT / "evals/building/erc20-points-token", folder)
+    (folder / "compose.yaml").write_text("services:\n  database:\n    image: postgres:17\n    mem_limit: 512m\n")
+    before = load_eval(folder, fixture_config())
+    first = merged_compose(before)["services"]["default"]["image"]
+    dockerfile = images / "Dockerfile"
+    dockerfile.write_text(dockerfile.read_text() + "\nLABEL test=changed\n")
+    after = load_eval(folder, fixture_config())
+    merged = merged_compose(after)["services"]
+    assert after.hash == before.hash
+    assert merged["default"]["image"] != first
+    assert merged["database"] == {"image": "postgres:17", "mem_limit": "512m", "networks": ["private"]}

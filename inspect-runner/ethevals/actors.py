@@ -19,7 +19,7 @@ def quiz_solver(evaluation):
 
 
 @dataclass
-class Player:
+class Agent:
     model: Model
     metadata: dict
     solver_for: Callable
@@ -49,7 +49,7 @@ def model_actor(item, config, prefix=""):
     return model, actor_metadata(item, config, prefix)
 
 
-def player(config, key, mode, planning=False):
+def agent(config, key, mode, planning=False):
     item = config.agents[key]
     if planning:
         model, metadata = None, actor_metadata(item, config)
@@ -67,7 +67,7 @@ def player(config, key, mode, planning=False):
             return quiz_solver(evaluation)
         return internet_solver(harness, config, item)
 
-    return Player(model, metadata, solve, lambda evaluation: uses_sandbox(mode), key=key)
+    return Agent(model, metadata, solve, lambda evaluation: uses_sandbox(mode), key=key)
 
 
 def grader(config):
@@ -76,7 +76,7 @@ def grader(config):
 
 
 def select_actors(config, agents=None, modes=None, answer=None, *, planning=False):
-    from .checks import CHECK_MODES, check_player, check_grader
+    from .checks import CHECK_MODES, check_agent, check_grader
     if unknown := set(agents or []) - config.agents.keys():
         raise ValueError(f"Unknown agent names: {', '.join(sorted(unknown))}")
     if modes and set(modes) - set(get_args(Mode)):
@@ -84,15 +84,15 @@ def select_actors(config, agents=None, modes=None, answer=None, *, planning=Fals
     if answer:
         grade = check_grader()
 
-        def players(evaluation):
+        def agents_for(evaluation):
             selected = modes or [CHECK_MODES[evaluation.declaration.type]]
-            return [(mode, check_player(evaluation, answer, mode=mode))
+            return [(mode, check_agent(evaluation, answer, mode=mode))
                     for mode in dict.fromkeys(evaluation.declaration.modes) if mode in selected]
     else:
         grade = None if planning else grader(config)
-        actors = [(mode, player(config, key, mode, planning)) for mode in dict.fromkeys(modes or ["vanilla"])
+        actors = [(mode, agent(config, key, mode, planning)) for mode in dict.fromkeys(modes or ["vanilla"])
                   for key in agents or config.agents]
 
-        def players(evaluation):
+        def agents_for(evaluation):
             return [(mode, actor) for mode, actor in actors if mode in evaluation.declaration.modes]
-    return players, grade
+    return agents_for, grade

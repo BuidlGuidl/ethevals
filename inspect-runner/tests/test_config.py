@@ -1,10 +1,52 @@
+from pathlib import Path
 import json
-
-import pytest
+import shutil
 
 from ethevals.config import load_config
 from ethevals.loader import load_eval
-from support import fixture_config
+import pytest
+import yaml
+
+from conftest import fixture_config
+from support import build_task, eval_cli
+
+
+ROOT = Path(__file__).resolve().parents[2]
+BUILD = ROOT / "evals/building/erc20-points-token"
+
+
+def test_validate_rejects_effort_typo(folder, tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(fixture_config().model_dump()).replace("effort: high", "effort: hihg"))
+    result = eval_cli("validate", "--evals", folder, "--config", path)
+    assert result.returncode == 2
+    assert "agents.opus.effort" in result.stderr
+
+
+def test_type_time_limit_reaches_task(tmp_path):
+    folder = tmp_path / "concepts/quiz"
+    shutil.copytree(ROOT / "evals/concepts/agent-registries", folder)
+    path = folder / "eval.yaml"
+    config = fixture_config()
+    config.time_limits["quiz"] = 123
+    config.cost_limit = 0.25
+    task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
+    assert (task.working_limit, task.time_limit, task.cost_limit) == (123, 369, 0.25)
+
+
+def test_unknown_harness_fails_at_config_load(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(fixture_config().model_dump()).replace("harness: claude_code", "harness: absent"))
+    with pytest.raises(ValueError, match="unknown harness 'absent'"):
+        fixture_config(path)
+
+
+def test_build_rejects_scoring_window_that_cannot_fit():
+    config = fixture_config()
+    evaluation = load_eval(BUILD, config)
+    config.time_limits["build"] = 300
+    with pytest.raises(ValueError, match="Scoring needs 540 seconds, but Inspect allows 450"):
+        build_task(evaluation, config, None, "internet", "reference", 1)
 
 
 @pytest.mark.parametrize("key,value,diagnostic", [
@@ -21,15 +63,3 @@ def test_config_errors_name_file_and_key(tmp_path, key, value, diagnostic):
         load_config(path)
     assert str(path) in str(error.value)
     assert diagnostic in str(error.value)
-
-
-def test_scenario_is_parked(tmp_path):
-    folder = tmp_path / "concepts/review"
-    (folder / "workspace").mkdir(parents=True)
-    (folder / "scorer").mkdir()
-    (folder / "scorer/scorer.yaml").write_text("scorers: []\n")
-    path = folder / "eval.yaml"
-    path.write_text("type: scenario\nprompt: Review this.\nmotivation: Check review.\nmodes: [internet]\n")
-    with pytest.raises(ValueError) as error:
-        load_eval(folder, fixture_config())
-    assert str(error.value) == f"{path.resolve()}: type: scenario is not supported yet"

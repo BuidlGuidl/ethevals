@@ -12,7 +12,7 @@ from unittest.mock import patch
 from inspect_ai import eval
 from inspect_ai.model import ModelOutput, get_model
 
-from support import fixture_config
+from conftest import fixture_config
 from ethevals.agents import CodexModel
 from support import valid_search_result
 from ethevals.loader import load_eval

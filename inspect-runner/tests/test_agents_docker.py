@@ -1,10 +1,10 @@
-"""Run each real CLI against mock replies and one keyless Exa search."""
-import os
 from pathlib import Path
+import os
 import subprocess
 import sys
 
 import pytest
+
 
 
 @pytest.mark.docker

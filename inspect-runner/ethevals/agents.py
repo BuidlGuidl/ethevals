@@ -31,7 +31,7 @@ def claude(model, **settings):
 
 
 def codex(model, **settings):
-    # The active player is a CodexModel, so every bridge fallback uses it.
+    # The active agent is a CodexModel, so every bridge fallback uses it.
     return as_solver(codex_cli(
         cwd="/workspace", model_config=model.agent_model_config,
         web_search="disabled", retry_refusals=0,

@@ -7,7 +7,7 @@ export type Mode = "vanilla" | "internet" | "skills";
 export type TableMode = Exclude<Mode, "skills">;
 export type EvalType = "quiz" | "build" | "act";
 
-export interface Evaluation {
+export interface Eval {
   id: string;
   hash: string;
   title: string;
@@ -18,9 +18,9 @@ export interface Evaluation {
   choices: string[];
   modes: Mode[];
 }
-export type DisplayEvaluation = Omit<Evaluation, "hash">;
+export type DisplayEval = Omit<Eval, "hash">;
 
-export interface Subject {
+export interface Agent {
   model: string;
   harness: string | null;
   effort: string | null;
@@ -54,20 +54,20 @@ export interface PillarRow {
   cells: Record<string, PillarCell>;
 }
 export interface Table {
-  subjects: Subject[];
+  agents: Agent[];
   pillars: Record<Pillar, PillarRow>;
 }
 export interface BoardData {
-  sample: boolean;
-  evaluations: Record<string, DisplayEvaluation>;
+  demo: boolean;
+  evaluations: Record<string, DisplayEval>;
   tables: Record<TableMode, Table>;
 }
 
-export function subjectKey(subject: Subject): string {
-  return JSON.stringify([subject.model, subject.harness, subject.effort]);
+export function agentKey(agent: Agent): string {
+  return JSON.stringify([agent.model, agent.harness, agent.effort]);
 }
 
-function evalCell(evaluation: Evaluation, mode: TableMode, rows: Row[]): EvalCell {
+function evalCell(evaluation: Eval, mode: TableMode, rows: Row[]): EvalCell {
   const scored = rows.filter((row) => row.status !== "error");
   const passed = scored.filter((row) => row.status === "passed").length;
   return {
@@ -100,35 +100,35 @@ function pillarCell(cells: EvalCell[]): PillarCell {
 }
 
 // The loader supplies current, checked rows. Group each row and compute each cell once.
-export function buildBoard(evaluations: Evaluation[], rows: Row[], sample = false): BoardData {
+export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): BoardData {
   const groups = new Map<string, Row[]>();
-  const subjects: Record<TableMode, Map<string, Subject>> = { internet: new Map(), vanilla: new Map() };
+  const agents: Record<TableMode, Map<string, Agent>> = { internet: new Map(), vanilla: new Map() };
   for (const row of rows) {
     if (row.mode === "skills") continue;
-    const key = subjectKey(row);
-    subjects[row.mode].set(key, { model: row.model, harness: row.harness, effort: row.effort });
+    const key = agentKey(row);
+    agents[row.mode].set(key, { model: row.model, harness: row.harness, effort: row.effort });
     const group = JSON.stringify([row.eval_id, row.mode, key]);
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group)!.push(row);
   }
   const tables = {} as BoardData["tables"];
   for (const mode of ["internet", "vanilla"] as const) {
-    const columns = [...subjects[mode].values()].sort((a, b) => subjectKey(a).localeCompare(subjectKey(b), "en"));
-    const table = { subjects: columns, pillars: {} as Table["pillars"] };
+    const columns = [...agents[mode].values()].sort((a, b) => agentKey(a).localeCompare(agentKey(b), "en"));
+    const table = { agents: columns, pillars: {} as Table["pillars"] };
     // The knowledge table shows quizzes only. Both table and panel use these rows.
     const eligible = evaluations.filter((evaluation) => mode !== "vanilla" || evaluation.type === "quiz");
     for (const pillar of pillars) {
       const evals = eligible.filter((evaluation) => evaluation.pillar === pillar).map((evaluation) => ({
         id: evaluation.id,
-        cells: Object.fromEntries(columns.map((subject) => {
-          const key = subjectKey(subject);
+        cells: Object.fromEntries(columns.map((agent) => {
+          const key = agentKey(agent);
           return [key, evalCell(evaluation, mode, groups.get(JSON.stringify([evaluation.id, mode, key])) ?? [])];
         })),
       }));
       table.pillars[pillar] = {
         evals,
-        cells: Object.fromEntries(columns.map((subject) => {
-          const key = subjectKey(subject);
+        cells: Object.fromEntries(columns.map((agent) => {
+          const key = agentKey(agent);
           return [key, pillarCell(evals.map((entry) => entry.cells[key]))];
         })),
       };
@@ -136,7 +136,7 @@ export function buildBoard(evaluations: Evaluation[], rows: Row[], sample = fals
     tables[mode] = table;
   }
   return {
-    sample, tables,
+    demo, tables,
     evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {
       id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar, type: evaluation.type,
       motivation: evaluation.motivation, prompt: evaluation.prompt, choices: evaluation.choices, modes: evaluation.modes,

@@ -1,182 +1,62 @@
 # ETH Evals board
 
-The agent table shows internet-mode results for each model and harness.
-The knowledge table shows vanilla-mode results for bare models on quiz evals.
-Expand a pillar to see its evals. Open a cell for its prompt, epochs, checks, and log links.
+The site builds a static board from the runner's catalog and results.
+The browser receives public declarations and row details, without targets or scorer files.
+[The root guide](../README.md#open-the-board) covers opening the board.
 
-## Build the site
+## Build
 
 Use Node.js 22 or later, pnpm 9.14.2, and uv with Python 3.13.
-From `site/`, run:
+From `site/`, run `pnpm install --frozen-lockfile`, then `pnpm build`.
+The build writes `out/` for any static file host; no runtime server or database is required.
+A normal build runs `ethevals catalog` to refresh `.catalog/catalog.json`.
 
-```sh
-pnpm install --frozen-lockfile
-pnpm build
-```
+## Demo data and settings
 
-The build writes `out/`, a static export with no runtime server or database.
-It uses Next.js [static export](https://nextjs.org/docs/app/guides/static-exports).
-Serve that folder through any static file host.
+Run `ETHEVALS_DEMO=1 pnpm build` to use the invented board.
+The banner labels demo results; log links open a bundled demo transcript.
+Run `pnpm build` without that variable to return to real results.
 
-Without results, the page shows an empty state and the eval catalog.
-A normal build never selects sample rows.
-
-## See the sample board
-
-From `site/`, run:
-
-```sh
-ETHEVALS_SAMPLE=1 pnpm build
-python3 -m http.server 8000 --directory out
-```
-
-Open <http://localhost:8000>.
-The banner labels all results as invented.
-The sample covers every pillar, all cell states, a limit failure, and execution errors.
-Its log links open a labelled sample transcript.
-
-To return to real results, run `pnpm build` without `ETHEVALS_SAMPLE`.
-If your shell exports that variable, unset it first.
-
-## Data settings
-
-The build runs `uv run ethevals catalog --output site/.catalog` from the repository root.
-The runner loads the evals and exports their declarations and hashes to `site/.catalog/catalog.json`.
-The site reads that catalog and one runner `rows.jsonl` file.
-Sample builds use an invented `sample/catalog.json` fixture instead.
-All paths below resolve from `site/`.
+All data paths resolve from `site/`.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `ETHEVALS_SAMPLE` | `0` | `1` selects only `sample/rows.jsonl` and `sample/catalog.json`. |
-| `ETHEVALS_ROWS` | `../results/rows.jsonl` | Path to one results file. Published rows contain full log URLs. |
+| `ETHEVALS_DEMO` | `0` | `1` selects `demo/catalog.json` and `demo/rows.jsonl`. |
+| `ETHEVALS_ROWS` | `../results/rows.jsonl` | One runner results file. |
 
-An absent default results file produces the empty state.
-An absent explicit file fails the build. Sample mode and `ETHEVALS_ROWS` cannot be combined.
-Malformed rows and duplicate epoch identities fail the build with the file and line.
-This includes undeclared modes, mismatched types at the same hash, and invalid mode and harness pairs.
-A missing evals root or catalog fails the build.
-One build line reports the rows path and counts for loaded, stale, and parked skills rows.
-An absent default file appears in that line.
+Demo mode and an explicit rows path cannot be combined.
+A missing default rows file produces the empty state; a missing explicit file fails the build.
+Malformed rows and duplicate epochs fail with their file and line.
+The loader accepts schema version 4 and displays only current eval hashes.
+Skills rows stay outside both tables.
+The build reports loaded, current, and stale row counts.
 
-After publishing logs with `ethevals publish-logs --publish`, use:
+Published rows supply full log URLs. The site does not publish or copy real logs.
+See [the runner reference](../inspect-runner/README.md#ci-and-publication) for publication.
 
-```sh
-ETHEVALS_ROWS=../results/paid/published/results-12345-1.jsonl \
-pnpm build
-```
+## Scores
 
-The publisher writes this `log_url`:
-`https://github.com/BuidlGuidl/ethevals/releases/download/results-12345-1/epoch.eval`.
-Rows from other runs carry their own release URLs.
-CI records attempts before log uploads and adds release links afterward.
-The publisher rebuilds rows from each run's logs, including interrupted attempts.
-The root README describes the paid CI path.
-Execution errors remain visible without log links. Their unpublished logs stay in the workflow artifact.
-The publisher writes linked rows after the upload succeeds, in a file named for the release.
-Its dry run writes nothing. It excludes already published logs and non-final errors.
-Local `logs/` paths remain visible without links. Sample mode keeps its bundled log links.
-The row fold preserves newer attempts regardless of publication order.
-It reads only `origin/main`, `origin/ci/results`, and artifact rows. An unchanged retry can reopen a missing results PR.
-The site still reads one rows file and rejects duplicate identities.
-The link downloads the `.eval` file. Open its local folder with `inspect view --log-dir path/to/folder`.
-Private repository assets require GitHub access. Public downloads require a public repository.
-Without a URL, the panel says that the full log is not published.
-The site does not copy or publish real logs.
+An eval score is its share of passed epochs; errors remain visible but do not enter the denominator.
+A pillar score averages eval scores, excluding evals without scored epochs.
+The board shows epoch counts instead of confidence intervals.
+Unsupported modes show `Not applicable`; supported cells without scores show `No epochs yet`.
 
-The loader accepts schema version 4 only. Older rows fail with the file and line.
-Execution attempts and version metadata do not enter the board's display model.
-The runner reads the real evals from `../evals/`. The site derives titles from their IDs.
-It keeps prompts, choices, motivations, types, pillars, and declared modes.
-The browser receives no scorer files or targets.
+Epoch cost adds model and grader cost. If either amount is unknown, the total stays unknown.
+The panel shows the cost source, total tokens, and elapsed time from the row.
+Different efforts stay in separate columns.
+The loader computes cells once; the client reuses them for tables and the detail panel.
 
-The runner supplies each hash from the same captured file manifest that supplies execution inputs.
-The site contains no eval hash algorithm or YAML declaration parser.
-Only rows with the current eval hash enter the board.
-Check outputs stay in their own folders. Paid commands do not accept scripted answers.
-Displayed internet results require a harness. Vanilla results require a bare model and a quiz eval.
-Skills mode remains outside both tables.
+## Checks
 
-## Scores and costs
-
-An eval score is `passed / scored epochs`.
-An epoch passes only when every named check passes.
-Errors remain visible in the panel but do not enter the denominator.
-Limits count as failed epochs because the runner records them as failed checks.
-Invalid Solidity bytes and empty grader reasons also produce failed checks.
-Docker exec failures, capture timeouts, and grader transport failures remain errors.
-The runner's `run()` function requires a budget for paid work. CI calls that same entry point.
-Exa search runs on the host through a tool bridge. Its optional key never enters containers or logs.
-The plan reserves the configured search price for each allowed request and also bounds selected epochs by wall time.
-The bridge keeps Exa's hosted schemas and appends its caps to each tool description.
-Search clamps `numResults` to 1–10 whole results, default 10. Fetch rejects batches above 5 URLs.
-Both share the 20-request epoch cap. `search_capped` counts our refusals, while `search_rate_limited` counts Exa throttling.
-Keyed search remains unverified until the first keyed run.
-The guessed $0.05 reserve covers each call at its cap, or $1 per internet attempt.
-The host logs HTTP status and JSON-RPC error code and message, with the key redacted.
-The raw keyless parity test uses `--run-live-exa -m live_exa`. Free CI checks never call Exa.
-
-The private CI runner has 2 CPUs, 8 GB of RAM, and 14 GB of disk.
-Stock limits are 3 GiB for the agent, 2 GiB for the scorer, and 256 MiB for the chain.
-Measured peaks were 1100.9 MiB, 25.4 MiB, and 39.4 MiB. Each limit exceeds twice its peak.
-The root README lists each CLI's scripted proof with an agent Forge build. Long paid sessions remain unmeasured.
-CI and this Mac run one task at a time, with at most 5.25 GiB of container limits.
-The Mac's Docker VM reports 8,217,686,016 bytes. Capacity checks derive the reserve from Compose limits.
-Local concurrency also must fit Docker's memory capacity, with at least 1 GiB left for the host.
-The execution step stops after 310 minutes within the 330-minute job.
-
-The [classification table](../README.md#failure-classification) gives the full rule.
-The panel uses the row's `limit` field to identify limits and displays the runner's check reasons.
-
-A pillar score is the mean of its eval scores.
-Evals without scored epochs do not enter that mean.
-The pillar's epoch count adds the eval counts together. It is not the denominator for the pillar mean.
-The board shows counts instead of a confidence interval.
-
-An unsupported mode shows `Not applicable`.
-A pillar without evals that declare the mode shows `No evals yet` in both the table and panel.
-A supported cell without scored epochs shows `No epochs yet`, with an error count when relevant.
-Effort appears once in each subject's column header.
-Different efforts stay separate because the runner treats them as distinct agent identities.
-
-Epoch cost includes model cost and grader cost.
-Search charges enter the run plan's reserve but have no metered cost in the rows.
-If either cost is unknown, the total stays unknown.
-The panel retains both amounts and their cost source, including guessed prices.
-Total tokens include the model and grader. Time is the total elapsed time, including setup.
-
-The loader groups rows by eval, mode, and subject once.
-It computes each eval cell once and derives pillar means from those cells.
-The client renders that model, so column highlights do not recalculate scores.
-Epoch details contain only the fields the panel uses.
-
-## Check the site
+From `site/`, run:
 
 ```sh
+pnpm test
 pnpm typecheck
 pnpm lint
-pnpm test
-ETHEVALS_SAMPLE=1 pnpm build
-pnpm exec tsx scripts/check-export.ts sample
 pnpm build
-pnpm exec tsx scripts/check-export.ts empty
 ```
 
-The last check expects no paid rows at the default path.
-The export checks inspect HTML and static assets without a browser or server.
-Tests assert literal score inputs and outputs, including missing epochs and errors.
-The runner integration test requires uv and Python. It creates a catalog and runs one key-free quiz check without Docker.
-
-## Design
-
-The page keeps prototype view 4's dark palette, system type, score thresholds, and column hover highlight.
-Red means below 25%, amber means below 50%, and green means 50% or more.
-These colors describe pass rates. They do not set a safety threshold for using an agent.
-
-The two tables share one page. The internet label reserves space for a future skills toggle.
-The detail panel uses a native modal dialog, Escape to close, and focus return to the opening cell.
-Tables scroll horizontally on narrow screens and retain the row labels.
-Keyboard focus highlights the same column as pointer hover.
-No component library, remote fonts, or charting package is required.
-
-Browser and visual checks remain with Shiv, as requested in the brief.
+Tests include a key-free runner integration with fixture evals and no Docker.
+After a demo build, `pnpm exec tsx scripts/check-export.ts demo` checks the exported assets.
+After a build with no results, the same command with `empty` checks the empty board.

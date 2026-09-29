@@ -44,9 +44,9 @@ h3 { font-size: 15px; font-weight: 600; }
 main { padding: 38px 28px 32px; max-width: 1600px; margin: auto; display: grid; gap: 36px; }
 .page-heading { display: grid; gap: 12px; }
 .page-heading p { color: var(--muted); font-size: 16px; }
-.sample-banner { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 20px; padding: 14px 18px; background: #302915; border: 1px solid #685725; color: #f8e7bc; }
-.sample-banner strong, .sample-label { color: var(--amber); }
-.sample-label { font-size: 12px; }
+.demo-banner { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 20px; padding: 14px 18px; background: #302915; border: 1px solid #685725; color: #f8e7bc; }
+.demo-banner strong, .demo-label { color: var(--amber); }
+.demo-label { font-size: 12px; }
 .pillar-strip { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid var(--border); }
 .pillar-strip > div { padding: 16px 20px; border-right: 1px solid var(--border); }
 .pillar-strip > div:first-child { padding-left: 0; }

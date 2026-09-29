@@ -8,7 +8,7 @@ function run(command: string, args: string[], cwd: string) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-if (process.env.ETHEVALS_SAMPLE !== "1") {
+if (process.env.ETHEVALS_DEMO !== "1") {
   run("uv", ["run", "ethevals", "catalog", "--output", path.join(siteRoot, ".catalog")], path.dirname(siteRoot));
 }
 run("pnpm", ["exec", "next", "build"], siteRoot);

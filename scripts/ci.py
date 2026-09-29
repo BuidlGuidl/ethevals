@@ -134,7 +134,7 @@ def checks(args, evals):
     command(sys.executable, "-m", "ethevals.cli", "check", "--output", args.output / "check")
     command(sys.executable, "-m", "pytest", "-q")
     command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
-            "--ignore=inspect-runner/tests/test_agent_docker.py")
+            "--ignore=inspect-runner/tests/test_agents_docker.py")
     write_hf(evals, args.output / "hf", DEFAULT_REPO, None)
     for task in ("test", "typecheck", "lint", "build"):
         command("pnpm", task, cwd="site")

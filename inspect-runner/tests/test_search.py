@@ -1,16 +1,15 @@
-"""Host-side search limits and credential handling without network."""
 import json
-import zipfile
 
-import httpx
-import pytest
+from ethevals.search import exa_tools
 from inspect_ai import Task, eval
 from inspect_ai.dataset import Sample
 from inspect_ai.model import ModelOutput
 from inspect_ai.scorer import match
 from inspect_ai.solver import solver
+import httpx
+import pytest
+import zipfile
 
-from ethevals.search import exa_tools
 
 
 @pytest.mark.live_exa

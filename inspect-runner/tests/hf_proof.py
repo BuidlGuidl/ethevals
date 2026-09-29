@@ -12,7 +12,7 @@ from inspect_ai.dataset import json_dataset
 from inspect_ai.log import read_eval_log
 from inspect_ai.model import ModelOutput, get_model
 
-from ethevals.checks import check_player, check_grader
+from ethevals.checks import check_agent, check_grader
 from ethevals.config import Config
 from ethevals.loader import Eval
 from ethevals.rows import results_rows
@@ -69,7 +69,7 @@ def prove(export: Path, evaluations: list[Eval], output: Path, config: Config) -
                     if log.status != "success" or not log.samples or len(log.samples[0].scores or {}) != 1:
                         raise ValueError(f"{sample.id}: {route} did not produce one score: {log.error}")
                     observed[route] = next(iter(log.samples[0].scores.values())).value
-                runner = build_task(evaluation, config, check_player(evaluation, "reference"),
+                runner = build_task(evaluation, config, check_agent(evaluation, "reference"),
                                     check_grader(), "vanilla", 1, None)
                 runner.model = model()
                 log = read_eval_log(eval(runner, log_dir=str(output / "logs"), display="none")[0].location)

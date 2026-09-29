@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { loadEvaluations, parseRows } from "../src/load";
+import { loadEvals, parseRows } from "../src/load";
 import { siteRoot } from "../src/paths";
 
 test("the board reads the merged runner's catalog and reference and empty rows", (t) => {
@@ -12,26 +12,36 @@ test("the board reads the merged runner's catalog and reference and empty rows",
   const root = mkdtempSync(path.join(scratch, "runner-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const site = path.join(root, "site");
-  mkdirSync(path.join(root, "evals"));
+  const folder = path.join(root, "evals/concepts/unit");
+  mkdirSync(path.join(folder, "scorer"), { recursive: true });
+  mkdirSync(path.join(folder, "workspace"));
+  writeFileSync(path.join(folder, "eval.yaml"), "type: quiz\nmotivation: Check units.\nprompt: Name the unit.\nmodes: [vanilla]\n");
+  writeFileSync(path.join(folder, "scorer/target.yaml"), 'target: "wei"\n');
+  const config = path.join(root, "config.json");
+  const fixture = spawnSync("uv", ["run", "python", "-c",
+    "import sys; sys.path.insert(0, 'inspect-runner/tests'); from conftest import small_config; print(small_config().model_dump_json())"],
+    { cwd: path.dirname(siteRoot), encoding: "utf8" });
+  assert.equal(fixture.status, 0, fixture.stderr);
+  writeFileSync(config, fixture.stdout);
   const env = { ...process.env };
   for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"]) delete env[key];
   function run(args: string[]) {
-    const result = spawnSync("uv", ["run", "ethevals", ...args], {
+    const result = spawnSync("uv", ["run", "ethevals", ...args, "--config", config, "--evals", folder], {
       cwd: path.dirname(siteRoot), env, encoding: "utf8", timeout: 60_000,
     });
     assert.equal(result.status, 0, result.error?.message ?? result.stderr + result.stdout);
     return result.stdout;
   }
   run(["catalog", "--output", path.join(site, ".catalog")]);
-  run(["check", "--evals", "evals/concepts/agent-registries", "--epochs", "1", "--output", path.join(root, "results")]);
-  const evaluations = loadEvaluations(path.join(site, ".catalog/catalog.json"));
+  run(["check", "--epochs", "1", "--output", path.join(root, "results")]);
+  const evaluations = loadEvals(path.join(site, ".catalog/catalog.json"));
   assert.deepEqual(evaluations.map((evaluation) => evaluation.id),
-    ["building/erc20-points-token", "concepts/agent-registries", "concepts/wei-per-ether", "transactions/send-six-decimal-token"]);
+    ["concepts/unit"]);
   for (const answer of ["reference", "empty"]) {
     const filename = path.join(root, "results", answer, "rows.jsonl");
     const rows = parseRows(readFileSync(filename, "utf8"), filename, evaluations);
     assert.deepEqual(rows.map((row) => [row.eval_id, row.schema_version, row.status]),
-      [["concepts/agent-registries", 4, answer === "reference" ? "passed" : "failed"]]);
+      [["concepts/unit", 4, answer === "reference" ? "passed" : "failed"]]);
     assert.equal(rows[0].eval_hash, evaluations.find((evaluation) => evaluation.id === rows[0].eval_id)!.hash);
     assert.equal(rows[0].log_url, null);
   }

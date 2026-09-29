@@ -40,11 +40,11 @@ def epoch_seconds(item, config):
     return time_limit + scoring_limit + (CONTAINER_SECONDS if item.actor.sandbox_for(item.evaluation) else 0)
 
 
-def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, retry_errors=False):
+def epoch_selection(evals, config, agents_for, previous, epochs=None, fresh=False, retry_errors=False):
     prior = {epoch_identity(row, row["epoch"]): row for row in previous}
     selected, pending, exhausted = set(), [], []
     for evaluation in evals:
-        for mode, actor in players(evaluation):
+        for mode, actor in agents_for(evaluation):
             for epoch in range(1, (epochs or config.epochs) + 1):
                 identity = epoch_identity({"eval_id": evaluation.id, "eval_hash": evaluation.hash,
                                            **actor.metadata, "mode": mode}, epoch)
@@ -61,10 +61,10 @@ def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, 
     return selected, pending, exhausted
 
 
-def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, fresh=False, wall_seconds=None):
+def plan(evals, config, agents_for, previous, *, epochs=None, retry_errors=False, fresh=False, wall_seconds=None):
     if wall_seconds is not None and (not math.isfinite(wall_seconds) or wall_seconds <= 0):
         raise ValueError("Wall seconds must be finite and positive")
-    selected, pending, exhausted = epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
+    selected, pending, exhausted = epoch_selection(evals, config, agents_for, previous, epochs, fresh, retry_errors)
     missing, deferred, admitted = [], [], []
     reserved = PREPARATION_SECONDS if pending else 0
     for item in sorted(pending, key=lambda item: epoch_seconds(item, config)):

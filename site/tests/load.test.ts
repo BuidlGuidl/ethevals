@@ -89,7 +89,7 @@ test("loader excludes stale rows and the board parks skills", (t) => {
   const board = loadBoard({}, f.site);
   const cell = board.tables.internet.pillars.concepts.evals[0].cells['["model-a","harness-a","high"]'];
   assert.deepEqual([cell.passed, cell.total, cell.score], [1, 1, 1]);
-  assert.deepEqual(board.tables.internet.subjects, [{ model: "model-a", harness: "harness-a", effort: "high" }]);
+  assert.deepEqual(board.tables.internet.agents, [{ model: "model-a", harness: "harness-a", effort: "high" }]);
 });
 
 test("missing default rows give an explicit empty state, while an override is required to exist", (t) => {
@@ -97,12 +97,12 @@ test("missing default rows give an explicit empty state, while an override is re
   const messages: string[] = [];
   t.mock.method(console, "log", (message: string) => messages.push(message));
   const empty = loadBoard({}, f.site);
-  assert.deepEqual([empty.tables.internet.subjects.length, empty.tables.vanilla.subjects.length,
+  assert.deepEqual([empty.tables.internet.agents.length, empty.tables.vanilla.agents.length,
     empty.evaluations["concepts/units"].prompt], [0, 0, "How many wei?"]);
   assert.equal(messages[0], `${f.rows} (missing; empty board): 0 read, 0 current, 0 stale.`);
   assert.throws(() => loadBoard({ ETHEVALS_ROWS: "../results/typo.jsonl" }, f.site), /typo.jsonl: results file does not exist/);
   f.write([{}]);
-  assert.equal(loadBoard({ ETHEVALS_ROWS: "../results/rows.jsonl" }, f.site).tables.internet.subjects[0].model, "model-a");
+  assert.equal(loadBoard({ ETHEVALS_ROWS: "../results/rows.jsonl" }, f.site).tables.internet.agents[0].model, "model-a");
 });
 
 test("missing eval roots and missing or malformed catalogs fail loudly", (t) => {
@@ -131,8 +131,8 @@ test("default site paths do not depend on the process working directory", () => 
   const previous = process.cwd();
   try {
     process.chdir(path.dirname(siteRoot));
-    const board = loadBoard({ ETHEVALS_SAMPLE: "1" });
-    assert.equal(board.tables.internet.pillars.concepts.cells['["Sample model A","Sample harness A","high"]'].score, 0.8333333333333333);
+    const board = loadBoard({ ETHEVALS_DEMO: "1" });
+    assert.equal(board.tables.internet.pillars.concepts.cells['["Demo model A","Demo harness A","high"]'].score, 0.8333333333333333);
   } finally {
     process.chdir(previous);
   }

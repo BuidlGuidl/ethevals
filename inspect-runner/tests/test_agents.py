@@ -1,28 +1,25 @@
-import asyncio
 import json
-import inspect
-from pathlib import Path
-import yaml
-
-import pytest
-from pydantic import ValidationError
-from inspect_ai.model import ChatMessageUser, GenerateConfig, ModelOutput, get_model
-from inspect_ai.tool import ToolInfo
-from inspect_ai.agent import AgentState
-from inspect_ai.agent._bridge.types import AgentBridge
-from inspect_ai.agent._bridge.util import bridge_generate, in_bridge_model_generate
-from inspect_ai.agent._bridge.responses_impl import (
-    inspect_responses_api_request_impl, responses_output_items_from_assistant_message, tools_from_responses_tool,
-)
-from inspect_ai.model._openai import chat_tool_calls_from_openai
-from openai.types.chat import ChatCompletionMessage
-from inspect_swe._codex_cli._events.consumer import CodexConsumer
 
 from ethevals import agents
-from ethevals.actors import player
+from ethevals.actors import agent
 from ethevals.config import Config
-from support import fixture_config
 from ethevals.images.tag import image_tag
+from inspect_ai.agent import AgentState
+from inspect_ai.agent._bridge.responses_impl import inspect_responses_api_request_impl, responses_output_items_from_assistant_message, tools_from_responses_tool
+from inspect_ai.agent._bridge.types import AgentBridge
+from inspect_ai.agent._bridge.util import bridge_generate, in_bridge_model_generate
+from inspect_ai.model import ChatMessageUser, GenerateConfig, ModelOutput, get_model
+from inspect_ai.model._openai import chat_tool_calls_from_openai
+from inspect_ai.tool import ToolInfo
+from inspect_swe._codex_cli._events.consumer import CodexConsumer
+from openai.types.chat import ChatCompletionMessage
+from pydantic import ValidationError
+import asyncio
+import inspect
+import pytest
+
+from conftest import fixture_config
+
 
 
 @pytest.mark.parametrize("key,harness", [
@@ -43,11 +40,11 @@ def test_registry_builds_solver(key, harness):
     ("kimi", "openrouter/moonshotai/kimi-k3", "opencode"),
     ("glm", "openrouter/z-ai/glm-5.3", "opencode"),
 ])
-def test_player_selects_model_and_effort(key, model, harness):
+def test_agent_selects_model_and_effort(key, model, harness):
     config = fixture_config()
     config.agents[key].model = "mockllm/model"
     config.agents[key].effort = "low"
-    actor = player(config, key, "internet")
+    actor = agent(config, key, "internet")
     assert str(actor.model) == "mockllm/model"
     assert actor.model.config.reasoning_effort == "low"
     assert actor.metadata["harness"] == harness
@@ -137,13 +134,13 @@ def test_inspect_still_needs_custom_call_adapter():
 
 
 @pytest.mark.parametrize("requested", ["inspect", "gpt-6-sol", "another-model", "openai/other"])
-def test_codex_active_player_adapts_every_bridge_model(tmp_path, requested, monkeypatch):
+def test_codex_active_agent_adapts_every_bridge_model(tmp_path, requested, monkeypatch):
     from inspect_ai import Task, eval
     from inspect_ai.dataset import Sample
     from inspect_ai.solver import solver
     config = fixture_config()
     config.agents["codex"].model = "mockllm/model"
-    actor = player(config, "codex", "internet")
+    actor = agent(config, "codex", "internet")
     monkeypatch.setattr(actor.model.source.api, "outputs", lambda *args: ModelOutput.for_tool_call(
         "mockllm/model", "exec", {"input": "text(42);"}))
     calls = []
@@ -166,7 +163,6 @@ def test_codex_active_player_adapts_every_bridge_model(tmp_path, requested, monk
     log = eval(Task(dataset=[Sample(input="Run code")], solver=through_bridge(), model=actor.model),
                log_dir=str(tmp_path / "logs"), display="none")[0]
     assert (log.status, calls) == ("success", [("custom_tool_call", "text(42);")])
-
 
 
 def test_image_tag_changes_with_each_input(tmp_path):

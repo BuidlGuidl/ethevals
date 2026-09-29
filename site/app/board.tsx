@@ -2,8 +2,8 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
-  pillars, subjectKey,
-  type BoardData, type Cell, type DisplayEvaluation as Evaluation, type TableMode as Mode, type Pillar, type Epoch, type Subject,
+  pillars, agentKey,
+  type BoardData, type Cell, type DisplayEval as Eval, type TableMode as Mode, type Pillar, type Epoch, type Agent,
 } from "../src/board";
 
 const names: Record<Pillar, string> = {
@@ -20,9 +20,9 @@ const money = (cost: number | null) => cost === null ? "Unknown" : `$${cost.toFi
 const countText = (cell: Cell) => `${cell.passed} of ${cell.total} epochs passed`;
 const cellText = (cell: Cell) => cell.state === "na" ? "Not applicable"
   : cell.state === "empty" ? "No evals yet" : cell.state === "pending" ? "No epochs yet" : percent(cell.score!);
-const subjectName = (subject: Subject) => [subject.model, subject.harness].filter(Boolean).join(" · ");
+const agentName = (agent: Agent) => [agent.model, agent.harness].filter(Boolean).join(" · ");
 
-type Selection = { evaluation?: Evaluation; pillar: Pillar; subject: Subject; mode: Mode };
+type Selection = { evaluation?: Eval; pillar: Pillar; agent: Agent; mode: Mode };
 
 function Score({ cell, label, open }: {
   cell: Cell; label: string; open: () => void;
@@ -44,7 +44,7 @@ function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onO
   const [expanded, setExpanded] = useState<Pillar[]>(["concepts"]);
   const [column, setColumn] = useState<string | null>(null);
   const table = data.tables[mode];
-  const subjects = table.subjects;
+  const agents = table.agents;
   const evaluations = pillars.flatMap((pillar) => table.pillars[pillar].evals.map((entry) => data.evaluations[entry.id]));
   const title = mode === "internet" ? "Agent table" : "Knowledge table";
 
@@ -55,7 +55,7 @@ function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onO
       {/* The mode label is the reserved place for a future skills toggle. */}
       <div className="mode-label">{mode === "internet" ? "Internet · no Ethereum skills" : "Vanilla · no harness or tools"}</div>
     </div>
-    {!subjects.length ? <div className="empty">
+    {!agents.length ? <div className="empty">
       <h3>{mode === "internet" ? "No agent epochs yet" : "No knowledge epochs yet"}</h3>
       <p>No published results match the current evals. Scores will appear after epochs finish.</p>
       <details><summary>Browse {evaluations.length} evals</summary><div className="catalog">
@@ -73,12 +73,12 @@ function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onO
           <caption className="sr-only">{title}. Pillars expand to evals. Open a cell for epochs and checks.</caption>
           <thead><tr>
             <th scope="col" className="row-label" onMouseEnter={() => setColumn(null)}>Pillar / eval<span className="subline">Expand a pillar to see its evals</span></th>
-            {subjects.map((subject) => <th key={subjectKey(subject)} scope="col"
-              className={column === subjectKey(subject) ? "column-hover" : ""}
-              onMouseEnter={() => setColumn(subjectKey(subject))}>
-              <span className="agent-name">{subject.model}</span>
-              {subject.harness && <span className="subline">{subject.harness}</span>}
-              <span className="subline">Effort: {subject.effort ?? "not recorded"}</span>
+            {agents.map((agent) => <th key={agentKey(agent)} scope="col"
+              className={column === agentKey(agent) ? "column-hover" : ""}
+              onMouseEnter={() => setColumn(agentKey(agent))}>
+              <span className="agent-name">{agent.model}</span>
+              {agent.harness && <span className="subline">{agent.harness}</span>}
+              <span className="subline">Effort: {agent.effort ?? "not recorded"}</span>
             </th>)}
           </tr></thead>
           {pillars.map((pillar) => {
@@ -95,12 +95,12 @@ function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onO
                     {names[pillar]}<span className="subline">{items.length} evals</span>
                   </button>
                 </th>
-                {subjects.map((subject) => <td key={subjectKey(subject)}
-                  className={column === subjectKey(subject) ? "column-hover" : ""}
-                  onMouseEnter={() => setColumn(subjectKey(subject))} onFocus={() => setColumn(subjectKey(subject))}>
-                  <Score cell={pillarRow.cells[subjectKey(subject)]}
-                    label={`${names[pillar]}, ${subjectName(subject)}`}
-                    open={() => onOpen({ pillar, subject, mode })} />
+                {agents.map((agent) => <td key={agentKey(agent)}
+                  className={column === agentKey(agent) ? "column-hover" : ""}
+                  onMouseEnter={() => setColumn(agentKey(agent))} onFocus={() => setColumn(agentKey(agent))}>
+                  <Score cell={pillarRow.cells[agentKey(agent)]}
+                    label={`${names[pillar]}, ${agentName(agent)}`}
+                    open={() => onOpen({ pillar, agent, mode })} />
                 </td>)}
               </tr></tbody>
               <tbody id={id} hidden={!open}>
@@ -108,14 +108,14 @@ function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onO
                   <th scope="row" className="row-label" onMouseEnter={() => setColumn(null)}>
                     {evaluation.title}<span className="eval-id">{evaluation.id}</span><span className="subline">{evaluation.type}</span>
                   </th>
-                  {subjects.map((subject) => <td key={subjectKey(subject)}
-                    className={column === subjectKey(subject) ? "column-hover" : ""}
-                    onMouseEnter={() => setColumn(subjectKey(subject))} onFocus={() => setColumn(subjectKey(subject))}>
-                    <Score cell={entry.cells[subjectKey(subject)]}
-                      label={`${evaluation.title}, ${subjectName(subject)}`}
-                      open={() => onOpen({ evaluation, pillar, subject, mode })} />
+                  {agents.map((agent) => <td key={agentKey(agent)}
+                    className={column === agentKey(agent) ? "column-hover" : ""}
+                    onMouseEnter={() => setColumn(agentKey(agent))} onFocus={() => setColumn(agentKey(agent))}>
+                    <Score cell={entry.cells[agentKey(agent)]}
+                      label={`${evaluation.title}, ${agentName(agent)}`}
+                      open={() => onOpen({ evaluation, pillar, agent, mode })} />
                   </td>)}
-                </tr>; }) : <tr><td colSpan={subjects.length + 1} className="no-evals">No evals yet for this mode.</td></tr>}
+                </tr>; }) : <tr><td colSpan={agents.length + 1} className="no-evals">No evals yet for this mode.</td></tr>}
               </tbody>
             </Fragment>;
           })}
@@ -126,7 +126,7 @@ function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onO
   </section>;
 }
 
-function Prompt({ evaluation }: { evaluation: Evaluation }) {
+function Prompt({ evaluation }: { evaluation: Eval }) {
   return <div className="prompt"><pre>{evaluation.prompt}</pre>
     {evaluation.choices.length > 0 && <ol type="A">{evaluation.choices.map((choice, index) => <li key={index}>{choice}</li>)}</ol>}
   </div>;
@@ -163,7 +163,7 @@ function Epochs({ rows, data }: { rows: Epoch[]; data: BoardData }) {
         <p>Grader: <span className="mono">{money(epoch.grader_cost_usd)}</span></p>
         <p className="muted">{epoch.cost_source}</p>
       </div>
-      {href ? <a href={href} target="_blank" rel="noreferrer">{data.sample ? "Open sample log" : "Open full log"}</a>
+      {href ? <a href={href} target="_blank" rel="noreferrer">{data.demo ? "Open demo log" : "Open full log"}</a>
         : <p className="muted">Full log not published.</p>}
     </section>
   </>;
@@ -185,9 +185,9 @@ export function Detail({ selection, data, onSelect, onClose }: {
     dialog.current?.scrollTo(0, 0);
     closeButton.current?.focus();
   }, [selection]);
-  const { evaluation, pillar, subject, mode } = selection;
+  const { evaluation, pillar, agent, mode } = selection;
   const pillarRow = data.tables[mode].pillars[pillar];
-  const key = subjectKey(subject);
+  const key = agentKey(agent);
   const evalRow = evaluation ? pillarRow.evals.find((entry) => entry.id === evaluation.id) : undefined;
   const evalCell = evalRow?.cells[key];
   const cell = evalCell ?? pillarRow.cells[key];
@@ -197,19 +197,19 @@ export function Detail({ selection, data, onSelect, onClose }: {
       if (event.target === event.currentTarget && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) onClose();
     }}>
     <header className="drawer-header"><div className="drawer-heading">
-      <p className="subline">{names[pillar]} · {mode} · {subjectName(subject)}</p>
+      <p className="subline">{names[pillar]} · {mode} · {agentName(agent)}</p>
       <h2 id="detail-title">{evaluation?.title ?? names[pillar]}</h2>
       <p className="mono">{cellText(cell)}{cell.state === "score" && ` · ${countText(cell)}`}</p>
-      {data.sample && <p className="sample-label">Sample data. Invented results.</p>}
+      {data.demo && <p className="demo-label">Demo data. Invented results.</p>}
     </div><button ref={closeButton} className="close-button" aria-label="Close details" onClick={onClose}>Close</button></header>
     <div className="drawer-content">
       {evaluation ? <>
-        <button className="back-button" onClick={() => onSelect({ pillar, subject, mode })}>Back to {names[pillar].toLowerCase()} evals</button>
+        <button className="back-button" onClick={() => onSelect({ pillar, agent, mode })}>Back to {names[pillar].toLowerCase()} evals</button>
         <section><h3>Motivation</h3><p>{evaluation.motivation}</p></section>
         <section><h3>Prompt</h3><Prompt evaluation={evaluation} /></section>
         {cell.state === "na" && <p>This eval does not declare the {mode} mode.</p>}
         {cell.state === "pending" && <p>{cell.errors ? "No scored epochs yet. Errors do not count toward the score." : "No epochs yet for this eval."}</p>}
-        {evalCell && <Epochs key={`${evaluation.id}-${subjectKey(subject)}-${mode}`} rows={evalCell.epochs} data={data} />}
+        {evalCell && <Epochs key={`${evaluation.id}-${agentKey(agent)}-${mode}`} rows={evalCell.epochs} data={data} />}
       </> : <>
         <p>Each eval with scored epochs has equal weight. Missing and errored epochs never count as zero.</p>
         {cell.state === "score" && <p className="muted">{percent(cell.score!)} is the mean of {pillarRow.cells[key].scoredEvals} eval scores. The epoch count below each score adds their epochs together.</p>}
@@ -230,7 +230,7 @@ export default function Board({ data }: { data: BoardData }) {
     <nav className="topnav" aria-label="Results tables"><a className="brand" href="#main">ETH Evals</a><a href="#agents">Agents</a><a href="#knowledge">Knowledge</a><a href="#scoring">How scoring works</a></nav>
     <main id="main">
       <header className="page-heading"><h1>Ethereum work, measured.</h1><p>How well agents do Ethereum work, and what bare models know.</p></header>
-      {data.sample && <aside className="sample-banner"><strong>Sample data</strong><span>All results and extra evals on this page are invented. These are not model rankings.</span></aside>}
+      {data.demo && <aside className="demo-banner"><strong>Demo data</strong><span>All results and extra evals on this page are invented. These are not model rankings.</span></aside>}
       <section className="pillar-strip" aria-label="Pillars">{pillars.map((pillar) => <div key={pillar}><h2>{names[pillar]}</h2><p>{descriptions[pillar]}</p></div>)}</section>
       <ResultsTable data={data} mode="internet" onOpen={setSelection} />
       <ResultsTable data={data} mode="vanilla" onOpen={setSelection} />
