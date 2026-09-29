@@ -12,6 +12,6 @@ Kimi and GLM stay on OpenRouter in OpenCode with Exa.
 Before paid work, the runner requires the keys for the selected providers and the grader.
 The keys stay on the host. Exa's key remains optional.
 
-The plan reserves eight searches per Claude Code search call, multiplied by the session cap and the native-search price.
-Codex receives the same reserve, although its search count is not capped. The reserve is not a billing ceiling.
-Results add native-search fees from the log to token costs.
+Plans reserve agent and grader token costs for all remaining attempts.
+Search charges sit outside the plan and results costs.
+Claude Code keeps its session search cap; Exa caps search and fetch calls per epoch. Codex search has no cap.

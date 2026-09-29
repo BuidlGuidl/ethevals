@@ -82,11 +82,11 @@ def load_eval(folder: Path, config: Config) -> Eval:
     kinds = [kind for kind, present in (
         ("target", "scorer/target.yaml" in files),
         ("tests", (folder / "scorer/tests").is_dir()),
-        ("rubric", "scorer/rubric.md" in files),
         ("check_script", script_path(files, "check") is not None),
+        ("rubric", "scorer/rubric.md" in files),
     ) if present]
-    allowed = {"quiz": {"target"}, "build": {"tests", "rubric"}, "act": {"check_script"}, "scenario": set()}
-    if not kinds or set(kinds) - allowed[declaration.type]:
+    primary = {"quiz": "target", "build": "tests", "act": "check_script"}.get(declaration.type)
+    if primary not in kinds or set(kinds) - {primary, "rubric"}:
         raise ValueError(f"{folder / 'scorer'}: scorer files do not match type {declaration.type}")
     target = None
     if "target" in kinds:
@@ -104,8 +104,6 @@ def load_eval(folder: Path, config: Config) -> Eval:
         if not any(name.startswith("scorer/tests/") and name.endswith(".t.sol") for name in files):
             raise ValueError(f"{folder}: scorer/tests must contain a .t.sol file")
     if "rubric" in kinds:
-        if "tests" not in kinds:
-            raise ValueError(f"{folder / 'scorer/rubric.md'}: rubric requires tests to supply evidence")
         rubric_questions(files)
     if "check_script" in kinds:
         validate_script(declaration, files)

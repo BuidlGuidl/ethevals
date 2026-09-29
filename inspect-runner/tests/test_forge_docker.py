@@ -60,7 +60,7 @@ class DockerBox:
 def containers(tmp_path, environment=None):
     assert not any(os.environ.get(name) for name in (
         "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", fixture_config())
     path = prepare_compose(evaluation, tmp_path)
     data = yaml.safe_load(path.read_bytes())
     for service in data["services"].values():
@@ -83,7 +83,7 @@ def test_compose_sees_only_the_normalized_document(tmp_path):
         validate_compose(tmp_path / "binary.yaml", data=yaml.safe_dump(data).encode())
     data["services"]["extra"]["environment"] = {"TOKEN": "$$SECRET_PROBE"}
     raw = yaml.safe_dump(data).encode() + b"# author comment\n"
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", fixture_config())
     path = prepare_compose(replace(evaluation, files={**evaluation.files, "compose.yaml": raw}), tmp_path)
     result = command(["docker", "compose", "-f", str(path), "config", "--format", "json"],
                      env={**os.environ, "SECRET_PROBE": "inert-canary"})
@@ -215,7 +215,7 @@ def traced_process(underlying):
 def test_reference_failures_owned_libraries_and_frozen_writer(tmp_path):
     output = tmp_path / "proof"
     config = fixture_config()
-    original = load_eval(Path("evals/building/erc20-points-token"), config)
+    original = load_eval(Path("inspect-runner/tests/fixtures/building/erc20-points-token"), config)
     files = dict(original.files)
     files["scorer/tests/ImageLibrary.t.sol"] = b'''pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";

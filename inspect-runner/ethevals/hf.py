@@ -49,6 +49,9 @@ def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
             skipped.append({"eval_id": evaluation.id, "reason": "not a quiz" if evaluation.declaration.type != "quiz"
                             else "vanilla mode is not declared"})
             continue
+        if "rubric" in evaluation.scorer_kinds:
+            skipped.append({"eval_id": evaluation.id, "reason": "rubric cannot be exported"})
+            continue
         validate_hf_export(evaluation.declaration, evaluation.target, evaluation.id)
         config = evaluation.target
         target = config.target

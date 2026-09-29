@@ -23,14 +23,12 @@ SCORING_OVERHEAD_SECONDS = 120
 
 def task_limits(evaluation, config):
     working_limit = config.time_limits[evaluation.declaration.type]
-    time_limit = working_limit * 3
     questions = len(rubric_questions(evaluation.files)) if "rubric" in evaluation.scorer_kinds else 0
     scoring_seconds = ((FORGE_SECONDS if "tests" in evaluation.scorer_kinds else 0)
                        + (CHECK_SECONDS if "check_script" in evaluation.scorer_kinds else 0)
                        + questions * GRADER_CALLS * GRADER_CONFIG.timeout)
     scoring_limit = scoring_seconds + SCORING_OVERHEAD_SECONDS
-    if scoring_seconds and scoring_limit >= time_limit / 2:
-        raise ValueError(f"Scoring needs {scoring_limit} seconds, but Inspect allows {time_limit / 2}.")
+    time_limit = max(3 * working_limit, 2 * scoring_limit)
     return working_limit, time_limit, scoring_limit
 
 
@@ -57,8 +55,6 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
                 "cost_limit_usd": config.cost_limit,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
                 "search_limit": config.search_limit if uses_sandbox(mode) and config.search else 0,
-                "search_price_usd": config.search_price_usd,
-                "native_search_price_usd": config.native_search_price_usd,
                 "working_limit_seconds": working_limit, "time_limit_seconds": time_limit,
                 "scoring_limit_seconds": scoring_limit}
     sample.metadata = dict(metadata)
@@ -78,17 +74,16 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
 def run(evals: list[Eval], config: Config, output: Path, *,
         epochs: int | None = None, fresh: bool = False, retry_errors: bool = False,
         rows_file: Path | None = None, agents=None, models=None, modes=None, answer=None,
-        budget=None, wall_seconds=None) -> tuple[bool, list[dict]]:
+        budget=None) -> tuple[bool, list[dict]]:
     previous = previous_rows(output, rows_file)
     agents_for, _ = select_actors(config, agents=agents, modes=modes, answer=answer, models=models, planning=True)
-    initial = plan(evals, config, agents_for, previous, wall_seconds=wall_seconds,
-                   epochs=epochs, fresh=fresh, retry_errors=retry_errors)
+    initial = plan(evals, config, agents_for, previous, epochs=epochs, fresh=fresh, retry_errors=retry_errors)
     report = budget_check(initial.report, budget, required=not answer)
     output.mkdir(parents=True, exist_ok=True)
     (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     if not report["within_budget"]:
         raise ValueError("Budget exceeded. No agent or grader ran.")
-    if not answer and initial.admitted:
+    if not answer and initial.pending:
         providers = {actor.metadata["model"].split("/", 1)[0] for evaluation in evals for _, actor in agents_for(evaluation)}
         providers.add(config.grader.model.split("/", 1)[0])
         missing = sorted(key for provider, key in {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY",
@@ -96,11 +91,11 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         if missing:
             raise ValueError(f"Missing provider keys for paid epochs: {', '.join(missing)}")
     prepared, preparation_errors = {}, []
-    if any(item.actor.sandbox_for(item.evaluation) for item in initial.admitted):
-        check_capacity(config, [item.evaluation for item in initial.admitted if item.actor.sandbox_for(item.evaluation)])
+    if any(item.actor.sandbox_for(item.evaluation) for item in initial.pending):
+        check_capacity(config, [item.evaluation for item in initial.pending if item.actor.sandbox_for(item.evaluation)])
         build_images()
     for evaluation in evals:
-        work = [item for item in initial.admitted if item.evaluation.id == evaluation.id]
+        work = [item for item in initial.pending if item.evaluation.id == evaluation.id]
         if not work:
             continue
         try:
@@ -114,7 +109,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         agents_for, grade = select_actors(config, agents=agents, modes=modes, answer=answer, models=models)
         actors = {evaluation.id: {(mode, actor.key): actor for mode, actor in agents_for(evaluation)}
                   for evaluation in evals}
-        for original, mode, planned_actor, epoch, attempt in initial.admitted:
+        for original, mode, planned_actor, epoch, attempt in initial.pending:
             if original.id not in prepared:
                 continue
             evaluation, compose = prepared[original.id]
@@ -134,8 +129,8 @@ def run(evals: list[Eval], config: Config, output: Path, *,
                  max_tasks=concurrency, max_sandboxes=concurrency, log_buffer=1, display="plain")
     finally:
         rows = [row for row in export_rows(output, previous) if epoch_identity(row, row["epoch"]) in initial.selected]
-    admitted = {epoch_identity(row, row["epoch"]): row["attempt"] for row in report["missing"]}
+    pending = {epoch_identity(row, row["epoch"]): row["attempt"] for row in report["missing"]}
     actual = {epoch_identity(row, row["epoch"]): row for row in rows}
-    return (not preparation_errors and admitted.keys() <= actual.keys()
+    return (not preparation_errors and pending.keys() <= actual.keys()
             and all(actual[key]["status"] != "error" and actual[key]["attempt"] == attempt
-                    for key, attempt in admitted.items())), rows
+                    for key, attempt in pending.items())), rows

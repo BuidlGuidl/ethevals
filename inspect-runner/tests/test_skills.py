@@ -13,7 +13,7 @@ from ethevals.loader import load_eval
 from support import build_task, eval_cli, fixture_config
 
 
-def test_skills_plan_reserves_search_and_keeps_the_harness(folder, tmp_path):
+def test_skills_plan_keeps_the_harness(folder, tmp_path):
     path = folder / "eval.yaml"
     declaration = yaml.safe_load(path.read_text())
     declaration["modes"] = ["vanilla", "internet", "skills"]
@@ -23,9 +23,9 @@ def test_skills_plan_reserves_search_and_keeps_the_harness(folder, tmp_path):
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     row = report["missing"][0]
-    assert (report["missing_epochs"], report["worst_case_usd"], report["within_budget"]) == (1, 12, True)
-    assert (row["mode"], row["harness"], row["per_attempt_usd"], row["wall_seconds"]) == (
-        "skills", "claude_code", 6, 1320)
+    assert (report["missing_epochs"], report["worst_case_usd"], report["within_budget"]) == (1, 10, True)
+    assert (row["mode"], row["harness"], row["per_attempt_usd"]) == (
+        "skills", "claude_code", 5)
 
 
 def test_pack_edits_change_only_opted_in_hashes_and_preserve_captured_bytes(folder, tmp_path, monkeypatch):
@@ -119,7 +119,9 @@ def test_skill_index_preserves_workspace_instructions_and_internet_prompt(folder
     assert installed == ["standards"]
     assert skills.dataset[0].input == internet.dataset[0].input
     assert skills.metadata["search_limit"] == internet.metadata["search_limit"] == 20
-    assert (skills.working_limit, skills.time_limit) == (300, 900)
+    assert skills.working_limit == 300
+    assert skills.time_limit >= 3 * skills.working_limit
+    assert skills.time_limit / 2 >= skills.metadata["scoring_limit_seconds"]
 
 
 def test_missing_skill_file_reports_the_real_pack_folder(folder, tmp_path, monkeypatch):
@@ -173,4 +175,4 @@ def test_skills_only_act_gets_a_free_reference_check(tmp_path):
     agents_for, _ = select_actors(config, answer="reference")
     assert [(mode, actor.free_check, actor.sandbox_for(evaluation)) for mode, actor in agents_for(evaluation)] == [
         ("skills", True, True)]
-    assert evaluation.scorer_kinds == ["check_script"]
+    assert evaluation.scorer_kinds == ["check_script", "rubric"]

@@ -40,25 +40,16 @@ Give Docker at least 7 GiB for one stock act epoch. The default concurrency is o
 ## Control spending and publication
 
 Run paid epochs only with explicit spending intent and a reviewed budget.
-Use `--models` for vanilla and `--agents` for internet or skills. Omitted selectors include all configured entries.
-Model entries own effort; agents reference model keys. Use `--effort low|medium|high|xhigh` to override model and agent effort.
-Optional `EXA_API_KEY` stays on the host.
-Opus and the grader use `ANTHROPIC_API_KEY`. GPT uses `OPENAI_API_KEY`; Kimi and GLM use `OPENROUTER_API_KEY`.
-The runner requires keys for the selected providers and the grader before paid work.
-Claude Code and Codex use their providers' own search; OpenCode uses Exa.
-Each agent declares `search: native` or `search: exa` in the config.
-Native-search fees come from the log. Claude Code reserves eight searches per call up to `search_limit` calls.
-Codex reserves the same amount, but its search count is not capped.
-Only a paid run proves provider access, usable native search, grader output, and fee agreement with the bill.
-Keep all five key variables unset for free work, including the unused `ANTHROPIC_AUTH_TOKEN`.
+Read [Plan and run](inspect-runner/README.md#plan-and-run) for selectors, budgets, and required keys.
+[ADR 0006](docs/adr/0006-direct-provider-keys-and-native-search.md) records the provider and search decisions.
+Keep all five key variables unset for free work.
+
 For the first paid Claude Code test, set `ANTHROPIC_API_KEY` and use:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries evals/building/erc20-points-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
+uv run ethevals run --evals evals/concepts/agent-registries evals/transactions/send-six-decimal-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
 ```
 
-For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-5.5`.
-Codex runs GPT-5.5 because Codex routes GPT-6 models through a search endpoint that Inspect's bridge does not support yet.
 Before remote writes, read [CI and publication](inspect-runner/README.md#ci-and-publication).
 Paid CI starts only after merge with a configured budget. Its default budget is zero.
 
