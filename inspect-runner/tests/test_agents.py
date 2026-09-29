@@ -8,7 +8,6 @@ import pytest
 from pydantic import ValidationError
 from inspect_ai.model import ChatMessageUser, GenerateConfig, ModelOutput, get_model
 from inspect_ai.tool import ToolInfo
-from inspect_ai.util import ExecResult
 from inspect_ai.agent import AgentState
 from inspect_ai.agent._bridge.types import AgentBridge
 from inspect_ai.agent._bridge.util import bridge_generate, in_bridge_model_generate
@@ -23,7 +22,6 @@ from ethevals import agents
 from ethevals.actors import player
 from ethevals.config import Config, load_config
 from ethevals.images.tag import image_tag
-from test_contracts import scoring_case, YES
 
 
 @pytest.mark.parametrize("key,harness", [
@@ -186,37 +184,3 @@ def test_image_tag_changes_with_each_input(tmp_path):
     changed = image_tag(tmp_path)
     (tmp_path / "solc.json").write_text('{"version":"0.8.31"}\n')
     assert len({original, changed, image_tag(tmp_path)}) == 3
-
-
-@pytest.mark.parametrize("local_oom,code,status", [
-    (True, 137, "failed"), (False, 137, "error"), (True, 1, "error"), (True, 0, "passed")])
-@pytest.mark.parametrize("cli_name", ["claude code", "codex cli", "opencode"])
-def test_agent_failure_exports_memory_cause(scoring_case, monkeypatch, local_oom, code, status, cli_name):
-    config = load_config()
-
-    class Box:
-        reads = 0
-        async def exec(self, command, **kwargs):
-            if "/sys/fs/cgroup/memory.peak" in command:
-                return ExecResult(success=True, returncode=0, stdout="134217728\n", stderr="")
-            self.reads += 1
-            return ExecResult(success=True, returncode=0, stdout=(
-                "oom 4\noom_kill 4\n" if self.reads == 1 else
-                f"oom {5 if local_oom else 4}\noom_kill 5\n"), stderr="")
-
-    async def killed(state, generate):
-        if code == 0:
-            return state
-        raise RuntimeError(f"Error executing {cli_name} agent {code}: CLI failure")
-
-    monkeypatch.setitem(agents.AGENTS, "proof", agents.Harness(lambda *a, **kw: killed, "proof"))
-    monkeypatch.setattr(agents, "sandbox", lambda name: box)
-    box = Box()
-    scoring_case["task"].solver = agents.internet_solver("proof", config, config.models["opus"])
-    row = scoring_case["run"]([YES, YES] if code == 0 else [])
-    assert (row["status"], row["passed"]) == (status, None if status == "error" else status == "passed")
-    assert row["agent_memory_peak_bytes"] == 134217728
-    if status == "failed":
-        assert {check["reason"] for check in row["checks"].values()} == {"Agent exceeded its container memory limit."}
-    elif status == "error":
-        assert f"Error executing {cli_name} agent {code}" in row["error_reason"]

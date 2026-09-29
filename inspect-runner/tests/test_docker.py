@@ -16,7 +16,7 @@ from ethevals.config import load_config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.sandboxes import IMAGES, runner_exec, validate_compose, workspace_files
-from ethevals.scorers import compiled_sources, forge, forge_checks, prepare_forge, rubric_evidence
+from ethevals.scorers import compiled_sources, forge, forge_checks, prepare_forge
 from prove_scoring import run_proof
 
 pytestmark = pytest.mark.docker
@@ -122,15 +122,14 @@ def test_unused_library_does_not_change_compiled_rubric_evidence(tmp_path):
 
         async def evidence(files):
             await prepare_forge(box, files, private)
-            result = await forge(box)
+            result = await forge(box, timeout=180)
             assert result.success, result.stderr + result.stdout
-            return rubric_evidence(await compiled_sources(box, files))
+            return await compiled_sources(box)
 
         first = anyio.run(evidence, submitted)
         unused = {f"lib/unused/Unused{n}.sol": b"//" + b"x" * 100000 for n in range(4)}
         second = anyio.run(evidence, {**submitted, **unused})
-        assert first == second == ({"src/Token.sol": src.decode(), "lib/custom/Helper.sol": helper.decode()}, [])
-        assert list(second[0]) == ["src/Token.sol", "lib/custom/Helper.sol"]
+        assert first == second == {"src/Token.sol": src, "lib/custom/Helper.sol": helper}
 
 
 def test_reference_failures_owned_libraries_and_frozen_writer(tmp_path):
@@ -150,57 +149,12 @@ def test_unavailable_compiler_fails_offline_and_names_available_versions(tmp_pat
             assert installed.stdout.strip() == "/home/agent/.svm/0.8.30/solc-0.8.30"
             await prepare_forge(box, {"src/Token.sol": b"pragma solidity =0.8.29; contract Token {}"}, {
                 "scorer/tests/Token.t.sol": b'pragma solidity ^0.8.0; import "../src/Token.sol"; contract Tests { function testToken() public { new Token(); } }'})
-            result = await forge(box)
-            checks = forge_checks(result.stdout, result.stderr, result.returncode, ["forge:test/Token.t.sol:Tests:testToken()"])
+            result = await forge(box, timeout=180)
+            checks = forge_checks(result.stdout, result.stderr, result.returncode)
             assert checks["forge:compile"]["passed"] is False
             assert "Available solc versions: 0.8.30" in checks["forge:compile"]["reason"]
             assert "No solc version installed that matches" in result.stderr
             assert "https://" not in result.stderr
-        anyio.run(proof)
-
-
-def test_slow_output_consumer_cannot_truncate_forge(tmp_path, monkeypatch):
-    import ethevals.scorers as scorers
-    original = scorers.runner_exec
-    with containers(tmp_path) as boxes:
-        box = boxes["scorer"]
-
-        async def slow_consumer(box, args, **kwargs):
-            args = [arg.replace("/usr/bin/head", "/tmp/slow-head") for arg in args]
-            return await original(box, args, **kwargs)
-
-        async def proof():
-            await box.write_file("/tmp/slow-head", '#!/bin/sh\nsleep 1\nexec /usr/bin/head "$@"\n')
-            await runner_exec(box, ["/bin/chmod", "+x", "/tmp/slow-head"])
-            await prepare_forge(box, {"src/Token.sol": b"pragma solidity =0.8.30; contract Token {}"}, {
-                "scorer/tests/Token.t.sol": b"pragma solidity =0.8.30; contract Tests { function testToken() public pure { assert(true); } }"})
-            monkeypatch.setattr("ethevals.sandboxes.runner_exec", slow_consumer)
-            result = await forge(box)
-            assert forge_checks(result.stdout, result.stderr, result.returncode,
-                                ["forge:test/Token.t.sol:Tests:testToken()"]) == {
-                "forge:compile": {"passed": True, "reason": "Compilation passed."},
-                "forge:test/Token.t.sol:Tests:testToken()": {"passed": True, "reason": "Test passed."},
-            }
-        anyio.run(proof)
-
-
-def test_forge_output_file_has_a_size_cap(tmp_path, monkeypatch):
-    import ethevals.scorers as scorers
-    from ethevals.scoring_base import SubmissionFailed
-    original = scorers.runner_exec
-    with containers(tmp_path) as boxes:
-        async def noisy_forge(box, args, **kwargs):
-            if "/usr/local/bin/forge" not in args:
-                return await original(box, args, **kwargs)
-            position = args.index("/usr/local/bin/forge")
-            args = args[:position] + ["/usr/bin/perl", "-e", 'print "x" x (12 * 1024 * 1024)']
-            return await original(box, args, **kwargs)
-
-        async def proof():
-            monkeypatch.setattr("ethevals.sandboxes.runner_exec", noisy_forge)
-            with pytest.raises(SubmissionFailed, match="10 MiB"):
-                await forge(boxes["scorer"])
-            assert len(await boxes["scorer"].read_file("/tmp/forge.stdout", text=False)) == 10485761
         anyio.run(proof)
 
 

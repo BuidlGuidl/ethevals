@@ -7,11 +7,6 @@ from inspect_ai.event import ToolEvent, ModelEvent
 from .search import search_result_status, search_text, CAP_MESSAGE
 
 
-def infrastructure_limit(kind, working_seconds, working_limit):
-    return kind == "operator" or (kind == "time" and working_limit is not None
-                                  and (working_seconds is None or working_seconds < working_limit))
-
-
 def search_failures(sample):
     sample = resolve_sample_attachments(sample)
     calls, results = {}, {}
@@ -64,25 +59,14 @@ def results_rows(log: EvalLog) -> list[dict]:
                 samples.append(EvalSample(id=metadata["eval_id"], epoch=epoch, input="", target="", error=log.error))
     rows = []
     for sample in samples:
-        checks = {} if sample.scores else dict((sample.metadata or {}).get("scoring_checks", {}))
+        checks = {}
         for score in (sample.scores or {}).values():
-            for name, check in (score.metadata or {}).get("checks", {}).items():
+            for name, value in score.value.items():
                 if name in checks:
                     raise ValueError(f"{log.location}: duplicate check {name}")
-                checks[name] = check
+                checks[name] = {"passed": value == "C", "reason": score.metadata["reasons"][name]}
         error = sample.error.message if sample.error else None
         error_kind = "execution" if error else None
-        if error:
-            for name in metadata.get("check_names", []):
-                checks.setdefault(name, {"passed": False, "reason": " ".join(f"No verdict: {error}".split())})
-        if sample.limit:
-            reason = " ".join((f"Epoch reached {sample.limit.type} limit {sample.limit.limit}. "
-                               + (sample.limit.reason or "")).split())
-            if infrastructure_limit(sample.limit.type, sample.working_time, metadata.get("working_limit_seconds")):
-                error_kind, error = "execution", reason
-            else:
-                error = error_kind = None
-            checks = {name: {"passed": False, "reason": reason} for name in metadata.get("check_names", checks)}
         if not checks and not error:
             error_kind, error = "scoring", "The epoch produced no named checks."
         usage = list(sample.model_usage.values())
@@ -138,7 +122,6 @@ def results_rows(log: EvalLog) -> list[dict]:
             "grader_prices": metadata.get("grader_prices", {}),
             "working_seconds": sample.working_time,
             "total_seconds": sample.total_time,
-            "agent_memory_peak_bytes": (sample.metadata or {}).get("agent_memory_peak_bytes"),
             "log_file": location,
             "log_sample_id": sample.id,
             "log_epoch": sample.epoch,

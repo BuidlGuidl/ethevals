@@ -56,7 +56,7 @@ def prove(export: Path, evaluations: list[Eval], output: Path, config: Config) -
         direct = json_dataset(str(paths[declaration["config"]]))
         for sample, hf_sample in zip(direct, stock.dataset, strict=True):
             evaluation = evaluations[sample.id]
-            reference = target_reference(evaluation.scorers[0], evaluation.declaration)
+            reference = target_reference(evaluation.target, evaluation.declaration)
             for answer_kind, answer in [("reference", reference), ("wrong", "An incorrect answer.")]:
                 observed = {"config": declaration["config"], "eval_id": sample.id, "answer": answer_kind}
 

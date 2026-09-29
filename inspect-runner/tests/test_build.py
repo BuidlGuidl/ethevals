@@ -23,7 +23,7 @@ FORGE_OUTPUT = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {
 
 
 def test_forge_names_and_reasons():
-    assert forge_checks(FORGE_OUTPUT, "", 1, ["forge:test/Token.t.sol:TokenTest:testSupply()", "forge:test/Token.t.sol:TokenTest:testTransfer()"]) == {
+    assert forge_checks(FORGE_OUTPUT, "", 1) == {
         "forge:compile": {"passed": True, "reason": "Compilation passed."},
         "forge:test/Token.t.sol:TokenTest:testSupply()": {"passed": True, "reason": "Test passed."},
         "forge:test/Token.t.sol:TokenTest:testTransfer()": {"passed": False, "reason": "Wrong recipient balance expected 10"},
@@ -32,7 +32,7 @@ def test_forge_names_and_reasons():
 
 def test_compiler_error_is_a_failed_check():
     captured = json.loads((Path(__file__).parent / "fixtures/forge-1.5.1.json").read_text())["syntax"]
-    assert forge_checks(**captured, expected=[]) == {
+    assert forge_checks(**captured) == {
         "forge:compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},
     }
 

@@ -33,7 +33,7 @@ def quiz(tmp_path, name="units", *, modes=None, choices=None, **scorer):
     (folder / "scorer").mkdir()
     (folder / "eval.yaml").write_text(yaml.safe_dump({"type": "quiz", "motivation": "Check units.",
         "prompt": "Give the unit.", "modes": modes or ["vanilla"], "choices": choices}))
-    (folder / "scorer/scorer.yaml").write_text(yaml.safe_dump({"scorers": [{"kind": "target", "target": "wei", **scorer}]}))
+    (folder / "scorer/target.yaml").write_text(yaml.safe_dump({"target": "wei", **scorer}))
     return load_eval(folder, load_config())
 
 
@@ -82,11 +82,10 @@ def test_export_selects_vanilla_quizzes_and_keeps_prompts(tmp_path):
         write_hf([included], output)
 
 
-@pytest.mark.parametrize("method,choices,targets", [("match", None, ["wei", "Wei"]),
-                                                     ("choice", ["one", "two"], ["A", "B"])])
-def test_export_rejects_alternatives_without_partial_files(tmp_path, method, choices, targets):
+@pytest.mark.parametrize("choices,targets", [(None, ["wei", "Wei"]), (["one", "two"], ["A", "B"])])
+def test_export_rejects_alternatives_without_partial_files(tmp_path, choices, targets):
     good = quiz(tmp_path, "a-good")
-    bad = quiz(tmp_path, "z-alternatives", modes=["internet"], method=method, choices=choices, target=targets)
+    bad = quiz(tmp_path, "z-alternatives", modes=["internet"], choices=choices, target=targets)
     bad.declaration.modes = ["vanilla"]
     with pytest.raises(ValueError, match="cannot preserve alternative targets"):
         write_hf([good, bad], tmp_path / "hf")
@@ -104,8 +103,8 @@ def test_export_rejects_alternatives_without_partial_files(tmp_path, method, cho
     ({"numeric": True, "target": "1000"}, "1,000", "C"),
     ({"method": "pattern", "pattern": r"Unit: (\w+)"}, "Unit: wei", "C"),
     ({"method": "pattern", "pattern": r"Unit: (\w+)"}, "Unit: ether", "I"),
-    ({"method": "choice", "choices": ["one", "two"], "target": "B"}, "ANSWER: B", "C"),
-    ({"method": "choice", "choices": ["one", "two"], "target": "B"}, "ANSWER: A", "I"),
+    ({"choices": ["one", "two"], "target": "B"}, "ANSWER: B", "C"),
+    ({"choices": ["one", "two"], "target": "B"}, "ANSWER: A", "I"),
 ])
 def test_hf_task_matches_runner_for_the_same_answer(tmp_path, settings, answer, expected):
     evaluation = quiz(tmp_path, **settings)
@@ -136,10 +135,10 @@ def test_hf_proof_covers_every_fixture_task(tmp_path):
 
 def test_changing_fixture_scorer_updates_runner_and_export(tmp_path):
     evaluation = quiz(tmp_path)
-    path = evaluation.folder / "scorer/scorer.yaml"
+    path = evaluation.folder / "scorer/target.yaml"
     for location, verdict, passed in [("exact", "I", False), ("end", "C", True)]:
         settings = yaml.safe_load(path.read_text())
-        settings["scorers"][0]["location"] = location
+        settings["location"] = location
         path.write_text(yaml.safe_dump(settings))
         evaluation = load_eval(evaluation.folder, load_config())
         output = tmp_path / location
@@ -235,7 +234,7 @@ def test_publish_stages_rows_only_after_the_release_command_succeeds(tmp_path, m
 @pytest.mark.parametrize("blank", ["", " \t"])
 def test_blank_choice_fails_at_load(tmp_path, blank):
     with pytest.raises(ValueError, match="choices.*blank"):
-        quiz(tmp_path, choices=["wei", blank, "ether"], method="choice", target="C")
+        quiz(tmp_path, choices=["wei", blank, "ether"], target="C")
 
 
 def test_hash_in_output_path_cannot_select_an_unrelated_file(tmp_path):
@@ -270,19 +269,18 @@ def test_reused_folder_skips_published_and_hidden_rows(tmp_path, monkeypatch):
 @pytest.mark.parametrize("unsupported", ["alternatives", "second-scorer"])
 def test_validate_rejects_unexportable_vanilla_quiz(tmp_path, unsupported):
     evaluation = quiz(tmp_path, modes=["internet"])
-    path = evaluation.folder / "scorer/scorer.yaml"
-    scorers = [{"kind": "target", "target": ["wei", "ether"] if unsupported == "alternatives" else "wei"}]
+    path = evaluation.folder / "scorer/target.yaml"
+    target = {"target": ["wei", "ether"] if unsupported == "alternatives" else "wei"}
     if unsupported == "second-scorer":
         (evaluation.folder / "scorer/rubric.md").write_text("## unit\nIs the unit correct?\n")
-        scorers.append({"kind": "rubric"})
-    path.write_text(yaml.safe_dump({"scorers": scorers}))
+    path.write_text(yaml.safe_dump(target))
     declaration = evaluation.declaration.model_dump()
     declaration["modes"] = ["vanilla"]
     (evaluation.folder / "eval.yaml").write_text(yaml.safe_dump(declaration))
     result = subprocess.run([sys.executable, "-m", "ethevals.cli", "validate", "--evals", str(evaluation.folder)],
                             capture_output=True, text=True)
     assert result.returncode == 2
-    assert ("cannot preserve alternative targets" if unsupported == "alternatives" else "exactly one target scorer") in result.stderr
+    assert ("cannot preserve alternative targets" if unsupported == "alternatives" else "scorer files do not match type quiz") in result.stderr
 
 
 @pytest.mark.parametrize("args", [["run", "--publish"], ["check", "--dry-run"], ["export-hf"],

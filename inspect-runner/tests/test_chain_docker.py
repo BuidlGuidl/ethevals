@@ -16,7 +16,7 @@ from inspect_ai.solver import solver
 from ethevals.checks import check_player, check_grader
 from ethevals.config import load_config
 from ethevals.loader import load_eval
-from ethevals.preparation import prepare_compose, prepare_eval
+from ethevals.preparation import prepare_compose
 from ethevals.runner import build_task
 from ethevals.rows import results_rows
 from ethevals.sandboxes import IMAGES, validate_compose
@@ -59,46 +59,6 @@ def test_expensive_signed_transaction_cannot_change_captured_state():
         assert "result" in value["tx"]
 
 
-def test_script_output_waits_for_readers_and_caps_each_stream(monkeypatch):
-    import ethevals.check_script as scripts
-    from ethevals.scoring_base import SubmissionFailed
-    from test_docker import DockerBox
-
-    class ChainBox(DockerBox):
-        async def exec(self, args, **kwargs):
-            kwargs.setdefault("cwd", "/eval")
-            return await super().exec(args, user="foundry", **kwargs)
-
-    original = scripts.runner_exec
-
-    async def slow_reader(box, args, **kwargs):
-        return await original(box, [arg.replace("/usr/bin/head", "/eval/slow-head") for arg in args], **kwargs)
-
-    with chain_container() as name:
-        docker("exec", name, "mkdir", "-p", "/eval/scorer")
-        docker("exec", "-i", name, "bash", "-c", "cat > /eval/slow-head; chmod +x /eval/slow-head",
-               input='#!/bin/sh\nsleep 1\nexec /usr/bin/head "$@"\n')
-        monkeypatch.setattr("ethevals.sandboxes.runner_exec", slow_reader)
-
-        async def proof():
-            box = ChainBox(name)
-            docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py",
-                   input='print(\'{"balance":{"passed":true,"reason":"Exact balance."}}\')\n')
-            assert await scripts.script_result("check", box) == {"balance": {"passed": True, "reason": "Exact balance."}}
-            for stream in ("stdout", "stderr"):
-                docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py",
-                       input=f'import sys\nsys.{stream}.write("x" * (2 * 1024 * 1024))\n')
-                with pytest.raises(SubmissionFailed, match="1 MiB"):
-                    await scripts.script_result("check", box)
-                assert len(await box.read_file(f"/eval/script.{stream}", text=False)) == 1048577
-            docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py", input='raise SystemExit(125)\n')
-            with pytest.raises(SubmissionFailed, match="check.py exited 125"):
-                await scripts.script_result("check", box)
-            docker("exec", name, "bash", "-c", "rm /eval/script.stdout; mkdir /eval/script.stdout")
-            with pytest.raises(RuntimeError, match="Cannot capture check script output"):
-                await scripts.script_result("check", box)
-
-        anyio.run(proof)
 
 
 def test_private_compose_network_blocks_host_and_keeps_chain_reachable(tmp_path):
@@ -150,7 +110,6 @@ fi
     evaluation = replace(evaluation, files={**evaluation.files,
                          "scorer/solution/run.sh": guard + evaluation.files["scorer/solution/run.sh"]})
     compose = prepare_compose(evaluation, tmp_path)
-    evaluation = prepare_eval(evaluation, tmp_path, compose)
     task = build_task(evaluation, config, check_player(evaluation, "reference"), check_grader(), "internet", 1, compose)
     log = eval(task, log_dir=str(tmp_path / "offline"), display="none", retry_on_error=0)[0]
     row = results_rows(log)[0]
@@ -232,7 +191,7 @@ def test_slow_setup_preserves_player_time(tmp_path):
     files = {**evaluation.files,
              "scorer/setup.py": b'import time; time.sleep(31); print(\'{"files": {}}\')',
              "scorer/check.py": b'print(\'{"ran":{"passed":true,"reason":"Player reached grading."}}\')'}
-    evaluation = replace(evaluation, files=files, discovered_checks={"check_script": ("script:ran",)})
+    evaluation = replace(evaluation, files=files)
     compose = prepare_compose(evaluation, tmp_path)
     player = replace(check_player(evaluation, "empty"), solver_for=lambda _: slow_player())
     task = build_task(evaluation, config, player, check_grader(), "internet", 1, compose)

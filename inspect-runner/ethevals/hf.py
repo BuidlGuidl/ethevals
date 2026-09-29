@@ -15,15 +15,16 @@ DEFAULT_REPO = "ethereum-foundation/hf-ethevals-dataset"
 
 
 def config_name(evaluation: Eval) -> str:
-    config = evaluation.scorers[0]
-    name = f"{evaluation.pillar}-{config.method}"
-    if config.method == "match":
+    config = evaluation.target
+    method = target_scorer_spec(config, evaluation.declaration.choices).scorer
+    name = f"{evaluation.pillar}-{method}"
+    if method == "match":
         name += f"-{config.location}"
         if config.numeric:
             name += "-numeric"
-    elif config.method == "pattern":
+    elif method == "pattern":
         name += "-" + hashlib.sha256(config.pattern.encode()).hexdigest()[:12]
-    if config.method != "choice" and not config.ignore_case:
+    if method != "choice" and not config.ignore_case:
         name += "-case"
     return name
 
@@ -48,12 +49,12 @@ def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
             skipped.append({"eval_id": evaluation.id, "reason": "not a quiz" if evaluation.declaration.type != "quiz"
                             else "vanilla mode is not declared"})
             continue
-        validate_hf_export(evaluation.declaration, evaluation.scorers, evaluation.id)
-        config = evaluation.scorers[0]
+        validate_hf_export(evaluation.declaration, evaluation.target, evaluation.id)
+        config = evaluation.target
         target = config.target
         if isinstance(target, list):
             target = target[0]
-        scorer = target_scorer_spec(config)
+        scorer = target_scorer_spec(config, evaluation.declaration.choices)
         name = config_name(evaluation)
         if name not in groups:
             fields = {"input": "input", "target": "target", "metadata": ["metadata"]}

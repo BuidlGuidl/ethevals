@@ -22,11 +22,6 @@ from support import run
 from ethevals.checks import mock_delay
 from support import build_task
 from ethevals.files import inline_file
-from ethevals.scorers import named_checks
-
-def scorer_yaml(text):
-    return yaml.safe_dump({"scorers": [yaml.safe_load(text)]})
-
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -40,7 +35,7 @@ def folder(tmp_path):
 
 @pytest.mark.parametrize("file,addition,key", [
     ("eval.yaml", "unexpected: true\n", "unexpected"),
-    ("scorer/scorer.yaml", "unexpected: true\n", "unexpected"),
+    ("scorer/target.yaml", "unexpected: true\n", "unexpected"),
     ("eval.yaml", "addresses: {registry: 0x1234}\n", "addresses"),
 ])
 def test_loader_rejects_unknown_keys(folder, file, addition, key):
@@ -54,25 +49,25 @@ def test_loader_rejects_unknown_keys(folder, file, addition, key):
 
 @pytest.mark.parametrize("target", ["8004", "1.10", "0x1234", '["8004", 42]'])
 def test_loader_rejects_numeric_targets(folder, target):
-    path = folder / "scorer/scorer.yaml"
-    path.write_text(f"scorers:\n  - kind: target\n    target: {target}\n")
+    path = folder / "scorer/target.yaml"
+    path.write_text(f"target: {target}\n")
     with pytest.raises(ValueError) as error:
         load_eval(folder, load_config())
     assert f"{path}: target" in str(error.value)
 
 
 def test_loader_requires_scorer_file(folder):
-    path = folder / "scorer/scorer.yaml"
+    path = folder / "scorer/target.yaml"
     path.unlink()
     with pytest.raises(ValueError) as error:
         load_eval(folder, load_config())
-    assert str(path) in str(error.value)
+    assert str(path.parent) in str(error.value)
 
 
 def test_loader_preserves_target_and_prompt(folder):
     (folder / "workspace/.gitkeep").unlink()
     (folder / "eval.yaml").write_text("type: quiz\nmotivation: Test a literal answer.\nprompt: Say hello.\nmodes: [internet]\n")
-    (folder / "scorer/scorer.yaml").write_text(scorer_yaml('kind: target\ntarget: ["hello", "hi"]\n'))
+    (folder / "scorer/target.yaml").write_text('target: ["hello", "hi"]\n')
     (folder / "workspace/hello.txt").write_text("public workspace")
     (folder / "scorer/secret.txt").write_text("private scorer")
     sample = load_eval(folder, load_config()).sample()
@@ -124,8 +119,8 @@ def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
 
 @pytest.mark.parametrize("method,answer,expected", [("pattern", "ERC 8004", True), ("pattern", "ERC 20", False), ("match", "20", False)])
 def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected):
-    path = folder / "scorer/scorer.yaml"
-    path.write_text(scorer_yaml('kind: target\nname: number\ntarget: "8004"\nmethod: ' + method + ('\npattern: "ERC ([0-9]+)"\n' if method == "pattern" else "\n")))
+    path = folder / "scorer/target.yaml"
+    path.write_text('name: number\ntarget: "8004"\nmethod: ' + method + ('\npattern: "ERC ([0-9]+)"\n' if method == "pattern" else "\n"))
     config = load_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", answer)])
@@ -135,7 +130,7 @@ def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected
     assert row["checks"]["number"]["passed"] is expected
 
 
-@scorer(metrics=[accuracy()])
+@scorer(metrics={"*": [accuracy()]})
 def with_grader(underlying):
 
     async def score(state, target):
@@ -197,7 +192,7 @@ def test_working_limit_is_a_failed_check(folder, tmp_path):
 
 def test_choice_target_list_accepts_either_letter(folder, tmp_path):
     (folder / "eval.yaml").write_text("type: quiz\nmotivation: Check accepted alternatives.\nprompt: Select a greeting.\nmodes: [internet]\nchoices: [hello, hi, goodbye]\n")
-    (folder / "scorer/scorer.yaml").write_text(scorer_yaml('kind: target\nmethod: choice\ntarget: ["A", "B"]\n'))
+    (folder / "scorer/target.yaml").write_text('target: ["A", "B"]\n')
     config = load_config()
     task = build_task(load_eval(folder, config), config, None, "internet", "reference", 1)
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", "ANSWER: B")])
@@ -226,9 +221,9 @@ def cli(*args):
 
 @pytest.mark.parametrize("pattern,reference", [("ERC ([0-9]+)", "ERC 8004"), ("ERC-?([0-9]+)", "ERC-8004")])
 def test_pattern_check_through_cli(folder, tmp_path, pattern, reference):
-    (folder / "scorer/scorer.yaml").write_text(scorer_yaml(
-        f'kind: target\ntarget: "8004"\nmethod: pattern\npattern: "{pattern}"\nreference: "{reference}"\n'
-    ))
+    (folder / "scorer/target.yaml").write_text(
+        f'target: "8004"\nmethod: pattern\npattern: "{pattern}"\nreference: "{reference}"\n'
+    )
     output = tmp_path / "results"
     for invocation in range(2):
         if invocation:
@@ -241,27 +236,6 @@ def test_pattern_check_through_cli(folder, tmp_path, pattern, reference):
         assert [row["status"] for row in reference_rows] == ["passed"] * (invocation + 1)
         assert [row["status"] for row in empty_rows] == ["failed"] * (invocation + 1)
     assert len(list((output / "reference/logs").rglob("*.eval"))) == 2
-
-
-def test_check_reruns_changed_scorer(folder, tmp_path, monkeypatch):
-    from ethevals.cli import main
-    from ethevals.scorers import SCORERS
-    from dataclasses import replace
-    from inspect_ai.scorer import Score
-
-    monkeypatch.setattr(sys, "argv", ["ethevals", "check", "--evals", str(folder),
-                                    "--epochs", "1", "--output", str(tmp_path / "results")])
-    assert main() == 0
-
-    def always_pass(config, folder):
-        async def score(state, target, submission=None):
-            return Score(value="C", metadata={"checks": {config.name: {"passed": True, "reason": "Broken scorer."}}})
-        return score
-
-    monkeypatch.setitem(SCORERS, "target", replace(SCORERS["target"], build=always_pass))
-    assert main() == 1
-    empty = json.loads((tmp_path / "results/empty/rows.jsonl").read_text())
-    assert empty["checks"] == {"erc_number": {"passed": True, "reason": "Broken scorer."}}
 
 
 def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_path, monkeypatch):

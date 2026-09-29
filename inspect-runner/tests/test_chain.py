@@ -4,7 +4,6 @@ import threading
 from pathlib import Path
 
 import pytest
-from inspect_ai.util import ExecResult
 
 from ethevals.images import rpc_filter
 from ethevals.loader import load_eval
@@ -216,10 +215,9 @@ def test_act_requires_check_script_and_allows_declared_chain_file(tmp_path):
     shutil.copytree(root / "evals/transactions/send-six-decimal-token", folder)
     (folder / "workspace/chain.json").write_text("declared input")
     assert load_eval(folder, load_config()).files["workspace/chain.json"] == b"declared input"
-    (folder / "scorer/scorer.yaml").write_text("scorers:\n  - kind: tests\n")
     (folder / "scorer/tests").mkdir()
     (folder / "scorer/tests/Test.t.sol").write_text("contract Test {}")
-    with pytest.raises(ValueError, match="act evals require check_script"):
+    with pytest.raises(ValueError, match="scorer files do not match type act"):
         load_eval(folder, load_config())
 
 
@@ -229,50 +227,6 @@ def test_compose_rejects_private_network_with_host_gateway(tmp_path):
     del data["networks"]["private"]["driver_opts"]
     with pytest.raises(ValueError, match="inhibit_ipv4"):
         validate_compose(tmp_path / "compose.yaml", stock=True, data=yaml.safe_dump(data).encode())
-
-
-def test_script_failure_includes_stderr_tail():
-    import anyio
-    from inspect_ai.util import ExecResult
-    from ethevals.check_script import script_result
-    from ethevals.scoring_base import SubmissionFailed
-
-    class Box:
-        async def exec(self, command, **kwargs):
-            if "/usr/bin/test" in command or "/sys/fs/cgroup/memory.events" in command:
-                return ExecResult(success=True, returncode=0, stdout="oom 0\noom_kill 0\n", stderr="")
-            return ExecResult(success=False, returncode=1, stdout="", stderr="")
-
-        async def read_file(self, path, **kwargs):
-            if path.endswith("status"):
-                return "1"
-            return b"" if path.endswith("stdout") else b"x" * 6000 + b"\nValueError: bad setup amount"
-
-    with pytest.raises(SubmissionFailed, match="ValueError: bad setup amount") as error:
-        anyio.run(script_result, "setup", Box())
-    assert len(str(error.value)) < 4200
-
-
-def test_failed_reference_discovery_names_checks(tmp_path, monkeypatch):
-    from dataclasses import replace
-    from inspect_ai import Task, eval
-    from inspect_ai.model import get_model
-    from ethevals.preparation import reference_checks, no_player
-    from ethevals.scorers import SCORERS, EVALUATIONS
-
-    evaluation = load_eval(Path(__file__).resolve().parents[2] / "evals/transactions/send-six-decimal-token", load_config())
-    EVALUATIONS[(evaluation.id, evaluation.hash)] = evaluation
-
-    async def discover(*args):
-        return {"script:balance": {"passed": False, "reason": "Recipient holds zero."}}
-
-    monkeypatch.setitem(SCORERS, "check_script", replace(SCORERS["check_script"], discover=discover))
-    sample = evaluation.sample()
-    sample.files = None
-    task = Task(dataset=[sample], solver=no_player(), model=get_model("mockllm/model"),
-                scorer=reference_checks(evaluation.id, evaluation.hash))
-    log = eval(task, log_dir=str(tmp_path / "logs"), display="none", retry_on_error=0)[0]
-    assert "script:balance: Recipient holds zero." in log.samples[0].error.message
 
 
 def test_docker_build_error_is_local_to_eval_and_keeps_diagnostics(tmp_path, monkeypatch):
@@ -328,18 +282,3 @@ def test_control_reads_fragmented_reply_to_eof(tmp_path, monkeypatch, capsys):
     finally:
         thread.join(5)
         server.close()
-
-
-def test_earlier_chain_oom_does_not_change_wrapper_failure(monkeypatch):
-    import anyio
-    from ethevals.check_script import script_result
-
-    class Box:
-        async def exec(self, command, **kwargs):
-            if "/sys/fs/cgroup/memory.events" in command:
-                return ExecResult(success=True, returncode=0, stdout="oom 8\noom_kill 3\n", stderr="")
-            code = 125 if "/usr/bin/timeout" in command else 0
-            return ExecResult(success=code == 0, returncode=code, stdout="", stderr="")
-
-    with pytest.raises(RuntimeError, match="Cannot capture check script output"):
-        anyio.run(script_result, "check", Box())

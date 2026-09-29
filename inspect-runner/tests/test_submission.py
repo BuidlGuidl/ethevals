@@ -15,7 +15,7 @@ from ethevals.loader import load_eval
 from ethevals.rows import results_rows
 from support import run
 from ethevals.sandboxes import IMAGES, validate_compose
-from ethevals.scorers import forge_checks, rubric_evidence
+from ethevals.scorers import forge_checks
 from support import build_task
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -81,39 +81,24 @@ def test_eval_root_cannot_be_a_symlink(tmp_path):
     "Error: Encountered invalid solc version =0.8.99. No solc version exists that matches.",
     "CompilerError: Stack too deep. Try compiling with --via-ir.",
 ])
-def test_submission_compile_errors_fill_the_fixed_check_set(diagnostic):
+def test_submission_compile_errors_record_one_check(diagnostic):
     reason = diagnostic + (" Scoring is offline. Available solc versions: 0.8.30." if "solc version" in diagnostic else "")
-    assert forge_checks("", diagnostic, 1, [CHECK]) == {
+    assert forge_checks("", diagnostic, 1) == {
         "forge:compile": {"passed": False, "reason": reason},
-        CHECK: {"passed": False, "reason": reason},
     }
 
 
-def test_pass_compile_and_setup_failure_have_the_same_checks():
+def test_pass_compile_and_setup_failure_record_observed_checks():
     setup = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {
         "setUp()": {"status": "Failure", "reason": "EvmError: Revert"}}}})
-    assert forge_checks(PASS, "", 0, [CHECK]) == {
+    assert forge_checks(PASS, "", 0) == {
         "forge:compile": {"passed": True, "reason": "Compilation passed."},
         CHECK: {"passed": True, "reason": "Test passed."}}
-    assert forge_checks("", "CompilerError: Stack too deep", 1, [CHECK]) == {
-        "forge:compile": {"passed": False, "reason": "CompilerError: Stack too deep"},
-        CHECK: {"passed": False, "reason": "CompilerError: Stack too deep"}}
-    assert forge_checks(setup, "", 1, [CHECK]) == {
+    assert forge_checks("", "CompilerError: Stack too deep", 1) == {
+        "forge:compile": {"passed": False, "reason": "CompilerError: Stack too deep"}}
+    assert forge_checks(setup, "", 1) == {
         "forge:compile": {"passed": True, "reason": "Compilation passed."},
-        CHECK: {"passed": False, "reason": "EvmError: Revert"}}
-
-
-def test_agent_test_functions_do_not_become_checks():
-    output = json.loads(PASS)
-    output["src/Token.sol:Extra"] = {"test_results": {"testFree()": {"status": "Success"}}}
-    assert forge_checks(json.dumps(output), "", 0, [CHECK]) == {
-        "forge:compile": {"passed": True, "reason": "Compilation passed."},
-        CHECK: {"passed": True, "reason": "Test passed."}}
-
-
-def test_rubric_reports_omitted_dependency_files():
-    assert rubric_evidence({"lib/custom/Huge.sol": b"x" * 100001, "src/Token.sol": b"contract Token {}"}) == (
-        {"src/Token.sol": "contract Token {}"}, ["lib/custom/Huge.sol"])
+        "forge:test/Token.t.sol:TokenTest:setUp()": {"passed": False, "reason": "EvmError: Revert"}}
 
 
 def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
@@ -134,7 +119,7 @@ def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
     assert len(list((output / "logs").glob("*.eval"))) == 2
     success, rows = run([evaluation], config, output, answer="reference", epochs=1, retry_errors=True)
     assert (success, rows[0]["status"], rows[0]["attempt"]) == (False, "error", 3)
-    assert set(rows[0]["checks"]) == {"erc_number"}
+    assert rows[0]["checks"] == {}
     success, rows = run([evaluation], config, output, answer="reference", epochs=1)
     assert (success, rows[0]["attempt"]) == (True, 3)
 
@@ -174,31 +159,6 @@ def test_unknown_harness_fails_at_config_load(tmp_path):
     path.write_text((ROOT / "inspect-runner/ethevals/config.yaml").read_text().replace("harness: claude_code", "harness: absent"))
     with pytest.raises(ValueError, match="unknown harness 'absent'"):
         load_config(path)
-
-
-def test_workspace_failure_fills_all_eval_checks(tmp_path, monkeypatch):
-    import ethevals.scorers as scorers
-    config = load_config()
-    config.models["opus"].model = "mockllm/model"
-    config.grader.model = "mockllm/model"
-    task = build_task(load_eval(BUILD, config), config, "opus", "internet", None, 1)
-    task.dataset[0].sandbox = task.dataset[0].files = None
-    task.solver = generate()
-
-    async def broken_workspace():
-        from ethevals.scoring_base import SubmissionFailed
-        raise SubmissionFailed("Workspace contains a link or special file: src/Token.sol")
-
-    async def stopped():
-        pass
-
-    monkeypatch.setattr(scorers, "stop_agent", stopped)
-    monkeypatch.setattr(scorers, "workspace_files", broken_workspace)
-    row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    failure = {"passed": False, "reason": "Workspace contains a link or special file: src/Token.sol"}
-    assert row["checks"] == {"forge:compile": failure, CHECK: failure,
-                             "rubric:uses_openzeppelin": failure, "rubric:protects_holders": failure}
-    assert (row["status"], row["grader_tokens"]) == ("failed", 0)
 
 
 def test_loaded_eval_uses_captured_files(tmp_path):

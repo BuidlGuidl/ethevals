@@ -1,41 +1,32 @@
-"""Shared types for scorer kinds."""
-from dataclasses import dataclass, field
-from typing import Callable
-
+"""Check scores and the common scoring failure boundary."""
+from inspect_ai.event import SampleLimitEvent
+from inspect_ai.log import transcript
 from inspect_ai.scorer import Score
-
-from .config import Declaration
+from inspect_ai.util import OutputLimitExceededError
 
 
 def checks_score(checks):
-    return Score(value="C" if all(c["passed"] for c in checks.values()) else "I", metadata={"checks": checks})
-
-
-def failed_checks(names, reason):
-    return {name: {"passed": False, "reason": reason} for name in names}
-
-
-@dataclass
-class Submission:
-    captures: dict = field(default_factory=dict)
+    return Score(value={name: "C" if check["passed"] else "I" for name, check in checks.items()},
+                 metadata={"reasons": {name: " ".join(check["reason"].split()) for name, check in checks.items()}})
 
 
 class SubmissionFailed(Exception):
     pass
 
 
-@dataclass(frozen=True)
-class ScorerKind:
-    schema: type[Declaration]
-    build: Callable
-    validate: Callable
-    sample_fields: Callable = lambda config: {}
-    reference: Callable = lambda config, declaration: ""
-    free_check: bool = True
-    workspace: Callable = lambda config: ({}, "")
-    names: Callable = lambda config, evaluation: []
-    discover: Callable | None = None
-    capture: Callable | None = None
-    setup: Callable | None = None
-    cache_inputs: Callable = lambda images: []
-    requires: tuple[str, ...] = ()
+def scoring_boundary(name, score):
+    async def checked(state, target):
+        limit = next((event for event in reversed(transcript().events) if isinstance(event, SampleLimitEvent)), None)
+        try:
+            if limit:
+                if limit.type == "operator" or (limit.type == "time" and
+                        limit.working_start < state.metadata["working_limit_seconds"]):
+                    raise RuntimeError(f"Epoch stopped by {limit.type} before its working limit. {limit.message}")
+                raise SubmissionFailed(f"Epoch reached {limit.type} limit {limit.limit}. {limit.message}")
+            return await score(state, target)
+        except OutputLimitExceededError:
+            reason = "Submission output was too large. Inspect allows 10 MiB per exec stream."
+        except SubmissionFailed as error:
+            reason = str(error)
+        return checks_score({name: {"passed": False, "reason": reason}})
+    return checked

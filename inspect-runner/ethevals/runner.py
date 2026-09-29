@@ -13,19 +13,25 @@ from .config import Config, read_yaml
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
 from .planning import plan, budget_check
-from .scorers import named_checks, EVALUATIONS, SCORERS, check_names, rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS
+from .scorers import EVALUATIONS, SCORERS, rubric_budget, rubric_questions, GRADER_CALLS, GRADER_CONFIG
+from .check_script import CHECK_SECONDS
 from .sandboxes import compose_file
-from .preparation import prepare_eval, prepare_compose, check_capacity
+from .preparation import prepare_compose, check_capacity
 from .images.tag import image_inputs, image_tag
 
 
 def task_limits(evaluation, config):
     working_limit = evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit)
     time_limit = working_limit * 3
-    scoring_limit = scoring_seconds(evaluation) + SCORING_OVERHEAD_SECONDS
-    if scoring_seconds(evaluation) and scoring_limit >= time_limit / 2:
+    forge_seconds = 180
+    questions = len(rubric_questions(evaluation.files)) if "rubric" in evaluation.scorer_kinds else 0
+    scoring_seconds = ((forge_seconds if "tests" in evaluation.scorer_kinds else 0)
+                       + (CHECK_SECONDS if "check_script" in evaluation.scorer_kinds else 0)
+                       + questions * GRADER_CALLS * GRADER_CONFIG.timeout)
+    scoring_limit = scoring_seconds + 120
+    if scoring_seconds and scoring_limit >= time_limit / 2:
         raise ValueError(f"Scoring needs {scoring_limit} seconds, but Inspect allows {time_limit / 2}.")
-    return working_limit, time_limit, scoring_limit
+    return working_limit, time_limit, scoring_limit, forge_seconds
 
 
 def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
@@ -41,10 +47,10 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
         sample.sandbox = SandboxEnvironmentSpec(type="ethevals_docker", config=str(compose))
         images = {name: service["image"] for name, service in read_yaml(compose)["services"].items()}
         limit = read_yaml(compose)["services"]["default"]["mem_limit"]
-        sample.input += f"\nYour container has a {limit} memory limit, shared by the CLI and its tools. Exceeding it fails the epoch's checks.\n"
+        sample.input += f"\nYour container has a {limit} memory limit, shared by the CLI and its tools. Exceeding it can end the epoch with an error.\n"
     else:
         sample.files = None
-    working_limit, time_limit, scoring_limit = task_limits(evaluation, config)
+    working_limit, time_limit, scoring_limit, forge_seconds = task_limits(evaluation, config)
     metadata = {**sample.metadata, **player.metadata, **grader.metadata,
                 "created_at": datetime.now(timezone.utc).isoformat(), "mode": mode,
                 "images": images,
@@ -54,19 +60,16 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
                 "search_limit": config.search_limit if mode == "internet" and config.search_provider else 0,
                 "search_price_usd": config.search_price_usd,
-                "free_check": player.free_check,
                 "working_limit_seconds": working_limit, "time_limit_seconds": time_limit,
-                "scoring_limit_seconds": scoring_limit,
-                "check_names": check_names(evaluation, player.free_check)}
+                "scoring_limit_seconds": scoring_limit}
     sample.metadata = dict(metadata)
-    if any(SCORERS[item.kind].discover and item.kind not in evaluation.discovered_checks for item in evaluation.scorers):
-        raise ValueError("Discover reference checks with prepare_eval before building a task.")
     EVALUATIONS[(evaluation.id, evaluation.hash)] = evaluation
     identity = hashlib.sha256(json.dumps(epoch_identity(metadata, 0)).encode()).hexdigest()[:16]
     return Task(
         name=f"{evaluation.id.replace('/', '-')}-{identity}",
         version=evaluation.hash, dataset=[sample], solver=player.solver_for(evaluation),
-        scorer=named_checks(evaluation.id, evaluation.hash),
+        scorer=[SCORERS[kind](evaluation.id, evaluation.hash, **({"timeout": forge_seconds} if kind == "tests" else {}))
+                for kind in evaluation.scorer_kinds if not (player.free_check and kind == "rubric")],
         model=player.model, epochs=epochs,
         working_limit=working_limit, time_limit=time_limit,
         cost_limit=config.cost_limit, metadata=metadata,
@@ -88,7 +91,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         raise ValueError("Budget exceeded. No player or grader ran.")
     if not answer and initial.admitted and not os.environ.get("OPENROUTER_API_KEY"):
         raise ValueError("OPENROUTER_API_KEY is required for missing paid epochs")
-    prepared, discovery_errors = {}, []
+    prepared, preparation_errors = {}, []
     if any(item.actor.sandbox_for(item.evaluation) for item in initial.admitted):
         check_capacity(config)
     for evaluation in evals:
@@ -97,10 +100,10 @@ def run(evals: list[Eval], config: Config, output: Path, *,
             continue
         try:
             compose = prepare_compose(evaluation, output) if any(item.actor.sandbox_for(evaluation) for item in work) else None
-            prepared[evaluation.id] = (prepare_eval(evaluation, output, compose), compose)
+            prepared[evaluation.id] = (evaluation, compose)
         except (ValueError, RuntimeError) as error:
-            discovery_errors.append({"eval_id": evaluation.id, "eval_hash": evaluation.hash, "error": str(error)})
-            logging.getLogger(__name__).error("%s: check discovery failed: %s", evaluation.id, error)
+            preparation_errors.append({"eval_id": evaluation.id, "eval_hash": evaluation.hash, "error": str(error)})
+            logging.getLogger(__name__).error("%s: container preparation failed: %s", evaluation.id, error)
     tasks = []
     if prepared:
         players, grade = select_actors(config, models, modes, answer, delay)
@@ -115,9 +118,9 @@ def run(evals: list[Eval], config: Config, output: Path, *,
             task.metadata.update(epoch=epoch, attempt=attempt)
             tasks.append(task_with(task, name=f"{task.name}-epoch-{epoch}"))
     error_path = output / "discovery-errors.json"
-    if discovery_errors:
+    if preparation_errors:
         previous_errors = json.loads(error_path.read_text()) if error_path.exists() else []
-        error_path.write_text(json.dumps(previous_errors + discovery_errors, indent=2) + "\n")
+        error_path.write_text(json.dumps(previous_errors + preparation_errors, indent=2) + "\n")
     try:
         if tasks:
             concurrency = min(config.max_tasks, config.max_samples)
@@ -128,6 +131,6 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         rows = [row for row in export_rows(output, previous) if epoch_identity(row, row["epoch"]) in initial.selected]
     admitted = {epoch_identity(row, row["epoch"]): row["attempt"] for row in report["missing"]}
     actual = {epoch_identity(row, row["epoch"]): row for row in rows}
-    return (not discovery_errors and admitted.keys() <= actual.keys()
+    return (not preparation_errors and admitted.keys() <= actual.keys()
             and all(actual[key]["status"] != "error" and actual[key]["attempt"] == attempt
                     for key, attempt in admitted.items())), rows

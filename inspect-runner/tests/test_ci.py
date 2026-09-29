@@ -87,10 +87,10 @@ def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path
     saved = rows.read_bytes()
 
     def forbidden(*args, **kwargs):
-        raise AssertionError("A completed store cannot run a model or discovery")
+        raise AssertionError("A completed store cannot run a model or prepare containers")
 
     monkeypatch.setattr("ethevals.runner.eval", forbidden)
-    monkeypatch.setattr("ethevals.runner.prepare_eval", forbidden)
+    monkeypatch.setattr("ethevals.runner.prepare_compose", forbidden)
     success, repeated = run([quiz], config, tmp_path / "second", answer="reference", rows_file=rows, epochs=3)
     assert (success, repeated) == (True, complete)
     assert rows.read_bytes() == saved
@@ -222,18 +222,18 @@ def test_release_script_exports_without_upload(tmp_path):
     assert sorted(p.parent.name for p in (tmp_path / "hf/data").glob("*/test.jsonl")) == ["concepts-choice", "concepts-match-exact"]
 
 
-def test_failed_discovery_stays_missing_without_using_attempts(tmp_path, monkeypatch):
+def test_failed_preparation_stays_missing_without_using_attempts(tmp_path, monkeypatch):
     config = load_config()
     build = load_eval(ROOT / "evals/building/erc20-points-token", config)
     players, grade = select_actors(config, answer="reference")
 
     def failed(*args):
-        raise RuntimeError("Reference compilation failed")
+        raise RuntimeError("Docker build failed")
 
-    monkeypatch.setattr("ethevals.runner.prepare_eval", failed)
+    monkeypatch.setattr("ethevals.runner.prepare_compose", failed)
     success, rows = run([build], config, tmp_path, answer="reference", epochs=1)
     assert (success, rows) == (False, [])
-    assert json.loads((tmp_path / "discovery-errors.json").read_text())[0]["error"] == "Reference compilation failed"
+    assert json.loads((tmp_path / "discovery-errors.json").read_text())[0]["error"] == "Docker build failed"
     report = plan([build], config, players, read_rows(tmp_path / "rows.jsonl"), epochs=1).report
     assert [(r["eval_id"], r["attempt"], r["remaining_attempts"]) for r in report["missing"]] == [
         ("building/erc20-points-token", 1, 2)]

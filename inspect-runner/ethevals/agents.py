@@ -3,14 +3,9 @@ from inspect_ai.model import Model
 from inspect_ai.solver import multiple_choice, solver
 from inspect_swe import claude_code, codex_cli, opencode
 import json
-import logging
-import re
-import anyio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
-from inspect_ai.util import sandbox
-from .sandboxes import memory_events, oom_killed, runner_exec
 
 
 @dataclass(frozen=True)
@@ -98,28 +93,9 @@ def internet_solver(harness: str, config, model):
     agent = AGENTS[harness].build(config, model)
 
     async def solve(state, generate):
-        box = sandbox("default")
-        before = await memory_events(box)
-        try:
-            if state.choices:
-                async def invoke(state, **kwargs):
-                    return await agent(state, generate)
-                return await multiple_choice()(state, invoke)
-            return await agent(state, generate)
-        except Exception as error:
-            if not (re.match(r"^Error executing (?:claude code|codex cli|opencode) agent 137:", str(error))
-                    and await oom_killed(box, before)):
-                raise
-            state.metadata["agent_oom"] = True
-            return state
-        finally:
-            # Record the agent session's peak before scoring stops its processes.
-            # A failed measurement must not replace the session's result.
-            with anyio.move_on_after(5, shield=True):
-                try:
-                    peak = await runner_exec(box, ["/bin/cat", "/sys/fs/cgroup/memory.peak"], timeout=5)
-                    if peak.success:
-                        state.metadata["agent_memory_peak_bytes"] = int(peak.stdout.strip())
-                except Exception:
-                    logging.getLogger(__name__).warning("Cannot read agent memory peak.", exc_info=True)
+        if state.choices:
+            async def invoke(state, **kwargs):
+                return await agent(state, generate)
+            return await multiple_choice()(state, invoke)
+        return await agent(state, generate)
     return solve

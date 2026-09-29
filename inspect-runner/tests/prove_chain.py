@@ -14,7 +14,7 @@ from inspect_ai.util import sandbox
 from ethevals.checks import check_player, check_grader
 from ethevals.config import load_config
 from ethevals.loader import load_eval
-from ethevals.preparation import prepare_compose, prepare_eval
+from ethevals.preparation import prepare_compose
 from ethevals.runner import build_task
 from ethevals.rows import export_rows
 from ethevals.sandboxes import runner_exec
@@ -85,7 +85,6 @@ def run_proof(output, variants=None):
     root = Path(__file__).resolve().parents[2]
     evaluation = load_eval(root / "evals/transactions/send-six-decimal-token", config)
     compose = prepare_compose(evaluation, output)
-    evaluation = prepare_eval(evaluation, output, compose)
     tasks = []
     for variant in variants or ("reference", "wrong", "crash", "missing", "cheat", "pending"):
         player = check_player(evaluation, "empty")
@@ -97,7 +96,10 @@ def run_proof(output, variants=None):
     rows = export_rows(output)
     for row in rows:
         assert row["status"] == ("passed" if row["answer_kind"] == "reference" else "failed"), row
-        assert set(row["checks"]) == {"script:agent_sender", "script:recipient_balance"}
+        names = ({"script:check"} if row["answer_kind"] == "crash" else
+                 {"script:recipient_balance"} if row["answer_kind"] == "missing" else
+                 {"script:agent_sender", "script:recipient_balance"})
+        assert set(row["checks"]) == names
         if row["answer_kind"] == "wrong":
             assert row["checks"]["script:recipient_balance"] == {"passed": False, "reason": "Recipient holds 13000000 base units; expected 12500000."}
         if row["answer_kind"] == "pending":

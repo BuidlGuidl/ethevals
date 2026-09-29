@@ -7,7 +7,7 @@ from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
 
 from .actors import Player, Grader, quiz_solver
-from .scorers import SCORERS
+from .scorers import target_reference
 from .check_script import run_solution
 
 
@@ -19,7 +19,7 @@ class CheckRun:
 
 def quiz_check_solver(evaluation, answer):
     replies = {
-        "reference": "\n".join(SCORERS[item.kind].reference(item, evaluation.declaration) for item in evaluation.scorers),
+        "reference": target_reference(evaluation.target, evaluation.declaration),
         "empty": "", "default": "Default output from mockllm/model",
     }
     return CheckRun(quiz_solver(evaluation), replies[answer])

@@ -1,5 +1,0 @@
-scorers:
-  - kind: target
-    name: wei_conversion
-    method: choice
-    target: "C"

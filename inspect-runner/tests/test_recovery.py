@@ -139,14 +139,14 @@ def test_run_prepares_only_initially_admitted_evals(tmp_path, monkeypatch):
     config = small_config()
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     deferred = load_eval(ROOT / "evals/concepts/wei-per-ether", config)
-    original = runner.prepare_eval
+    original = runner.prepare_compose
 
     def prepare(evaluation, *args):
         if evaluation.id == deferred.id:
             raise RuntimeError("Deferred eval was prepared")
         return original(evaluation, *args)
 
-    monkeypatch.setattr(runner, "prepare_eval", prepare)
+    monkeypatch.setattr(runner, "prepare_compose", prepare)
     success, rows = run([evaluation, deferred], config, tmp_path, answer="reference", epochs=1, wall_seconds=2000)
     assert (success, [(row["eval_id"], row["status"]) for row in rows]) == (
         True, [("concepts/agent-registries", "passed")])
@@ -239,7 +239,7 @@ def test_late_publication_retains_current_source_and_newer_rows(tmp_path, monkey
 def test_budget_stops_before_preparation(tmp_path, monkeypatch):
     config = small_config()
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    monkeypatch.setattr("ethevals.runner.prepare_eval", lambda *a: pytest.fail("Preparation ran"))
+    monkeypatch.setattr("ethevals.runner.prepare_compose", lambda *a: pytest.fail("Preparation ran"))
     with pytest.raises(ValueError, match="Budget exceeded"):
         run([evaluation], config, tmp_path, budget=1, epochs=1, modes=["vanilla"])
     report = json.loads((tmp_path / "plan.json").read_text())

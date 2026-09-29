@@ -6,16 +6,40 @@ import pytest
 import yaml
 from inspect_ai import eval
 
-from ethevals.checks import check_grader, check_player
+from ethevals.checks import check_grader
 from ethevals.config import load_config
 from ethevals.files import content_hash
 from ethevals.loader import load_eval
-from ethevals.preparation import prepare_compose, prepare_eval
+from ethevals.preparation import prepare_compose
 from ethevals.rows import results_rows
 from ethevals.runner import build_task, run
 from test_docker import ROOT, containers
 
 pytestmark = pytest.mark.docker
+
+
+@pytest.mark.parametrize("script,status,reason", [
+    (b'print("x" * (11 * 1024 * 1024))', "failed", "malformed JSON"),
+    (b'print("not JSON")', "failed", "malformed JSON"),
+    (b'raise ValueError("bad amount")', "failed", "ValueError: bad amount"),
+    (b'import os, signal; os.kill(os.getpid(), signal.SIGKILL)', "error", "exit code 137"),
+])
+def test_check_script_failures_through_task(tmp_path, script, status, reason):
+    import shutil
+    config = load_config()
+    folder = tmp_path / "transactions/script"
+    shutil.copytree(ROOT / "evals/transactions/send-six-decimal-token", folder)
+    (folder / "scorer/check.py").write_bytes(script)
+    evaluation = load_eval(folder, config)
+    success, rows = run([evaluation], config, tmp_path / "results", answer="empty", epochs=1)
+    row = rows[0]
+    assert (success, row["status"]) == (status != "error", status)
+    if status == "failed":
+        assert set(row["checks"]) == {"script:check"}
+        assert row["checks"]["script:check"]["passed"] is False
+        assert reason in row["checks"]["script:check"]["reason"]
+    else:
+        assert reason in row["error_reason"]
 
 
 @pytest.mark.parametrize("local_oom,cli_code", [(True, 137), (False, 137), (True, 1)])
@@ -48,124 +72,8 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
     monkeypatch.setitem(agents.AGENTS, "claude_code", agents.Harness(lambda *a, **kw: killed, "proof"))
     task = build_task(evaluation, config, player(config, "opus", "internet"), check_grader(), "internet", 1, compose)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert (row["status"], row["passed"]) == (("failed", False) if local_oom and cli_code == 137 else ("error", None)), row
-    assert isinstance(row["agent_memory_peak_bytes"], int)
-    assert row["agent_memory_peak_bytes"] > 0
-    if local_oom:
-        assert row["agent_memory_peak_bytes"] >= 128 * 1024 * 1024
-    if local_oom and cli_code == 137:
-        assert {c["reason"] for c in row["checks"].values()} == {"Agent exceeded its container memory limit."}
-    else:
-        assert f"Error executing claude code agent {cli_code}" in row["error_reason"]
-
-
-def test_killed_check_wrapper_after_setup_exports_error(tmp_path):
-    from inspect_ai.solver import solver
-    from inspect_ai.util import sandbox
-    config = load_config()
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
-    compose = prepare_compose(evaluation, tmp_path)
-    evaluation = prepare_eval(evaluation, tmp_path, compose)
-    files = {**evaluation.files, "scorer/check.py": b'import os, signal\n'
-             b'print(\'{"balance":{"passed":true,"reason":"Balance matches."}}\', flush=True)\n'
-             b'os.kill(os.getppid(), signal.SIGKILL)\n'}
-    evaluation = replace(evaluation, files=files, hash=content_hash(files))
-    compose = prepare_compose(evaluation, tmp_path)
-    task = build_task(evaluation, config, check_player(evaluation, "empty"), check_grader(), "internet", 1, compose)
-
-    @solver
-    def setup_succeeded():
-        async def solve(state, generate):
-            assert await sandbox("chain").read_file("/eval/script.status") == "0"
-            return state
-        return solve
-
-    task.solver = setup_succeeded()
-    row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
     assert (row["status"], row["passed"]) == ("error", None), row
-    assert "check.py wrapper exited 137 without a script status" in row["error_reason"]
-
-
-def test_scoring_deadline_kills_a_process_that_ignores_term(tmp_path):
-    import anyio
-    from ethevals.sandboxes import scoring_exec
-    from ethevals.scoring_base import SubmissionFailed
-    with containers(tmp_path) as boxes:
-        async def proof():
-            with pytest.raises(SubmissionFailed, match="Submission exceeded the scoring time limit"):
-                await scoring_exec(boxes["scorer"], ["/bin/sh", "-c", "trap '' TERM; while :; do sleep 1; done"], timeout=.1)
-        anyio.run(proof)
-
-
-@pytest.mark.parametrize("kind", ["build", "act", "host_kill"])
-def test_oom_during_grading_fails_fixed_checks(tmp_path, monkeypatch, kind):
-    import subprocess
-    import threading
-    import time
-    killed = []
-    watcher = None
-    config = load_config()
-    folder = "transactions/send-six-decimal-token" if kind == "act" else "building/erc20-points-token"
-    evaluation = load_eval(ROOT / "evals" / folder, config)
-    compose = prepare_compose(evaluation, tmp_path)
-    evaluation = prepare_eval(evaluation, tmp_path, compose)
-    document = yaml.safe_load(compose.read_bytes())
-    document["services"]["chain" if kind == "act" else "scorer"]["mem_limit"] = "128m"
-    files = dict(evaluation.files)
-    if kind == "act":
-        files["scorer/check.py"] = b"allocation = bytearray(512 * 1024 * 1024)\n"
-    evaluation = replace(evaluation, files=files, hash=content_hash(files))
-    compose = prepare_compose(evaluation, tmp_path)
-    compose.write_text(yaml.safe_dump(document))
-    if kind != "act":
-        from ethevals.scorers import prepare_forge as original
-        from ethevals.sandboxes import runner_exec
-
-        async def prepare(box, *args):
-            nonlocal watcher
-            await original(box, *args)
-            script = """
-compiler=$(find /home/agent/.svm -name 'solc-*' -type f | head -1)
-cp "$compiler" /tmp/real-solc
-cat > "$compiler" <<'SOLC'
-#!/bin/sh
-if [ "$1" = --version ]; then exec /tmp/real-solc "$@"; fi
-exec /usr/bin/perl -e '$allocation = "x" x (512 * 1024 * 1024); sleep 1'
-SOLC
-chmod +x "$compiler"
-"""
-            if kind == "host_kill":
-                script = script.replace('exec /usr/bin/perl -e \'$allocation = "x" x (512 * 1024 * 1024); sleep 1\'',
-                                        'echo $$ > /tmp/compiler.pid\nexec /bin/sleep 90')
-            result = await runner_exec(box, ["/bin/bash", "-c", script], user="root")
-            assert result.success, result.stderr
-            if kind == "host_kill":
-                def kill_from_host():
-                    for _ in range(100):
-                        ids = subprocess.run(["docker", "ps", "-q", "--filter", "label=com.docker.compose.service=scorer"],
-                                             capture_output=True, text=True, check=True).stdout.split()
-                        for container in ids:
-                            result = subprocess.run(["docker", "exec", "-u", "root", container, "sh", "-c",
-                                'test -f /tmp/compiler.pid && kill -9 "$(cat /tmp/compiler.pid)"'], capture_output=True)
-                            if result.returncode == 0:
-                                killed.append(container)
-                                return
-                        time.sleep(0.1)
-                watcher = threading.Thread(target=kill_from_host)
-                watcher.start()
-        monkeypatch.setattr("ethevals.scorers.prepare_forge", prepare)
-    task = build_task(evaluation, config, check_player(evaluation, "reference"), check_grader(), "internet", 1, compose)
-    log = eval(task, log_dir=str(tmp_path / "logs"), display="none", retry_on_error=0)[0]
-    row = results_rows(log)[0]
-    if kind == "host_kill":
-        watcher.join(timeout=20)
-        assert len(killed) == 1
-        assert (row["status"], row["passed"]) == ("error", None), row
-        assert "Forge exited 1" in row["error_reason"]
-        return
-    assert (row["status"], row["passed"]) == ("failed", False), row
-    assert len(row["checks"]) == (2 if kind == "act" else 8)
-    assert {check["reason"] for check in row["checks"].values()} == {"Submission exceeded the scorer memory limit."}
+    assert f"Error executing claude code agent {cli_code}" in row["error_reason"]
 
 
 def test_non_utf8_source_matches_real_forge_and_fails_checks(tmp_path):
@@ -179,7 +87,7 @@ def test_non_utf8_source_matches_real_forge_and_fails_checks(tmp_path):
             box = boxes["scorer"]
             await prepare_forge(box, {"src/BuilderPoints.sol": b"pragma solidity =0.8.30; contract BuilderPoints {}"}, original.files)
             await box.write_file("/workspace/src/BuilderPoints.sol", source)
-            return await forge(box)
+            return await forge(box, timeout=180)
         result = anyio.run(capture)
         assert result.returncode == 1
         assert "stream did not contain valid UTF-8" in result.stderr

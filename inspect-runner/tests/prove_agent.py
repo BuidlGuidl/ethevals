@@ -18,7 +18,7 @@ from ethevals.search import valid_search_result
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
 from support import build_task
-from ethevals.preparation import prepare_eval, prepare_compose
+from ethevals.preparation import prepare_compose
 
 
 def main():
@@ -92,7 +92,6 @@ console.log(JSON.stringify({matches, files, environments}));
     config.grader.model = "mockllm/model"
     evaluation = load_eval(Path(args.eval), config)
     compose = prepare_compose(evaluation, args.output)
-    evaluation = prepare_eval(evaluation, args.output, compose)
     task = build_task(evaluation, config, args.model, "internet", None, 1, compose)
     task.metadata.update(answer_kind=f"scripted_{args.answer}", cost_source="mock", grader_cost_source="mock")
     calls = 0
@@ -171,8 +170,9 @@ console.log(JSON.stringify({matches, files, environments}));
         return ModelOutput.from_content("mockllm/model", "Done.")
 
     def grade(messages, tools, tool_choice, config):
-        request = next(json.loads(message.text) for message in messages if message.text.startswith('{"files"'))
-        assert "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol" not in request["files"]
+        evidence = json.loads(messages[1].text)
+        assert "src/BuilderPoints.sol" in evidence
+        assert "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol" not in evidence
         passed = args.answer == "reference"
         return ModelOutput.from_content("mockllm/model", json.dumps({
             "passed": passed,

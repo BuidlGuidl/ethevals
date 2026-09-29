@@ -7,7 +7,7 @@ The root `pyproject.toml` installs the `ethevals` command.
 
 An eval lives at `evals/<pillar>/<name>/`.
 The pillar is `concepts`, `transactions`, `building`, or `security`.
-The folder contains `eval.yaml`, `workspace/`, and `scorer/scorer.yaml`.
+The folder contains `eval.yaml`, `workspace/`, and `scorer/`.
 An optional `compose.yaml` declares services for an internet epoch.
 Without it, the runner uses `images/stock.compose.yaml` for quizzes and builds.
 Act evals use `images/act.compose.yaml` with the shared chain service.
@@ -22,10 +22,16 @@ The internet mode supports Claude Code, Codex CLI, and OpenCode. The skills mode
 The folder path supplies the eval ID and pillar.
 Targets stay under `scorer/`.
 
-`scorer/scorer.yaml` requires a `scorers` list, including for a single kind.
-A target uses `scorers: [{kind: target, target: "8004"}]`.
-A build can use `scorers: [{kind: tests}, {kind: rubric}]`.
-Each kind appears once. Every emitted check must pass for the epoch to pass.
+The files under `scorer/` select each kind:
+
+| File | Type and scorer |
+| --- | --- |
+| `target.yaml` | Quiz target, plus Inspect match or pattern settings. |
+| `tests/` | Build tests run by Forge. |
+| `rubric.md` | Build questions graded after tests. Requires `tests/`. |
+| `check.py` | Act check script. |
+
+Every emitted check must pass for the epoch to pass.
 A target is a nonempty string or a list of nonempty strings. Any listed target can pass.
 Vanilla quizzes allow only one target or a single-item list, because stock Inspect must preserve the exported answer.
 Choices cannot contain blank or whitespace-only entries.
@@ -37,14 +43,14 @@ The target scorer accepts these fields:
 | Field | Values or default |
 | --- | --- |
 | `name` | Stable check name. Default `answer`. Lowercase letters, digits, and underscores. |
-| `method` | `match`, `pattern`, or `choice`. Default `match`. |
+| `method` | `match` or `pattern`. Default `match`. |
 | `location` | `begin`, `end`, `any`, or `exact`. Default `exact`. Used by `match`. |
 | `ignore_case` | Default `true`. Used by `match` and `pattern`. |
 | `numeric` | Default `false`. Used by `match`. |
 | `pattern` | Required regex for the `pattern` method. |
 | `reference` | Optional complete reference reply. Defaults to the first target, with `ANSWER:` for choice quizzes. |
 
-A quiz with `choices` requires the `choice` method and letter targets, such as `C`.
+A quiz with `choices` selects Inspect's `choice()` scorer and requires letter targets, such as `C`.
 The solver uses Inspect's `multiple_choice()` path without shuffled choices or chain-of-thought prompts.
 Other vanilla quizzes use `generate()` without tools.
 `target_scorer_spec` in `scorers.py` supplies the scorer name and arguments to the runner and HF exporter.
@@ -92,7 +98,7 @@ This lets the runner select missing epochs without using Inspect's broader task 
 After the second error, the plan lists the exhausted epoch without another model call.
 `--retry-errors` grants one further execution to each selected error epoch without deleting logs.
 It never repeats a completed pass or failure. The next ordinary invocation still obeys the configured cap.
-Player working-time and cost limits fail the existing checks with the limit reason. The row's `limit` field records the limit.
+Player working-time and cost limits produce a failed check with the limit reason. The row's `limit` field records the limit.
 Operator stops and wall-clock stops before the working limit produce errors.
 `check` writes fresh logs on every invocation and checks only the current selection.
 The Python `run()` result also contains only the current selection. `rows.jsonl` contains the whole store.
@@ -132,8 +138,7 @@ See the root README for the limits of this cost estimate.
 The exporter reads complete logs so long reasons survive Inspect's summary truncation.
 It uses `role_usage["grader"]` even when the grader and model under test share a model name.
 Synthetic setup-failure rows have unknown costs for both roles.
-Error rows retain the fixed check names and any verdicts completed before the error.
-Checks without a verdict carry `passed: false` and a `No verdict` reason. The row's verdict remains null.
+Error rows retain scores from completed scorers. The row's verdict remains null.
 Docker failures, broken reference data, and grader failures are errors on the runner's side.
 A grader's explicit `passed: false` is a failed check.
 
@@ -144,22 +149,19 @@ The command uses the same loader and captured file manifest as execution and has
 `catalog.json` contains declarations, eval IDs, pillars, and hashes. It excludes scorer contents and workspace files.
 The site's normal build runs this command and reads schema v3 rows. See [the site README](../site/README.md).
 
-## Extension hooks
+## Scorers
 
-`SCORERS` in `scorers.py` owns each kind's schema, validation, sample fields, reference reply, and scorer factory.
-Each kind also supplies its check names, workspace files, and prompt note.
-The optional `setup`, `discover`, and `capture` hooks prepare services, discover names, and capture grading inputs.
-Each kind supplies its cache inputs. Generic discovery stores a mapping from kind to names.
-Sandbox initialization runs setup hooks before Inspect starts the player's limits and working-time clock.
-The generic boundary stops the agent once, then calls each selected capture hook before scoring.
-Scorers share captured state through `Submission.captures`; the build capture owns Forge's compiled source records.
-`scoring_base.py` owns the shared types and `SubmissionFailed`. The generic scorer catches that exception once to fail the fixed set.
-The `requires` field declares scorer order dependencies. The rubric requires tests before it.
-Only `tests` supplies `foundry.toml` and the Solidity note. Internet quizzes receive neither.
-A `tests` eval must omit `workspace/foundry.toml`; the loader rejects an author's copy.
-A new kind returns an Inspect `Score` with `metadata["checks"]`.
-Each named check requires a boolean `passed` and a nonempty `reason`.
-`named_checks()` normalizes each reason to one line and passes the epoch only when all checks pass.
+`SCORERS` maps each kind to an Inspect scorer factory.
+The Task runs the selected scorers in file-kind order: target, tests, rubric, check script.
+Each score maps check names to `C` or `I` in `Score.value` and stores reasons in `Score.metadata["reasons"]`.
+Rows read these scores. Inspect retains completed scorers when a later scorer raises an error.
+The rubric reads the tests score before it reads Forge's build info.
+Compilation failure skips rubric grading.
+Sandbox initialization runs act setup before the player's clock starts.
+Build and act scoring stop the agent before reading its work.
+`scoring_base.py` converts submission failures, player limits, and output overflow to failed checks.
+Only tests supply `foundry.toml` and the Solidity note. Internet quizzes receive neither.
+A build must omit `workspace/foundry.toml`; the runner supplies it.
 
 `CHECK_SOLVERS` in `checks.py` maps each eval type to its free-check factory.
 A factory returns a `CheckRun` with a solver and a mock reply.
@@ -202,8 +204,8 @@ An eval's `time_limit` takes precedence.
 Quizzes allow 300 working seconds; builds and acts allow 1,200. Inspect excludes retry backoff and sandbox waits.
 The wall-clock backstop is three times the working limit: 900 seconds for quizzes and 3,600 seconds for builds and acts.
 `cost_limit` gives the player $5. The grader has a computed allowance instead of a configurable minimum.
-Each request caps serialized messages and generation settings at 300,000 bytes, including filenames and omission counts.
-Evidence uses ASCII escapes. The allowance reserves one input token per serialized byte.
+Each request uses an evidence block cut once at 100,000 ASCII bytes.
+The allowance reserves 300,000 input tokens per attempt for evidence, the question, and request settings.
 It covers two calls per question and three provider attempts per call, including abandoned attempts absent from reported usage.
 The formula is `questions * 2 * (max_retries + 1) * (300000 * max(input, cache_read, cache_write) + max_tokens * output) / 1000000`.
 `rubric_budget(evaluation, config)` supplies this ceiling for rows and the CI budget gate.
@@ -217,10 +219,10 @@ Each generation call has a 60-second total deadline, including backoff, and a 20
 Grader calls set `max_retries=2`, so brief provider failures can recover without repeating the player epoch.
 Inspect applies its backoff between attempts. Invalid replies permit at most two generation calls per question.
 Two questions permit 240 seconds of grader calls plus 180 seconds of Forge execution.
-The total scoring deadline adds 120 seconds for snapshot and transfer work, for 540 seconds in the current build.
+The scoring reserve adds 120 seconds for snapshot and transfer work, for 540 seconds in the current build.
 Act scoring allows 120 seconds for the check script plus 120 seconds for capture and transfer, for 240 seconds total.
-Task creation requires that deadline to fit inside Inspect's scoring window, half the wall-clock backstop.
-Player working-time and cost limits take precedence over scoring errors and produce a final failed row.
+Task creation requires that reserve to fit inside Inspect's scoring window, half the wall-clock backstop.
+Player working-time and cost limits produce failed checks. Rows retain any error that Inspect records.
 After a player limit, scoring skips the snapshot and grader.
 An operator stop or a wall-clock stop before the working limit produces an error row.
 `max_tasks` and `max_samples` control concurrency. The checked-in config sets both to one.
@@ -252,44 +254,21 @@ Agent test directories and cached output do not enter the scorer workspace.
 Forge runs with a clean environment, `ffi = false`, and no filesystem cheatcode permissions.
 The agent and scorer have separate filesystems with no shared volumes.
 
-Before any player epoch, the runner discovers checks with a key-free reference run in the scorer container.
-It caches names under `inputs/<eval_hash>/<scoring_hash>/checks.json` and reuses them across epochs.
-The scoring hash includes the eval hash, service image names, computed stock image names, grading config, and check-naming versions.
-An edit to `foundry.toml` invalidates discovered checks without renaming either image.
-Cache hits do not rewrite existing files.
-Its test functions define `forge:<test path>:<suite>:<function signature>` checks. `forge:compile` always accompanies them.
-The reference must pass. Discovery runs only for evals with missing epochs and permits one infrastructure retry.
-A discovery failure appends to `discovery-errors.json` and skips that eval. Other evals continue.
-The error names failed tests, their reasons, and the compiler diagnostic when present.
-Discovery failures consume no player attempts. A later invocation can retry discovery.
-Forge runs only tests under `test/`. Agent functions outside that expected set cannot add checks.
-Compilation or submission output-limit failure fills every eval check with its reason.
-A failed `constructor()` or `setUp()` fills that suite's missing tests.
-After compilation, unexplained missing names produce `status: error`.
-Unknown signal exits and output without results or a compiler diagnostic also produce errors.
-Invalid Solidity bytes and confirmed OOM kills fail the fixed checks.
+Forge reports `forge:<test path>:<suite>:<function signature>` checks during scoring.
+`forge:compile` accompanies test results. Compilation failure records only that check, with a readable diagnostic.
+Forge runs only tests under `test/`. Constructor and setup failures retain the names Forge reports.
+Unknown signal exits and output without results or a compiler diagnostic produce errors.
+Invalid Solidity bytes fail compilation.
 Stock limits are 3 GiB for the agent, 2 GiB for the scorer, and 256 MiB for the chain.
 Custom Compose files require those limits and permit at most three services. Capacity comes from the stock Compose limits.
 One concurrent epoch reserves at most 5.25 GiB on the private runner's 8 GB of RAM.
 That runner has 2 CPUs and 14 GB of disk. Local concurrency must also fit Docker's memory capacity.
 The capacity check reserves another 1 GiB for the host before preparation.
-The keyless proofs measured peaks of 1100.9 MiB for the agent, 25.4 MiB for the scorer, and 39.4 MiB for the chain.
-Each reference agent also ran Forge. All chosen limits exceed twice the peaks; the scorer retains at least 2 GiB.
-The root README lists every CLI measurement. These scripted proofs do not measure long paid sessions.
-This Mac's Docker VM has 8,217,686,016 bytes. Both machines use one concurrent task plus a 1 GiB host reserve.
-Scoring reads `memory.events` before each command and after OOM-like failures, including Forge's killed compiler child.
-Both `oom` and `oom_kill` must rise for that command. Ordinary failed tests need no second memory exec.
-A host kill without both deltas remains an error. An agent CLI exit 137 with both deltas fails every check.
-Other CLI failures remain errors. Rows record the agent container's `memory.peak` in `agent_memory_peak_bytes`.
-Task notes tell the agent its memory limit. Setup uses the runner executor, not the scoring executor.
-Docker exec failures and capture timeouts remain errors. Only a known submission-rule violation raises `SubmissionFailed`.
-Forge streams through readers with a 10 MiB cap per stream and one extra byte to detect overflow.
-The wrapper waits for both reader process IDs before the scorer reads each file.
-The cap applies only to captured output, so Forge can write larger build-info files.
-Compilation reasons use the coded diagnostic. Only compiler-version failures include the offline compiler note.
-Scorer-side Forge output enters log events as byte counts. Compilation reasons exclude private source lines and code frames.
-Workspace failures fail all the eval's Forge and rubric checks with the snapshot reason.
-The fixed set keeps the same denominator across successful and failed submissions.
+Container memory failures remain Inspect errors. Task notes tell the agent its memory limit.
+Each exec has its own timeout. `task_limits()` supplies the Task, planning, and Forge limits.
+Inspect caps each exec stream at 10 MiB. If Inspect raises an output-limit error, scoring records a failed check.
+Compilation reasons use the coded diagnostic. Compiler-version failures include the offline compiler note.
+Workspace failures record one failed `forge:compile` check and skip the rubric.
 Free checks omit rubric questions; paid epochs include them.
 
 `scorer/rubric.md` has one `## stable_name` heading per question, followed by its yes-or-no question.
@@ -297,22 +276,22 @@ Each question becomes `rubric:stable_name`, independent of its position in the f
 The grader receives source contents from Forge's build info, with the agent's `src/` files first.
 Imported dependencies under `lib/` follow. Unused libraries and private tests never enter the evidence.
 It excludes the image's runner-owned dependencies and tells the grader where those dependencies come from.
-It skips files above 100,000 bytes or beyond a 300,000-byte total, then considers smaller later files.
-The request cap also counts escaped contents, filenames, and JSON structure. Files that fit retain their source-first order.
-Omissions appear as `omitted_file_count`, never a list of paths.
+The runner serializes evidence with ASCII escapes, then cuts it once at 100,000 bytes.
+The prompt tells the grader that the evidence can be truncated.
 The grader decides from the available evidence and reports uncertainty.
 The runner retains that verdict even when files exceed the cap.
 Files precede the question in a text block that carries Inspect's cache marker.
-The runner sizes evidence against the longest question, so every question shares that evidence block.
+Every question shares that evidence block.
 It receives no tools and must return a boolean `passed` and a one-line `reason` in JSON.
-The request uses a structured response schema. The parser requires one JSON object, with optional Markdown fences.
+The request uses a structured response schema. The parser requires one JSON object, without Markdown fences.
 Prose, wrappers, or quoted objects before a verdict count as invalid replies.
 Provider failures, exhausted grader budgets, and two invalid replies produce `status: error`.
 A schema-valid reply with an empty reason fails that rubric check with a runner-supplied reason.
-Verdicts completed before a later grader error remain in the row.
+If the rubric raises an error, the row retains the completed tests score.
 An error can repeat the player epoch within the retry cap. Snapshot persistence and regrading remain deferred.
 Grader calls use Inspect's `grader` role for separate token and cost accounting.
-Scorer options in logs contain only the eval ID and hash. The scorer resolves captured files in process.
+Scorer options contain the eval ID and hash, plus the Forge timeout for tests.
+Scorers resolve captured files in process.
 
 ## Compose rules
 
@@ -346,7 +325,7 @@ OpenCode proofs check the selected system prompt and model identity.
 
 ## Act scoring
 
-An act eval declares `scorers: [{kind: check_script}]` and `modes: [internet]`.
+An act eval supplies `scorer/check.py` and declares `modes: [internet]`.
 The [token fixture](../evals/transactions/send-six-decimal-token) sends 12.5 tokens with six decimals.
 Its two checks inspect the recipient's exact balance and the transaction's sender.
 Both checks fail on the untouched chain.
@@ -361,8 +340,7 @@ The amd64 compiler comes from ethereum/solc-bin. The arm64 compiler comes from n
 Preparation builds both images and retains their computed names in the execution compose file.
 Rows record both names in `images`, with file hashes in `runner_inputs` and `chain_inputs`. No registry push is needed.
 Additional custom services have no stock input hashes. An absent chain has an empty `chain_inputs` mapping.
-A build failure becomes that eval's discovery error and includes Docker's last 8 KiB of diagnostics.
-The discovery cache includes both image names, the eval hash, grading config, and naming versions.
+A build failure becomes that eval's preparation error and includes Docker's last 8 KiB of diagnostics.
 
 Anvil listens at `127.0.0.1:8546` inside the chain container, with no generated accounts and no interval mining.
 The filter listens at `http://chain:8545`. It accepts only JSON-RPC POST requests to `/`.
@@ -398,10 +376,9 @@ The script contract is:
 - The check script prints one JSON object keyed by stable names matching `[a-z][a-z0-9_]*`.
 - Each value has exactly `passed`, a boolean, and `reason`, a nonempty string.
 - The runner adds the `script:` prefix and normalizes reasons to one line.
-- Setup and check scripts each have a 120-second limit and a 1 MiB output limit per stream.
-- Capped readers finish before the runner reads either output file. One extra byte detects overflow.
+- Setup and check scripts each have a 120-second timeout. Inspect caps each output stream at 10 MiB.
 - Setup consumes neither the player's time allowance nor its recorded working time. Setup timeouts are errors.
-- Script failures include the last 4 KiB of stderr. Failed discovery lists each failing check and its reason.
+- Script failures include the last 4 KiB of stderr.
 - Public setup values remain visible to the agent.
 
 For example, a check script can print:
@@ -410,21 +387,18 @@ For example, a check script can print:
 {"recipient_balance": {"passed": true, "reason": "Recipient holds 12500000 base units."}}
 ```
 
-A free reference run discovers names and must pass every check before player epochs can start.
-The names remain fixed across passing transfers, wrong amounts, missing checks, and script crashes.
-Extra runtime names cannot add checks. Missing checks fail with a reason.
-A crashed or malformed author check script, including exit 125, fails the full set under a deliberate fail-closed rule.
-An agent CLI exit 137 caused by its own container OOM is the second deliberate fail-closed rule.
-The wrapper clears the old author status before each script. Missing status, reader failures, and FIFO failures remain errors.
-Scripts must return a verdict for any chain state. An agent cannot evade a failure by crashing the checker.
-An in-container timeout or output overflow also fails the full set.
-Missing scripts, wrapper exit 125, host exec timeouts, and output-copy failures remain errors.
-Setup failures, failed discovery, and Docker failures remain runner errors.
-Player working-time and cost limits fail the fixed set and skip further scoring.
+The free check runs the reference solution and untouched workspace through the same scorers.
+The check script supplies its names in each result.
+A nonzero script exit or malformed verdict records a failed `script:check`.
+Scripts must return a verdict for any chain state.
+Signal exits, missing scripts, and transport failures remain errors.
+Scoring exec timeouts and Inspect output-limit exceptions record a failed check.
+Setup and Docker failures remain errors.
+Player working-time and cost limits record a failed check and skip further scoring.
 Operator stops and wall-clock stops before the working limit remain errors.
 The [classification table](../README.md#failure-classification) lists every boundary and the deliberate script exception.
 
-The generic boundary first stops the agent's processes, including detached senders.
+The check-script scorer first stops the agent's processes, including detached senders.
 Capture closes the filter and waits for the request that already holds the forwarding lock.
 Requests waiting for that lock fail. Further public RPC requests fail too.
 The runner disables mining and drops queued and pending transactions through localhost RPC.
