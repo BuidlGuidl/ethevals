@@ -13,9 +13,13 @@ class SubmissionFailed(Exception):
     pass
 
 
+def epoch_limit():
+    return next((event for event in reversed(transcript().events) if isinstance(event, SampleLimitEvent)), None)
+
+
 def scoring_boundary(name, score):
     async def checked(state, target):
-        limit = next((event for event in reversed(transcript().events) if isinstance(event, SampleLimitEvent)), None)
+        limit = epoch_limit()
         try:
             if limit:
                 if limit.type == "operator" or (limit.type == "time" and

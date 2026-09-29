@@ -19,7 +19,7 @@ from ethevals.rows import fold_rows, previous_rows, read_rows, results_rows, wri
 from ethevals.runner import build_task as actor_task
 from inspect_ai import eval
 from inspect_ai.log import read_eval_log
-from inspect_ai.model import ContentText, ContentToolUse, ModelCost, ModelInfo, ModelOutput, ModelUsage, get_model, set_model_info
+from inspect_ai.model import ModelCost, ModelInfo, ModelOutput, ModelUsage, get_model, set_model_info
 from inspect_ai.scorer import accuracy, scorer
 from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
@@ -82,26 +82,6 @@ def test_rows_split_grader_usage_for_the_same_model(folder, tmp_path):
     assert row["grader_cost_usd"] == pytest.approx(0.000013)
     assert row["cost_source"] == "computed:test"
     assert log.eval.metadata["prices"] == {"input": 1, "output": 2}
-
-
-@pytest.mark.parametrize("harness,names,cost", [
-    ("claude_code", ["web_search", "web_fetch"], 0.010018),
-    ("codex_cli", ["search", "open_page", "find_in_page"], 0.030018),
-])
-def test_rows_add_native_search_fees_from_saved_log(folder, tmp_path, harness, names, cost):
-    config = fixture_config()
-    task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
-    task.metadata.update(search="native", harness=harness, native_search_price_usd=0.01)
-    output = ModelOutput.from_content("mockllm/search-fees", "8004")
-    output.message.content = [ContentToolUse(tool_type="web_search", id=f"search-{i}", name=name,
-                                           arguments='{"query":"ERC"}', result="") for i, name in enumerate(names)] + [ContentText(text="8004")]
-    output.usage = ModelUsage(input_tokens=10, output_tokens=4, total_tokens=14)
-    set_model_info("mockllm/search-fees", ModelInfo(cost=ModelCost(input=1, output=2, input_cache_read=0, input_cache_write=0)))
-    task.model = get_model("mockllm/search-fees", custom_outputs=[output], memoize=False)
-    log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
-    row = results_rows(read_eval_log(log.location, resolve_attachments=True))[0]
-    assert (row["status"], row["total_tokens"], row["grader_cost_usd"]) == ("passed", 14, 0)
-    assert row["model_cost_usd"] == pytest.approx(cost)
 
 
 def test_error_is_distinct_from_failed_answer(folder, tmp_path):
@@ -220,8 +200,7 @@ def test_store_keeps_old_evals_and_runs_only_edited_eval(folder, tmp_path):
     assert [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()] == stored
 
 
-def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path, monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
+def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path):
     config = fixture_config()
     config.grader.model = "mockllm/grader"
     for key, item in config.models.items():

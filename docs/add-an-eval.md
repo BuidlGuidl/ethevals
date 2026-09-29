@@ -29,15 +29,14 @@ rm -rf results/author-guide/agent-registries
 uv run ethevals check --evals evals/concepts/agent-registries --output results/author-guide/agent-registries
 ```
 
-Expected final lines for this example:
+Expected final lines, where `<epochs>` is `epochs` from `config.yaml`:
 
 ```text
-1 results rows: results/author-guide/agent-registries/reference/rows.jsonl
-1 results rows: results/author-guide/agent-registries/empty/rows.jsonl
+<epochs> results rows: results/author-guide/agent-registries/reference/rows.jsonl
+<epochs> results rows: results/author-guide/agent-registries/empty/rows.jsonl
 ```
 
 `check` uses scripted answers, makes no model calls, and skips rubrics.
-For paid plans, `--models opus-5.5 --modes vanilla` selects a model; `--agents claude-code-opus-5.5 --modes internet` selects an agent.
 
 ## Choose an example to copy
 
@@ -201,12 +200,8 @@ The transaction example asks whether the agent checked on-chain success before r
 The rubric runs after the target, Forge tests, or check script.
 Builds show the grader compiled source, so an agent cannot hide code from grading.
 Other evals show the transcript: tool calls with inputs and outputs, and the final reply.
-The runner excludes system messages from transcript evidence.
-It keeps the first 100,000 bytes of build evidence or the last 100,000 bytes of transcript evidence.
-ASCII JSON escapes make each character one byte; the cut can leave partial JSON.
-The transcript cut preserves the final reply and recent tool results; earlier calls can be absent.
-Every question receives the same evidence, and the grader must state uncertainty when evidence is incomplete.
 Each verdict becomes a named `rubric:` check. Free `check` runs skip all rubrics.
+See [the evidence contract](../inspect-runner/README.md#captured-files-and-build-scoring) for content and size limits.
 
 ## Add an extra service if needed
 
@@ -243,15 +238,15 @@ uv run ethevals check --evals "$eval_dir" --output results/author-eval
 ```
 
 `validate` prints the eval ID and hash after it checks the declaration and files.
-The demo config runs one reference epoch and one untouched epoch by default.
+`check` runs `epochs` from `config.yaml` for both the reference and the untouched answer.
 It selects vanilla for quizzes and internet for builds and acts.
 Each invocation runs fresh epochs, even if the output directory exists.
 
-Expected final lines for one eval:
+Expected final lines for one eval, where `<epochs>` is the configured count:
 
 ```text
-1 results rows: results/author-eval/reference/rows.jsonl
-1 results rows: results/author-eval/empty/rows.jsonl
+<epochs> results rows: results/author-eval/reference/rows.jsonl
+<epochs> results rows: results/author-eval/empty/rows.jsonl
 ```
 
 Read both row files.

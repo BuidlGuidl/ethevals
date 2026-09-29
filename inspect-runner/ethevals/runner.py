@@ -28,7 +28,7 @@ def task_limits(evaluation, config):
                        + (CHECK_SECONDS if "check_script" in evaluation.scorer_kinds else 0)
                        + questions * GRADER_CALLS * GRADER_CONFIG.timeout)
     scoring_limit = scoring_seconds + SCORING_OVERHEAD_SECONDS
-    time_limit = max(working_limit * 3, working_limit + 2 * scoring_limit)
+    time_limit = max(3 * working_limit, 2 * scoring_limit)
     return working_limit, time_limit, scoring_limit
 
 
@@ -55,8 +55,6 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
                 "cost_limit_usd": config.cost_limit,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
                 "search_limit": config.search_limit if uses_sandbox(mode) and config.search else 0,
-                "search_price_usd": config.search_price_usd,
-                "native_search_price_usd": config.native_search_price_usd,
                 "working_limit_seconds": working_limit, "time_limit_seconds": time_limit,
                 "scoring_limit_seconds": scoring_limit}
     sample.metadata = dict(metadata)

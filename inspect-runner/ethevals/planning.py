@@ -5,7 +5,6 @@ from typing import NamedTuple
 
 from .rows import epoch_identity
 from .scorers import rubric_budget
-from .config import uses_sandbox
 
 
 class Epoch(NamedTuple):
@@ -61,9 +60,6 @@ def plan(evals, config, agents_for, previous, *, epochs=None, retry_errors=False
         # Reserve every remaining runner attempt. Runtime spends one per invocation.
         remaining = max(1, config.max_attempts - attempt + 1)
         per_attempt = config.cost_limit + rubric_budget(evaluation, config)
-        if uses_sandbox(mode) and config.search:
-            per_attempt += config.search_limit * (8 * config.native_search_price_usd
-                           if actor.metadata.get("search") == "native" else config.search_price_usd)
         row = {"eval_id": evaluation.id, "eval_hash": evaluation.hash, "type": evaluation.declaration.type,
                **actor.metadata, "mode": mode, "epoch": epoch, "attempt": attempt,
                "remaining_attempts": remaining,

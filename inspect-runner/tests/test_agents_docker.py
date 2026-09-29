@@ -13,7 +13,7 @@ import pytest
 @pytest.mark.parametrize("evaluation,mode", [
     ("inspect-runner/tests/fixtures/building/erc20-points-token", "internet"),
     ("evals/concepts/agent-registries", "internet"),
-    ("concepts/agent-registries", "skills"),
+    ("evals/concepts/agent-registries", "skills"),
 ])
 def test_agent_proof(tmp_path, agent, answer, evaluation, mode):
     environment = os.environ.copy()

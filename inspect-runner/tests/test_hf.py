@@ -21,12 +21,17 @@ from support import build_task, fixture_config, fixture_quiz
 
 def test_hf_cli_exports_fixture_rows_card_and_benchmark(tmp_path, config_path):
     evals = [fixture_quiz(tmp_path, "unit"), fixture_quiz(tmp_path, "choice", choices=["wei", "ether"], target="A")]
+    rubric = fixture_quiz(tmp_path, "rubric")
+    (rubric.folder / "scorer/rubric.md").write_text("## explained\nDid the answer explain the unit?\n")
+    evals.append(load_eval(rubric.folder, fixture_config()))
     output = tmp_path / "hf"
     result = subprocess.run([sys.executable, "-m", "ethevals.cli", "export-hf", "--output", str(output),
                              "--hf-repo", "example/ethereum", "--license", "cc-by-4.0",
                              "--config", str(config_path), "--evals", *[str(item.folder) for item in evals]], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["rows"] == 2
+    assert json.loads(result.stdout)["skipped"] == [
+        {"eval_id": "concepts/rubric", "reason": "rubric cannot be exported"}]
     text = (output / "README.md").read_text()
     card = yaml.safe_load(text.split("---", 2)[1])
     assert card["license"] == "cc-by-4.0"

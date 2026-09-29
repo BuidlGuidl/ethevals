@@ -1,7 +1,7 @@
 # TODO: For real runs, set opus-5.5 and gpt-5.5 effort to high.
 # Omit effort for kimi-k3 and glm-5.3 to use provider defaults.
 # Set grader effort to medium.
-# TODO: Use 3 epochs for real runs.
+# TODO: Use 3 epochs for real runs; 3 epochs can exceed CI's 6-hour job; split the run first.
 epochs: 1
 time_limits: {quiz: 120, build: 1200, act: 600}
 cost_limit: 5.0
@@ -13,8 +13,6 @@ grader:
   max_tokens: 32768 # Includes adaptive thinking and the JSON verdict.
 search: true
 search_limit: 20
-search_price_usd: 0.05 # Reserve at the cap: 10 search results or 5 fetched pages. Check before funding.
-native_search_price_usd: 0.01 # Per native search. Check before funding.
 # Model slugs and all prices are guesses. Check them before a paid epoch.
 # Prices are USD per million tokens, including separate cache rates.
 models:

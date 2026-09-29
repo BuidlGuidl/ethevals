@@ -35,12 +35,12 @@ def test_registry_builds_solver(key, harness):
         assert list(inspect.signature(solve).parameters) == ["state", "generate"]
 
 
-@pytest.mark.parametrize("key,model,harness", [
-    ("codex-cli-gpt-5.5", "openrouter/openai/gpt-5.5", "codex_cli"),
-    ("opencode-kimi-k3", "openrouter/moonshotai/kimi-k3", "opencode"),
-    ("opencode-glm-5.3", "openrouter/z-ai/glm-5.3", "opencode"),
+@pytest.mark.parametrize("key,harness", [
+    ("codex-cli-gpt-5.5", "codex_cli"),
+    ("opencode-kimi-k3", "opencode"),
+    ("opencode-glm-5.3", "opencode"),
 ])
-def test_agent_selects_model_and_effort(key, model, harness):
+def test_agent_selects_model_and_effort(key, harness):
     config = fixture_config()
     config.models[config.agents[key].model].model = "mockllm/model"
     config.models[config.agents[key].model].effort = "low"

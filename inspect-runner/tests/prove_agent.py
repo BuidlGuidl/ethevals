@@ -15,7 +15,7 @@ from inspect_ai.model import ContentText, ContentToolUse, ModelOutput, get_model
 
 from support import build_task, fixture_config, valid_search_result
 from ethevals.loader import load_eval
-from ethevals.rows import export_rows, native_searches
+from ethevals.rows import export_rows
 from ethevals.preparation import build_images, prepare_compose
 from ethevals.skills import skill_index
 
@@ -214,7 +214,10 @@ console.log(JSON.stringify({matches, files, environments}));
             call = next(call for message in evidence for call in message.get("tool_calls", [])
                         if "balanceOf(address)(uint256)" in call["arguments"].get("command", ""))
             result = next(message for message in evidence if message.get("tool_call_id") == call["id"])
-            assert "12500000" in json.dumps(result), result
+            assert set(call) == {"id", "function", "arguments"}, call
+            assert set(result) == {"role", "tool_call_id", "function", "content"}, result
+            assert result["role"] == "tool" and result["function"] == "Bash", result
+            assert "12500000" in result["content"], result
             print(json.dumps({"grader_balance_check": call, "grader_balance_result": result}), flush=True)
         elif evaluation.declaration.type == "build":
             assert "src/BuilderPoints.sol" in evidence
@@ -244,11 +247,8 @@ console.log(JSON.stringify({matches, files, environments}));
     assert search_ok
     assert row["mode"] == args.mode, row
     log = read_eval_log(logs[0].location, resolve_attachments=True)
-    if native_search:
-        assert native_searches(log.samples[0], harness) == 1
-        usage = sum(item.total_cost for item in log.samples[0].model_usage.values())
-        assert abs(row["model_cost_usd"] - (usage - row["grader_cost_usd"] + 0.01)) < 1e-9
-        print(json.dumps({"native_search_count": 1, "native_search_fee_usd": 0.01}), flush=True)
+    usage = sum(item.total_cost for item in log.samples[0].model_usage.values())
+    assert abs(row["model_cost_usd"] - (usage - row["grader_cost_usd"])) < 1e-9
     request = next(event for event in log.samples[0].events if event.event == "model")
     (args.output / "first-request.json").write_text(request.model_dump_json(indent=2))
     messages = "\n".join(message.text for message in request.input)

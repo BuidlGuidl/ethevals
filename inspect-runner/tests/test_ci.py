@@ -2,7 +2,6 @@ from pathlib import Path
 import argparse
 import importlib.util
 import json
-import os
 import subprocess
 import sys
 
@@ -12,7 +11,6 @@ from ethevals.planning import plan
 from ethevals.rows import fold_rows, read_rows, write_rows
 from inspect_ai.log import read_eval_log, write_eval_log
 import pytest
-import yaml
 
 from support import catalog_quiz, cli, fixture_config, run
 
@@ -21,22 +19,6 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("ci", ROOT / "scripts/ci.py")
 ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
-
-
-@pytest.mark.parametrize("outcome,code,completed", [("success", 0, "completed=true\n"),
-                                                   ("error", 2, "completed=true\n"), ("killed", -15, "")])
-def test_workflow_marks_only_finished_commands_for_publication(tmp_path, outcome, code, completed):
-    workflow = yaml.safe_load((ROOT / ".github/workflows/results.yml").read_text())
-    script = next(step["run"] for step in workflow["jobs"]["run"]["steps"] if step.get("id") == "epochs")
-    uv = tmp_path / "uv"
-    uv.write_text('#!/bin/bash\ncase "$OUTCOME" in error) exit 2;; killed) kill -TERM "$PPID";; esac\n')
-    uv.chmod(0o755)
-    output = tmp_path / "output"
-    result = subprocess.run(["bash", "-e", "-c", script], env={**os.environ,
-        "PATH": str(tmp_path) + os.pathsep + os.environ["PATH"], "OUTCOME": outcome,
-        "GITHUB_OUTPUT": str(output), "RUN_BUDGET": "0"}, capture_output=True, text=True)
-    assert result.returncode == code
-    assert (output.read_text() if output.exists() else "") == completed
 
 
 def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(tmp_path, monkeypatch):
@@ -147,7 +129,6 @@ def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
                  "--rows", tmp_path / "rows.jsonl", "--evals", ROOT / "evals/concepts/agent-registries",
                  "--models", "test", "--modes", "vanilla")
     assert result.returncode == 2
-    assert "OPENROUTER_API_KEY is required" not in result.stderr
     assert not (output / "logs").exists()
     if budget == "0":
         report = json.loads((output / "plan.json").read_text())

@@ -4,7 +4,7 @@ import json
 from ethevals.actors import select_actors
 from ethevals.loader import load_eval
 from ethevals.planning import budget_check, plan
-from ethevals.rows import epoch_identity, fold_rows, write_rows
+from ethevals.rows import epoch_identity, write_rows
 import pytest
 
 from support import catalog_quiz, cli, eval_cli, fixture_config, run, small_config
@@ -46,9 +46,8 @@ def test_default_plan_selects_models_and_agents(tmp_path, effort, omit_effort):
         (mode, harness, model["model"], effort or model.get("effort")) for mode, actors in
         [("vanilla", expected), ("internet", agents), ("skills", agents)] for harness, model in actors]
     count = len(expected) + 2 * len(agents)
-    search = 2 * data["search_limit"] * sum(8 * data["native_search_price_usd"] if agent["search"] == "native"
-                                          else data["search_price_usd"] for agent in data["agents"].values()) if data["search"] else 0
-    assert (report["missing_epochs"], report["worst_case_usd"]) == (count, (count * data["cost_limit"] + search) * data["max_attempts"])
+    assert report["missing_epochs"] == count
+    assert report["worst_case_usd"] == sum(row["worst_case_usd"] for row in report["missing"])
     assert [row["prices"] for row in report["missing"]] == [
         data["prices"][model["model"]] for _, model in expected + agents + agents]
 
@@ -98,7 +97,6 @@ def test_selected_modes_cross_only_declared_modes(folder, tmp_path):
 
 def test_paid_run_needs_budget_before_constructing_provider(tmp_path, monkeypatch):
     config, evaluation = catalog_quiz()
-    monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
     monkeypatch.setattr("ethevals.actors.model_actor", lambda *args: pytest.fail("Provider constructed"))
     with pytest.raises(ValueError, match="requires --budget"):
         run([evaluation], config, tmp_path, agents=["claude-code-opus-5.5"], epochs=1)
@@ -117,13 +115,11 @@ def test_run_executes_all_missing_epochs_in_saved_plan(tmp_path):
 
 
 @pytest.mark.parametrize("effort", [None, "high"])
-def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path, monkeypatch, effort):
+def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path, effort):
     config, evaluation = catalog_quiz()
     first = config.models["opus-5.5"].model_copy(update={"model": "mockllm/shared", "effort": effort})
     config.models = {"first": first, "low": first.model_copy(update={"effort": "low"})}
     config.grader.model = "mockllm/grader"
-    # Both providers are MockLLM. The gate key never reaches a provider request.
-    monkeypatch.setenv("OPENROUTER_API_KEY", "inert-offline-gate-key")
     success, rows = run([evaluation], config, tmp_path, models=["first", "low"], modes=["vanilla"], epochs=1, budget=20)
     assert success
     assert [(row["effort"], row["status"], row["attempt"]) for row in rows] == [
@@ -131,9 +127,8 @@ def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path,
 
 
 @pytest.mark.parametrize("mode", ["vanilla", "internet", "skills"])
-def test_planned_identity_matches_every_configured_provider(monkeypatch, mode):
+def test_planned_identity_matches_every_configured_provider(mode):
     config, evaluation = catalog_quiz()
-    monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
     for key, settings in (config.models if mode == "vanilla" else config.agents).items():
         selection = {"models" if mode == "vanilla" else "agents": [key], "modes": [mode]}
         planned, _ = select_actors(config, **selection, planning=True)
@@ -184,24 +179,9 @@ def test_build_plan_reserves_capped_grader_requests():
     config = fixture_config()
     evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", config)
     agents_for, _ = select_actors(config, agents=["claude-code-opus-5.5"], modes=["internet"], planning=True)
-    report = budget_check(plan([evaluation], config, agents_for, [], epochs=1).report, 29.6)
-    assert report["missing"][0]["per_attempt_usd"] == 14.76165
-    assert (report["worst_case_usd"], report["within_budget"]) == (29.5233, True)
-
-
-@pytest.mark.parametrize("key", ["claude-code-opus-5.5", "codex-cli-gpt-5.5"])
-def test_plan_reserves_native_searches(key):
-    config, evaluation = catalog_quiz()
-    config.agents[key].search = "native"
-    config.search_limit = 3
-    config.native_search_price_usd = 0.02
-    actors_for, _ = select_actors(config, agents=[key], modes=["internet"], planning=True)
-    report = plan([evaluation], config, actors_for, [], epochs=1).report
-    assert (report["missing"][0]["per_attempt_usd"], report["worst_case_usd"]) == (5.48, 10.96)
-    config.search = False
-    actors_for, _ = select_actors(config, agents=[key], modes=["internet"], planning=True)
-    report = plan([evaluation], config, actors_for, [], epochs=1).report
-    assert (report["missing"][0]["per_attempt_usd"], report["worst_case_usd"]) == (5, 10)
+    report = budget_check(plan([evaluation], config, agents_for, [], epochs=1).report, 27.6)
+    assert report["missing"][0]["per_attempt_usd"] == 13.75835
+    assert (report["worst_case_usd"], report["within_budget"]) == (27.5167, True)
 
 
 @pytest.mark.parametrize("present,missing", [
