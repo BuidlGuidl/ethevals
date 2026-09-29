@@ -46,7 +46,7 @@ def test_runner_exception_after_eval_retains_rows_and_plan_reads_logs(tmp_path, 
     assert (row["status"], row["attempt"]) == ("passed", 1)
     (tmp_path / "rows.jsonl").unlink()
     players, _ = select_actors(config, answer="reference", planning=True)
-    report = plan([evaluation], config, players, previous_rows(tmp_path), epochs=1)
+    report = plan([evaluation], config, players, previous_rows(tmp_path), epochs=1).report
     assert (report["missing_epochs"], report["worst_case_usd"]) == (0, 0)
 
 
@@ -68,14 +68,12 @@ def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(
         raise RuntimeError("Release upload failed")
 
     monkeypatch.setattr(ci, "publish_logs", failed)
-    args = argparse.Namespace(output=output, rows=rows, repo="owner/repo", run_id="12-1", commit="a" * 40,
-                              publish=True, open_pr=True)
-    with pytest.raises(RuntimeError, match="Release upload failed"):
-        ci.publish_results(args)
+    args = argparse.Namespace(output=output, repo="owner/repo", publish=True)
+    assert ci.publish_artifacts(args) == 1
     assert sorted((r["status"], r["attempt"]) for r in persisted[0][0]) == [("error", 2), ("passed", 1)]
     assert persisted[0][1] == {"12-1": {"commit": "a" * 40}}
     players, _ = select_actors(config, answer="reference", planning=True)
-    report = plan([evaluation], config, players, persisted[0][0], epochs=2)
+    report = plan([evaluation], config, players, persisted[0][0], epochs=2).report
     assert (report["missing_epochs"], len(report["exhausted_errors"])) == (0, 1)
 
 
@@ -94,11 +92,12 @@ def test_publication_retry_uses_artifact_identity_and_gate_ignores_step_names(tm
     saved = {}
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
     monkeypatch.setattr(ci, "stored_file", lambda ref, path: json.dumps(saved) if path == ci.RECEIPTS else "")
-    artifact = {"id": 1, "name": "eval-run-12-1", "expired": False,
+    artifact = {"id": 1, "name": "paid-12-1", "expired": False,
                 "created_at": datetime.now(timezone.utc).isoformat()}
     queries = []
 
     def api(*args, **kwargs):
+        assert not args[-1].endswith("/zip")
         queries.append(args[-1])
         return subprocess.CompletedProcess(args, 0, stdout=archive.getvalue() if args[-1].endswith("/zip")
                                            else json.dumps({"artifacts": [
@@ -116,17 +115,17 @@ def test_publication_retry_uses_artifact_identity_and_gate_ignores_step_names(tm
 
     monkeypatch.setattr(ci, "publish_logs", logs)
     args = argparse.Namespace(output=output, repo="owner/repo", publish=True)
-    assert ci.publish_results(args) == 0
+    assert ci.publish_artifacts(args) == 0
     ci.require_recorded_runs("owner/repo")
     assert saved == {"12-1": {"commit": "a" * 40}}
     assert published == [("12-1", "a" * 40)]
-    assert all("/jobs" not in query for query in queries)
+    assert all("/jobs" not in query and "/zip" not in query for query in queries)
 
     # A zero-work or gated artifact cannot create a receipt or PR.
     idle = tmp_path / "idle"
     idle.mkdir()
     args.output = idle
-    assert ci.publish_results(args) == 0
+    assert ci.publish_artifacts(args) == 0
     assert saved == {"12-1": {"commit": "a" * 40}}
     assert published == [("12-1", "a" * 40)]
 
@@ -150,20 +149,21 @@ def test_time_plan_only_runs_epochs_that_fit(tmp_path):
     assert report["reserved_wall_seconds"] == 1020 + report["preparation_seconds"]
     assert report["deferred_epochs"] == 2
     players, _ = select_actors(config, answer="reference", planning=True)
-    assert [r["epoch"] for r in plan([evaluation], config, players, previous_rows(tmp_path), epochs=3)["missing"]] == [2, 3]
+    assert [r["epoch"] for r in plan([evaluation], config, players, previous_rows(tmp_path), epochs=3).report["missing"]] == [2, 3]
 
 
 def test_admission_counts_discovery_and_startup_and_interleaves_models():
     config, evaluation = quiz()
+    config.max_tasks = config.max_samples = 2
     players, _ = select_actors(config, ["opus", "codex"], ["vanilla"], planning=True)
-    report = plan([evaluation], config, players, [], epochs=3, wall_seconds=1700, preparation_seconds=100)
+    report = plan([evaluation], config, players, [], epochs=3, wall_seconds=1700, preparation_seconds=100).report
     assert [(row["model"], row["epoch"]) for row in report["missing"]] == [
         ("openrouter/anthropic/claude-opus-5.5", 1), ("openrouter/openai/gpt-6-sol", 1)]
     assert (report["reserved_wall_seconds"], report["deferred_epochs"]) == (1630, 4)
-    assert [item[3] for item in report.admitted] == [1, 1]
+    assert [row["epoch"] for row in report["missing"]] == [1, 1]
     internet, _ = select_actors(config, ["opus", "codex"], ["internet"], planning=True)
-    report = plan([evaluation], config, internet, [], epochs=3, wall_seconds=1900, preparation_seconds=100)
-    assert (report["missing_epochs"], report["reserved_wall_seconds"], report["task_lifecycle_seconds"]) == (1, 1900, 120)
+    report = plan([evaluation], config, internet, [], epochs=3, wall_seconds=3700, preparation_seconds=100).report
+    assert (report["missing_epochs"], report["reserved_wall_seconds"], report["task_lifecycle_seconds"]) == (4, 3670, 120)
 
 
 def test_deferred_long_epochs_keep_admission_balanced_across_models():
@@ -171,16 +171,19 @@ def test_deferred_long_epochs_keep_admission_balanced_across_models():
     config = load_config()
     evals = [load_eval(path, config) for path in sorted((ROOT / "evals").glob("*/*"))]
     players, _ = select_actors(config, modes=["vanilla", "internet"], planning=True)
-    report = plan(evals, config, players, [], wall_seconds=16200)
+    report = plan(evals, config, players, [], wall_seconds=16200).report
     assert dict(Counter(row["model"] for row in report["missing"])) == {
-        "openrouter/anthropic/claude-opus-5.5": 2, "openrouter/openai/gpt-6-sol": 2,
-        "openrouter/moonshotai/kimi-k3": 2, "openrouter/z-ai/glm-5.3": 1}
+        "openrouter/anthropic/claude-opus-5.5": 3, "openrouter/openai/gpt-6-sol": 3,
+        "openrouter/moonshotai/kimi-k3": 3, "openrouter/z-ai/glm-5.3": 3}
+    assert (report["missing_epochs"], report["reserved_wall_seconds"] ) == (12, 12240)
+    assert {row["mode"] for row in report["missing"]} == {"vanilla"}
 
 
 def test_run_executes_final_admission_without_selecting_again(tmp_path, monkeypatch):
     import ethevals.planning as planning
     import ethevals.runner as runner
     config, evaluation = quiz()
+    config.max_tasks = config.max_samples = 2
     selection = planning.epoch_selection
     selected = 0
 

@@ -31,7 +31,7 @@ def search_failures(sample):
             calls.setdefault(message.tool_call_id, message.function or "")
     rate_limited = failed = capped = 0
     searches = {key for key, call in calls.items()
-                if any(name in call for name in ("web_search_exa", "web_fetch_exa", "web_search_advanced_exa"))}
+                if any(name in call for name in ("web_search_exa", "web_fetch_exa"))}
     for key in searches & results.keys():
         result, error = results[key]
         limited, failure = search_result_status(result)

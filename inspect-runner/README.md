@@ -72,13 +72,19 @@ It skips the write when the content is unchanged.
 CI uses a fresh output directory and reads only that run's logs.
 After an abrupt kill, the logs remain the recovery source until the next command exports rows.
 The runner also exports rows if `eval()` raises. Both `plan` and `run` fold rows from these logs.
-CI rebuilds the artifact's own rows before publication and commits them with a receipt in `results/runs.json`.
-It uploads release assets afterward. A failed upload leaves paid attempts recorded.
+CI rebuilds all recovered artifacts' rows and commits every row and receipt before any log upload.
+It uploads each artifact in numeric attempt order and collects failures. An older failure cannot hide newer paid work.
+Publication reads only `origin/main`, `origin/ci/results`, and artifact rows.
+An unchanged retry opens a missing results PR whenever the results branch differs from main.
 An unrecorded earlier CI attempt blocks new paid work and names the artifact to recover.
 Retry its publication job before the 14-day artifact expires. See the root README for local recovery commands.
 The artifact's `paid-started.json` supplies the executing run ID, attempt, and source commit.
-A retry of publication keeps that identity. Gated runs and zero-work runs create no receipt or PR.
-The separate recovery step scans artifacts within the 14-day retention window and ignores workflow step names.
+A retry of publication keeps that identity. Gated and zero-work plans create no marker or receipt.
+CI uploads a tiny `paid-RUN-ATTEMPT` marker after planning and before the step with model keys.
+The upload must succeed first. A reserved attempt still needs a receipt if preparation later fails.
+Markers last 90 days; logs last 14 days. Missing log artifacts still block the next paid run.
+The separate recovery step compares marker names with receipts, downloads nothing, and stops after five minutes.
+Expired but listed markers block too. Deleted markers beyond retention cannot protect old lost work.
 Its metadata scan permits 100 pages and fails closed if more remain. Artifact order does not affect the result.
 `scripts/ci.py accept-loss --run-id RUN_ID-ATTEMPT --reason TEXT --repo OWNER/REPO --publish` records an unrecoverable loss.
 An accepted loss cannot restore rows. Missing epochs can spend again.
@@ -110,13 +116,17 @@ It shares epoch selection with `run` and uses the runtime's `cost_limit`, `rubri
 Search adds `search_limit * search_price_usd` to each internet attempt's reserve.
 CI uses `--wall-seconds 16200` for preparation and epochs within its 330-minute job.
 The execution step has a 310-minute deadline, which leaves 20 minutes for artifact upload.
-Final admission deducts measured preparation time, including builds and discovery.
+A budget below the cheapest pending group stops before preparation. Final admission deducts measured build and discovery time.
 Builds have a 1,800-second timeout. Discovery scoring has a 600-second deadline and no retry.
-Sandbox epochs include startup and cleanup bounds of 600 and 60 seconds. Act setup adds another 150 seconds.
-Task initialization and final task cleanup each have a 60-second deadline. The plan reserves both outside the parallel bound.
+Sandbox epochs include 180 seconds for startup, 60 for cleanup, and a fixed 120-second workspace-copy allowance.
+Inspect copies files outside our deadline; the copy allowance is not enforced. Act setup adds 150 seconds.
+Task initialization and final cleanup each have a 60-second deadline, charged once per distinct Compose file.
+Slow sample cleanup logs a warning and preserves scored rows. Final task cleanup retries leftover containers.
 Admission uses `preparation + lifecycle + sum(durations) / m + (1 - 1/m) * longest_duration`.
-CI sets `m = 2` for tasks, samples, and sandboxes. Admission interleaves models.
-The standalone plan admits 7 of 72 epochs before preparation time is known. `run()` saves the final admission after preparation.
+CI sets `m = 1` for tasks, samples, and sandboxes.
+Admission takes shortest whole groups first: one eval, mode, and epoch across every configured model.
+Recorded completed cells stay recorded. Each group admits all remaining cells or none.
+With zero preparation time, CI admits 12 of 72 epochs and reserves 12,240 seconds. `run()` saves its final count after preparation.
 Execution uses those admitted items. Deferred epochs remain missing.
 `--budget USD` exits with code 1 when the worst-case estimate exceeds the budget.
 The plan also lists exhausted errors and an expected-cost estimate from recorded spend.
@@ -206,10 +216,14 @@ Each model ID has one price schedule across both roles. Config loading rejects c
 The host sends optional `EXA_API_KEY` in an HTTP header. The bridge exposes no key to any harness.
 Keyed and keyless requests use the same host-side path. Logs and agent configuration contain no key.
 `search_limit` caps search and fetch requests together at 20 per epoch. Failed requests consume a slot.
-The bridge preserves hosted Exa descriptions and schemas in `exa-tools.json`, checked by the keyless parity test.
-The host logs failed HTTP status codes without credentials. Keyed search remains unverified until the first keyed run.
+The bridge keeps hosted schemas in `exa-tools.json` and adds its per-call limits to each tool description.
+Search clamps `numResults` to 1–10 whole results, default 10. Fetch rejects batches above 5 URLs.
+The optional `--run-live-exa -m live_exa` test compares the raw hosted snapshot. Free CI checks never call Exa.
+The host logs HTTP status and JSON-RPC error code and message, with the key redacted.
+Keyed search remains unverified until the first keyed run.
 The plan reserves the configured `search_price_usd`, currently a guessed $0.05, for every slot, including keyless runs.
 Check this price before funding a run. Rows retain the limit, price, and search outcome counts.
+The reserve covers the per-call caps and totals $1 per internet attempt.
 `time_limit` supplies the fallback working-time limit. `time_limits` sets working limits by eval type.
 An eval's `time_limit` takes precedence.
 Quizzes allow 300 working seconds; builds and acts allow 1,200. Inspect excludes retry backoff and sandbox waits.
@@ -236,7 +250,7 @@ Task creation requires that deadline to fit inside Inspect's scoring window, hal
 Player working-time and cost limits take precedence over scoring errors and produce a final failed row.
 After a player limit, scoring skips the snapshot and grader.
 An operator stop or a wall-clock stop before the working limit produces an error row.
-`max_tasks` and `max_samples` control concurrency. Both default to four.
+`max_tasks` and `max_samples` control concurrency. The checked-in config sets both to one.
 
 ## Build scoring
 
@@ -281,12 +295,19 @@ A failed `constructor()` or `setUp()` fills that suite's missing tests.
 After compilation, unexplained missing names produce `status: error`.
 Unknown signal exits and output without results or a compiler diagnostic also produce errors.
 Invalid Solidity bytes and confirmed OOM kills fail the fixed checks.
-Every stock container has a 1 GiB limit. Custom Compose files require that limit and permit at most three services.
-Two concurrent epochs reserve at most 6 GiB on the private runner's 8 GB of RAM.
+Stock limits are 3 GiB for the agent, 2 GiB for the scorer, and 256 MiB for the chain.
+Custom Compose files require those limits and permit at most three services. Capacity comes from the stock Compose limits.
+One concurrent epoch reserves at most 5.25 GiB on the private runner's 8 GB of RAM.
 That runner has 2 CPUs and 14 GB of disk. Local concurrency must also fit Docker's memory capacity.
 The capacity check reserves another 1 GiB for the host before preparation.
-Scoring reads `memory.events` after every unsuccessful command, including Forge exit 1 after solc dies.
-Both `oom` and `oom_kill` must be nonzero. A host kill without a local OOM event remains an error.
+The keyless proofs measured peaks of 1100.9 MiB for the agent, 25.4 MiB for the scorer, and 39.4 MiB for the chain.
+Each reference agent also ran Forge. All chosen limits exceed twice the peaks; the scorer retains at least 2 GiB.
+The root README lists every CLI measurement. These scripted proofs do not measure long paid sessions.
+This Mac's Docker VM has 8,217,686,016 bytes. Both machines use one concurrent task plus a 1 GiB host reserve.
+Scoring reads `memory.events` before each command and after OOM-like failures, including Forge's killed compiler child.
+Both `oom` and `oom_kill` must rise for that command. Ordinary failed tests need no second memory exec.
+A host kill without both deltas remains an error. Agent solver failures with both deltas fail every check.
+Task notes tell the agent its memory limit. Setup uses the runner executor, not the scoring executor.
 Docker exec failures and capture timeouts remain errors. Only a known submission-rule violation raises `SubmissionFailed`.
 Forge streams through readers with a 10 MiB cap per stream and one extra byte to detect overflow.
 The wrapper waits for both reader process IDs before the scorer reads each file.
@@ -419,7 +440,9 @@ For example, a check script can print:
 A free reference run discovers names and must pass every check before player epochs can start.
 The names remain fixed across passing transfers, wrong amounts, missing checks, and script crashes.
 Extra runtime names cannot add checks. Missing checks fail with a reason.
-A crashed or malformed author check script fails the full set as the one deliberate fail-closed exception.
+A crashed or malformed author check script, including exit 125, fails the full set under a deliberate fail-closed rule.
+An agent solver failure caused by its own container OOM is the second deliberate fail-closed rule.
+The wrapper records the author's exit status separately. Reader and FIFO failures remain errors.
 Scripts must return a verdict for any chain state. An agent cannot evade a failure by crashing the checker.
 An in-container timeout or output overflow also fails the full set.
 Missing scripts, wrapper exit 125, host exec timeouts, and output-copy failures remain errors.

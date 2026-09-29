@@ -62,14 +62,16 @@ def validate_compose(path: Path, *, stock: bool = False, data: bytes | None = No
                "networks", "volumes", "depends_on", "healthcheck", "mem_limit", "cpus"}
     if len(services) > 3:
         reject("at most three services fit the per-epoch memory budget")
+    limits = read_yaml(IMAGES / "act.compose.yaml")["services"]
     for name, service in services.items():
         if not isinstance(service, dict):
             reject(f"service {name}: must be a mapping")
         extra = set(service) - allowed - ({"build"} if stock else set())
         if extra:
             reject(f"service {name}: forbidden options {sorted(extra)}; privileged containers and host mounts are forbidden")
-        if service.get("mem_limit") != "1g":
-            reject(f"service {name}: requires mem_limit: 1g")
+        required = limits.get(name, limits["chain"])["mem_limit"]
+        if service.get("mem_limit") != required:
+            reject(f"service {name}: requires mem_limit: {required}")
         if name in {"default", "scorer"}:
             runner_image = image_tag(IMAGES)
             if service.get("image") != runner_image or service.get("user", "agent") != "agent":
@@ -103,27 +105,38 @@ async def runner_exec(box, command, **kwargs):
     ], **kwargs)
 
 
-async def oom_killed(box):
-    """Require this cgroup's limit to have caused an OOM, not a host OOM."""
+async def memory_events(box):
     try:
         with anyio.fail_after(15):
             events = await runner_exec(box, ["/bin/cat", "/sys/fs/cgroup/memory.events"], timeout=5)
             if not events.success:
                 raise RuntimeError("Cannot read scorer memory counters.")
             counters = dict(line.split() for line in events.stdout.splitlines())
-            return int(counters["oom"]) > 0 and int(counters["oom_kill"]) > 0
+            return {name: int(counters[name]) for name in ("oom", "oom_kill")}
     except Exception as error:
         raise RuntimeError("Cannot inspect scorer memory state.") from error
+
+
+async def oom_killed(box, before):
+    """Require both counters to rise during this command in this cgroup."""
+    after = await memory_events(box)
+    return all(after[name] > before[name] for name in ("oom", "oom_kill"))
 
 
 async def scoring_exec(box, command, **kwargs):
     # Own the in-container deadline so Inspect cannot merge it with a host timeout.
     seconds = kwargs.pop("timeout")
+    stderr_path = kwargs.pop("stderr_path", None)
+    before = await memory_events(box)
     started = time.monotonic()
     with anyio.fail_after(seconds + 30):
         result = await runner_exec(box, ["/usr/bin/timeout", "-k", "5s", f"{seconds}s", *command], **kwargs)
     elapsed = time.monotonic() - started
-    if not result.success and await oom_killed(box):
+    diagnostic = (await box.read_file(stderr_path, text=False)).decode("utf-8", errors="replace") \
+        if result.returncode == 1 and stderr_path else result.stderr
+    possible_oom = result.returncode in (-9, 137) or bool(re.search(
+        r"(?:signal[: ]+9|SIGKILL|Killed)", diagnostic))
+    if possible_oom and await oom_killed(box, before):
         raise SubmissionFailed("Submission exceeded the scorer memory limit.")
     if result.returncode == 124 or (result.returncode == 137 and elapsed >= seconds):
         raise SubmissionFailed("Submission exceeded the scoring time limit.")

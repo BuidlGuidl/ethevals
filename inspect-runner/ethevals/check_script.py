@@ -36,15 +36,18 @@ async def script_result(name, box=None):
     exists = await runner_exec(box, ["/usr/bin/test", "-f", f"/eval/scorer/{name}.py"])
     if not exists.success:
         raise RuntimeError(f"Missing scorer script: {name}.py")
-    result = await scoring_exec(box, ["/bin/bash", "-c",
+    execute = runner_exec if name == "setup" else scoring_exec
+    result = await execute(box, ["/bin/bash", "-c",
         '/bin/rm -f /eval/script.stdout.pipe /eval/script.stderr.pipe; '
         '/usr/bin/mkfifo /eval/script.stdout.pipe /eval/script.stderr.pipe || exit 125; '
         '{ /usr/bin/head -c 1048577 > /eval/script.stdout; status=$?; /bin/cat > /dev/null; exit "$status"; } < /eval/script.stdout.pipe & out=$!; '
         '{ /usr/bin/head -c 1048577 > /eval/script.stderr; status=$?; /bin/cat > /dev/null; exit "$status"; } < /eval/script.stderr.pipe & err=$!; '
         '"$@" > /eval/script.stdout.pipe 2> /eval/script.stderr.pipe; result=$?; '
+        'printf "%s" "$result" > /eval/script.status || exit 125; '
         'wait "$out"; out_status=$?; wait "$err"; err_status=$?; '
         'if (( out_status || err_status )); then exit 125; fi; '
-        '/bin/rm -f /eval/script.stdout.pipe /eval/script.stderr.pipe; exit "$result"',
+        '/bin/rm -f /eval/script.stdout.pipe /eval/script.stderr.pipe || exit 125; '
+        'if (( result == 125 )); then exit 1; fi; exit "$result"',
         "script-output", "/usr/bin/env", "RPC_URL=http://127.0.0.1:8546", "SOLC=/opt/solc",
         "/usr/bin/python3", f"/eval/scorer/{name}.py"], cwd="/eval",
         timeout=SETUP_TIMEOUT if name == "setup" else CHECK_SECONDS)
@@ -55,10 +58,11 @@ async def script_result(name, box=None):
     if max(len(stdout), len(stderr)) > 1048576:
         raise SubmissionFailed("Check script exceeded its 1 MiB output limit.")
     if not result.success:
-        raise SubmissionFailed(f"{name}.py exited {result.returncode}: {stderr[-4096:].decode('utf-8', errors='replace')}")
+        status = int(await box.read_file("/eval/script.status"))
+        raise SubmissionFailed(f"{name}.py exited {status}: {stderr[-4096:].decode('utf-8', errors='replace')}")
     try:
         return json.loads(stdout)
-    except (ValueError, UnicodeDecodeError) as error:
+    except ValueError as error:
         raise SubmissionFailed(f"Check script returned malformed JSON: {error}") from error
 
 

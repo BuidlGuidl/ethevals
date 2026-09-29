@@ -3,6 +3,7 @@ import json
 import re
 import os
 import logging
+import math
 from pathlib import Path
 
 import anyio
@@ -13,6 +14,9 @@ from inspect_ai.util import store
 
 TOOLS = json.loads(Path(__file__).with_name("exa-tools.json").read_text())
 CAP_MESSAGE = "Search failed: epoch search cap reached."
+RESULT_CAP = 10
+URL_CAP = 5
+CAP_DESCRIPTION = " Runner limits: numResults is clamped to 1–10 whole results, default 10. Fetch accepts at most 5 URLs per call; larger batches are rejected."
 
 
 async def exa_request(url, name, arguments, key):
@@ -32,12 +36,21 @@ async def exa_request(url, name, arguments, key):
         else:
             payload = response.json()
         if "error" in payload:
+            error = json.dumps(payload["error"], ensure_ascii=True)
+            logging.getLogger(__name__).warning("Exa JSON-RPC error: %s", error.replace(key, "[redacted]") if key else error)
             return {"isError": True, "content": [{"type": "text", "text": "Search failed at Exa."}]}
         return payload["result"]
 
 
 def exa_tool(definition, url, limit):
     async def execute(**arguments) -> str:
+        if definition["name"] == "web_search_exa":
+            count = arguments.get("numResults", RESULT_CAP)
+            if not isinstance(count, (int, float)) or not math.isfinite(count):
+                return "Search failed: numResults must be finite."
+            arguments["numResults"] = max(1, min(RESULT_CAP, int(count)))
+        elif len(arguments.get("urls", [])) > URL_CAP:
+            return "Search failed: at most 5 URLs are allowed per call."
         used = store().get("exa_calls", 0)
         if used >= limit:
             return CAP_MESSAGE
@@ -55,7 +68,7 @@ def exa_tool(definition, url, limit):
             return "Search failed: Exa rate limit exceeded." if error.response.status_code == 429 else "Search failed: Exa request failed."
         except Exception:
             return "Search failed: Exa request failed."
-    return ToolDef(execute, name=definition["name"], description=definition["description"],
+    return ToolDef(execute, name=definition["name"], description=definition["description"] + CAP_DESCRIPTION,
                    parameters=ToolParams.model_validate(definition["inputSchema"])).as_tool()
 
 

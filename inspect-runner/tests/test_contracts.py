@@ -249,7 +249,8 @@ def test_quiz_internet_has_no_foundry_files_or_note():
     config = load_config()
     evaluation = load_eval(ROOT / "evals/concepts/wei-per-ether", config)
     task = build_task(evaluation, config, None, "internet", "reference", 1)
-    assert task.dataset[0].input == "How many wei equal one ether?"
+    assert task.dataset[0].input.startswith("How many wei equal one ether?\nYour container has a ")
+    assert "Foundry" not in task.dataset[0].input
     assert task.dataset[0].files == {"/workspace/.gitkeep": "data:application/octet-stream;base64,"}
     assert task.dataset[0].sandbox.type == "ethevals_docker"
 

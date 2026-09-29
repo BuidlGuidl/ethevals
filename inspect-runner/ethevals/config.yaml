@@ -3,8 +3,8 @@ time_limit: 300
 time_limits: {build: 1200, act: 1200, scenario: 900}
 cost_limit: 5.0
 max_attempts: 2
-max_tasks: 2
-max_samples: 2
+max_tasks: 1
+max_samples: 1
 grader:
   model: openrouter/anthropic/claude-opus-5.5
   effort: none
@@ -13,7 +13,7 @@ grader:
   prices: {input: 5.0, output: 25.0, input_cache_read: 0.5, input_cache_write: 6.25}
 search_provider: https://mcp.exa.ai/mcp
 search_limit: 20
-search_price_usd: 0.05 # Reserve per search, including keyless runs. Check this price before funding.
+search_price_usd: 0.05 # Reserve at the cap: 10 search results or 5 fetched pages. Check before funding.
 # Model slugs and all prices are guesses. Check them before a paid epoch.
 # Prices are USD per million tokens, including separate cache rates.
 models:

@@ -242,10 +242,13 @@ All three harnesses use a host-side Exa search tool through Inspect's bridge. Cl
 The host sends optional `EXA_API_KEY` in an HTTP header. The container sees only the bridge address.
 Keyed and keyless requests share this path. Neither agent configuration nor published logs contain the key.
 Each epoch permits `search_limit` requests, currently 20, shared across search and fetch.
-The bridge preserves Exa's tool descriptions and input schemas, captured in `inspect-runner/ethevals/exa-tools.json`.
-The keyless parity test compares that snapshot with the hosted tool list.
+The bridge keeps the hosted schemas in `inspect-runner/ethevals/exa-tools.json` and adds its limits to the tool descriptions.
+Search clamps `numResults` to 1–10 whole results, with a default of 10. Fetch rejects batches above 5 URLs.
+The optional `--run-live-exa -m live_exa` test compares the raw keyless snapshot with the hosted tool list.
+Free CI checks never call Exa. Agent proofs run keyless searches separately.
 Failed requests consume a slot. The plan reserves `search_price_usd`, currently a guessed $0.05, for each slot.
-The reserve also applies to keyless runs. Check the configured price before funding a run.
+This reserves $1 per internet attempt at the per-call caps, including keyless runs. Check the price before funding a run.
+The host logs HTTP status and JSON-RPC error code and message, with the key redacted.
 The Exa endpoint can rate-limit requests. Agents can also fetch pages and install packages from their containers.
 
 Guess: the pair costs $1 to $5, including rubric grading. This estimate is not a spending cap.
@@ -266,13 +269,31 @@ Discovery errors name failed tests and compiler diagnostics.
 Compilation and suite lifecycle failures retain that check set. Agent-added tests cannot add checks.
 Docker exec failures and capture timeouts are runner errors. Unknown Forge exits remain errors.
 Invalid Solidity bytes and confirmed scorer OOM kills fail the fixed checks.
-Every stock container has a 1 GiB memory limit. Custom Compose files must use the same limits.
-At most three containers run per epoch. Two concurrent epochs reserve at most 6 GiB.
+Stock limits are 3 GiB for the agent, 2 GiB for the scorer, and 256 MiB for the chain.
+Custom Compose files must use the same limits. The capacity check derives its reserve from the stock Compose file.
+One concurrent epoch reserves at most 5.25 GiB. CI and this Mac use one task, sample, and sandbox at a time.
 The private GitHub runner has 2 CPUs, 8 GB of RAM, and 14 GB of disk.
 Local runs also check Docker's memory capacity before preparation, with at least 1 GiB left for the host.
 Reduce `max_tasks` or `max_samples` when the Docker VM has less memory.
-The cgroup's `oom` and `oom_kill` counters must both increase above zero to classify a scorer memory failure.
+Both `oom` and `oom_kill` must rise between the before and after readings for that command.
+Ordinary failed tests need no second memory exec. OOM-like exits also check the counters after execution.
+An agent solver failure with both deltas positive fails every check. Task notes tell the agent its memory limit.
 An external kill without a local memory-limit event remains an error.
+
+The September 29 keyless Docker proofs measured cgroup `memory.peak` with a temporary 4 GiB agent limit.
+Each reference agent built its submitted contract with Forge. The measurements include reference discovery and scoring.
+
+| Container or CLI | Peak bytes | Peak MiB | Chosen limit |
+| --- | ---: | ---: | ---: |
+| Claude Code, build | 531763200 | 507.1 | 3 GiB |
+| Codex, build | 982052864 | 936.6 | 3 GiB |
+| OpenCode with Kimi, build | 1146003456 | 1092.9 | 3 GiB |
+| OpenCode with GLM, build | 1154355200 | 1100.9 | 3 GiB |
+| Scorer, largest reference build | 26628096 | 25.4 | 2 GiB |
+| Chain, reference setup and checks | 41328640 | 39.4 | 256 MiB |
+
+All limits exceed twice the measured peaks. These are scripted sessions, not measurements of long paid sessions.
+This Mac's Docker VM reports 8,217,686,016 bytes. One epoch plus the 1 GiB host reserve needs 6,710,886,400 bytes.
 A schema-valid grader reply without a reason fails that rubric check. Transport and invalid-JSON failures remain errors.
 Forge streams through capped readers. The wrapper waits for both reader processes before the scorer reads their files.
 The cap is 10 MiB per stream, with one extra byte to detect overflow.
@@ -311,7 +332,8 @@ ADR 0002 remains proposed until this paid test succeeds.
 | Agent processes escape the bounded stop loop | Failed checks |
 | Scorer or chain exceeds its own cgroup memory limit | Failed checks |
 | In-container scoring timeout or output overflow | Failed checks |
-| Author check script crashes or returns a malformed verdict | Failed checks, the one deliberate fail-closed exception |
+| Agent solver fails after its own container OOM | Failed checks, deliberate fail-closed rule |
+| Author check script crashes, exits 125, or returns a malformed verdict | Failed checks, deliberate fail-closed rule |
 | Grader returns a schema-valid verdict with an empty reason | That rubric check fails |
 | Player reaches its working-time or cost limit | Failed checks |
 | Missing script, wrapper exit 125, or host exec or file-copy failure | Error |
@@ -390,14 +412,19 @@ Each epoch reserves player, grader, and search costs for every remaining attempt
 `plan` reads the same rows and local logs and uses the same budget check.
 CI gives preparation and epochs 16,200 seconds within its 330-minute job.
 The execution step stops at 310 minutes, which leaves 20 minutes for artifact upload before the job deadline.
-Preparation runs first. Final admission deducts the measured preparation time, including image builds and discovery.
+A budget below the cheapest pending group stops before preparation. Final admission deducts measured image-build and discovery time.
 Image builds stop after 1,800 seconds. Each discovery scorer has a 600-second deadline and no retry.
-Sandbox epochs include 600 seconds for startup and 60 for cleanup. Act setup adds another 150 seconds.
-Task initialization and final task cleanup each have a 60-second deadline. The plan reserves both outside the parallel bound.
-The bound is `preparation + lifecycle + sum(durations) / m + (1 - 1/m) * longest_duration`, with `m = 2` in CI.
+Sandbox epochs include 180 seconds for startup, 60 for cleanup, and a fixed 120-second workspace-copy allowance.
+Inspect copies workspace files outside our deadline. That allowance is not an enforced bound. Act setup adds 150 seconds.
+Task initialization and final cleanup each have a 60-second deadline, charged once per distinct Compose file.
+Slow sample cleanup logs a warning and preserves scored rows. Final task cleanup retries leftover containers.
+The reserve is `preparation + lifecycle + sum(durations) / m + (1 - 1/m) * longest_duration`, with `m = 1` in CI.
 Inspect refills vacant task slots. The runner uses the same concurrency for tasks, samples, and sandboxes.
-Admission interleaves models. Execution uses the admitted items without selecting epochs again.
-The standalone plan admits 7 of 72 epochs before preparation time is known. The run saves its final count in `plan.json`.
+Admission takes the shortest whole groups first. A group is one eval, mode, and epoch across all configured models.
+Existing completed cells stay recorded; admission takes all remaining cells in their group or none.
+Execution uses the admitted items without selecting epochs again.
+The standalone CI plan admits 12 of 72 epochs, reserves 12,240 seconds, and defers 60, with zero preparation time.
+The run saves its final count in `plan.json` after preparation.
 Epochs that do not fit remain missing for the next run. `--wall-seconds` sets this reserve locally.
 The current build reserves $29.7288 per attempt, or $59.4576 with both attempts left, including the search reserve.
 The gate uses this worst-case estimate. Prices remain guesses, and an in-flight player call can exceed its cost limit.
@@ -413,21 +440,23 @@ Then dispatch `Eval results` on `main` with a higher `budget` input.
 Each invocation runs at most one attempt per missing identity. The estimate reserves every remaining attempt.
 
 The publisher runs after failed or timed-out execution and downloads all artifacts from that workflow run.
-It rebuilds the run's own rows from its logs, then commits those rows and the artifact receipt before uploading logs.
+It rebuilds every recovered artifact's rows and commits all rows and receipts before any log upload.
+Uploads proceed in numeric attempt order. A failed older upload cannot block a newer receipt or upload.
 Release links arrive in a later commit. A failed upload cannot erase recorded attempts.
-The publisher builds its commit from current `main` and folds current results into it.
+The publisher reads only `origin/main`, `origin/ci/results`, and artifact rows. It builds its commit from current `main`.
 Higher attempt counts win, followed by the row's completion time. Argument order cannot change the result.
 Retried old publications preserve newer rows and source. Epoch numbers sort numerically.
-The execution process writes `paid-started.json` immediately before it starts paid tasks.
+After a key-free plan chooses paid work, CI uploads `paid-started.json` as the tiny `paid-RUN-ATTEMPT` artifact.
+The upload must succeed before the step with model keys starts. The paid step copies the marker into its log artifact.
 That marker holds the executing run ID, attempt, and source commit.
 The publisher takes receipt keys and release names from the marker, including on a publish-only retry.
-Gated runs and runs with no paid work create no receipt or results PR.
-The recovery check runs in its own step. Only that step receives its read token.
-It scans recent artifacts, independent of workflow step names, and checks markers against committed receipts.
+Gated and zero-work plans create no marker or receipt. A reserved attempt still needs a receipt if preparation later fails.
+The recovery check has a five-minute deadline and its own read token.
+It compares `paid-RUN-ATTEMPT` artifact names with receipts and downloads nothing.
 If an artifact remains unrecorded, the run stops and names the run to recover.
-Artifacts retain logs and discovery reports for 14 days. Recovery reads markers within that retention window.
+Log artifacts retain data for 14 days. Paid markers last 90 days and block retries even when no log artifact uploaded.
 The metadata scan stops after 100 pages and fails closed if more remain. It does not assume artifact order.
-An unreadable artifact within the scan blocks paid work. Recover it or record an accepted loss before funding another run.
+An expired but listed paid marker also blocks. Deleted markers beyond retention cannot protect old lost work.
 
 To recover a failed run, download its `eval-run-RUN_ID-ATTEMPT` artifact before it expires.
 Fetch current `main` and `ci/results` into a checkout.
@@ -453,6 +482,7 @@ Omit `--publish` to inspect the proposed command without a remote write.
 Locally, rerun `ethevals run` with the same output folder. Its logs restore completed epochs and attempt counts.
 
 The job appends changed records to `ci/results` and opens a results PR against `main`.
+An unchanged retry still opens a missing PR whenever `ci/results` differs from `main`.
 It retains the previous results branch as a parent, so it never needs a force push.
 Merge that PR to put the rows on the board. A merge with no missing epochs makes no model calls.
 The built-in token's PR checks wait for a maintainer to approve them.
@@ -487,7 +517,7 @@ The workflows call local scripts. To run their free paths:
 ```sh
 uv run python scripts/ci.py checks --output results/ci-checks
 uv run python scripts/ci.py after-merge --answer reference --budget 1000 --output results/local-ci
-uv run python scripts/ci.py publish-results --output results/local-ci --repo BuidlGuidl/ethevals
+uv run ethevals publish-logs --output results/local-ci --repo BuidlGuidl/ethevals --run-id local-proof --commit "$(git rev-parse HEAD)"
 uv run python scripts/ci.py release --output out/hf-ci --hf-repo OWNER/DATASET --license CHOSEN_LICENSE
 ```
 

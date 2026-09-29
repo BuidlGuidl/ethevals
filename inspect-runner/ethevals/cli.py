@@ -87,7 +87,7 @@ def main() -> int:
         if args.command == "plan":
             players, _ = select_actors(config, args.models, args.modes, args.answer, planning=True)
             report = budget_check(plan(evals, config, players, previous_rows(args.output, args.rows),
-                          epochs=args.epochs, retry_errors=args.retry_errors, wall_seconds=args.wall_seconds), args.budget)
+                          epochs=args.epochs, retry_errors=args.retry_errors, wall_seconds=args.wall_seconds).report, args.budget)
             print(json.dumps(report, indent=2))
             return 0 if report["within_budget"] else 1
         answers = ["reference", "empty"] if args.command == "check" else [args.answer]

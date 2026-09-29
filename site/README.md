@@ -71,14 +71,19 @@ pnpm build
 A row with `log_file: results-12345-1/epoch.eval` links to
 `https://github.com/BuidlGuidl/ethevals/releases/download/results-12345-1/epoch.eval`.
 Rows from other runs carry other release tags, so one base reaches all releases.
-CI records attempts in `results/rows.jsonl` and artifact receipts in `results/runs.json` before it uploads logs.
+CI records all recovered artifacts' attempts and receipts before any log upload.
+Rows live in `results/rows.jsonl`; receipts live in `results/runs.json`.
+Uploads proceed in numeric attempt order. An older failure cannot block newer receipts or uploads.
 It adds release links afterward. Failed publication leaves scores and attempt counts intact.
 The publisher rebuilds rows from the run artifact's logs, including interrupted attempts.
 An unrecorded earlier artifact blocks paid CI work. Retry its publication job before the 14-day artifact expires.
 The root README gives the local recovery command.
 Receipt and release identities come from the artifact's executing run and attempt, even after a publish-only retry.
-Only runs that began paid work need receipts. Gated and zero-work runs open no results PR.
-Recovery scans the 14-day artifact window in a separate step with its own read token.
+CI uploads a tiny `paid-RUN-ATTEMPT` marker after planning and before the step with model keys.
+Gated and zero-work plans create no marker or receipt. Reserved attempts need receipts even if preparation later fails.
+Markers last 90 days; logs last 14 days. A missing log artifact still blocks paid work.
+Recovery compares marker names with receipts and downloads nothing. Its separate step has a five-minute deadline and a read token.
+Expired but listed markers block too. Deleted markers beyond retention cannot protect old lost work.
 It scans at most 100 metadata pages and fails closed if more remain, without assuming artifact order.
 The root README documents `scripts/ci.py accept-loss` for artifacts that cannot be recovered.
 That receipt accepts lost spend. Missing rows can cause future runs to pay for those epochs again.
@@ -88,6 +93,7 @@ Its dry run writes nothing. It excludes key-free, stale-hash, skills, and alread
 Only `results-<run-id>/<asset>.eval` paths receive release links when `ETHEVALS_LOG_BASE` is set.
 Local `logs/` paths remain visible without links. Sample mode keeps its bundled log links.
 The row fold preserves newer attempts regardless of publication order.
+It reads only `origin/main`, `origin/ci/results`, and artifact rows. An unchanged retry can reopen a missing results PR.
 The site still reads one rows file and rejects duplicate identities.
 The link downloads the `.eval` file. Open its local folder with `inspect view --log-dir path/to/folder`.
 Private repository assets require GitHub access. Public downloads require a public repository.
@@ -119,20 +125,34 @@ Docker exec failures, capture timeouts, and grader transport failures remain err
 The runner's `run()` function requires a budget for paid work. CI calls that same entry point.
 Exa search runs on the host through a tool bridge. Its optional key never enters containers or logs.
 The plan reserves the configured search price for each allowed request and also bounds selected epochs by wall time.
-The bridge offers `web_search_exa` and `web_fetch_exa` with Exa's hosted descriptions and schemas.
+The bridge keeps Exa's hosted schemas and appends its caps to each tool description.
+Search clamps `numResults` to 1–10 whole results, default 10. Fetch rejects batches above 5 URLs.
 Both share the 20-request epoch cap. `search_capped` counts our refusals, while `search_rate_limited` counts Exa throttling.
 Keyed search remains unverified until the first keyed run.
+The guessed $0.05 reserve covers each call at its cap, or $1 per internet attempt.
+The host logs HTTP status and JSON-RPC error code and message, with the key redacted.
+The raw keyless parity test uses `--run-live-exa -m live_exa`. Free CI checks never call Exa.
 
 The private CI runner has 2 CPUs, 8 GB of RAM, and 14 GB of disk.
-Each container has a 1 GiB limit, with at most three containers per epoch and two concurrent epochs.
+Stock limits are 3 GiB for the agent, 2 GiB for the scorer, and 256 MiB for the chain.
+Measured peaks were 1100.9 MiB, 25.4 MiB, and 39.4 MiB. Each limit exceeds twice its peak.
+The root README lists each CLI's scripted proof with an agent Forge build. Long paid sessions remain unmeasured.
+CI and this Mac run one task at a time, with at most 5.25 GiB of container limits.
+The Mac's Docker VM reports 8,217,686,016 bytes. Capacity checks derive the reserve from Compose limits.
 Local concurrency also must fit Docker's memory capacity, with at least 1 GiB left for the host.
 Admission uses the list-scheduling bound after it deducts measured preparation and discovery time.
-Sandbox epochs include 600 seconds for startup and 60 for cleanup. Act setup adds another 150 seconds.
-Task initialization and final task cleanup each have a 60-second deadline. The plan reserves both outside the parallel bound.
-The standalone CI plan admits 7 of 72 epochs before preparation time is known. The run saves its final count afterward.
-Admission interleaves models. The execution step stops after 310 minutes within the 330-minute job.
+Sandbox epochs include 180 seconds for startup, 60 for cleanup, and a fixed 120-second workspace-copy allowance.
+Inspect copies files outside our deadline; that allowance is not enforced. Act setup adds 150 seconds.
+Task initialization and final cleanup each have a 60-second deadline, charged once per distinct Compose file.
+Slow sample cleanup logs a warning and preserves scored rows. Final task cleanup retries leftover containers.
+The standalone CI plan admits 12 of 72 epochs and reserves 12,240 seconds with zero preparation time.
+Admission takes shortest whole groups first: one eval, mode, and epoch across every configured model.
+Each group admits all remaining cells or none. A budget below the cheapest group stops before preparation.
+The execution step stops after 310 minutes within the 330-minute job.
 
-Author script crashes and malformed replies are the one deliberate fail-closed exception: they produce failed checks.
+Two deliberate fail-closed rules produce failed checks: author script crashes or malformed replies, and an agent's own container OOM.
+Author exit 125 is a failed check. The wrapper records that status separately from its own errors.
+OOM attribution requires both local memory counters to rise during the command. Ordinary failed tests need no second memory exec.
 Missing scripts, wrapper failures, host timeouts, and host kills remain errors.
 The [classification table](../README.md#failure-classification) gives the full rule.
 The panel uses the row's `limit` field to identify limits and displays the runner's check reasons.

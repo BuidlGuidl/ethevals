@@ -27,7 +27,7 @@ def test_search_cap_has_its_own_row_counter():
     assert search_failures(sample) == {"search_calls": 2, "search_failed": 2, "search_rate_limited": 1, "search_capped": 1}
 
 
-@pytest.mark.docker
+@pytest.mark.live_exa
 def test_bridge_matches_keyless_hosted_tools():
     from inspect_ai.tool import ToolDef
     response = httpx.post("https://mcp.exa.ai/mcp", headers={"Accept": "application/json, text/event-stream"},
@@ -35,11 +35,13 @@ def test_bridge_matches_keyless_hosted_tools():
     response.raise_for_status()
     payload = next(json.loads(line[5:]) for line in response.text.splitlines() if line.startswith("data:"))
     hosted = payload["result"]["tools"]
+    from ethevals.search import TOOLS, CAP_DESCRIPTION
+    assert TOOLS == hosted
     tools = [ToolDef(tool) for tool in exa_tools("https://mcp.exa.ai/mcp", 20)]
     assert [tool.name for tool in tools] == ["web_search_exa", "web_fetch_exa"]
     for actual, expected in zip(tools, hosted, strict=True):
         assert actual.name == expected["name"]
-        assert actual.description == expected["description"]
+        assert actual.description == expected["description"] + CAP_DESCRIPTION
         from inspect_ai.tool import ToolParams
         assert actual.parameters.model_dump() == ToolParams.model_validate(expected["inputSchema"]).model_dump()
 
@@ -75,7 +77,7 @@ def test_host_search_caps_requests_and_redacts_credentials(tmp_path, monkeypatch
     assert answers == ["Test result [redacted]"] * 2 + [
         "Search failed: epoch search cap reached."]
     assert requests == [(key, {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params}) for params in [
-        {"name": "web_search_exa", "arguments": {"query": "Ethereum", "objective": "Find the protocol spec"}},
+        {"name": "web_search_exa", "arguments": {"query": "Ethereum", "objective": "Find the protocol spec", "numResults": 10}},
         {"name": "web_fetch_exa", "arguments": {"urls": ["https://ethereum.org"]}}]]
     archives = list(tmp_path.glob("*.eval"))
     assert len(archives) == 1
@@ -107,4 +109,47 @@ def test_exa_http_failure_logs_status_without_credentials(tmp_path, monkeypatch,
                     model="mockllm/model"), log_dir=str(tmp_path), display="none")[0]
     assert log.samples[0].output.completion == answer
     assert f"Exa HTTP status {status}" in caplog.text
+    assert key not in caplog.text
+
+
+def test_search_clamps_results_and_rejects_large_fetch_batches(tmp_path, monkeypatch):
+    import ethevals.search as search
+    requests = []
+    async def request(url, name, arguments, key):
+        requests.append((name, arguments))
+        return {"content": [{"type": "text", "text": "Fetched within the cap."}]}
+    monkeypatch.setattr(search, "exa_request", request)
+
+    @solver
+    def capped():
+        async def solve(state, generate):
+            search, fetch = exa_tools("https://mcp.exa.ai/mcp", 20)
+            answers = [await search(query="Ethereum", objective="Find specs", numResults=200),
+                       await search(query="Ethereum", objective="Find specs", numResults=-2),
+                       await fetch(urls=["https://ethereum.org"] * 6),
+                       await fetch(urls=["https://ethereum.org"] * 5)]
+            state.output = ModelOutput.from_content("mockllm/model", json.dumps(answers))
+            return state
+        return solve
+    log = eval(Task(dataset=[Sample(input="Search", target="")], solver=capped(), model="mockllm/model"),
+               log_dir=str(tmp_path), display="none")[0]
+    assert json.loads(log.samples[0].output.completion) == ["Fetched within the cap.", "Fetched within the cap.",
+        "Search failed: at most 5 URLs are allowed per call.", "Fetched within the cap."]
+    assert requests == [
+        ("web_search_exa", {"query": "Ethereum", "objective": "Find specs", "numResults": 10}),
+        ("web_search_exa", {"query": "Ethereum", "objective": "Find specs", "numResults": 1}),
+        ("web_fetch_exa", {"urls": ["https://ethereum.org"] * 5})]
+
+
+def test_json_rpc_error_logs_code_and_message_without_key(monkeypatch, caplog):
+    import anyio
+    import ethevals.search as search
+    key = "inert-offline-exa-canary"
+    client = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={
+        "jsonrpc": "2.0", "id": 1, "error": {"code": -32001, "message": "Rejected key " + key}}))
+    monkeypatch.setattr(search.httpx, "AsyncClient", lambda **kw: client(transport=transport, **kw))
+    result = anyio.run(search.exa_request, "https://mcp.exa.ai/mcp", "web_search_exa", {}, key)
+    assert result == {"isError": True, "content": [{"type": "text", "text": "Search failed at Exa."}]}
+    assert '-32001' in caplog.text and 'Rejected key [redacted]' in caplog.text
     assert key not in caplog.text

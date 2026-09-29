@@ -243,6 +243,8 @@ def test_script_failure_includes_stderr_tail():
             return ExecResult(success=False, returncode=1, stdout="", stderr="")
 
         async def read_file(self, path, **kwargs):
+            if path.endswith("status"):
+                return "1"
             return b"" if path.endswith("stdout") else b"x" * 6000 + b"\nValueError: bad setup amount"
 
     with pytest.raises(SubmissionFailed, match="ValueError: bad setup amount") as error:

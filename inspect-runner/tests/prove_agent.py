@@ -160,7 +160,7 @@ console.log(JSON.stringify({matches, files, environments}));
             command = (
                 "test ! -e /workspace/scorer && test ! -e /workspace/test/BuilderPoints.t.sol && "
                 "test ! -e /workspace/rubric.md && "
-                f"printf '%s' '{encoded}' | base64 -d > /workspace/src/BuilderPoints.sol"
+                f"printf '%s' '{encoded}' | base64 -d > /workspace/src/BuilderPoints.sol && forge build"
             )
             if harness == "codex_cli":
                 name, arguments = "exec", {"input": "text(await tools.exec_command(" + json.dumps({"cmd": command}) + "));"}

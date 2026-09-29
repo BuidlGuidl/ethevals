@@ -59,12 +59,12 @@ def test_agent_sample_contains_only_workspace_files():
 
 
 @pytest.mark.parametrize("service", ["default", "scorer"])
-@pytest.mark.parametrize("limit", [None, "2g"])
+@pytest.mark.parametrize("limit", [None, "1g"])
 def test_custom_compose_requires_bounded_memory(tmp_path, service, limit):
     data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_bytes())
     data["services"]["default"].pop("build")
     data["services"][service]["mem_limit"] = limit
-    with pytest.raises(ValueError, match="requires mem_limit: 1g"):
+    with pytest.raises(ValueError, match="requires mem_limit:"):
         validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump(data).encode())
 
 
@@ -75,7 +75,7 @@ def test_concurrency_must_fit_docker_memory(monkeypatch):
     config = load_config()
     check_capacity(config)
     config.max_tasks = config.max_samples = 3
-    with pytest.raises(ValueError, match="3 GiB per concurrent epoch plus 1 GiB for the host"):
+    with pytest.raises(ValueError, match="5.25 GiB per concurrent epoch plus 1 GiB for the host"):
         check_capacity(config)
 
 

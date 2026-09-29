@@ -1,17 +1,26 @@
 """Select epochs once for both the budget plan and the runner."""
 import math
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import NamedTuple
 
 from .rows import epoch_identity
 from .scorers import rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS, SCORERS
-from .preparation import SETUP_SECONDS, STARTUP_SECONDS, CLEANUP_SECONDS, TASK_LIFECYCLE_SECONDS
+from .preparation import SETUP_SECONDS, STARTUP_SECONDS, CLEANUP_SECONDS, TASK_LIFECYCLE_SECONDS, WORKSPACE_COPY_SECONDS
 
 
-class Plan(dict):
-    """JSON report with the selected work retained for execution."""
+class Epoch(NamedTuple):
+    evaluation: object
+    mode: str
+    actor: object
+    epoch: int
+    attempt: int
 
-    def __init__(self, report, admitted):
-        super().__init__(report)
-        self.admitted = admitted
+
+@dataclass
+class Plan:
+    report: dict
+    admitted: list[Epoch]
 
 
 def budget_check(report, budget, *, required=False):
@@ -27,7 +36,7 @@ def epoch_seconds(evaluation, config, actor):
     working = evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit)
     seconds = 3 * working + scoring_seconds(evaluation) + SCORING_OVERHEAD_SECONDS
     if actor.sandbox_for(evaluation):
-        seconds += STARTUP_SECONDS + CLEANUP_SECONDS
+        seconds += STARTUP_SECONDS + CLEANUP_SECONDS + WORKSPACE_COPY_SECONDS
         if any(SCORERS[item.kind].setup for item in evaluation.scorers):
             seconds += SETUP_SECONDS
     return seconds
@@ -46,7 +55,7 @@ def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, 
                 attempt = row.get("attempt", 0)
                 if fresh or (row.get("status") not in {"passed", "failed"}
                              and (attempt < config.max_attempts or retry_errors)):
-                    pending.append((evaluation, mode, actor, epoch, attempt + 1))
+                    pending.append(Epoch(evaluation, mode, actor, epoch, attempt + 1))
                 elif row.get("status") == "error":
                     exhausted.append(row)
     if not selected:
@@ -63,12 +72,11 @@ def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, f
     missing, deferred, admitted, total, longest, reserved = [], [], [], 0, 0, preparation_seconds
     lifecycle = 0
     concurrency = min(config.max_tasks, config.max_samples)
-    queue = list(pending)
-    counts = dict.fromkeys((item[2].key for item in queue), 0)
-    while queue:
-        # Keep models with fewer admitted epochs first, including after a deferral.
-        index = min(range(len(queue)), key=lambda index: counts[queue[index][2].key])
-        item = queue.pop(index)
+    groups = defaultdict(list)
+    for item in pending:
+        groups[item.evaluation.id, item.mode, item.epoch].append(item)
+    rows = {}
+    for item in pending:
         evaluation, mode, actor, epoch, attempt = item
         metadata = {"eval_id": evaluation.id, "eval_hash": evaluation.hash, "type": evaluation.declaration.type,
                     **actor.metadata, "mode": mode, "epoch": epoch}
@@ -81,26 +89,35 @@ def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, f
                    if all(row.get(key) == metadata.get(key) for key in ("type", "model", "harness", "effort", "mode", "answer_kind"))
                    and row.get("model_cost_usd") is not None and row.get("grader_cost_usd") is not None]
         seconds = epoch_seconds(evaluation, config, actor)
-        task_overhead = 2 * TASK_LIFECYCLE_SECONDS if actor.sandbox_for(evaluation) else 0
         row = {**metadata, "attempt": attempt, "remaining_attempts": remaining,
                         "wall_seconds": seconds,
-                        "task_lifecycle_seconds": task_overhead,
                         "per_attempt_usd": per_attempt, "worst_case_usd": per_attempt * remaining,
                         "expected_usd_estimate": sum(history) / len(history) if history else None}
+        rows[id(item)] = row
+    queue = sorted(groups.values(), key=lambda group: sum(rows[id(item)]["wall_seconds"] for item in group))
+    compositions = set()
+    for group in queue:
+        group_rows = [rows[id(item)] for item in group]
+        seconds = sum(row["wall_seconds"] for row in group_rows)
+        group_longest = max(row["wall_seconds"] for row in group_rows)
+        # prepare_compose writes one immutable path per eval hash.
+        compose_files = {item.evaluation.hash for item in group if item.actor.sandbox_for(item.evaluation)}
+        task_overhead = 2 * TASK_LIFECYCLE_SECONDS * len(compose_files - compositions)
         # Task initialization and final cleanup can run outside the sample dispatcher.
         bound = (preparation_seconds + lifecycle + task_overhead
-                 + (total + seconds) / concurrency + (1 - 1 / concurrency) * max(longest, seconds))
+                 + (total + seconds) / concurrency + (1 - 1 / concurrency) * max(longest, group_longest))
         if wall_seconds is not None and bound > wall_seconds:
-            deferred.append(row)
+            deferred.extend(group_rows)
         else:
-            missing.append(row)
-            admitted.append(item)
-            counts[actor.key] += 1
+            missing.extend(group_rows)
+            admitted.extend(group)
+            compositions.update(compose_files)
             total += seconds
-            longest = max(longest, seconds)
+            longest = max(longest, group_longest)
             lifecycle += task_overhead
             reserved = bound
     return Plan({"missing": missing, "missing_epochs": len(missing),
+            "cheapest_group_usd": min((sum(rows[id(item)]["worst_case_usd"] for item in group) for group in queue), default=0),
             "deferred": deferred, "deferred_epochs": len(deferred), "wall_seconds": wall_seconds,
             "reserved_wall_seconds": reserved,
             "preparation_seconds": preparation_seconds, "concurrency": concurrency,

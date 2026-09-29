@@ -72,7 +72,7 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
     assert report["history_covered_epochs"] == 1
     assert report["missing"][0]["expected_usd_estimate"] == 0.25
     players, _ = select_actors(config, ["opus"], ["vanilla"], planning=True)
-    assert plan([quiz], config, players, rows)["expected_usd_estimate"] == 0.25
+    assert plan([quiz], config, players, rows).report["expected_usd_estimate"] == 0.25
 
 
 def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path, monkeypatch):
@@ -125,9 +125,12 @@ def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path):
     first = cli("scripts/ci.py", "after-merge", "--output", tmp_path / "first", "--answer", "reference",
                 "--epochs", "1", "--budget", "10", *common)
     assert first.returncode == 0, first.stdout + first.stderr
+    (tmp_path / "first/paid-started.json").write_text(json.dumps({"run_id": "12-1", "commit": "a" * 40}))
     published = cli("scripts/ci.py", "publish-results", "--output", tmp_path / "first",
-                    "--repo", "BuidlGuidl/ethevals", *common)
+                    "--repo", "BuidlGuidl/ethevals")
     assert published.returncode == 0, published.stderr
+    assert "Dry run: record 1 rows and 1 receipts" in published.stdout
+    assert '"release": "results-12-1"' in published.stdout
     assert [(r["epoch"], r["status"]) for r in read_rows(tmp_path / "first/rows.jsonl")] == [(1, "passed")]
     assert not rows.exists()
     write_rows(rows, read_rows(tmp_path / "first/rows.jsonl"))
@@ -175,18 +178,16 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     records = []
     monkeypatch.setattr(ci, "stored_file", lambda ref, path: json.dumps(previous) + "\n" if str(path).endswith("rows.jsonl") else "{}")
     monkeypatch.setattr(ci, "commit_results", lambda rows, saved, *args: records.append((rows, saved)))
-    args = argparse.Namespace(output=output, rows=rows, repo="owner/repo", run_id="1", commit="a" * 40,
-                              publish=True, open_pr=False)
+    args = argparse.Namespace(output=output, repo="owner/repo", publish=True)
 
     def fail(*args, **kwargs):
         raise subprocess.CalledProcessError(1, "gh")
 
     monkeypatch.setattr("ethevals.publish.subprocess.run", fail)
-    with pytest.raises(subprocess.CalledProcessError):
-        ci.publish_results(args)
+    assert ci.publish_artifacts(args) == 1
     assert [(r["status"], r.get("attempt")) for r in records[0][0]] == [("passed", None), ("error", 2), ("passed", None)]
     monkeypatch.setattr("ethevals.publish.subprocess.run", lambda *a, **kw: subprocess.CompletedProcess(a, 0))
-    assert ci.publish_results(args) == 0
+    assert ci.publish_artifacts(args) == 0
     assert sorted((r["status"], r["log_file"]) for r in records[-1][0]) == [
         ("error", "logs/new.eval"), ("passed", "results-1/new.eval"), ("passed", "results-old/old.eval")]
 
@@ -211,7 +212,7 @@ def test_failed_discovery_stays_missing_without_using_attempts(tmp_path, monkeyp
     success, rows = run([build], config, tmp_path, answer="reference", epochs=1)
     assert (success, rows) == (False, [])
     assert json.loads((tmp_path / "discovery-errors.json").read_text())[0]["error"] == "Reference compilation failed"
-    report = plan([build], config, players, read_rows(tmp_path / "rows.jsonl"), epochs=1)
+    report = plan([build], config, players, read_rows(tmp_path / "rows.jsonl"), epochs=1).report
     assert [(r["eval_id"], r["attempt"], r["remaining_attempts"], r["worst_case_usd"]) for r in report["missing"]] == [
         ("building/erc20-points-token", 1, 2, 59.4576)]
 

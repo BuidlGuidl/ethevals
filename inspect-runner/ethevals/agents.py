@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+from inspect_ai.util import sandbox
+from .sandboxes import memory_events, oom_killed
 
 
 @dataclass(frozen=True)
@@ -93,9 +95,17 @@ def internet_solver(harness: str, config, model):
     agent = AGENTS[harness].build(config, model)
 
     async def solve(state, generate):
-        if state.choices:
-            async def invoke(state, **kwargs):
-                return await agent(state, generate)
-            return await multiple_choice()(state, invoke)
-        return await agent(state, generate)
+        box = sandbox("default")
+        before = await memory_events(box)
+        try:
+            if state.choices:
+                async def invoke(state, **kwargs):
+                    return await agent(state, generate)
+                return await multiple_choice()(state, invoke)
+            return await agent(state, generate)
+        except Exception:
+            if not await oom_killed(box, before):
+                raise
+            state.metadata["agent_oom"] = True
+            return state
     return solve

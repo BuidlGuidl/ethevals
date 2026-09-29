@@ -18,6 +18,59 @@ from test_docker import ROOT, containers
 pytestmark = pytest.mark.docker
 
 
+@pytest.mark.parametrize("local_oom", [True, False])
+def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, local_oom):
+    from ethevals import agents
+    from inspect_ai.util import sandbox
+    from ethevals.sandboxes import runner_exec
+    from ethevals.actors import player
+    config = load_config()
+    config.models["opus"].model = "mockllm/model"
+    config.grader.model = "mockllm/model"
+    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    compose = prepare_compose(evaluation, tmp_path)
+    document = yaml.safe_load(compose.read_bytes())
+    document["services"]["default"]["mem_limit"] = "128m"
+    compose.write_text(yaml.safe_dump(document))
+
+    async def killed(state, generate):
+        command = ["/usr/bin/perl", "-e", '$allocation = "x" x (512 * 1024 * 1024); sleep 1'] if local_oom else [
+            "/bin/sh", "-c", "kill -9 $$"]
+        result = await runner_exec(sandbox("default"), command)
+        if not result.success:
+            raise RuntimeError(f"Agent exited {result.returncode}")
+        raise AssertionError("The death proof survived")
+
+    monkeypatch.setitem(agents.AGENTS, "claude_code", agents.Harness(lambda *a, **kw: killed, "proof"))
+    task = build_task(evaluation, config, player(config, "opus", "internet"), check_grader(), "internet", 1, compose)
+    row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
+    assert (row["status"], row["passed"]) == (("failed", False) if local_oom else ("error", None)), row
+    if local_oom:
+        assert {c["reason"] for c in row["checks"].values()} == {"Agent exceeded its container memory limit."}
+    else:
+        assert "Agent exited" in row["error_reason"]
+
+
+def test_slow_cleanup_keeps_the_scored_row(tmp_path, monkeypatch, caplog):
+    import anyio
+    from ethevals.preparation import DockerSandboxEnvironment
+    original = DockerSandboxEnvironment.sample_cleanup.__func__
+
+    async def slow(cls, *args, **kwargs):
+        await original(cls, *args, **kwargs)
+        await anyio.sleep(2)
+
+    monkeypatch.setattr(DockerSandboxEnvironment, "sample_cleanup", classmethod(slow))
+    monkeypatch.setattr("ethevals.preparation.CLEANUP_SECONDS", 1)
+    config = load_config()
+    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    compose = prepare_compose(evaluation, tmp_path)
+    task = build_task(evaluation, config, check_player(evaluation, "reference", mode="internet"), check_grader(), "internet", 1, compose)
+    row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
+    assert (row["status"], row["passed"]) == ("passed", True), row
+    assert "Sample cleanup exceeded its deadline" in caplog.text
+
+
 def test_scoring_deadline_kills_a_process_that_ignores_term(tmp_path):
     import anyio
     from ethevals.sandboxes import scoring_exec

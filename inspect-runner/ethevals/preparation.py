@@ -2,6 +2,7 @@
 import hashlib
 import json
 import subprocess
+import logging
 from dataclasses import replace
 
 import anyio
@@ -20,7 +21,8 @@ from .images.tag import image_tag
 
 CHECK_SETS = {}
 SETUP_SECONDS = 150
-STARTUP_SECONDS = 600
+STARTUP_SECONDS = 180
+WORKSPACE_COPY_SECONDS = 120  # Inspect copies files outside sample_init; reserve an allowance.
 CLEANUP_SECONDS = 60
 DISCOVERY_SECONDS = 600
 TASK_LIFECYCLE_SECONDS = 60
@@ -60,12 +62,10 @@ class EvalDocker(DockerSandboxEnvironment):
 
     @classmethod
     async def sample_cleanup(cls, task_name, config, environments, interrupted):
-        with anyio.fail_after(CLEANUP_SECONDS, shield=True):
+        with anyio.move_on_after(CLEANUP_SECONDS, shield=True) as scope:
             await super().sample_cleanup(task_name, config, environments, interrupted)
-
-
-def sandbox_type(evaluation):
-    return "ethevals_docker"
+        if scope.cancel_called:
+            logging.getLogger(__name__).warning("Sample cleanup exceeded its deadline; task cleanup will retry.")
 
 
 def docker_command(command):
@@ -112,8 +112,11 @@ def prepare_compose(evaluation, output):
 def check_capacity(config):
     memory = int(docker_command(["docker", "info", "--format", "{{.MemTotal}}"]).stdout)
     concurrency = min(config.max_tasks, config.max_samples)
-    if concurrency * 3 * 1024**3 + 1024**3 > memory:
-        raise ValueError("Docker memory must cover 3 GiB per concurrent epoch plus 1 GiB for the host. Reduce concurrency.")
+    services = read_yaml(IMAGES / "act.compose.yaml")["services"]
+    per_epoch = sum(int(service["mem_limit"][:-1]) * {"g": 1024**3, "m": 1024**2}[service["mem_limit"][-1]]
+                    for service in services.values())
+    if concurrency * per_epoch + 1024**3 > memory:
+        raise ValueError(f"Docker memory must cover {per_epoch / 1024**3:g} GiB per concurrent epoch plus 1 GiB for the host. Reduce concurrency.")
 
 
 @solver
@@ -163,7 +166,7 @@ def prepare_eval(evaluation, output, compose=None):
         task = Task(name="reference-checks", dataset=[evaluation.sample()],
                     solver=no_player(),
                     scorer=reference_checks(evaluation.id, evaluation.hash), model=get_model("mockllm/model"),
-                    sandbox=SandboxEnvironmentSpec(type=sandbox_type(evaluation), config=str(compose)))
+                    sandbox=SandboxEnvironmentSpec(type="ethevals_docker", config=str(compose)))
         logs = eval(task, log_dir=str(path.parent / "preflight"), display="plain", retry_on_error=0, fail_on_error=False)
         log = logs[0]
         if log.error or not log.samples or log.samples[0].error:

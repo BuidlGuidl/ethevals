@@ -42,6 +42,7 @@ def test_docker_timeout_during_oom_inspection_is_an_error(scoring_case, monkeypa
 
 
 @pytest.mark.parametrize("cause,status", [("wrapper", "error"), ("host_timeout", "error"),
+    ("earlier_oom_wrapper", "error"), ("author125", "failed"),
     ("read_timeout", "error"), ("missing", "error"), ("crash", "failed"), ("json", "failed"),
     ("schema", "failed"), ("deadline", "failed"), ("output", "failed"), ("pass", "passed")])
 def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status):
@@ -59,7 +60,7 @@ def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status
         async def exec(self, command, **kwargs):
             code, stdout = 0, ""
             if "/sys/fs/cgroup/memory.events" in command:
-                stdout = "oom 0\noom_kill 0\n"
+                stdout = "oom 5\noom_kill 5\n" if cause == "earlier_oom_wrapper" else "oom 0\noom_kill 0\n"
             elif "--freeze" in command:
                 stdout = "{}"
             elif "/usr/bin/test" in command:
@@ -67,10 +68,12 @@ def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status
             elif "/usr/bin/timeout" in command:
                 if cause == "host_timeout":
                     raise TimeoutError("Host compose exec timed out")
-                code = {"wrapper": 125, "crash": 1, "deadline": 124}.get(cause, 0)
+                code = {"wrapper": 125, "earlier_oom_wrapper": 125, "author125": 1, "crash": 1, "deadline": 124}.get(cause, 0)
             return ExecResult(success=code == 0, returncode=code, stdout=stdout, stderr="")
 
         async def read_file(self, path, **kwargs):
+            if path == "/eval/script.status":
+                return "125" if cause == "author125" else "1"
             if path != "/eval/script.stdout":
                 return b""
             if cause == "read_timeout":
@@ -99,9 +102,11 @@ def test_compiler_child_exit_one_and_host_oom_through_rows(scoring_case, monkeyp
     from inspect_ai.util import ExecResult
 
     class Box:
+        reads = 0
         async def exec(self, command, **kwargs):
             if "/sys/fs/cgroup/memory.events" in command:
-                return ExecResult(success=True, returncode=0, stdout=counters, stderr="")
+                self.reads += 1
+                return ExecResult(success=True, returncode=0, stdout="oom 0\noom_kill 0\n" if self.reads == 1 else counters, stderr="")
             return ExecResult(success=False, returncode=1, stdout="", stderr="")
 
         async def read_file(self, path, **kwargs):

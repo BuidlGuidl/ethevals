@@ -236,7 +236,7 @@ async def forge(box, *args):
         'if (( out_status || err_status )); then exit 125; fi; '
         '/bin/rm -f /tmp/forge.stdout.pipe /tmp/forge.stderr.pipe; exit "$result"', "forge-output",
         "/usr/local/bin/forge", "test", "--root", "/workspace", "--match-path", "test/**", "--json", "--build-info", *args,
-    ], timeout=FORGE_SECONDS)
+    ], timeout=FORGE_SECONDS, stderr_path="/tmp/forge.stderr")
     if result.returncode == 125:
         raise RuntimeError("Cannot capture Forge output.")
     stdout = await box.read_file("/tmp/forge.stdout", text=False)
@@ -467,6 +467,9 @@ def named_checks(eval_id: str, eval_hash: str) -> Scorer:
     evaluation = EVALUATIONS[(eval_id, eval_hash)]
     async def score(state, target):
         free_check = state.metadata["free_check"]
+        if state.metadata.get("agent_oom"):
+            return checks_score(failed_checks(check_names(evaluation, free_check),
+                                             "Agent exceeded its container memory limit."))
         limit = next((event for event in reversed(transcript().events) if isinstance(event, SampleLimitEvent)), None)
         if limit:
             if infrastructure_limit(limit.type, limit.working_start, state.metadata.get("working_limit_seconds")):
