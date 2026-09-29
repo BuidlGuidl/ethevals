@@ -17,16 +17,10 @@ test("the board reads the merged runner's catalog and reference and empty rows",
   mkdirSync(path.join(folder, "workspace"));
   writeFileSync(path.join(folder, "eval.yaml"), "type: quiz\nmotivation: Check units.\nprompt: Name the unit.\nmodes: [vanilla]\n");
   writeFileSync(path.join(folder, "scorer/target.yaml"), 'target: "wei"\n');
-  const config = path.join(root, "config.json");
-  const fixture = spawnSync("uv", ["run", "python", "-c",
-    "import sys; sys.path.insert(0, 'inspect-runner/tests'); from conftest import small_config; print(small_config().model_dump_json())"],
-    { cwd: path.dirname(siteRoot), encoding: "utf8" });
-  assert.equal(fixture.status, 0, fixture.stderr);
-  writeFileSync(config, fixture.stdout);
   const env = { ...process.env };
   for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"]) delete env[key];
   function run(args: string[]) {
-    const result = spawnSync("uv", ["run", "ethevals", ...args, "--config", config, "--evals", folder], {
+    const result = spawnSync("uv", ["run", "ethevals", ...args, "--evals", folder], {
       cwd: path.dirname(siteRoot), env, encoding: "utf8", timeout: 60_000,
     });
     assert.equal(result.status, 0, result.error?.message ?? result.stderr + result.stdout);

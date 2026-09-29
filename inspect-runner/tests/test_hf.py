@@ -15,8 +15,7 @@ from inspect_ai.model import ModelOutput, get_model
 import pytest
 import yaml
 
-from conftest import fixture_config, fixture_quiz
-from support import build_task
+from support import build_task, fixture_config, fixture_quiz
 
 
 
@@ -105,16 +104,17 @@ def test_hf_task_matches_runner_for_the_same_answer(tmp_path, settings, answer, 
     assert [(None if row["status"] == "error" else row["status"] == "passed") for row in rows] == [expected == "C"]
 
 
-def test_hf_proof_covers_every_fixture_task(tmp_path):
-    evals = [fixture_quiz(tmp_path, "unit"), fixture_quiz(tmp_path, "choice", choices=["wei", "ether"], target="A")]
+def test_hf_proof_covers_every_vanilla_quiz(tmp_path):
+    config = fixture_config()
+    root = Path(__file__).resolve().parents[2]
+    evals = [load_eval(path, config) for path in sorted((root / "evals").glob("*/*"))]
+    evals = [item for item in evals if item.declaration.type == "quiz" and "vanilla" in item.declaration.modes]
     write_hf(evals, tmp_path / "hf")
-    report = prove(tmp_path / "hf", evals, tmp_path / "proof", fixture_config())
+    report = prove(tmp_path / "hf", evals, tmp_path / "proof", config)
     assert json.loads((tmp_path / "proof/report.json").read_text()) == report
     assert sorted((row["eval_id"], row["answer"], row["json_dataset"], row["hf_loader"], row["runner"]) for row in report) == [
-        ("concepts/choice", "reference", "C", "C", "C"),
-        ("concepts/choice", "wrong", "I", "I", "I"),
-        ("concepts/unit", "reference", "C", "C", "C"),
-        ("concepts/unit", "wrong", "I", "I", "I"),
+        (item.id, answer, verdict, verdict, verdict)
+        for item in evals for answer, verdict in [("reference", "C"), ("wrong", "I")]
     ]
 
 

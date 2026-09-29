@@ -4,8 +4,7 @@ from pathlib import Path
 from ethevals.checks import CHECK_SOLVERS, CheckRun
 from ethevals.loader import load_eval
 from ethevals.runner import run
-from conftest import fixture_config
-from support import mock_delay
+from support import fixture_config, mock_delay
 
 original = CHECK_SOLVERS["quiz"]
 def delayed(evaluation, answer):

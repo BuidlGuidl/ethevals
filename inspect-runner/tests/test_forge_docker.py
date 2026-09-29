@@ -21,8 +21,7 @@ import anyio
 import pytest
 import yaml
 
-from conftest import fixture_config
-from support import build_task
+from support import build_task, fixture_config
 
 
 pytestmark = pytest.mark.docker
@@ -215,7 +214,6 @@ def traced_process(underlying):
 
 def test_reference_failures_owned_libraries_and_frozen_writer(tmp_path):
     output = tmp_path / "proof"
-    assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
     config = fixture_config()
     original = load_eval(Path("evals/building/erc20-points-token"), config)
     files = dict(original.files)
@@ -271,4 +269,3 @@ contract ConstructorTest is Test {
         elif list(variants)[row["epoch"] - 1] == "setup":
             assert row["checks"]["forge:test/ImageLibrary.t.sol:ConstructorTest:constructor()"] == {
                 "passed": False, "reason": "constructor failed"}
-    print("PASS: reference, unavailable compiler, constructor failure, owned libraries, stopped processes, and private diagnostics.")

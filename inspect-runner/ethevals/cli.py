@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -47,8 +46,8 @@ def parse_args(argv=None):
         parsers[name].add_argument("--budget", type=float, help="USD ceiling. Required for missing paid epochs.")
         parsers[name].add_argument("--wall-seconds", type=float, help="Bound preparation and scheduled epochs in wall seconds.")
     parsers["check"].set_defaults(agents=None)
-    parsers["export-hf"].add_argument("--hf-repo", default=os.environ.get("ETHEVALS_HF_REPO", DEFAULT_REPO))
-    parsers["export-hf"].add_argument("--license", default=os.environ.get("ETHEVALS_DATASET_LICENSE"), help="HF dataset license identifier. Unset means undecided.")
+    parsers["export-hf"].add_argument("--hf-repo", default=DEFAULT_REPO)
+    parsers["export-hf"].add_argument("--license", help="HF dataset license identifier. Unset means undecided.")
     publisher = parsers["publish-logs"]
     publisher.add_argument("--repo", required=True, help="GitHub owner/repo for log assets.")
     publisher.add_argument("--run-id", required=True, help="Unique results run ID. The release tag is results-<run-id>.")

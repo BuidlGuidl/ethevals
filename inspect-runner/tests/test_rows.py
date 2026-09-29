@@ -26,8 +26,7 @@ from inspect_ai.util import sandbox
 import pytest
 import yaml
 
-from conftest import catalog_quiz, fixture_config
-from support import build_task, mock_delay, run
+from support import build_task, catalog_quiz, fixture_config, mock_delay, run
 from test_forge_docker import containers
 
 
@@ -584,7 +583,7 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
             raise RuntimeError(f"Error executing claude code agent {result.returncode}: CLI failure")
         raise AssertionError("The death proof survived")
 
-    monkeypatch.setitem(agents.AGENTS, "claude_code", agents.Harness(lambda *a, **kw: killed, "proof"))
+    monkeypatch.setitem(agents.HARNESSES, "claude_code", agents.Harness(lambda *a, **kw: killed, "proof"))
     task = actor_task(evaluation, config, agent(config, "opus", "internet"), check_grader(), "internet", 1, compose)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
     assert row["status"] == "error", row

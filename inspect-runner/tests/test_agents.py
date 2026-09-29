@@ -18,7 +18,7 @@ import asyncio
 import inspect
 import pytest
 
-from conftest import fixture_config
+from support import fixture_config
 
 
 
@@ -30,7 +30,7 @@ def test_registry_builds_solver(key, harness):
     config = fixture_config()
     for search in [True, False]:
         config.search = search
-        solve = agents.AGENTS[harness].build(config, config.agents[key])
+        solve = agents.HARNESSES[harness].build(config, config.agents[key])
         assert inspect.iscoroutinefunction(solve)
         assert list(inspect.signature(solve).parameters) == ["state", "generate"]
 

@@ -3,13 +3,15 @@
 Add a folder under `evals/<pillar>/<name>/`.
 Use `concepts`, `transactions`, `building`, or `security` for the pillar.
 The folder path supplies the eval ID.
+`check` runs your reference and an untouched case: an empty reply for quizzes, and the starting workspace for builds and acts.
+Rows go under `reference/` and `empty/`.
 Finish when the reference passes, the untouched case fails, and the PR's free checks pass.
 
 ## Prepare the checkout
 
 Install Python 3.13, uv, Node.js 22 or later, and pnpm 9.14.2.
 For builds and acts, start Docker with Compose support.
-Give Docker at least 6.25 GiB for one stock act epoch, including 1 GiB for the host.
+Give Docker at least 7 GiB for one stock act epoch, including 1 GiB for the host.
 Extra services need more memory. The default concurrency is one.
 Vanilla quiz checks need no Docker.
 
@@ -18,15 +20,12 @@ Run these commands from the repository root in one shell:
 ```sh
 unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
 uv sync --frozen
-(cd site && pnpm install --frozen-lockfile)
 ```
 
-The site packages are also required by a Python visibility test.
-Before a container run on shared Docker, run `docker ps` and wait for other sessions' ETH Evals containers to finish.
 Check an unchanged quiz before you create your copy:
 
 ```sh
-docker ps
+rm -rf results/author-guide/agent-registries
 uv run ethevals check --evals evals/concepts/agent-registries --output results/author-guide/agent-registries
 ```
 
@@ -38,7 +37,6 @@ Expected final lines for this example:
 ```
 
 `check` makes no model calls and skips rubrics.
-For builds and acts, it builds the stock images and fetches public dependencies as needed.
 
 ## Choose an example to copy
 
@@ -54,9 +52,9 @@ The runner does not copy them into the agent's workspace, but the repository pub
 Do not rely on their secrecy from an agent with internet access.
 
 Use `[vanilla]` for a bare-model quiz, or `[vanilla, internet]` to include agents.
+Hugging Face publication includes targets, so internet-mode agents can look them up.
 Use `[internet]` for builds and acts.
 The `scenario` type and `skills` mode are not supported yet.
-Time limits belong to the runner configuration, not `eval.yaml`.
 
 ### Write a free-text quiz
 
@@ -80,7 +78,7 @@ Quote numeric targets and addresses so YAML keeps them as strings.
 Use stable check names matching `[a-z][a-z0-9_]*`. The default name is `answer`.
 The default match is exact and case-insensitive.
 For pattern matching, supply `method: pattern`, a regex in `pattern`, and a matching complete reply in `reference`.
-See the [target fields](../inspect-runner/README.md#eval-folders) for other answer formats.
+`location` (`exact`, `begin`, `end`, or `any`), `ignore_case`, and `numeric` pass through to Inspect's `match()`.
 Vanilla quizzes accept one target, including a single-item list.
 Keep `workspace/.gitkeep` so Git preserves the required empty directory.
 
@@ -103,11 +101,8 @@ target: C
 ```
 
 Set `target` to the correct uppercase letter in the listed order.
-The presence of `choices` selects multiple-choice scoring. Do not set `method: choice`.
+The presence of `choices` selects multiple-choice scoring.
 The runner preserves the order and supplies `ANSWER: C` for this reference.
-
-For either quiz format, have a reviewer check the fact and whether another answer is correct.
-The free reference only proves that the target accepts the reference reply.
 
 ### Write a build eval
 
@@ -125,11 +120,10 @@ eval_dir=evals/building/my-points-token
 
 The reference files overlay the declared workspace at matching paths.
 An optional `scorer/solution/run.sh` then runs with Bash in `/workspace`, with a 120-second limit.
-The untouched case keeps the starting contract.
 
 Write Forge tests with `.t.sol` filenames under `scorer/tests/`.
 The runner places them under `test/`, so the example imports `../src/BuilderPoints.sol`.
-Its seven test functions cover the token's prompt, and the runner adds `forge:compile`.
+Its seven test functions cover the token's metadata, supply, owner, and transfers. The runner adds `forge:compile`.
 
 Use Solidity 0.8.30 with the installed OpenZeppelin 5.4.0 and forge-std 1.9.7 libraries.
 Use the `@openzeppelin/contracts/` and `forge-std/` remappings.
@@ -142,8 +136,8 @@ The compiler must already exist in the image.
 If the prompt needs model grading, keep `scorer/rubric.md` with one yes-or-no question per `## name` heading.
 For example, `uses_openzeppelin` asks whether the contract uses OpenZeppelin v5's ERC20 implementation.
 If tests cover the whole prompt, remove the rubric file.
-Rubrics require tests for source evidence. Review the questions in the PR because the free check skips them.
-See [build scoring](../inspect-runner/README.md#build-scoring) for the evidence contract.
+Rubrics require tests for source evidence.
+See [build scoring](../inspect-runner/README.md#captured-files-and-build-scoring) for the evidence contract.
 
 ### Write an act eval
 
@@ -173,11 +167,12 @@ Supply exactly one `scorer/check` or `scorer/check.<ext>` file.
 Setup is optional and uses `scorer/setup` or `scorer/setup.<ext>`.
 Give each script a shebang for its interpreter. The runner makes it executable and runs it directly.
 
-Setup and checks run in the chain container under `/eval`.
+Setup and check run in the chain container from `/eval`, where your scorer files sit under `scorer/`.
 They receive `RPC_URL` for private Anvil controls, `PUBLIC_RPC_URL` for filtered RPC, and `SOLC` for the installed compiler.
-The chain and scorer containers have `cast`, `forge`, and internet access.
+The reference `run.sh` runs in the agent's container.
+Both containers have `cast`, `forge`, `jq`, and internet access.
+Forge runs offline, so pass `--use "$SOLC"`.
 Setup and checks each have 120 seconds. Keep their output concise.
-The reference overlays the workspace, then runs `run.sh` with Bash and a 120-second limit.
 
 Keep setup output and service responses free of reference solutions and private expected state.
 Keep chain controls out of services the agent can reach.
@@ -207,15 +202,14 @@ services:
     networks: [private]
 ```
 
-Pin each image by digest. The runner does not enforce pinning.
+Pin each image by digest.
 Set a positive `mem_limit` for each service, and budget Docker memory for their sum plus the stock services.
-There is no service-count cap or fixed memory limit for extra services.
 Join only `private`, which is also the default when `networks` is absent.
 The runner owns `default`, `scorer`, `chain`, and network definitions.
 Do not redeclare them or copy stock image tags into your file.
 Do not use host mounts, published ports, privileged containers, custom builds, or inherited host environment values.
 For persistent service data, declare a named volume and use a long-form `type: volume` mount.
-See the [Compose rules](../inspect-runner/README.md#compose-rules) for allowed fields.
+See the [Compose rules](../inspect-runner/README.md#compose-and-agents) for allowed fields.
 
 ## Check your eval
 
@@ -223,12 +217,11 @@ With `eval_dir` set by your chosen copy step, run:
 
 ```sh
 uv run ethevals validate --evals "$eval_dir"
-docker ps
+rm -rf results/author-eval
 uv run ethevals check --evals "$eval_dir" --output results/author-eval
 ```
 
 `validate` prints the eval ID and hash after it checks the declaration and files.
-It does not run the reference or check the prompt's correctness.
 `check` runs three reference epochs and three untouched epochs by default.
 It selects vanilla for quizzes and internet for builds and acts.
 Each invocation runs fresh epochs, even if the output directory exists.
@@ -241,11 +234,9 @@ Expected final lines for one eval:
 ```
 
 Read both row files.
-If the folder contains earlier checks, select the current eval ID and hash that `validate` printed.
 Require `status: passed` for every reference and `status: failed` for every untouched epoch.
 An untouched epoch needs at least one failed check. For example, the starting build compiles but fails behavior tests.
-Rows use `schema_version: 4` and `status` for the overall result.
-Each entry in `checks` has its own `passed` and `reason`. There is no row-level `passed` or `answer_kind`.
+Each entry in `checks` has its own `passed` and `reason`.
 
 If the command fails, use these steps:
 
@@ -255,45 +246,37 @@ If the command fails, use these steps:
 - For a failed reference, read each failed check's `reason`.
   Check compiler versions and imports for builds. Check setup values and token units for acts.
 - If the untouched case passes, strengthen the checks so they reject unfinished work.
-- If fewer rows appear, read the terminal error and `plan.json` under `reference/` and `empty/`.
-  Container preparation can fail before any epoch produces a row.
+- If fewer rows appear, read the terminal error.
 - For a Docker capacity error, increase Docker memory or reduce concurrency in the runner configuration.
 
-For acts, also exercise unwanted chain states beyond the untouched case.
-Read the reasons to confirm that the script reports the intended failure.
+For acts, temporarily change `run.sh` to send the wrong amount, then to send twice.
+Rerun `check` each time.
+The reference must fail with your script's reason, not an error.
+Restore `run.sh`.
 
 ## Prepare the pull request
 
-Keep `.gitkeep` in an otherwise empty workspace.
 Use regular files. The loader rejects symlinks and hard links.
 Avoid `lib`, `out`, and `cache` for authored files because Git ignores those names at any depth.
-The loader excludes those names directly under the eval root or `workspace/`, and rejects them anywhere under `scorer/`.
 Remove stray files before the final check. Eval hashes include uncommitted files.
 Keep generated logs and mock rows out of the PR, including `results/rows.jsonl`.
 
-If tests fail because they list the existing evals, update those expectations without weakening the behavior checks.
-These assertions can need changes:
-
-- The catalog list in [site/tests/runner.test.ts](../site/tests/runner.test.ts) includes every eval.
-- Vanilla quiz exports use `test_hf_cli_exports_fixture_rows_card_and_benchmark` and `test_hf_proof_covers_every_fixture_task` in the [Python tests](../inspect-runner/tests/).
-- `test_quizzes_through_real_pipeline` checks quiz IDs, epochs, and check names in those tests.
-
-To reproduce the PR's `Free checks` job, use a fresh output folder:
+To reproduce the PR's `Free checks` job, run:
 
 ```sh
-docker ps
-uv run python scripts/ci.py checks --output results/author-guide-ci
+(cd site && pnpm install --frozen-lockfile)
+rm -rf results/ci
+uv run python scripts/ci.py checks --output results/ci
 git diff --check
 ```
 
 This needs Docker and takes several minutes.
 It runs validation, free reference checks, Python tests, Docker proofs, dataset export, and site tests, typecheck, lint, and build.
-It makes no paid calls. A reviewer must assess any rubric and the prompt's correctness.
+It makes no paid calls. A reviewer checks the prompt's facts and any rubric.
 
 A paid run starts only when CI runs after merge and a maintainer has set a budget.
 `ETHEVALS_BUDGET_USD` defaults to zero, which blocks missing paid work.
 CI opens a separate results PR. Merging that PR puts the results on the board.
 Changing an included eval file changes its hash and makes earlier results stale.
 Hugging Face publication is a separate manual workflow for vanilla quizzes.
-It publishes targets, so internet-mode agents can look them up.
-See [CI and committed results](../README.md#ci-and-committed-results) for operator steps.
+See [CI and publication](../inspect-runner/README.md#ci-and-publication) for operator steps.

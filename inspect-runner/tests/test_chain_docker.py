@@ -1,4 +1,4 @@
-from conftest import fixture_config
+from support import fixture_config
 from contextlib import contextmanager
 from dataclasses import replace
 from ethevals.checks import check_agent, check_grader
@@ -15,7 +15,6 @@ from inspect_ai.util import sandbox
 from pathlib import Path
 import anyio
 import json
-import os
 import pytest
 import subprocess
 import time
@@ -221,7 +220,6 @@ assert rpc('eth_getBlockByNumber', ['latest', False])['hash'] == before
 
 def test_act_checks_bypasses_and_grading_boundary(tmp_path):
     output = tmp_path / "chain"
-    assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
     config = fixture_config()
     root = Path(__file__).resolve().parents[2]
     evaluation = load_eval(root / "evals/transactions/send-six-decimal-token", config)
@@ -234,7 +232,6 @@ def test_act_checks_bypasses_and_grading_boundary(tmp_path):
         agent = replace(agent, metadata={**agent.metadata, "epoch": list(variants).index(variant) + 1},
                          solver_for=lambda _, variant=variant: attempt(evaluation, variant))
         tasks.append(build_task(evaluation, config, agent, check_grader(), "internet", 1, compose))
-    started = time.monotonic()
     eval(tasks, log_dir=str(output / "logs"), display="plain", retry_on_error=0, fail_on_error=False, max_tasks=2)
     rows = export_rows(output)
     for row in rows:
@@ -253,5 +250,3 @@ def test_act_checks_bypasses_and_grading_boundary(tmp_path):
             text = log.model_dump_json()
             for method in ("eth_sendTransaction", "eth_sendUnsignedTransaction", "anvil_setBalance", "HTTP GET"):
                 assert f"RPC refused: {method}" in text or f"RPC refused: '{method}'" in text
-    print(json.dumps({"seconds": round(time.monotonic() - started, 2), "rows": rows}), flush=True)
-    return rows

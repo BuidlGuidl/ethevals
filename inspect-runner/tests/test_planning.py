@@ -7,8 +7,7 @@ from ethevals.planning import budget_check, plan
 from ethevals.rows import epoch_identity, fold_rows, write_rows
 import pytest
 
-from conftest import catalog_quiz, fixture_config, small_config
-from support import cli, eval_cli, run
+from support import catalog_quiz, cli, eval_cli, fixture_config, run, small_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -160,7 +159,7 @@ def test_budget_stops_before_preparation(tmp_path, monkeypatch):
 
 
 def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
-    from conftest import small_config
+    from support import small_config
     config = small_config()
     config_path = tmp_path / "config.yaml"
     config_path.write_text(config.model_dump_json())

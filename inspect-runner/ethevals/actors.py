@@ -5,7 +5,7 @@ from inspect_ai.model import GenerateConfig, Model, ModelInfo, ModelCost, get_mo
 from inspect_ai.solver import SolverSpec
 from inspect_ai._eval.loader import solver_from_spec
 
-from .agents import AGENTS, CodexModel, internet_solver
+from .agents import HARNESSES, CodexModel, internet_solver
 from .config import Mode, GraderConfig, uses_sandbox
 
 
@@ -58,7 +58,7 @@ def agent(config, key, mode, planning=False):
     harness = item.harness if mode == "internet" else None
     if harness == "codex_cli" and not planning:
         model = CodexModel(model)
-    metadata.update(harness=harness, harness_version=AGENTS[harness].version if harness else None)
+    metadata.update(harness=harness, harness_version=HARNESSES[harness].version if harness else None)
 
     def solve(evaluation):
         if mode == "vanilla":

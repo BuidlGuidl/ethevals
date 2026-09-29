@@ -79,7 +79,7 @@ def open_code(model, **settings):
     ))
 
 
-AGENTS = {
+HARNESSES = {
     "claude_code": Harness(claude, "2.1.274"),
     "codex_cli": Harness(codex, "0.158.0"),
     "opencode": Harness(open_code, "1.18.33"),
@@ -88,9 +88,9 @@ AGENTS = {
 
 @solver
 def internet_solver(harness: str, config, model):
-    if harness not in AGENTS:
+    if harness not in HARNESSES:
         raise ValueError(f"Harness {harness!r} has no internet solver yet")
-    agent = AGENTS[harness].build(config, model)
+    agent = HARNESSES[harness].build(config, model)
 
     async def solve(state, generate):
         if state.choices:

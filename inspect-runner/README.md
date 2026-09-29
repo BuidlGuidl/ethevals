@@ -207,12 +207,13 @@ CI gets the release's source commit from its Inspect logs.
 `ethevals export-hf --output DIR` writes vanilla quizzes to an empty directory.
 `--hf-repo` and `--license` set dataset card values.
 `scripts/ci.py release` previews the HF upload; `--publish` performs it.
+[release.yml](../.github/workflows/release.yml) publishes the dataset on manual dispatch with the `HF_TOKEN` secret.
 
 ## Maintainer checks
 
 Run `uv run pytest -q` for unit tests.
 Run `uv run pytest -q --run-docker -m docker` for the container proofs.
-Tests use the config factories in `tests/conftest.py`.
+Tests use the config factories in `tests/support.py`.
 `--run-live-exa -m live_exa` opts into hosted Exa schema checks.
 
 The agent proof also remains a command:

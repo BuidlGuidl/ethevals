@@ -81,11 +81,11 @@ _Avoid_: notes, description
 ## How evals are scored
 
 **Epoch**:
-One evaluation of one agent, or one bare model, on one eval in one mode. An epoch passes only if every check passes.
+One execution of one agent, or one bare model, on one eval in one mode. An epoch passes only if every check passes.
 _Avoid_: run, trial
 
 **Attempt**:
-A re-run of the same epoch after an error. The results row counts the initial execution as attempt 1.
+One execution of an epoch. The first is attempt 1. An error can lead to another, up to `max_attempts`.
 
 **Check**:
 One named thing the scorer decides about an epoch, recorded as pass or fail with a one-line reason.

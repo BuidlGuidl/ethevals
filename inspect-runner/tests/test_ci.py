@@ -12,8 +12,7 @@ from ethevals.rows import fold_rows, read_rows, write_rows
 from inspect_ai.log import read_eval_log, write_eval_log
 import pytest
 
-from conftest import catalog_quiz, fixture_config
-from support import cli, run
+from support import catalog_quiz, cli, fixture_config, run
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -120,7 +119,7 @@ def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path
 
 @pytest.mark.parametrize("budget", ["0", "nan", "inf", "-1"])
 def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
-    from conftest import small_config
+    from support import small_config
     config_path = tmp_path / "config.yaml"
     config_path.write_text(small_config().model_dump_json())
     output = tmp_path / "eval-run-1"
@@ -165,7 +164,7 @@ def test_publish_dry_run_and_resume_preserve_completed_epochs(tmp_path, monkeypa
 
 @pytest.mark.parametrize("status", ["failed", "error"])
 def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path, status):
-    from conftest import small_config
+    from support import small_config
     config = small_config()
     config_path = tmp_path / "config.yaml"
     config_path.write_text(config.model_dump_json())
@@ -193,7 +192,7 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path, status):
 
 def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows(tmp_path, monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST")  # Inspect omits Git revisions under pytest.
-    from conftest import small_config
+    from support import small_config
     config = small_config()
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
     previous = {"eval_id": quiz.id, "eval_hash": "stale", "model": "model", "mode": "vanilla", "epoch": 1,
@@ -239,7 +238,7 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
 
 
 def test_release_script_exports_without_upload(tmp_path, monkeypatch, capsys):
-    from conftest import fixture_quiz
+    from support import fixture_quiz
     evaluation = fixture_quiz(tmp_path / "evals")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(ci, "load_config", fixture_config)

@@ -9,8 +9,7 @@ from ethevals.files import inline_file
 from ethevals.loader import eval_hash, load_eval
 import pytest
 
-from conftest import fixture_config
-from support import build_task
+from support import build_task, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]

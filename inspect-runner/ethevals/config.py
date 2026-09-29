@@ -73,11 +73,11 @@ class Config(Declaration):
 
     @model_validator(mode="after")
     def check_grader(self):
-        from .agents import AGENTS
+        from .agents import HARNESSES
         if self.time_limits.keys() != {"quiz", "build", "act"}:
             raise ValueError("time_limits requires quiz, build, and act")
         for key, model in self.agents.items():
-            if model.harness is not None and model.harness not in AGENTS:
+            if model.harness is not None and model.harness not in HARNESSES:
                 raise ValueError(f"agents.{key}.harness: unknown harness {model.harness!r}")
         for item in [self.grader, *self.agents.values()]:
             if item.model not in self.prices:

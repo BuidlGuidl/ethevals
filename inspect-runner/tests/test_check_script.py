@@ -3,7 +3,7 @@ from pathlib import Path
 from ethevals.loader import load_eval
 import pytest
 
-from conftest import fixture_config
+from support import fixture_config
 
 
 

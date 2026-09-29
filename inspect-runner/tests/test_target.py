@@ -8,8 +8,7 @@ from inspect_ai.log import read_eval_log
 from inspect_ai.model import ModelOutput, get_model
 import pytest
 
-from conftest import fixture_config
-from support import build_task, eval_cli, run
+from support import build_task, eval_cli, fixture_config, run
 
 
 ROOT = Path(__file__).resolve().parents[2]

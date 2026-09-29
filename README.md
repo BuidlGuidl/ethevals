@@ -42,7 +42,7 @@ These check results stay separate from the board's paid results.
 To check one eval, select its folder:
 
 ```sh
-uv run ethevals check --evals evals/concepts/agent-registries --epochs 1
+uv run ethevals check --evals evals/concepts/agent-registries
 ```
 
 To check the folder format without execution, replace `check` with `validate`.

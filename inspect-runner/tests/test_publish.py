@@ -7,7 +7,7 @@ from ethevals.loader import load_eval
 from ethevals.publish import publish_logs
 import pytest
 
-from conftest import fixture_config
+from support import fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]

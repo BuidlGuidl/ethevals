@@ -14,7 +14,7 @@ import anyio
 import pytest
 import yaml
 
-from conftest import fixture_config
+from support import fixture_config
 from test_chain_docker import ROOT, docker
 from test_forge_docker import DockerBox
 
