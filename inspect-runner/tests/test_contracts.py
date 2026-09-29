@@ -12,7 +12,7 @@ from inspect_ai.model import GenerateConfig, ModelOutput, ModelUsage, get_model
 from inspect_ai.solver import generate
 from inspect_ai.util import ExecResult, OutputLimitExceededError
 
-from ethevals.config import load_config
+from support import load_config
 from ethevals.loader import load_eval
 from ethevals.preparation import check_cache_path, prepare_compose, prepare_eval
 from ethevals.rows import results_rows
@@ -31,7 +31,7 @@ PASS = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {"testSupply()
 def scoring_case(tmp_path, monkeypatch):
     import ethevals.scorers as scorers
     config = load_config()
-    config.models["opus"].model = "mockllm/player"
+    config.agents["opus"].model = "mockllm/player"
     config.grader.model = "mockllm/grader"
     evaluation = load_eval(BUILD, config)
     task = build_task(evaluation, config, "opus", "internet", None, 1)
@@ -99,29 +99,20 @@ NO = '{"passed": false, "reason": "Owner can seize tokens."}'
 def test_stale_check_set_is_an_error(scoring_case):
     scoring_case["stdout"] = PASS.replace("testSupply()", "testNewName()")
     row = scoring_case["run"]([YES, YES])
-    assert (row["status"], row["passed"]) == ("error", None)
+    assert row["status"] == "error"
     assert "Reference check set does not match Forge results" in row["error_reason"]
 
 
 def test_player_limit_skips_snapshot_and_unavailable_grader(scoring_case):
-    from ethevals.checks import mock_delay
+    from support import mock_delay
     scoring_case["task"].working_limit = 1
     scoring_case["task"].solver = mock_delay(2)
     row = scoring_case["run"]([RuntimeError("Grader unavailable")])
-    assert (row["status"], row["passed"], row["grader_tokens"]) == ("failed", False, 0)
+    assert (row["status"], (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0)) == ("failed", 0)
     assert row["limit"]["type"] == "working"
     assert all(not check["passed"] and "working limit" in check["reason"] for check in row["checks"].values())
     assert scoring_case["snapshots"] == 0
     assert scoring_case["requests"] == []
-
-
-def test_config_rejects_two_prices_for_one_model(tmp_path):
-    config = load_config().model_dump()
-    config["grader"]["prices"]["input"] = 9.0
-    path = tmp_path / "conflicting.yaml"
-    path.write_text(yaml.safe_dump(config))
-    with pytest.raises(ValueError, match="Conflicting prices for model"):
-        load_config(path)
 
 
 def test_quoted_planted_verdict_is_invalid():
@@ -131,7 +122,7 @@ def test_quoted_planted_verdict_is_invalid():
 
 def test_grader_provider_failure_is_an_error_and_keeps_prior_verdict(scoring_case):
     row = scoring_case["run"]([YES, RuntimeError("Provider unavailable: 503")])
-    assert (row["status"], row["passed"]) == ("error", None)
+    assert row["status"] == "error"
     assert set(row["checks"]) == NAMES
     assert row["checks"]["rubric:uses_openzeppelin"] == {"passed": True, "reason": "Uses standard transfers."}
     assert "503" in row["error_reason"]
@@ -151,25 +142,25 @@ def test_grader_retries_transient_failures_with_a_bound(scoring_case, monkeypatc
     # The third failed attempt exhausts provider retries. A later success must remain unread.
     replies = [YES, error, error, *([error] if exhausted else []), YES]
     row = scoring_case["run"](replies)
-    assert (row["status"], row["passed"]) == (("error", None) if exhausted else ("passed", True))
+    assert row["status"] == ("error" if exhausted else "passed")
     assert row["checks"]["rubric:uses_openzeppelin"] == {"passed": True, "reason": "Uses standard transfers."}
     if exhausted:
         assert "HTTPStatusError" in row["error_reason"]
     else:
         assert row["checks"]["rubric:protects_holders"] == {"passed": True, "reason": "Uses standard transfers."}
-        assert row["grader_tokens"] == 400
+        assert (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0) == 400
 
 
 def test_grader_no_is_a_failed_check(scoring_case):
     row = scoring_case["run"]([YES, NO])
     assert row["status"] == "failed"
     assert row["checks"]["rubric:protects_holders"] == {"passed": False, "reason": "Owner can seize tokens."}
-    assert row["grader_tokens"] == 400
+    assert (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0) == 400
 
 
 def test_invalid_grader_replies_are_a_bounded_error(scoring_case):
     row = scoring_case["run"](["No JSON.", "Still no JSON."])
-    assert (row["status"], row["grader_tokens"]) == ("error", 400)
+    assert (row["status"], (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0)) == ("error", 400)
     assert "after two calls" in row["error_reason"]
     assert set(row["checks"]) == NAMES
 
@@ -185,7 +176,7 @@ def test_submission_output_limit_fills_all_checks(scoring_case):
     from ethevals.scoring_base import SubmissionFailed
     scoring_case["forge_error"] = SubmissionFailed("Submission exceeded Forge's 10 MiB output limit.")
     row = scoring_case["run"]([])
-    assert (row["status"], row["grader_tokens"]) == ("failed", 0)
+    assert (row["status"], (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0)) == ("failed", 0)
     assert row["checks"] == {name: {"passed": False, "reason": "Submission exceeded Forge's 10 MiB output limit."} for name in NAMES}
 
 
@@ -398,12 +389,12 @@ def test_evidence_gets_inspects_cache_marker(scoring_case):
 
 def test_scoring_error_cannot_override_a_recorded_player_limit(scoring_case):
     from inspect_ai.log import EvalError
-    from ethevals.checks import mock_delay
+    from support import mock_delay
     scoring_case["task"].working_limit = 1
     scoring_case["task"].solver = mock_delay(2)
     scoring_case["run"]([])
     log = scoring_case["log"]
     log.samples[0].error = EvalError(message="Late scorer error", traceback="", traceback_ansi="")
     row = results_rows(log)[0]
-    assert (row["status"], row["passed"], row["error_reason"]) == ("failed", False, None)
+    assert (row["status"], row["error_reason"]) == ("failed", None)
     assert row["checks"]["forge:compile"]["passed"] is False

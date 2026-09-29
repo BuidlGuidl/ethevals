@@ -14,7 +14,7 @@ from inspect_ai import eval
 from inspect_ai.solver import solver
 
 from ethevals.checks import check_player, check_grader
-from ethevals.config import load_config
+from support import load_config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose, prepare_eval
 from ethevals.runner import build_task
@@ -243,4 +243,4 @@ def test_slow_setup_preserves_player_time(tmp_path):
     log = eval(task, log_dir=str(tmp_path / "slow"), display="none", retry_on_error=0)[0]
     row = results_rows(log)[0]
     assert (row["status"], row["checks"]) == ("passed", {"script:ran": {"passed": True, "reason": "Player reached grading."}})
-    assert row["model_tokens"] > 0
+    assert row["total_tokens"] > 0

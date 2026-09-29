@@ -12,7 +12,7 @@ from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
 
 from ethevals.checks import check_player, check_grader
-from ethevals.config import load_config
+from support import load_config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose, prepare_eval
 from ethevals.runner import build_task
@@ -87,22 +87,23 @@ def run_proof(output, variants=None):
     compose = prepare_compose(evaluation, output)
     evaluation = prepare_eval(evaluation, output, compose)
     tasks = []
-    for variant in variants or ("reference", "wrong", "crash", "missing", "cheat", "pending"):
+    variants = variants or ("reference", "wrong", "crash", "missing", "cheat", "pending")
+    for variant in variants:
         player = check_player(evaluation, "empty")
-        player = replace(player, metadata={**player.metadata, "answer_kind": variant},
+        player = replace(player, metadata={**player.metadata, "epoch": list(variants).index(variant) + 1},
                          solver_for=lambda _, variant=variant: attempt(evaluation, variant))
         tasks.append(build_task(evaluation, config, player, check_grader(), "internet", 1, compose))
     started = time.monotonic()
     eval(tasks, log_dir=str(output / "logs"), display="plain", retry_on_error=0, fail_on_error=False, max_tasks=2)
     rows = export_rows(output)
     for row in rows:
-        assert row["status"] == ("passed" if row["answer_kind"] == "reference" else "failed"), row
+        assert row["status"] == ("passed" if list(variants)[row["epoch"] - 1] == "reference" else "failed"), row
         assert set(row["checks"]) == {"script:agent_sender", "script:recipient_balance"}
-        if row["answer_kind"] == "wrong":
+        if list(variants)[row["epoch"] - 1] == "wrong":
             assert row["checks"]["script:recipient_balance"] == {"passed": False, "reason": "Recipient holds 13000000 base units; expected 12500000."}
-        if row["answer_kind"] == "pending":
+        if list(variants)[row["epoch"] - 1] == "pending":
             assert row["checks"]["script:recipient_balance"] == {"passed": False, "reason": "Recipient holds 0 base units; expected 12500000."}
-        if row["answer_kind"] == "cheat":
+        if list(variants)[row["epoch"] - 1] == "cheat":
             log = read_eval_log(str(output / row["log_file"]))
             text = log.model_dump_json()
             for method in ("eth_sendTransaction", "eth_sendUnsignedTransaction", "anvil_setBalance", "HTTP GET"):

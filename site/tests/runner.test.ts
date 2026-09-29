@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { loadBoard, loadEvaluations, parseRows } from "../src/load";
@@ -30,16 +30,12 @@ test("the board reads the merged runner's catalog and reference and empty rows",
   for (const answer of ["reference", "empty"]) {
     const filename = path.join(root, "results", answer, "rows.jsonl");
     const rows = parseRows(readFileSync(filename, "utf8"), filename, evaluations);
-    assert.deepEqual(rows.map((row) => [row.eval_id, row.schema_version, row.status, row.passed, row.answer_kind]),
-      [["concepts/agent-registries", 3, answer === "reference" ? "passed" : "failed", answer === "reference", answer]]);
+    assert.deepEqual(rows.map((row) => [row.eval_id, row.schema_version, row.status]),
+      [["concepts/agent-registries", 4, answer === "reference" ? "passed" : "failed"]]);
     assert.equal(rows[0].eval_hash, evaluations.find((evaluation) => evaluation.id === rows[0].eval_id)!.hash);
-    const board = loadBoard({ ETHEVALS_ROWS: filename }, site);
-    assert.deepEqual([Object.keys(board.evaluations), board.tables.internet.subjects, board.tables.vanilla.subjects],
-      [["building/erc20-points-token", "concepts/agent-registries", "concepts/wei-per-ether", "transactions/send-six-decimal-token"], [], []]);
+    assert.equal(rows[0].log_url, null);
+
   }
-  const plan = JSON.parse(run(["publish-logs", "--output", path.join(root, "results/reference"),
-    "--repo", "example/ethevals", "--run-id", "123-1", "--commit", "a".repeat(40), "--dry-run"]));
-  assert.deepEqual(plan.skipped, { published: 0, key_free: 1, stale: 0, skills: 0 });
-  assert.deepEqual(plan.assets, []);
-  assert.equal(existsSync(plan.rows_file), false);
+  const board = loadBoard({}, site);
+  assert.deepEqual([board.tables.internet.subjects, board.tables.vanilla.subjects], [[], []]);
 });

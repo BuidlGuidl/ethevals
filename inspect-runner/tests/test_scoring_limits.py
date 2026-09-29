@@ -10,11 +10,11 @@ from inspect_ai.event import ModelEvent
 from inspect_ai.model import ChatMessageUser, ChatMessageTool, ModelOutput, get_model
 from inspect_ai.solver import solver
 
-from ethevals.config import load_config
+from support import load_config
 from ethevals.loader import load_eval
 from ethevals.rows import results_rows
 from ethevals.scorers import forge_checks
-from ethevals.search import valid_search_result
+from support import valid_search_result
 from support import build_task
 from test_contracts import scoring_case, YES, BUILD
 
@@ -42,7 +42,7 @@ def test_unexplained_forge_failure_is_an_error(code, stdout, stderr, reason):
 def test_unexplained_forge_failure_produces_error_row(scoring_case):
     scoring_case.update(stdout="", stderr="Forge panicked", returncode=1)
     row = scoring_case["run"]([])
-    assert (row["status"], row["passed"]) == ("error", None)
+    assert row["status"] == "error"
     assert "without test results or a compiler diagnostic" in row["error_reason"]
 
 
@@ -64,10 +64,10 @@ def test_discovery_error_names_failure(scoring_case, monkeypatch, case, reason):
 def test_grader_effective_config_and_recorded_ceiling(scoring_case):
     row = scoring_case["run"]([YES, YES])
     assert row["status"] == "passed"
-    assert row["grader_cost_limit_usd"] == pytest.approx(23.7288)
+    assert scoring_case["log"].eval.metadata["grader_cost_limit_usd"] == pytest.approx(23.7288)
     assert [(item.max_retries, item.timeout, item.attempt_timeout, item.max_tokens, item.reasoning_effort)
             for item in scoring_case["configs"]] == [(2, 60, 20, 4096, "none")] * 2
-    assert (row["working_limit_seconds"], row["time_limit_seconds"], row["scoring_limit_seconds"]) == (1200, 3600, 540)
+    assert (scoring_case["log"].eval.metadata["working_limit_seconds"], scoring_case["log"].eval.metadata["time_limit_seconds"], scoring_case["log"].eval.metadata["scoring_limit_seconds"]) == (1200, 3600, 540)
 
 
 @pytest.mark.parametrize("waiting", ["provider", "backoff"])
@@ -90,7 +90,7 @@ def test_slow_provider_stops_at_total_grader_deadline(scoring_case, monkeypatch,
     assert row["status"] == "error"
     assert "Grader exceeded its total call deadline" in row["error_reason"]
     assert elapsed < 4
-    assert row["grader_tokens"] == 0
+    assert (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0) == 0
 
 
 def test_budget_reserves_timeout_attempts_and_invalid_replies(scoring_case, monkeypatch):
@@ -106,8 +106,8 @@ def test_budget_reserves_timeout_attempts_and_invalid_replies(scoring_case, monk
     assert row["status"] == "passed"
     assert len(scoring_case["configs"]) == 12
     # All twelve requests can be billed, though Inspect meters only four.
-    assert row["grader_tokens"] == 800
-    assert row["grader_cost_limit_usd"] == pytest.approx(12 * 1.9774)
+    assert (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0) == 800
+    assert scoring_case["log"].eval.metadata["grader_cost_limit_usd"] == pytest.approx(12 * 1.9774)
 
 
 def test_non_ascii_evidence_fits_token_floor(scoring_case):
@@ -129,7 +129,7 @@ def test_non_ascii_evidence_fits_token_floor(scoring_case):
 def test_build_rejects_scoring_window_that_cannot_fit():
     config = load_config()
     evaluation = load_eval(BUILD, config)
-    evaluation = replace(evaluation, declaration=evaluation.declaration.model_copy(update={"time_limit": 300}))
+    config.time_limits["build"] = 300
     with pytest.raises(ValueError, match="Scoring needs 540 seconds, but Inspect allows 450"):
         build_task(evaluation, config, None, "internet", "reference", 1)
 
@@ -145,18 +145,18 @@ def test_operator_stop_is_an_error_and_skips_scoring(scoring_case):
 
     scoring_case["task"].solver = stopped()
     row = scoring_case["run"]([])
-    assert (row["status"], row["passed"], row["limit"]["type"]) == ("error", None, "operator")
+    assert (row["status"], row["limit"]["type"]) == ("error", "operator")
     assert "Stopped by operator" in row["error_reason"]
     assert scoring_case["snapshots"] == 0
 
 
 def test_wall_backstop_is_an_error(scoring_case):
-    from ethevals.checks import mock_delay
+    from support import mock_delay
     scoring_case["task"].solver = mock_delay(2)
     scoring_case["task"].time_limit = 1
     row = scoring_case["run"]([])
-    assert (row["status"], row["passed"], row["limit"]["type"]) == ("error", None, "time")
-    assert row["working_seconds"] < row["working_limit_seconds"]
+    assert (row["status"], row["limit"]["type"]) == ("error", "time")
+    assert row["working_seconds"] < scoring_case["log"].eval.metadata["working_limit_seconds"]
     assert scoring_case["snapshots"] == 0
 
 
@@ -165,7 +165,7 @@ def test_provider_backoff_does_not_spend_working_limit(tmp_path, monkeypatch):
     from inspect_ai.model._providers.mockllm import MockLLM
     from tenacity import wait_fixed
     config = load_config()
-    config.time_limit = 1
+    config.time_limits["quiz"] = 1
     evaluation = load_eval(BUILD.parents[1] / "concepts/wei-per-ether", config)
     task = build_task(evaluation, config, None, "vanilla", "reference", 1)
     attempts = 0
@@ -183,28 +183,6 @@ def test_provider_backoff_does_not_spend_working_limit(tmp_path, monkeypatch):
     task.model = get_model("mockllm/model", custom_outputs=reply)
     log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(log)[0]
-    assert (row["status"], row["passed"], attempts) == ("passed", True, 2)
+    assert (row["status"], attempts) == ("passed", 2)
     assert row["total_seconds"] >= 1.5
     assert row["working_seconds"] < 1
-
-
-@pytest.mark.parametrize("code_mode", [False, True])
-def test_exa_rate_limit_in_transcript_counts_once(scoring_case, code_mode):
-    from inspect_ai.log import read_eval_log, write_eval_log
-    scoring_case["run"]([YES, YES])
-    log = scoring_case["log"]
-    function = "exec" if code_mode else "mcp__exa__web_search_exa"
-    arguments = {"input": "text(await tools.mcp__exa__web_search_exa({query:'test'}));"} if code_mode else {"query": "test"}
-    call = ModelOutput.for_tool_call("mockllm/model", function, arguments)
-    result = json.dumps({"content": [{"type": "text", "text": "You've hit Exa's free MCP rate limit. See https://exa.ai"}]})
-    message = ChatMessageTool(function=function, tool_call_id=call.message.tool_calls[0].id, content=result)
-    messages = [ChatMessageUser(content="Search"), call.message, message]
-    # Agent bridges keep tool results in repeated model inputs, without ToolEvents.
-    event = ModelEvent(model="mockllm/model", input=messages, tools=[], tool_choice="none",
-                       config={}, output=ModelOutput.from_content("mockllm/model", "Done"))
-    log.samples[0].events.extend([event, event])
-    write_eval_log(log, log.location)
-    row = results_rows(read_eval_log(log.location))[0]
-    assert (row["status"], row["search_calls"], row["search_failed"], row["search_rate_limited"]) == ("passed", 1, 1, 1)
-    assert valid_search_result(result) is False
-    assert valid_search_result('Title: ERC-20\nURL: https://ethereum.org/erc20\nContent: Token standard') is True

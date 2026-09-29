@@ -8,5 +8,3 @@ Sample model reply: ANSWER: C
 Check: answer
 Verdict: Pass
 Reason: The answer selects 10^18 wei.
-
-Real epochs link to their own Inspect .eval files through ETHEVALS_LOG_BASE.

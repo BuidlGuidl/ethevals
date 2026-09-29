@@ -13,7 +13,7 @@ Without it, the runner uses `images/stock.compose.yaml` for quizzes and builds.
 Act evals use `images/act.compose.yaml` with the shared chain service.
 
 `eval.yaml` requires `type`, `motivation`, `prompt`, and `modes`.
-It accepts optional `choices`, a list of strings, and `time_limit`, a positive number of seconds.
+It accepts optional `choices`, a list of strings.
 Modes use the glossary names directly: `vanilla`, `internet`, and `skills`.
 The runner selects only modes that each eval declares.
 `run` defaults to vanilla. `check` selects vanilla for quizzes and internet for other types.
@@ -107,33 +107,24 @@ See the root README for the limits of this cost estimate.
 
 | Fields | Meaning |
 | --- | --- |
-| `schema_version` | Results format version, currently `3`. |
-| `eval_id`, `eval_hash`, `pillar`, `type` | Eval identity at execution time. |
-| `harness`, `model`, `effort`, `mode` | Agent or bare model identity. A bare model has a null harness. |
-| `harness_version`, `images` | Harness version and service image tags used for this execution. |
-| `runner_inputs`, `chain_inputs` | SHA-256 hashes of each stock image's Dockerfile and copied files. Both include `solc.json`. |
-| `grader_model`, `grader_effort`, `grader_prices` | Grader identity and configured prices. Free checks bind the grader to mockllm. |
-| `answer_kind` | `reference`, `empty`, or `default` for mock checks. Null for paid epochs. |
-| `epoch`, `status`, `passed` | Epoch number and result. Errors have a null verdict. |
-| `attempt`, `max_attempts` | Execution count and configured cap per identity. |
-| `model_metered_usd`, `grader_metered_usd` | Dollars recorded by Inspect's cost meter for each role. Mock usage can have synthetic prices. |
-| `cost_limit_usd`, `grader_cost_limit_usd`, `limit` | Separate budgets and any player limit that stopped execution. |
-| `working_limit_seconds`, `time_limit_seconds`, `scoring_limit_seconds` | Player working limit, wall-clock backstop, and total scoring deadline. |
-| `search_calls`, `search_failed`, `search_rate_limited`, `search_capped` | Search and fetch calls, failed results, Exa throttling, and our cap refusals. Repeated model inputs count once. |
-| `checks` | JSON object keyed by check name. Each check has `passed` and a one-line `reason`. |
-| `error_kind`, `error_reason` | Error details, separate from a failed check. |
-| `model_tokens`, `grader_tokens`, `total_tokens` | Total token counts. Grader usage is subtracted from overall usage. |
-| `token_source` | `mock` or `provider`. Mock token counts are synthetic. |
-| `model_cost_usd`, `model_cost_source`, `prices` | Model cost, its source, and the configured price object. Unknown cost is null with source `unavailable`. |
-| `grader_cost_usd`, `grader_cost_source`, `grader_prices` | Separate grader cost, source, and price object. No grader calls means zero with source `no_usage`. |
-| `working_seconds`, `total_seconds` | Inspect's working time and elapsed time. Setup failures can leave these null. |
-| `log_file`, `log_sample_id`, `log_epoch`, `sample_uuid` | Log path relative to the results folder and Inspect's sample identity. |
+| `schema_version` | Row schema version 4. |
+| `eval_id`, `eval_hash`, `type` | Eval identity and type. |
+| `mode`, `harness`, `model`, `effort`, `epoch` | Epoch identity. |
+| `attempt`, `completed_at` | Retry number and completion time used when rows merge. |
+| `status`, `checks` | Passed, failed, or error, with each named check and reason. |
+| `error_kind`, `error_reason`, `limit` | Error details or the Inspect limit reached. |
+| `total_tokens` | Total model and grader tokens. |
+| `model_cost_usd`, `grader_cost_usd`, `cost_source` | Costs for each role and their source. Unknown costs are null. |
+| `working_seconds`, `total_seconds` | Inspect working and elapsed time. |
+| `log_file`, `log_url` | Local asset path and full URL after publication. |
+
+Config snapshots, prices, and search calls remain in the Inspect log.
 
 The exporter reads complete logs so long reasons survive Inspect's summary truncation.
 It uses `role_usage["grader"]` even when the grader and model under test share a model name.
 Synthetic setup-failure rows have unknown costs for both roles.
 Error rows retain the fixed check names and any verdicts completed before the error.
-Checks without a verdict carry `passed: false` and a `No verdict` reason. The row's verdict remains null.
+Checks without a verdict carry `passed: false` and a `No verdict` reason. The row's status remains `error`.
 Docker failures, broken reference data, and grader failures are errors on the runner's side.
 A grader's explicit `passed: false` is a failed check.
 
@@ -142,7 +133,7 @@ A grader's explicit `passed: false` is a failed check.
 Run `uv run ethevals catalog --output site/.catalog` from the repository root to export public eval declarations.
 The command uses the same loader and captured file manifest as execution and hashing.
 `catalog.json` contains declarations, eval IDs, pillars, and hashes. It excludes scorer contents and workspace files.
-The site's normal build runs this command and reads schema v3 rows. See [the site README](../site/README.md).
+The site's normal build runs this command and reads schema v4 rows. See [the site README](../site/README.md).
 
 ## Extension hooks
 
@@ -171,21 +162,21 @@ The rubric registry entry sets `free_check=False` and stays out of free checks.
 Each `AGENTS` entry in `agents.py` holds one solver factory and its version.
 `Harness.build()` supplies the version and host-side Exa tool bridge to that factory.
 `actors.py` constructs the player and grader once, with their models, effort, and prices.
-`build_task()` receives these actors. Check-only solvers and delays live in `checks.py`.
+`build_task()` receives these actors. Check solvers live in `checks.py`. Test delays live in the tests.
 `Eval.sample()` already maps workspace files to `/workspace/` and keeps scorer files separate.
 Vanilla execution clears the file mapping before a plain model call.
 Internet execution sets a Docker sandbox on each sample.
 
-`config.yaml` holds player model settings and a separate `grader` entry.
-The grader entry has `model`, `effort`, `max_tokens`, `prices`, and `price_source` fields.
+`config.yaml` holds `agents` and a separate `grader` entry.
+The grader entry has `model`, `effort`, and `max_tokens`. Prices live in one map keyed by model.
 Effort accepts `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
 `validate` rejects other effort values before a paid run.
 It also rejects harness names absent from `AGENTS`. A null harness supports vanilla mode only.
 All four configured models declare a harness and remain available for vanilla quizzes.
 `agent_model_config` supplies the CLI model identity.
 Actor construction registers prices once, including names absent from Inspect's database.
-Each model ID has one price schedule across both roles. Config loading rejects conflicting schedules.
-`search_provider` accepts `https://mcp.exa.ai/mcp` or null. Null disables search.
+Each model ID has one price schedule across both roles. The `prices` map stores each model once.
+`search` enables or disables Exa. The endpoint is fixed in `search.py`.
 The host sends optional `EXA_API_KEY` in an HTTP header. The bridge exposes no key to any harness.
 Keyed and keyless requests use the same host-side path. Logs and agent configuration contain no key.
 `search_limit` caps search and fetch requests together at 20 per epoch. Failed requests consume a slot.
@@ -195,10 +186,9 @@ The optional `--run-live-exa -m live_exa` test compares the raw hosted snapshot.
 The host logs HTTP status and JSON-RPC error code and message, with the key redacted.
 Keyed search remains unverified until the first keyed run.
 The plan reserves the configured `search_price_usd`, currently a guessed $0.05, for every slot, including keyless runs.
-Check this price before funding a run. Rows retain the limit, price, and search outcome counts.
+Check this price before funding a run. Logs retain the limit, price, and search calls.
 The reserve covers the per-call caps and totals $1 per internet attempt.
-`time_limit` supplies the fallback working-time limit. `time_limits` sets working limits by eval type.
-An eval's `time_limit` takes precedence.
+`time_limits` sets working limits for quiz, build, and act evals.
 Quizzes allow 300 working seconds; builds and acts allow 1,200. Inspect excludes retry backoff and sandbox waits.
 The wall-clock backstop is three times the working limit: 900 seconds for quizzes and 3,600 seconds for builds and acts.
 `cost_limit` gives the player $5. The grader has a computed allowance instead of a configurable minimum.
@@ -206,7 +196,7 @@ Each request caps serialized messages and generation settings at 300,000 bytes, 
 Evidence uses ASCII escapes. The allowance reserves one input token per serialized byte.
 It covers two calls per question and three provider attempts per call, including abandoned attempts absent from reported usage.
 The formula is `questions * 2 * (max_retries + 1) * (300000 * max(input, cache_read, cache_write) + max_tokens * output) / 1000000`.
-`rubric_budget(evaluation, config)` supplies this ceiling for rows and the CI budget gate.
+`rubric_budget(evaluation, config)` supplies this ceiling for logs and the CI budget gate.
 Rows record it as `grader_cost_limit_usd`. The configured two-question build reserves $23.7288.
 The ceiling assumes the configured prices and output cap. It grants no cache discount.
 These settings live in `config.yaml`, alongside `max_attempts: 2`.
@@ -223,7 +213,7 @@ Task creation requires that deadline to fit inside Inspect's scoring window, hal
 Player working-time and cost limits take precedence over scoring errors and produce a final failed row.
 After a player limit, scoring skips the snapshot and grader.
 An operator stop or a wall-clock stop before the working limit produces an error row.
-`max_tasks` and `max_samples` control concurrency. The checked-in config sets both to one.
+`concurrency` controls parallel epochs. The checked-in config sets it to one.
 
 ## Build scoring
 
@@ -482,19 +472,19 @@ The [paid ADR test](../README.md#run-the-paid-adr-0002-test) gives exact command
 
 From the repository root, export vanilla quizzes with `uv run ethevals export-hf --output out/hf`.
 The output directory must be empty. `--hf-repo` and `--license` set the dataset card values.
-Run the offline proof with `uv run ethevals prove-hf --export out/hf --output out/hf-proof`.
-The proof records observed scores from stock Inspect and the runner in `out/hf-proof/report.json`.
+Run the offline proof with `uv run pytest -q inspect-runner/tests/test_outputs.py -k hf_proof`.
+The proof records observed scores from stock Inspect and the runner in its temporary output folder.
 
 Plan log publication with:
 
 ```sh
 uv run ethevals publish-logs --output results/paid \
-  --repo OWNER/REPO --run-id RUN_ID --commit FULL_SOURCE_SHA --dry-run
+  --repo OWNER/REPO --run-id RUN_ID --commit FULL_SOURCE_SHA
 ```
 
-The dry run writes nothing. Replace `--dry-run` with `--publish` to upload through `gh`.
+The dry run writes nothing. Add `--publish` to upload through `gh`.
 After success, the command writes `results/paid/published/results-RUN_ID.jsonl`.
-Publication skips non-final error rows as well as key-free, stale-hash, and skills rows.
-It skips hidden rows and logs already linked to releases. Keep publication files when reusing a results folder.
-Each command accepts only its own flags. Export, proof, and publish commands require explicit output paths.
+Publication skips non-final error rows. The site filters stale hashes and parks skills.
+It skips logs already linked to releases. Keep publication files when reusing a results folder.
+Each command accepts only its own flags. Export and publish commands require explicit output paths.
 `validate` rejects alternative targets and extra scorers on vanilla quizzes.

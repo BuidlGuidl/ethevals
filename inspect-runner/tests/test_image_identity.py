@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from ethevals.config import load_config
+from support import load_config
 from ethevals.images.tag import BUILD_INPUTS, image_inputs, image_tag
 from ethevals.loader import load_eval
 from ethevals.preparation import check_cache_path, prepare_compose
@@ -80,8 +80,8 @@ def test_rows_record_both_build_identities(tmp_path):
         log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(log)[0]
     assert (row["status"], row["checks"]) == ("failed", {"script:balance": {"passed": False, "reason": "No transfer."}})
-    assert row["images"] == {"default": image_tag(IMAGES), "scorer": image_tag(IMAGES), "chain": image_tag(IMAGES, "chain")}
-    assert row["runner_inputs"] == image_inputs(IMAGES)
-    assert row["chain_inputs"] == image_inputs(IMAGES, "chain")
-    assert set(row["runner_inputs"]) == {"Dockerfile", "solc.json"}
-    assert set(row["chain_inputs"]) == {"Chain.Dockerfile", "solc.json", "rpc_filter.py"}
+    assert log.eval.metadata["images"] == {"default": image_tag(IMAGES), "scorer": image_tag(IMAGES), "chain": image_tag(IMAGES, "chain")}
+    assert log.eval.metadata["runner_inputs"] == image_inputs(IMAGES)
+    assert log.eval.metadata["chain_inputs"] == image_inputs(IMAGES, "chain")
+    assert set(log.eval.metadata["runner_inputs"]) == {"Dockerfile", "solc.json"}
+    assert set(log.eval.metadata["chain_inputs"]) == {"Chain.Dockerfile", "solc.json", "rpc_filter.py"}

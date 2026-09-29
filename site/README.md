@@ -49,46 +49,43 @@ All paths below resolve from `site/`.
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `ETHEVALS_SAMPLE` | `0` | `1` selects only `sample/rows.jsonl` and `sample/catalog.json`. |
-| `ETHEVALS_ROWS` | `../results/rows.jsonl` | Path to one results file. Published rows contain release-relative log paths. |
-| `ETHEVALS_LOG_BASE` | Unset | GitHub release-download base URL, or an absolute site path. |
+| `ETHEVALS_ROWS` | `../results/rows.jsonl` | Path to one results file. Published rows contain full log URLs. |
 
 An absent default results file produces the empty state.
 An absent explicit file fails the build. Sample mode and `ETHEVALS_ROWS` cannot be combined.
 Malformed rows and duplicate epoch identities fail the build with the file and line.
-This includes undeclared modes, mismatched pillars or types at the same hash, and invalid mode and harness pairs.
+This includes undeclared modes, mismatched types at the same hash, and invalid mode and harness pairs.
 A missing evals root or catalog fails the build.
-One build line reports the rows path and counts for shown, stale, key-free, and excluded skills rows.
+One build line reports the rows path and counts for loaded, stale, and parked skills rows.
 An absent default file appears in that line.
 
 After publishing logs with `ethevals publish-logs --publish`, use:
 
 ```sh
 ETHEVALS_ROWS=../results/paid/published/results-12345-1.jsonl \
-ETHEVALS_LOG_BASE=https://github.com/BuidlGuidl/ethevals/releases/download \
 pnpm build
 ```
 
-A row with `log_file: results-12345-1/epoch.eval` links to
+The publisher writes this `log_url`:
 `https://github.com/BuidlGuidl/ethevals/releases/download/results-12345-1/epoch.eval`.
-Rows from other runs carry other release tags, so one base reaches all releases.
+Rows from other runs carry their own release URLs.
 CI records attempts before log uploads and adds release links afterward.
 The publisher rebuilds rows from each run's logs, including interrupted attempts.
 The root README describes the paid CI path.
 Execution errors remain visible without log links. Their unpublished logs stay in the workflow artifact.
 The publisher writes linked rows after the upload succeeds, in a file named for the release.
-Its dry run writes nothing. It excludes key-free, stale-hash, skills, and already published logs.
-Only `results-<run-id>/<asset>.eval` paths receive release links when `ETHEVALS_LOG_BASE` is set.
+Its dry run writes nothing. It excludes already published logs and non-final errors.
 Local `logs/` paths remain visible without links. Sample mode keeps its bundled log links.
 The row fold preserves newer attempts regardless of publication order.
 It reads only `origin/main`, `origin/ci/results`, and artifact rows. An unchanged retry can reopen a missing results PR.
 The site still reads one rows file and rejects duplicate identities.
 The link downloads the `.eval` file. Open its local folder with `inspect view --log-dir path/to/folder`.
 Private repository assets require GitHub access. Public downloads require a public repository.
-Without a base, the panel says that the full log is not published.
+Without a URL, the panel says that the full log is not published.
 The site does not copy or publish real logs.
 
-The loader accepts schema version 3 only. Version 2 rows fail with the file and line.
-Metered costs, execution attempts, and version metadata do not enter the board's display model.
+The loader accepts schema version 4 only. Older rows fail with the file and line.
+Execution attempts and version metadata do not enter the board's display model.
 The runner reads the real evals from `../evals/`. The site derives titles from their IDs.
 It keeps prompts, choices, motivations, types, pillars, and declared modes.
 The browser receives no scorer files or targets.
@@ -96,8 +93,7 @@ The browser receives no scorer files or targets.
 The runner supplies each hash from the same captured file manifest that supplies execution inputs.
 The site contains no eval hash algorithm or YAML declaration parser.
 Only rows with the current eval hash enter the board.
-Reference, empty, default mock, and other key-free rows never enter the board.
-Key-free internet build rows can have no harness. The loader accepts and excludes them.
+Check outputs stay in their own folders. Paid commands do not accept scripted answers.
 Displayed internet results require a harness. Vanilla results require a bare model and a quiz eval.
 Skills mode remains outside both tables.
 
@@ -150,7 +146,7 @@ Different efforts stay separate because the runner treats them as distinct agent
 Epoch cost includes model cost and grader cost.
 Search charges enter the run plan's reserve but have no metered cost in the rows.
 If either cost is unknown, the total stays unknown.
-The panel retains both amounts and their sources, including guessed prices.
+The panel retains both amounts and their cost source, including guessed prices.
 Total tokens include the model and grader. Time is the total elapsed time, including setup.
 
 The loader groups rows by eval, mode, and subject once.
@@ -172,7 +168,7 @@ pnpm exec tsx scripts/check-export.ts empty
 
 The last check expects no paid rows at the default path.
 The export checks inspect HTML and static assets without a browser or server.
-Tests assert literal score inputs and outputs, including missing epochs, errors, and key-free rows.
+Tests assert literal score inputs and outputs, including missing epochs and errors.
 The runner integration test requires uv and Python. It creates a catalog and runs one key-free quiz check without Docker.
 
 ## Design

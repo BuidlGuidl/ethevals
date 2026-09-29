@@ -7,7 +7,7 @@ import yaml
 from inspect_ai import eval
 
 from ethevals.checks import check_grader, check_player
-from ethevals.config import load_config
+from support import load_config
 from ethevals.files import content_hash
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose, prepare_eval
@@ -25,7 +25,7 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
     from ethevals.sandboxes import runner_exec
     from ethevals.actors import player
     config = load_config()
-    config.models["opus"].model = "mockllm/model"
+    config.agents["opus"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     compose = prepare_compose(evaluation, tmp_path)
@@ -47,12 +47,13 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
 
     monkeypatch.setitem(agents.AGENTS, "claude_code", agents.Harness(lambda *a, **kw: killed, "proof"))
     task = build_task(evaluation, config, player(config, "opus", "internet"), check_grader(), "internet", 1, compose)
-    row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert (row["status"], row["passed"]) == (("failed", False) if local_oom and cli_code == 137 else ("error", None)), row
-    assert isinstance(row["agent_memory_peak_bytes"], int)
-    assert row["agent_memory_peak_bytes"] > 0
+    log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
+    row = results_rows(log)[0]
+    assert row["status"] == ("failed" if local_oom and cli_code == 137 else "error"), row
+    assert isinstance(log.samples[0].metadata["agent_memory_peak_bytes"], int)
+    assert log.samples[0].metadata["agent_memory_peak_bytes"] > 0
     if local_oom:
-        assert row["agent_memory_peak_bytes"] >= 128 * 1024 * 1024
+        assert log.samples[0].metadata["agent_memory_peak_bytes"] >= 128 * 1024 * 1024
     if local_oom and cli_code == 137:
         assert {c["reason"] for c in row["checks"].values()} == {"Agent exceeded its container memory limit."}
     else:
@@ -82,7 +83,7 @@ def test_killed_check_wrapper_after_setup_exports_error(tmp_path):
 
     task.solver = setup_succeeded()
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert (row["status"], row["passed"]) == ("error", None), row
+    assert row["status"] == "error", row
     assert "check.py wrapper exited 137 without a script status" in row["error_reason"]
 
 
@@ -160,10 +161,10 @@ chmod +x "$compiler"
     if kind == "host_kill":
         watcher.join(timeout=20)
         assert len(killed) == 1
-        assert (row["status"], row["passed"]) == ("error", None), row
+        assert row["status"] == "error", row
         assert "Forge exited 1" in row["error_reason"]
         return
-    assert (row["status"], row["passed"]) == ("failed", False), row
+    assert row["status"] == "failed", row
     assert len(row["checks"]) == (2 if kind == "act" else 8)
     assert {check["reason"] for check in row["checks"].values()} == {"Submission exceeded the scorer memory limit."}
 
@@ -188,7 +189,7 @@ def test_non_utf8_source_matches_real_forge_and_fails_checks(tmp_path):
     evaluation = replace(original, files=files, hash=content_hash(files))
     success, rows = run([evaluation], config, tmp_path / "scored", answer="empty", epochs=1)
     assert success
-    assert (rows[0]["status"], rows[0]["passed"]) == ("failed", False)
+    assert (rows[0]["status"], (None if rows[0]["status"] == "error" else rows[0]["status"] == "passed")) == ("failed", False)
     assert {check["reason"] for check in rows[0]["checks"].values()} == {"Solidity source is not valid UTF-8: src/BuilderPoints.sol"}
 
 

@@ -1,21 +1,12 @@
 {
   "catalog": [{"id": "concepts/units", "hash": "current", "pillar": "concepts", "type": "quiz", "motivation": "Check units.", "prompt": "How many wei?", "choices": null, "modes": ["vanilla", "internet", "skills"]}],
-  "row": {
-    "schema_version": 3, "eval_id": "concepts/units", "eval_hash": "current", "pillar": "concepts", "type": "quiz",
-    "model": "test/model", "harness": "test", "effort": "high", "mode": "internet", "answer_kind": null,
-    "epoch": 1, "status": "passed", "passed": true, "checks": {"answer": {"passed": true, "reason": "Matches."}},
-    "error_kind": null, "error_reason": null, "total_tokens": 100, "token_source": "provider",
-    "model_cost_usd": 0.2, "grader_cost_usd": 0.0, "model_cost_source": "computed", "grader_cost_source": "no_usage",
-    "total_seconds": 8, "working_seconds": 7, "log_file": "logs/epoch.eval", "limit": null
-  },
+  "row": {"schema_version": 4, "eval_id": "concepts/units", "eval_hash": "current", "type": "quiz", "model": "test/model", "harness": "test", "effort": "high", "mode": "internet", "epoch": 1, "status": "passed", "checks": {"answer": {"passed": true, "reason": "Matches."}}, "error_kind": null, "error_reason": null, "total_tokens": 100, "model_cost_usd": 0.2, "grader_cost_usd": 0.0, "total_seconds": 8, "working_seconds": 7, "log_file": "logs/epoch.eval", "limit": null, "attempt": 1, "completed_at": "2026-09-29T00:00:00Z", "cost_source": "computed", "log_url": null},
   "cases": [
     {"name": "passed", "changes": {}, "shown": true, "publish": true},
-    {"name": "failed", "changes": {"status": "failed", "passed": false, "checks": {"answer": {"passed": false, "reason": "Wrong."}}}, "shown": true, "publish": true},
-    {"name": "error", "changes": {"status": "error", "passed": null, "error_kind": "execution", "error_reason": "Provider unavailable"}, "shown": true, "publish": false},
-    {"name": "answer_kind", "changes": {"answer_kind": "reference"}, "shown": false, "publish": false},
-    {"name": "mock_tokens", "changes": {"token_source": "mock"}, "shown": false, "publish": false},
-    {"name": "stale", "changes": {"eval_hash": "old"}, "shown": false, "publish": false},
-    {"name": "removed", "changes": {"eval_id": "concepts/removed"}, "shown": false, "publish": false},
-    {"name": "skills", "changes": {"mode": "skills"}, "shown": false, "publish": false}
+    {"name": "failed", "changes": {"status": "failed", "checks": {"answer": {"passed": false, "reason": "Wrong."}}}, "shown": true, "publish": true},
+    {"name": "error", "changes": {"status": "error", "error_kind": "execution", "error_reason": "Provider unavailable"}, "shown": true, "publish": false},
+    {"name": "stale", "changes": {"eval_hash": "old"}, "shown": false, "publish": true},
+    {"name": "removed", "changes": {"eval_id": "concepts/removed"}, "shown": false, "publish": true},
+    {"name": "skills", "changes": {"mode": "skills"}, "shown": false, "publish": true}
   ]
 }

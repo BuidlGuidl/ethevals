@@ -28,7 +28,7 @@ export interface Subject {
 
 export type Epoch = Pick<Row, "epoch" | "status" | "checks" | "error_kind" | "error_reason"
   | "total_tokens" | "total_seconds" | "model_cost_usd" | "grader_cost_usd"
-  | "model_cost_source" | "grader_cost_source"> & {
+  | "cost_source"> & {
   cost: number | null;
   issue: string;
   logUrl: string | null;
@@ -67,9 +67,9 @@ export function subjectKey(subject: Subject): string {
   return JSON.stringify([subject.model, subject.harness, subject.effort]);
 }
 
-function evalCell(evaluation: Evaluation, mode: TableMode, rows: Row[], logBase: string, sample: boolean): EvalCell {
+function evalCell(evaluation: Evaluation, mode: TableMode, rows: Row[]): EvalCell {
   const scored = rows.filter((row) => row.status !== "error");
-  const passed = scored.filter((row) => row.passed).length;
+  const passed = scored.filter((row) => row.status === "passed").length;
   return {
     state: !evaluation.modes.includes(mode) ? "na" : scored.length ? "score" : "pending",
     score: scored.length ? passed / scored.length : null,
@@ -78,11 +78,11 @@ function evalCell(evaluation: Evaluation, mode: TableMode, rows: Row[], logBase:
       epoch: row.epoch, status: row.status, checks: row.checks, error_kind: row.error_kind,
       error_reason: row.error_reason, total_tokens: row.total_tokens, total_seconds: row.total_seconds,
       model_cost_usd: row.model_cost_usd, grader_cost_usd: row.grader_cost_usd,
-      model_cost_source: row.model_cost_source, grader_cost_source: row.grader_cost_source,
+      cost_source: row.cost_source,
       cost: epochCost(row), issue: row.error_reason ?? (row.limit
         ? [...new Set(Object.values(row.checks).filter((check) => !check.passed).map((check) => check.reason))].join(" ")
         : ""),
-      logUrl: row.status === "error" || (!sample && !/^results-[A-Za-z0-9][A-Za-z0-9_-]{0,99}\/[A-Za-z0-9][A-Za-z0-9_.-]*\.eval$/.test(row.log_file)) ? null : logUrl(logBase, row.log_file),
+      logUrl: row.log_url,
     })),
   };
 }
@@ -100,7 +100,7 @@ function pillarCell(cells: EvalCell[]): PillarCell {
 }
 
 // The loader supplies current, checked rows. Group each row and compute each cell once.
-export function buildBoard(evaluations: Evaluation[], rows: Row[], sample = false, logBase = ""): BoardData {
+export function buildBoard(evaluations: Evaluation[], rows: Row[], sample = false): BoardData {
   const groups = new Map<string, Row[]>();
   const subjects: Record<TableMode, Map<string, Subject>> = { internet: new Map(), vanilla: new Map() };
   for (const row of rows) {
@@ -122,7 +122,7 @@ export function buildBoard(evaluations: Evaluation[], rows: Row[], sample = fals
         id: evaluation.id,
         cells: Object.fromEntries(columns.map((subject) => {
           const key = subjectKey(subject);
-          return [key, evalCell(evaluation, mode, groups.get(JSON.stringify([evaluation.id, mode, key])) ?? [], logBase, sample)];
+          return [key, evalCell(evaluation, mode, groups.get(JSON.stringify([evaluation.id, mode, key])) ?? [])];
         })),
       }));
       table.pillars[pillar] = {
@@ -147,12 +147,4 @@ export function buildBoard(evaluations: Evaluation[], rows: Row[], sample = fals
 export function epochCost(row: Pick<Row, "model_cost_usd" | "grader_cost_usd">): number | null {
   return row.model_cost_usd === null || row.grader_cost_usd === null
     ? null : row.model_cost_usd + row.grader_cost_usd;
-}
-
-export function logUrl(base: string, file: string): string | null {
-  if (!base || !file || file.startsWith("/") || file.includes("\\")
-    || file.split("/").some((part) => part === ".." || part === ".")
-    || /^[a-z][a-z\d+.-]*:/i.test(file)) return null;
-  const encoded = file.split("/").map(encodeURIComponent).join("/");
-  return `${base.replace(/\/$/, "")}/${encoded}`;
 }

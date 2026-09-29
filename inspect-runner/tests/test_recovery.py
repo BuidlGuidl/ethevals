@@ -9,7 +9,8 @@ import pytest
 from inspect_ai.log import read_eval_log, write_eval_log
 
 from ethevals.actors import select_actors
-from ethevals.config import Config, load_config
+from ethevals.config import Config
+from support import load_config
 from ethevals.loader import load_eval
 from ethevals.planning import plan
 from ethevals.rows import epoch_identity, fold_rows, previous_rows, read_rows, write_rows
@@ -81,18 +82,18 @@ def test_paid_run_needs_budget_before_constructing_provider(tmp_path, monkeypatc
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
     monkeypatch.setattr("ethevals.actors.model_actor", lambda *args: pytest.fail("Provider constructed"))
     with pytest.raises(ValueError, match="requires --budget"):
-        run([evaluation], config, tmp_path, models=["opus"], epochs=1)
+        run([evaluation], config, tmp_path, agents=["opus"], epochs=1)
     with pytest.raises(ValueError, match="Budget exceeded"):
-        run([evaluation], config, tmp_path, models=["opus"], epochs=1, budget=0)
+        run([evaluation], config, tmp_path, agents=["opus"], epochs=1, budget=0)
 
 
 def small_config():
     prices = dict(input=1, output=1, input_cache_read=1, input_cache_write=1)
-    model = dict(model="mockllm/test", effort="high", price_source="test", prices=prices)
-    return Config(epochs=3, time_limit=10, cost_limit=2, max_attempts=2,
-                  max_tasks=1, max_samples=1, search_provider=None,
+    model = dict(model="mockllm/test", effort="high")
+    return Config(epochs=3, time_limits={"quiz": 10, "build": 1200, "act": 1200}, cost_limit=2, max_attempts=2,
+                  concurrency=1, search=False, prices={"mockllm/test": prices}, price_source="test",
                   grader={**model, "max_tokens": 10},
-                  models={"test": {**model, "harness": None}})
+                  agents={"test": {**model, "harness": None}})
 
 
 def test_admission_reaches_every_epoch():
@@ -158,7 +159,7 @@ def test_run_prepares_only_initially_admitted_evals(tmp_path, monkeypatch):
 ])
 def test_plan_includes_scoring_and_only_sandbox_container_time(folder, mode, seconds):
     config = small_config()
-    config.time_limit = 1000
+    config.time_limits = {"quiz": 1000, "build": 1000, "act": 1000}
     evaluation = load_eval(ROOT / "evals" / folder, config)
     players, _ = select_actors(config, modes=[mode], planning=True)
     report = plan([evaluation], config, players, [], epochs=1).report
@@ -167,12 +168,12 @@ def test_plan_includes_scoring_and_only_sandbox_container_time(folder, mode, sec
 
 def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path, monkeypatch):
     config, evaluation = quiz()
-    first = config.models["opus"].model_copy(update={"model": "mockllm/shared", "harness": None})
-    config.models = {"high": first, "low": first.model_copy(update={"effort": "low"})}
+    first = config.agents["opus"].model_copy(update={"model": "mockllm/shared", "harness": None})
+    config.agents = {"high": first, "low": first.model_copy(update={"effort": "low"})}
     config.grader.model = "mockllm/grader"
     # Both providers are MockLLM. The gate key never reaches a provider request.
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-offline-gate-key")
-    success, rows = run([evaluation], config, tmp_path, models=["high", "low"], modes=["vanilla"], epochs=1, budget=20)
+    success, rows = run([evaluation], config, tmp_path, agents=["high", "low"], modes=["vanilla"], epochs=1, budget=20)
     assert success
     assert [(row["effort"], row["status"], row["attempt"]) for row in rows] == [
         ("high", "failed", 1), ("low", "failed", 1)]
@@ -182,11 +183,11 @@ def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path,
 def test_planned_identity_matches_every_configured_provider(monkeypatch, mode):
     config, evaluation = quiz()
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
-    for key, settings in config.models.items():
+    for key, settings in config.agents.items():
         planned, _ = select_actors(config, [key], [mode], planning=True)
         actual, _ = select_actors(config, [key], [mode])
         expected = (evaluation.id, evaluation.hash, settings.harness if mode == "internet" else None,
-                    settings.model, settings.effort, mode, None, 1)
+                    settings.model, settings.effort, mode, 1)
         for selection in (planned, actual):
             actor = selection(evaluation)[0][1]
             assert epoch_identity({"eval_id": evaluation.id, "eval_hash": evaluation.hash, "mode": mode,

@@ -20,12 +20,12 @@ def test_publish_and_site_use_the_same_final_rows(tmp_path):
         (root / "site/.catalog/catalog.json").write_text(json.dumps(fixture["catalog"]))
         row = {**fixture["row"], **case["changes"]}
         (output / "rows.jsonl").write_text(json.dumps(row) + "\n")
-        plan = publish_logs(output, "example/ethevals", "fixture", "a" * 40,
-                            current_hashes={"concepts/units": "current"})
+        plan = publish_logs(output, "example/ethevals", "fixture", "a" * 40)
         assert bool(plan["assets"]) == case["publish"], case["name"]
         if plan["assets"]:
             published.append(case["name"])
     site = directory.parents[1] / "site"
     result = subprocess.run([str(site / "node_modules/.bin/tsx"), str(directory / "prove_visibility.ts"), str(tmp_path)],
                             cwd=site, text=True, capture_output=True, check=True)
-    assert published == json.loads(result.stdout.splitlines()[-1]) == ["passed", "failed"]
+    assert published == ["passed", "failed", "stale", "removed", "skills"]
+    assert json.loads(result.stdout.splitlines()[-1]) == ["passed", "failed"]

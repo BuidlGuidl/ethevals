@@ -11,20 +11,16 @@ from inspect_ai.dataset import json_dataset
 from inspect_ai.log import read_eval_log
 from inspect_ai.model import ModelOutput, get_model
 
-from ethevals.config import load_config
+from support import load_config
 from ethevals.hf import write_hf
 from ethevals.loader import load_eval
-from ethevals.publish import publish_logs as publish
+from ethevals.publish import publish_logs
 from ethevals.rows import results_rows
-from ethevals.hf_proof import local_hf_tasks, prove
+from hf_proof import local_hf_tasks, prove
 from support import build_task
 
 ROOT = Path(__file__).resolve().parents[2]
 EVALUATION = load_eval(ROOT / "evals/concepts/agent-registries", load_config())
-
-
-def publish_logs(*args, **kwargs):
-    return publish(*args, current_hashes={EVALUATION.id: EVALUATION.hash}, **kwargs)
 
 
 def quiz(tmp_path, name="units", *, modes=None, choices=None, **scorer):
@@ -118,7 +114,7 @@ def test_hf_task_matches_runner_for_the_same_answer(tmp_path, settings, answer, 
     runner = build_task(evaluation, load_config(), None, "vanilla", "reference", 1)
     runner.model = model()
     rows = results_rows(read_eval_log(eval(runner, log_dir=str(tmp_path / "logs"), display="none")[0].location))
-    assert [row["passed"] for row in rows] == [expected == "C"]
+    assert [(None if row["status"] == "error" else row["status"] == "passed") for row in rows] == [expected == "C"]
 
 
 def test_hf_proof_covers_every_fixture_task(tmp_path):
@@ -156,7 +152,7 @@ def test_changing_fixture_scorer_updates_runner_and_export(tmp_path):
         exported_log = eval(exported, log_dir=str(tmp_path / "logs"), display="none")[0]
         assert [score.value for score in exported_log.samples[0].scores.values()] == [verdict]
         runner_log = eval(runner, log_dir=str(tmp_path / "logs"), display="none")[0]
-        assert [(row["status"], row["passed"]) for row in results_rows(runner_log)] == [
+        assert [(row["status"], (None if row["status"] == "error" else row["status"] == "passed")) for row in results_rows(runner_log)] == [
             ("passed" if passed else "failed", passed)]
 
 
@@ -176,7 +172,7 @@ def local_results(tmp_path):
     for name in ["old.eval", "kept.eval", "unused.eval"]:
         (tmp_path / "logs" / name).write_bytes(b"log fixture")
     rows = [{"eval_id": EVALUATION.id, "eval_hash": EVALUATION.hash,
-             "answer_kind": None, "token_source": "provider", "status": "passed", "model": "test/model", "mode": "vanilla", "epoch": epoch,
+             "status": "passed", "model": "test/model", "mode": "vanilla", "epoch": epoch,
              "log_file": "logs/kept.eval"} for epoch in [1, 2]]
     (tmp_path / "rows.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
     return rows
@@ -185,7 +181,7 @@ def local_results(tmp_path):
 def test_publish_dry_run_picks_only_referenced_logs_and_writes_nothing(tmp_path):
     rows = local_results(tmp_path)
     result = subprocess.run([sys.executable, "-m", "ethevals.cli", "publish-logs", "--output", str(tmp_path),
-                             "--repo", "example/ethevals", "--run-id", "123-1", "--commit", "a" * 40, "--dry-run"],
+                             "--repo", "example/ethevals", "--run-id", "123-1", "--commit", "a" * 40],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     plan = json.loads(result.stdout)
@@ -227,7 +223,7 @@ def test_publish_stages_rows_only_after_the_release_command_succeeds(tmp_path, m
     plan = publish_logs(tmp_path, "example/ethevals", "1", "a" * 40, publish=True)
     assert Path(plan["rows_file"]).name == "results-1.jsonl"
     assert [json.loads(line) for line in Path(plan["rows_file"]).read_text().splitlines()] == [
-        {**row, "log_file": "results-1/kept.eval"} for row in rows]
+        {**row, "log_url": "https://github.com/example/ethevals/releases/download/results-1/kept.eval"} for row in rows]
     assert receipt[0][:10] == ["gh", "release", "create", "results-1", "--repo", "example/ethevals",
                                "--target", "a" * 40, "--latest=false", "--title"]
 
@@ -253,17 +249,15 @@ def test_reused_folder_skips_published_and_hidden_rows(tmp_path, monkeypatch):
     publish_logs(tmp_path, "example/ethevals", "first", "a" * 40, publish=True)
     (tmp_path / "logs/new.eval").write_bytes(b"new log")
     rows += [{**rows[0], "epoch": epoch, **change} for epoch, change in enumerate([
-        {"log_file": "results-elsewhere/linked.eval"},
-        {"answer_kind": "reference", "log_file": "logs/missing-reference.eval"},
-        {"token_source": "mock", "log_file": "logs/missing-mock.eval"},
-        {"eval_hash": "old", "log_file": "logs/missing-stale.eval"},
-        {"mode": "skills", "log_file": "logs/missing-skills.eval"},
+        {"log_url": "https://github.com/example/ethevals/releases/download/results-elsewhere/linked.eval"},
+        {"eval_hash": "old", "log_file": "logs/new.eval"},
+        {"mode": "skills", "log_file": "logs/new.eval"},
         {"log_file": "logs/new.eval"},
     ], 3)]
     (tmp_path / "rows.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
     plan = publish_logs(tmp_path, "example/ethevals", "second", "a" * 40)
-    assert [(asset["name"], [row["epoch"] for row in asset["rows"]]) for asset in plan["assets"]] == [("new.eval", [8])]
-    assert plan["skipped"] == {"published": 3, "key_free": 2, "stale": 1, "skills": 1}
+    assert [(asset["name"], [row["epoch"] for row in asset["rows"]]) for asset in plan["assets"]] == [("new.eval", [4, 5, 6])]
+    assert plan["skipped"] == {"published": 3}
     assert sorted(path.name for path in (tmp_path / "published").iterdir()) == ["results-first.jsonl"]
 
 
@@ -285,8 +279,8 @@ def test_validate_rejects_unexportable_vanilla_quiz(tmp_path, unsupported):
     assert ("cannot preserve alternative targets" if unsupported == "alternatives" else "exactly one target scorer") in result.stderr
 
 
-@pytest.mark.parametrize("args", [["run", "--publish"], ["check", "--dry-run"], ["export-hf"],
-                                  ["publish-logs", "--output", "results"], ["prove-hf", "--export", "hf"]])
+@pytest.mark.parametrize("args", [["run", "--publish"], ["check", "--publish"], ["export-hf"],
+                                  ["publish-logs", "--output", "results"]])
 def test_cli_rejects_wrong_or_missing_flags(args):
     result = subprocess.run([sys.executable, "-m", "ethevals.cli", *args], capture_output=True, text=True)
     assert result.returncode == 2
@@ -304,7 +298,7 @@ def test_stock_hf_loader_selects_task_by_id(tmp_path):
 def test_proof_records_observed_verdicts_before_reporting_mismatch(tmp_path, monkeypatch):
     evaluation = quiz(tmp_path)
     write_hf([evaluation], tmp_path / "hf")
-    monkeypatch.setattr("ethevals.hf_proof.target_reference", lambda *args: "wrong unit")
+    monkeypatch.setattr("hf_proof.target_reference", lambda *args: "wrong unit")
     with pytest.raises(ValueError, match="HF parity mismatch"):
         prove(tmp_path / "hf", [evaluation], tmp_path / "proof", load_config())
     report = json.loads((tmp_path / "proof/report.json").read_text())

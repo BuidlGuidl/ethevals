@@ -76,7 +76,7 @@ def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, f
         # Reserve every remaining runner attempt. Runtime spends one per invocation.
         remaining = max(1, config.max_attempts - attempt + 1)
         per_attempt = config.cost_limit + rubric_budget(evaluation, config)
-        if mode == "internet" and config.search_provider:
+        if mode == "internet" and config.search:
             per_attempt += config.search_limit * config.search_price_usd
         row = {"eval_id": evaluation.id, "eval_hash": evaluation.hash, "type": evaluation.declaration.type,
                **actor.metadata, "mode": mode, "epoch": epoch, "attempt": attempt,

@@ -15,11 +15,11 @@ from inspect_ai.model import ModelCost, ModelInfo, ModelOutput, ModelUsage, get_
 from inspect_ai.scorer import accuracy, scorer
 from inspect_ai.solver import solver
 
-from ethevals.config import load_config
+from support import load_config
 from ethevals.loader import eval_hash, load_eval
 from ethevals.rows import results_rows
 from support import run
-from ethevals.checks import mock_delay
+from support import mock_delay
 from support import build_task
 from ethevals.files import inline_file
 from ethevals.scorers import named_checks
@@ -102,7 +102,7 @@ def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
     output = tmp_path / answer
     success, rows = run(evals, config, output, answer=answer)
     assert success is True
-    assert [(row["eval_id"], row["epoch"], row["passed"]) for row in rows] == [
+    assert [(row["eval_id"], row["epoch"], (None if row["status"] == "error" else row["status"] == "passed")) for row in rows] == [
         ("concepts/agent-registries", 1, expected), ("concepts/agent-registries", 2, expected),
         ("concepts/agent-registries", 3, expected), ("concepts/wei-per-ether", 1, expected),
         ("concepts/wei-per-ether", 2, expected), ("concepts/wei-per-ether", 3, expected),
@@ -112,11 +112,11 @@ def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
         check_name = "erc_number" if row["eval_id"].endswith("agent-registries") else "wei_conversion"
         reason = "Answer matches the target." if expected else "The answer is empty." if answer == "empty" else "Answer does not match the target."
         assert row["checks"] == {check_name: {"passed": expected, "reason": reason}}
-        assert (row["model_cost_usd"], row["model_cost_source"], row["grader_tokens"]) == (0.0, "mock", 0)
+        assert (row["model_cost_usd"], row["cost_source"]) == (0.0, "mock")
         assert Path(row["log_file"]).is_absolute() is False
         log = read_eval_log(output / row["log_file"])
-        sample = next(sample for sample in log.samples if sample.epoch == row["log_epoch"])
-        assert (sample.id, sample.uuid) == (row["log_sample_id"], row["sample_uuid"])
+        sample = log.samples[0]
+        assert sample.id == row["eval_id"]
         calls = [event for event in sample.events if event.event == "model"]
         assert len(calls) == 1
         assert calls[0].tools == []
@@ -131,7 +131,7 @@ def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", answer)])
     log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(read_eval_log(log.location))[0]
-    assert row["passed"] is expected
+    assert (None if row["status"] == "error" else row["status"] == "passed") is expected
     assert row["checks"]["number"]["passed"] is expected
 
 
@@ -147,7 +147,7 @@ def with_grader(underlying):
 def test_rows_split_grader_usage_for_the_same_model(folder, tmp_path):
     config = load_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
-    task.metadata.update(answer_kind=None, cost_source="computed:test", grader_cost_source="computed:grader", prices={"input": 1, "output": 2})
+    task.metadata.update(cost_source="computed:test", grader_cost_source="computed:grader", prices={"input": 1, "output": 2})
     output = ModelOutput.from_content("mockllm/model", "8004")
     output.usage = ModelUsage(input_tokens=10, output_tokens=4, total_tokens=14)
     grade = ModelOutput.from_content("mockllm/model", "yes")
@@ -158,11 +158,11 @@ def test_rows_split_grader_usage_for_the_same_model(folder, tmp_path):
     log = eval(task, model_roles={"grader": get_model("mockllm/model", custom_outputs=[grade])},
                log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(read_eval_log(log.location))[0]
-    assert (row["model_tokens"], row["grader_tokens"], row["total_tokens"]) == (14, 10, 24)
+    assert row["total_tokens"] == 24
     assert row["model_cost_usd"] == pytest.approx(0.000018)
     assert row["grader_cost_usd"] == pytest.approx(0.000013)
-    assert (row["model_cost_source"], row["grader_cost_source"]) == ("computed:test", "computed:grader")
-    assert row["prices"] == {"input": 1, "output": 2}
+    assert row["cost_source"] == "computed:test"
+    assert log.eval.metadata["prices"] == {"input": 1, "output": 2}
 
 
 @solver
@@ -178,7 +178,7 @@ def test_error_is_distinct_from_failed_answer(folder, tmp_path):
     task.solver = crash()
     log = eval(task, fail_on_error=False, log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(read_eval_log(log.location))[0]
-    assert (row["status"], row["passed"], row["error_kind"]) == ("error", None, "execution")
+    assert (row["status"], row["error_kind"]) == ("error", "execution")
     assert "Harness crashed in the test." in row["error_reason"]
 
 
@@ -189,7 +189,7 @@ def test_working_limit_is_a_failed_check(folder, tmp_path):
     task.working_limit = 1
     log = eval(task, fail_on_error=False, log_dir=str(tmp_path / "logs"), display="none")[0]
     row = results_rows(read_eval_log(log.location))[0]
-    assert (row["status"], row["passed"], row["error_kind"]) == ("failed", False, None)
+    assert (row["status"], row["error_kind"]) == ("failed", None)
     assert row["checks"]["erc_number"]["passed"] is False
     assert "working limit 1" in row["checks"]["erc_number"]["reason"]
     assert row["limit"]["type"] == "working"
@@ -213,8 +213,8 @@ def test_completed_epochs_are_reused(folder, tmp_path):
     second_success, second = run([evaluation], config, tmp_path / "results", answer="reference")
     assert (first_success, second_success) == (True, True)
     assert [row["status"] for row in second] == ["passed", "passed", "passed"]
-    assert [(row["sample_uuid"], row["log_file"]) for row in second] == [
-        (row["sample_uuid"], row["log_file"]) for row in first
+    assert [(row["completed_at"], row["log_file"]) for row in second] == [
+        (row["completed_at"], row["log_file"]) for row in first
     ]
 
 
@@ -280,7 +280,7 @@ def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_
 
     monkeypatch.setitem(CHECK_SOLVERS, "quiz", lambda evaluation, answer: CheckRun(crash_once(), "8004"))
     config = load_config()
-    config.max_tasks = config.max_samples = 1
+    config.concurrency = 1
     evaluation = load_eval(folder, config)
     output = tmp_path / "results"
     success, first = run([evaluation], config, output, answer="reference")
@@ -289,7 +289,7 @@ def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_
     success, second = run([evaluation], config, output, answer="reference")
     assert success is True
     assert [row["status"] for row in second] == ["passed", "passed", "passed"]
-    assert [second[index]["sample_uuid"] == first[index]["sample_uuid"] for index in range(3)] == [True, False, True]
+    assert [second[index]["completed_at"] == first[index]["completed_at"] for index in range(3)] == [True, False, True]
     assert len(list((output / "logs").rglob("*.eval"))) == 4
     assert attempts == 4
 
@@ -314,7 +314,7 @@ def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch, kind):
     evaluation = load_eval(folder, config)
     success, first = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
-    assert (first[0]["status"], first[0]["passed"]) == ("failed", False)
+    assert (first[0]["status"], (None if first[0]["status"] == "error" else first[0]["status"] == "passed")) == ("failed", False)
     assert f"{kind} limit" in first[0]["checks"]["erc_number"]["reason"]
     success, second = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
@@ -349,25 +349,25 @@ def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
     config = load_config()
     config.grader.model = "mockllm/grader"
-    for key, item in config.models.items():
+    for key, item in config.agents.items():
         item.model = f"mockllm/{key}"
     evaluation = load_eval(folder, config)
     output = tmp_path / "results"
-    success, first = run([evaluation], config, output, models=["opus"], epochs=1, budget=100)
+    success, first = run([evaluation], config, output, agents=["opus"], epochs=1, budget=100)
     assert success is True
-    config.models["opus"].prices.input = 99.0
+    config.prices[config.agents["opus"].model].input = 99.0
     config.grader.model = "mockllm/codex"
-    config.time_limit = 400
-    success, second = run([evaluation], config, output, models=["opus"], epochs=1, budget=100)
+    config.time_limits["quiz"] = 400
+    success, second = run([evaluation], config, output, agents=["opus"], epochs=1, budget=100)
     assert success is True
     assert second == first
-    success, third = run([evaluation], config, output, models=["codex"], epochs=1, budget=100)
+    success, third = run([evaluation], config, output, agents=["codex"], epochs=1, budget=100)
     assert success is True
     assert third[0]["model"] == "mockllm/codex"
     stored = [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()]
     assert sorted(row["model"] for row in stored) == ["mockllm/codex", "mockllm/opus"]
-    config.models["opus"].effort = "low"
-    success, fourth = run([evaluation], config, output, models=["opus"], epochs=1, budget=100)
+    config.agents["opus"].effort = "low"
+    success, fourth = run([evaluation], config, output, agents=["opus"], epochs=1, budget=100)
     assert success is True
     assert fourth[0]["effort"] == "low"
     assert len(list((output / "logs").rglob("*.eval"))) == 3
@@ -408,10 +408,10 @@ def test_hash_ignores_local_artifacts_but_includes_new_author_files(folder):
 
 def test_validate_rejects_effort_typo(folder, tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text((ROOT / "inspect-runner/ethevals/config.yaml").read_text().replace("effort: high", "effort: hihg"))
+    path.write_text(yaml.safe_dump(load_config().model_dump()).replace("effort: high", "effort: hihg"))
     result = cli("validate", "--evals", folder, "--config", path)
     assert result.returncode == 2
-    assert "models.opus.effort" in result.stderr
+    assert "agents.opus.effort" in result.stderr
 
 
 def test_selected_modes_cross_only_declared_modes(folder, tmp_path):
@@ -427,7 +427,7 @@ def test_unknown_grader_cost_keeps_known_model_cost(folder, tmp_path):
     config = load_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
-    log.eval.metadata.update(answer_kind=None, model="mockllm/agent", grader_model="mockllm/grader",
+    log.eval.metadata.update(model="mockllm/agent", grader_model="mockllm/grader",
                              cost_source="computed:test", grader_cost_source="computed:grader")
     # The exporter consumes persisted usage, including an unpriced grader.
     log.samples[0].model_usage = {
@@ -436,9 +436,9 @@ def test_unknown_grader_cost_keeps_known_model_cost(folder, tmp_path):
     }
     log.samples[0].role_usage = {"grader": ModelUsage(input_tokens=7, output_tokens=3, total_tokens=10)}
     row = results_rows(log)[0]
-    assert (row["model_cost_usd"], row["model_cost_source"]) == (0.000018, "computed:test")
-    assert (row["grader_cost_usd"], row["grader_cost_source"]) == (None, "unavailable")
-    assert (row["model_tokens"], row["grader_tokens"]) == (14, 10)
+    assert (row["model_cost_usd"], row["cost_source"]) == (0.000018, "unavailable")
+    assert (row["grader_cost_usd"], row["cost_source"]) == (None, "unavailable")
+    assert row["total_tokens"] == 24
 
 
 def test_setup_failure_has_unknown_cost(folder, tmp_path):
@@ -450,21 +450,21 @@ def test_setup_failure_has_unknown_cost(folder, tmp_path):
     log.samples = []
     log.status = "error"
     log.error = EvalError(message="Sandbox startup failed.", traceback="", traceback_ansi="")
-    log.eval.metadata.update(answer_kind=None, cost_source="computed:test")
+    log.eval.metadata.update(cost_source="computed:test")
     row = results_rows(log)[0]
     assert (row["status"], row["error_reason"]) == ("error", "Sandbox startup failed.")
-    assert (row["model_cost_usd"], row["model_cost_source"], row["grader_cost_usd"], row["grader_cost_source"]) == (
+    assert (row["model_cost_usd"], row["cost_source"], row["grader_cost_usd"], row["cost_source"]) == (
         None, "unavailable", None, "unavailable")
 
 
 def test_kill_and_resume_keeps_completed_epochs(folder, tmp_path):
     output = tmp_path / "results"
     config = load_config()
-    config.max_tasks = config.max_samples = 1
+    config.concurrency = 1
     config_path = tmp_path / "serial.yaml"
     config_path.write_text(yaml.safe_dump(config.model_dump()))
-    command = [sys.executable, "-m", "ethevals.cli", "run", "--evals", str(folder), "--answer", "reference",
-               "--epochs", "3", "--mock-delay", "2", "--output", str(output), "--config", str(config_path)]
+    command = [sys.executable, str(Path(__file__).with_name("resume_check.py")),
+               str(folder), str(output), str(config_path)]
     environment = {key: value for key, value in os.environ.items() if key != "OPENROUTER_API_KEY"}
     completed = []
     with (tmp_path / "killed.txt").open("w") as stream:
@@ -481,7 +481,7 @@ def test_kill_and_resume_keeps_completed_epochs(folder, tmp_path):
                             raise
                         # Inspect has opened the ZIP but has not written its directory yet.
                         continue
-                    completed.extend((log.eval.metadata["epoch"], sample.uuid)
+                    completed.extend((log.eval.metadata["epoch"], sample.completed_at)
                                      for sample in log.samples or [] if sample.scores)
                 if completed:
                     break
@@ -496,4 +496,4 @@ def test_kill_and_resume_keeps_completed_epochs(folder, tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     rows = [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()]
     assert [(row["epoch"], row["status"]) for row in rows] == [(1, "passed"), (2, "passed"), (3, "passed")]
-    assert [(row["epoch"], row["sample_uuid"]) for row in rows if row["epoch"] == completed[0][0]] == completed
+    assert [(row["epoch"], row["completed_at"]) for row in rows if row["epoch"] == completed[0][0]] == completed

@@ -2,9 +2,7 @@ import json
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from inspect_ai.log import EvalLog, EvalSample, EvalError, list_eval_logs, read_eval_log, resolve_sample_attachments
-from inspect_ai.event import ToolEvent, ModelEvent
-from .search import search_result_status, search_text, CAP_MESSAGE
+from inspect_ai.log import EvalLog, EvalSample, EvalError, list_eval_logs, read_eval_log
 
 
 def infrastructure_limit(kind, working_seconds, working_limit):
@@ -12,39 +10,9 @@ def infrastructure_limit(kind, working_seconds, working_limit):
                                   and (working_seconds is None or working_seconds < working_limit))
 
 
-def search_failures(sample):
-    sample = resolve_sample_attachments(sample)
-    calls, results = {}, {}
-    messages = list(sample.messages)
-    for event in sample.events:
-        if isinstance(event, ModelEvent):
-            messages.extend(event.input)
-        elif isinstance(event, ToolEvent):
-            calls[event.id] = event.function + json.dumps(event.arguments)
-            results[event.id] = (event.result, bool(event.error or event.failed))
-    for message in messages:
-        if message.role == "assistant":
-            for call in message.tool_calls or []:
-                calls[call.id] = call.function + json.dumps(call.arguments)
-        elif message.role == "tool":
-            results[message.tool_call_id] = (message.text, bool(message.error))
-            calls.setdefault(message.tool_call_id, message.function or "")
-    rate_limited = failed = capped = 0
-    searches = {key for key, call in calls.items()
-                if any(name in call for name in ("web_search_exa", "web_fetch_exa"))}
-    for key in searches & results.keys():
-        result, error = results[key]
-        limited, failure = search_result_status(result)
-        rate_limited += limited
-        capped += CAP_MESSAGE in search_text(result)[0]
-        failed += bool(error or failure)
-    return {"search_calls": len(searches), "search_failed": failed, "search_rate_limited": rate_limited,
-            "search_capped": capped}
-
-
 def epoch_identity(metadata: dict, epoch: int) -> tuple:
     return tuple(metadata.get(key) for key in (
-        "eval_id", "eval_hash", "harness", "model", "effort", "mode", "answer_kind",
+        "eval_id", "eval_hash", "harness", "model", "effort", "mode",
     )) + (epoch,)
 
 
@@ -88,7 +56,6 @@ def results_rows(log: EvalLog) -> list[dict]:
         usage = list(sample.model_usage.values())
         total_tokens = sum(item.total_tokens for item in usage)
         grader = sample.role_usage.get("grader")
-        grader_tokens = grader.total_tokens if grader else 0
         total_cost = sum(item.total_cost for item in usage) if usage and all(item.total_cost is not None for item in usage) else None
         grader_cost = grader.total_cost if grader else 0.0 if usage else None
         model_cost = total_cost - grader_cost if total_cost is not None and grader_cost is not None else None
@@ -96,54 +63,31 @@ def results_rows(log: EvalLog) -> list[dict]:
         if grader and grader.total_cost is None and metadata.get("grader_model") != metadata.get("model"):
             model_usage = sample.model_usage.get(metadata.get("model"))
             model_cost = model_usage.total_cost if model_usage else None
-        model_metered, grader_metered = model_cost, grader_cost
-        if metadata.get("answer_kind") and usage:
-            model_cost, grader_cost = 0.0, 0.0
-            model_source, grader_source = "mock", "mock"
-        else:
-            model_source = metadata.get("cost_source", "unavailable") if model_cost is not None else "unavailable"
-            grader_source = metadata.get("grader_cost_source", "unavailable") if grader_cost is not None else "unavailable"
-            if usage and not grader:
-                grader_source = "no_usage"
+        cost_source = metadata.get("cost_source", "unavailable")
+        if model_cost is None or grader_cost is None:
+            cost_source = "unavailable"
         passed = None if error else all(check["passed"] for check in checks.values())
         rows.append({
-            "schema_version": 3,
+            "schema_version": 4,
             **{key: metadata.get(key) for key in (
-                "eval_id", "eval_hash", "pillar", "type", "mode", "harness", "model", "effort", "answer_kind",
-                "grader_model", "grader_effort", "harness_version", "images", "runner_inputs", "chain_inputs",
-                "cost_limit_usd", "grader_cost_limit_usd", "max_attempts",
-                "working_limit_seconds", "time_limit_seconds", "scoring_limit_seconds",
-                "search_limit", "search_price_usd",
+                "eval_id", "eval_hash", "type", "mode", "harness", "model", "effort",
             )},
             "epoch": metadata.get("epoch", sample.epoch),
             "attempt": metadata.get("attempt", 1),
             "completed_at": sample.completed_at or sample.started_at or metadata.get("created_at", log.eval.created),
             "status": "error" if error else "passed" if passed else "failed",
-            "passed": passed,
             "checks": checks,
             "error_kind": error_kind,
             "limit": sample.limit.model_dump() if sample.limit else None,
             "error_reason": " ".join(error.split()) if error else None,
-            "model_tokens": total_tokens - grader_tokens,
-            "grader_tokens": grader_tokens,
             "total_tokens": total_tokens,
-            "token_source": "mock" if metadata.get("answer_kind") else "provider",
             "model_cost_usd": model_cost,
-            "model_metered_usd": model_metered,
-            "grader_metered_usd": grader_metered,
-            "model_cost_source": model_source,
             "grader_cost_usd": grader_cost,
-            "grader_cost_source": grader_source,
-            "prices": metadata.get("prices", {}),
-            "grader_prices": metadata.get("grader_prices", {}),
             "working_seconds": sample.working_time,
             "total_seconds": sample.total_time,
-            "agent_memory_peak_bytes": (sample.metadata or {}).get("agent_memory_peak_bytes"),
             "log_file": location,
-            "log_sample_id": sample.id,
-            "log_epoch": sample.epoch,
-            "sample_uuid": sample.uuid,
-            **search_failures(sample),
+            "log_url": None,
+            "cost_source": cost_source,
         })
     return rows
 
@@ -182,7 +126,7 @@ def row_version(row):
     # Release links enrich the same observation. They cannot replace a later attempt.
     return (row.get("attempt", 1), row.get("completed_at", ""),
             row.get("status") in {"passed", "failed"},
-            row.get("log_file", "").startswith("results-"), json.dumps(row, sort_keys=True))
+            bool(row.get("log_url")), json.dumps(row, sort_keys=True))
 
 
 def fold_rows(*groups: list[dict]) -> list[dict]:

@@ -6,7 +6,7 @@ from inspect_ai.solver import SolverSpec
 from inspect_ai._eval.loader import solver_from_spec
 
 from .agents import AGENTS, CodexModel, internet_solver
-from .config import Mode, GraderConfig
+from .config import Mode, GraderConfig, uses_sandbox
 
 
 def quiz_solver_spec(evaluation):
@@ -34,31 +34,31 @@ class Grader:
     metadata: dict
 
 
-def actor_metadata(item, prefix=""):
+def actor_metadata(item, config, prefix=""):
     return {prefix + key: value for key, value in {
-        "model": item.model, "effort": item.effort, "prices": item.prices.model_dump(),
-        "cost_source": f"computed:{item.price_source}",
+        "model": item.model, "effort": item.effort, "prices": config.prices[item.model].model_dump(),
+        "cost_source": f"computed:{config.price_source}",
     }.items()}
 
 
-def model_actor(item, prefix=""):
+def model_actor(item, config, prefix=""):
     info = get_model_info(item.model) or ModelInfo()
-    set_model_info(item.model, info.model_copy(update={"cost": ModelCost(**item.prices.model_dump())}))
+    set_model_info(item.model, info.model_copy(update={"cost": ModelCost(**config.prices[item.model].model_dump())}))
     model = get_model(item.model, config=GenerateConfig(reasoning_effort=item.effort,
                                                        max_tokens=item.max_tokens if isinstance(item, GraderConfig) else None))
-    return model, actor_metadata(item, prefix)
+    return model, actor_metadata(item, config, prefix)
 
 
 def player(config, key, mode, planning=False):
-    item = config.models[key]
+    item = config.agents[key]
     if planning:
-        model, metadata = None, actor_metadata(item)
+        model, metadata = None, actor_metadata(item, config)
     else:
-        model, metadata = model_actor(item)
+        model, metadata = model_actor(item, config)
     harness = item.harness if mode == "internet" else None
     if harness == "codex_cli" and not planning:
         model = CodexModel(model)
-    metadata.update(harness=harness, harness_version=AGENTS[harness].version if harness else None, answer_kind=None)
+    metadata.update(harness=harness, harness_version=AGENTS[harness].version if harness else None)
 
     def solve(evaluation):
         if mode == "vanilla":
@@ -67,20 +67,20 @@ def player(config, key, mode, planning=False):
             return quiz_solver(evaluation)
         return internet_solver(harness, config, item)
 
-    return Player(model, metadata, solve, lambda evaluation: mode != "vanilla", key=key)
+    return Player(model, metadata, solve, lambda evaluation: uses_sandbox(mode), key=key)
 
 
 def grader(config):
-    model, metadata = model_actor(config.grader, "grader_")
+    model, metadata = model_actor(config.grader, config, "grader_")
     return Grader(model, metadata)
 
 
-def select_actors(config, models=None, modes=None, answer=None, delay=0, *, planning=False):
+def select_actors(config, agents=None, modes=None, answer=None, *, planning=False):
     from .checks import CHECK_MODES, check_player, check_grader
-    if models and answer:
-        raise ValueError("--models cannot be combined with --answer")
-    if unknown := set(models or []) - config.models.keys():
-        raise ValueError(f"Unknown model names: {', '.join(sorted(unknown))}")
+    if agents and answer:
+        raise ValueError("--agents cannot be combined with --answer")
+    if unknown := set(agents or []) - config.agents.keys():
+        raise ValueError(f"Unknown agent names: {', '.join(sorted(unknown))}")
     if modes and set(modes) - set(get_args(Mode)):
         raise ValueError(f"Unknown modes: {modes}")
     if answer:
@@ -88,12 +88,12 @@ def select_actors(config, models=None, modes=None, answer=None, delay=0, *, plan
 
         def players(evaluation):
             selected = modes or [CHECK_MODES[evaluation.declaration.type]]
-            return [(mode, check_player(evaluation, answer, delay, mode))
+            return [(mode, check_player(evaluation, answer, mode=mode))
                     for mode in dict.fromkeys(evaluation.declaration.modes) if mode in selected]
     else:
         grade = None if planning else grader(config)
         actors = [(mode, player(config, key, mode, planning)) for mode in dict.fromkeys(modes or ["vanilla"])
-                  for key in models or config.models]
+                  for key in agents or config.agents]
 
         def players(evaluation):
             return [(mode, actor) for mode, actor in actors if mode in evaluation.declaration.modes]

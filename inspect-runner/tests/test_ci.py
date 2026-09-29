@@ -11,7 +11,7 @@ import pytest
 from inspect_ai.log import read_eval_log, write_eval_log
 
 from ethevals.actors import select_actors
-from ethevals.config import load_config
+from support import load_config
 from ethevals.loader import load_eval
 from ethevals.planning import plan
 from ethevals.rows import fold_rows, read_rows, write_rows
@@ -54,7 +54,7 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
     config_path.write_text(config.model_dump_json())
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
     base = {"eval_id": quiz.id, "eval_hash": quiz.hash, "type": "quiz", "harness": None,
-            "model": "mockllm/test", "effort": "high", "mode": "vanilla", "answer_kind": None}
+            "model": "mockllm/test", "effort": "high", "mode": "vanilla"}
     rows = [{**base, "epoch": 1, "status": "failed", "attempt": 1},
             {**base, "epoch": 2, "status": "error", "attempt": 1},
             {**base, "epoch": 3, "status": "error", "attempt": 2}]
@@ -105,7 +105,7 @@ def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
     result = cli("scripts/ci.py", "after-merge", "--budget", budget, "--output", output,
                  "--config", config_path,
                  "--rows", tmp_path / "rows.jsonl", "--evals", ROOT / "evals/concepts/agent-registries",
-                 "--models", "test", "--modes", "vanilla")
+                 "--agents", "test", "--modes", "vanilla")
     assert result.returncode == 2
     assert "OPENROUTER_API_KEY is required" not in result.stderr
     assert not (output / "logs").exists()
@@ -119,12 +119,13 @@ def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
     assert (published.returncode, published.stdout) == (0, ""), published.stderr
 
 
-def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path):
+def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path, monkeypatch):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
     rows = tmp_path / "rows.jsonl"
-    common = ["--rows", rows, "--evals", ROOT / "evals/concepts/agent-registries", "--modes", "vanilla"]
-    first = cli("scripts/ci.py", "after-merge", "--output", tmp_path / "eval-run-12-1", "--answer", "reference",
-                "--epochs", "1", "--budget", "10", *common)
-    assert first.returncode == 0, first.stdout + first.stderr
+    config = load_config()
+    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    success, initial = run([quiz], config, tmp_path / "eval-run-12-1", answer="reference", epochs=1)
+    assert (success, initial[0]["status"]) == (True, "passed")
     published = cli("scripts/ci.py", "publish-results", "--output", tmp_path,
                     "--repo", "BuidlGuidl/ethevals")
     assert published.returncode == 0, published.stderr
@@ -133,9 +134,8 @@ def test_after_merge_and_fold_commands_work_without_remote_writes(tmp_path):
     assert [(r["epoch"], r["status"]) for r in read_rows(tmp_path / "eval-run-12-1/rows.jsonl")] == [(1, "passed")]
     assert not rows.exists()
     write_rows(rows, read_rows(tmp_path / "eval-run-12-1/rows.jsonl"))
-    second = cli("scripts/ci.py", "after-merge", "--output", tmp_path / "second", "--answer", "reference",
-                 "--epochs", "3", "--budget", "20", *common)
-    assert second.returncode == 0, second.stdout + second.stderr
+    success, resumed = run([quiz], config, tmp_path / "second", answer="reference", epochs=3, rows_file=rows)
+    assert (success, len(resumed)) == (True, 3)
     report = json.loads((tmp_path / "second/plan.json").read_text())
     assert [r["epoch"] for r in report["missing"]] == [2, 3]
     assert [r["status"] for r in read_rows(tmp_path / "second/rows.jsonl")] == ["passed"] * 3
@@ -149,14 +149,14 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path, status):
     config_path.write_text(config.model_dump_json())
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
     row = {"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test",
-           "harness": None, "effort": "high", "mode": "vanilla", "answer_kind": None,
+           "harness": None, "effort": "high", "mode": "vanilla",
            "epoch": 1, "status": status, "attempt": 2}
     rows = tmp_path / "rows.jsonl"
     write_rows(rows, [row])
     before = rows.read_bytes(), rows.stat().st_mtime_ns
     output = tmp_path / "eval-run-1"
     result = cli("scripts/ci.py", "after-merge", "--output", output, "--rows", rows, "--config", config_path,
-                 "--evals", quiz.folder, "--models", "test", "--modes", "vanilla", "--epochs", "1", "--budget", "0")
+                 "--evals", quiz.folder, "--agents", "test", "--modes", "vanilla", "--epochs", "1", "--budget", "0")
     assert result.returncode == 0, result.stderr
     assert "execution success: True" in result.stdout
     report = json.loads((output / "plan.json").read_text())
@@ -210,7 +210,7 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     monkeypatch.setattr("ethevals.publish.subprocess.run", upload)
     assert ci.publish_artifacts(args) == 0
     assert sorted((r["status"], r["log_file"]) for r in records[-1]) == [
-        ("error", "logs/new.eval"), ("passed", "results-1/new.eval"), ("passed", "results-old/old.eval")]
+        ("error", "logs/new.eval"), ("passed", "logs/new.eval"), ("passed", "results-old/old.eval")]
     assert commands[-1][:8] == ["gh", "release", "create", "results-1", "--repo", "owner/repo", "--target", "b" * 40]
 
 

@@ -22,8 +22,8 @@ class Harness:
         from .search import exa_tools
         # Codex code mode calls MCP from a script, outside a direct model tool proposal.
         # The host tool enforces the per-epoch request cap for every caller.
-        bridges = [BridgedToolsSpec(name="exa", tools=exa_tools(config.search_provider, config.search_limit),
-                                   require_proposal=False)] if config.search_provider else []
+        bridges = [BridgedToolsSpec(name="exa", tools=exa_tools(config.search_limit),
+                                   require_proposal=False)] if config.search else []
         return self.factory(model, version=self.version, bridged_tools=bridges)
 
 

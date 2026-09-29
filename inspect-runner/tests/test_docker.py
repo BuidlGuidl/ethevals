@@ -12,7 +12,7 @@ import pytest
 import yaml
 from inspect_ai.util import ExecResult
 
-from ethevals.config import load_config
+from support import load_config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.sandboxes import IMAGES, runner_exec, validate_compose, workspace_files

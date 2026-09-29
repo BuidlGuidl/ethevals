@@ -1,6 +1,5 @@
-"""Read Exa results from native MCP and Codex code-mode transcripts."""
+"""Run capped Exa tools on the host."""
 import json
-import re
 import os
 import logging
 import math
@@ -12,6 +11,7 @@ from inspect_ai.tool import ToolDef, ToolParams
 from inspect_ai.util import store
 
 
+EXA_URL = "https://mcp.exa.ai/mcp"
 TOOLS = json.loads(Path(__file__).with_name("exa-tools.json").read_text())
 CAP_MESSAGE = "Search failed: epoch search cap reached."
 RESULT_CAP = 10
@@ -60,7 +60,8 @@ def exa_tool(definition, url, limit):
         try:
             with anyio.fail_after(30):
                 result = await exa_request(url, definition["name"], arguments, key)
-            text, error = search_text(result)
+            text = "\n".join(item.get("text", "") for item in result.get("content", []))
+            error = result.get("isError", False)
             if error:
                 text = "Search failed: " + text
             return text.replace(key, "[redacted]") if key else text
@@ -72,44 +73,5 @@ def exa_tool(definition, url, limit):
                    parameters=ToolParams.model_validate(definition["inputSchema"])).as_tool()
 
 
-def exa_tools(url, limit):
-    return [exa_tool(definition, url, limit) for definition in TOOLS]
-
-
-def search_text(result):
-    if isinstance(result, str):
-        # Codex wraps an MCP object with its script timing and output lines.
-        start = result.find('{"content"')
-        if start >= 0:
-            try:
-                result = json.JSONDecoder().raw_decode(result[start:])[0]
-            except ValueError:
-                pass
-        else:
-            try:
-                result = json.loads(result)
-            except ValueError:
-                return result, False
-    if isinstance(result, dict):
-        text, error = search_text(result.get("content", ""))
-        return text, error or bool(result.get("isError"))
-    if isinstance(result, list):
-        return "\n".join(item.get("text", "") if isinstance(item, dict) else getattr(item, "text", "")
-                         for item in result), False
-    return str(result), False
-
-
-def search_result_status(result):
-    text, error = search_text(result)
-    prefix = text[:300].lower()
-    limited = any(marker in prefix for marker in ("exa's free mcp rate limit", "rate limit exceeded",
-                                                   "rate_limit", "too many requests"))
-    failed = error or limited or prefix.startswith(("error", "search failed"))
-    return limited, failed
-
-
-def valid_search_result(result):
-    text, error = search_text(result)
-    return not error and not search_result_status(result)[1] and all(
-        re.search(pattern, text, re.MULTILINE) for pattern in
-        (r"^Title: .+", r"^URL: https?://\S+", r"^(?:Highlights|Content|Text):"))
+def exa_tools(limit):
+    return [exa_tool(definition, EXA_URL, limit) for definition in TOOLS]

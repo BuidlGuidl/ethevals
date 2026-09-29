@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -40,8 +40,6 @@ class Prices(Declaration):
 class ModelSettings(Declaration):
     model: str
     effort: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
-    price_source: str
-    prices: Prices
 
 
 class ModelConfig(ModelSettings):
@@ -56,35 +54,35 @@ class GraderConfig(ModelSettings):
 Mode = Literal["vanilla", "internet", "skills"]
 
 
+def uses_sandbox(mode: Mode) -> bool:
+    return mode != "vanilla"
+
+
 class Config(Declaration):
     epochs: int = Field(gt=0)
-    time_limit: int = Field(gt=0)
-    time_limits: dict[str, int] = Field(default_factory=dict)
+    time_limits: dict[Literal["quiz", "build", "act"], Annotated[int, Field(gt=0)]]
     cost_limit: float = Field(gt=0)
     max_attempts: int = Field(gt=0)
-    max_tasks: int = Field(default=2, gt=0)
-    max_samples: int = Field(default=2, gt=0)
+    concurrency: int = Field(default=2, gt=0)
     grader: GraderConfig
-    search_provider: str | None
+    search: bool
     search_limit: int = Field(default=20, gt=0)
     search_price_usd: float = Field(default=0.05, gt=0, allow_inf_nan=False)
-    models: dict[str, ModelConfig]
+    agents: dict[str, ModelConfig]
+    prices: dict[str, Prices]
+    price_source: str = "guess"
 
     @model_validator(mode="after")
     def check_grader(self):
         from .agents import AGENTS
-        if self.search_provider not in {None, "https://mcp.exa.ai/mcp"}:
-            raise ValueError("search_provider must be the key-free Exa endpoint or null")
-        if any(key not in {"quiz", "build", "act", "scenario"} or value <= 0 for key, value in self.time_limits.items()):
-            raise ValueError("time_limits requires eval types and positive seconds")
-        for key, model in self.models.items():
+        if self.time_limits.keys() != {"quiz", "build", "act"}:
+            raise ValueError("time_limits requires quiz, build, and act")
+        for key, model in self.agents.items():
             if model.harness is not None and model.harness not in AGENTS:
-                raise ValueError(f"models.{key}.harness: unknown harness {model.harness!r}")
-        prices = {}
-        for item in [self.grader, *self.models.values()]:
-            if item.model in prices and prices[item.model] != item.prices:
-                raise ValueError(f"Conflicting prices for model {item.model}")
-            prices[item.model] = item.prices
+                raise ValueError(f"agents.{key}.harness: unknown harness {model.harness!r}")
+        for item in [self.grader, *self.agents.values()]:
+            if item.model not in self.prices:
+                raise ValueError(f"prices.{item.model}: missing model prices")
         return self
 
 

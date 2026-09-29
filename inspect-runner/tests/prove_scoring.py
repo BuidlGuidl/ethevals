@@ -10,7 +10,7 @@ from inspect_ai.scorer import scorer, accuracy
 from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
 
-from ethevals.config import load_config
+from support import load_config
 from ethevals.files import content_hash
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
@@ -96,9 +96,10 @@ contract ConstructorTest is Test {
 '''
     evaluation = prepare_eval(replace(original, files=files, hash=content_hash(files)), output)
     tasks = []
-    for variant in ("reference", "pragma", "setup", "dependency", "snapshot", "traced", "missing_method", "syntax"):
+    variants = ("reference", "pragma", "setup", "dependency", "snapshot", "traced", "missing_method", "syntax")
+    for variant in variants:
         task = build_task(evaluation, config, None, "internet", "reference", 1)
-        task.metadata["answer_kind"] = variant
+        task.metadata["epoch"] = list(variants).index(variant) + 1
         task = task_with(task, name=task.name + "-" + variant)
         task.solver = submit(files, variant)
         if variant == "snapshot":
@@ -110,7 +111,7 @@ contract ConstructorTest is Test {
          retry_on_error=0, fail_on_error=False)
     rows = export_rows(output)
     expected = {"reference": "passed", "pragma": "failed", "setup": "failed", "dependency": "passed", "snapshot": "passed", "traced": "passed", "missing_method": "failed", "syntax": "failed"}
-    assert {row["answer_kind"]: row["status"] for row in rows} == expected, rows
+    assert {list(variants)[row["epoch"] - 1]: row["status"] for row in rows} == expected, rows
     check_sets = [set(row["checks"]) for row in rows]
     assert all(names == check_sets[0] for names in check_sets)
     assert len(check_sets[0]) == 10
@@ -128,12 +129,12 @@ contract ConstructorTest is Test {
             if event.event == "sandbox":
                 assert "PRIVATE_SOURCE_SENTINEL" not in (event.output or "")
         assert "PRIVATE_SOURCE_SENTINEL" not in str(row["checks"])
-        if row["answer_kind"] == "pragma":
+        if list(variants)[row["epoch"] - 1] == "pragma":
             assert "Available solc versions: 0.8.30" in row["checks"]["forge:compile"]["reason"]
-        elif row["answer_kind"] == "syntax":
+        elif list(variants)[row["epoch"] - 1] == "syntax":
             assert row["checks"]["forge:compile"] == {
                 "passed": False, "reason": "Error (6933): Expected primary expression."}
-        elif row["answer_kind"] == "setup":
+        elif list(variants)[row["epoch"] - 1] == "setup":
             assert row["checks"]["forge:test/ImageLibrary.t.sol:ConstructorTest:testConstructed()"] == {
                 "passed": False, "reason": "constructor failed"}
     print("PASS: reference, unavailable compiler, constructor failure, owned libraries, stopped processes, and private diagnostics.")

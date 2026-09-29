@@ -12,13 +12,13 @@ def test_capture_transport_failure_is_an_error(scoring_case, monkeypatch, operat
         raise error
     monkeypatch.setattr("ethevals.scorers." + operation, broken)
     row = scoring_case["run"]([])
-    assert (row["status"], row["passed"], row["attempt"]) == ("error", None, 1)
+    assert (row["status"], row["attempt"]) == ("error", 1)
     assert all(not check["passed"] for check in row["checks"].values())
 
 
 def test_empty_grader_reason_fails_the_rubric_check(scoring_case):
     row = scoring_case["run"](['{"passed": true, "reason": " "}', YES])
-    assert (row["status"], row["passed"]) == ("failed", False)
+    assert row["status"] == "failed"
     assert row["checks"]["rubric:uses_openzeppelin"] == {
         "passed": False, "reason": "The grader could not justify a verdict."}
     assert row["checks"]["rubric:protects_holders"]["passed"] is True
@@ -37,7 +37,7 @@ def test_docker_timeout_during_oom_inspection_is_an_error(scoring_case, monkeypa
     monkeypatch.setattr("ethevals.scorers.forge", real_forge)
     monkeypatch.setattr("ethevals.sandboxes.runner_exec", killed)
     row = scoring_case["run"]([])
-    assert (row["status"], row["passed"]) == ("error", None)
+    assert row["status"] == "error"
     assert "Cannot inspect scorer memory state" in row["error_reason"]
 
 
@@ -49,7 +49,7 @@ def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status
     from dataclasses import replace
     from inspect_ai import eval
     from inspect_ai.util import ExecResult
-    from ethevals.config import load_config
+    from support import load_config
     from ethevals.loader import load_eval
     from ethevals.checks import check_player, check_grader
     from ethevals.runner import build_task
@@ -92,7 +92,7 @@ def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status
     monkeypatch.setattr("ethevals.scorers.stop_agent", stopped)
     monkeypatch.setattr("ethevals.check_script.sandbox", lambda name: Box())
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert (row["status"], row["passed"]) == (status, None if status == "error" else status == "passed")
+    assert row["status"] == status
     assert list(row["checks"]) == ["script:balance"]
 
 
@@ -115,7 +115,7 @@ def test_compiler_child_exit_one_and_host_oom_through_rows(scoring_case, monkeyp
     monkeypatch.setattr("ethevals.scorers.sandbox", lambda name: Box())
     monkeypatch.setattr("ethevals.scorers.forge", real_forge)
     row = scoring_case["run"]([])
-    assert (row["status"], row["passed"]) == (status, False if status == "failed" else None)
+    assert row["status"] == status
 
 
 def test_invalid_source_bytes_fail_all_checks(scoring_case, monkeypatch):
@@ -129,7 +129,7 @@ def test_invalid_source_bytes_fail_all_checks(scoring_case, monkeypatch):
     monkeypatch.setattr("ethevals.scorers.sandbox", lambda name: Box())
     monkeypatch.setattr("ethevals.scorers.prepare_forge", prepare_forge)
     row = scoring_case["run"]([])
-    assert (row["status"], row["passed"]) == ("failed", False)
+    assert row["status"] == "failed"
     assert set(check["reason"] for check in row["checks"].values()) == {"Solidity source is not valid UTF-8: src/Token.sol"}
 
 
@@ -138,7 +138,7 @@ def test_chain_capture_failure_is_an_error(tmp_path, monkeypatch, timeout):
     from dataclasses import replace
     from inspect_ai import eval
     from inspect_ai.util import ExecResult
-    from ethevals.config import load_config
+    from support import load_config
     from ethevals.loader import load_eval
     from ethevals.checks import check_player, check_grader
     from ethevals.runner import build_task
@@ -163,5 +163,5 @@ def test_chain_capture_failure_is_an_error(tmp_path, monkeypatch, timeout):
     monkeypatch.setattr("ethevals.check_script.sandbox", lambda name: object())
     monkeypatch.setattr("ethevals.check_script.runner_exec", failed)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert (row["status"], row["passed"]) == ("error", None)
+    assert row["status"] == "error"
     assert row["checks"]["script:balance"]["passed"] is False
