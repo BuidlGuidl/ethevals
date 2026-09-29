@@ -124,7 +124,7 @@ def test_image_build_error_keeps_diagnostics(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
     config = fixture_config()
     act = load_eval(root / "evals/transactions/send-six-decimal-token", config)
-    quiz = load_eval(root / "evals/concepts/wei-per-ether", config)
+    quiz = load_eval(root / "inspect-runner/tests/fixtures/concepts/wei-per-ether", config)
     original = subprocess.run
 
     def command(args, **kwargs):

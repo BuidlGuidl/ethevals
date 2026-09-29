@@ -72,8 +72,6 @@ class Config(Declaration):
     grader: GraderConfig
     search: bool
     search_limit: int = Field(gt=0)
-    search_price_usd: float = Field(gt=0, allow_inf_nan=False)
-    native_search_price_usd: float = Field(gt=0, allow_inf_nan=False)
     models: dict[str, ModelSettings]
     agents: dict[str, AgentConfig]
     prices: dict[str, Prices]

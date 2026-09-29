@@ -15,7 +15,7 @@ from support import build_task, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "evals/building/erc20-points-token"
+BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
 
 
 def test_agent_sample_contains_only_workspace_files():
@@ -146,7 +146,7 @@ def test_runner_image_changes_leave_eval_hash_unchanged(tmp_path, monkeypatch):
     shutil.copytree(IMAGES, images)
     monkeypatch.setattr(sandboxes, "IMAGES", images)
     folder = tmp_path / "building" / "extra"
-    shutil.copytree(ROOT / "evals/building/erc20-points-token", folder)
+    shutil.copytree(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", folder)
     (folder / "compose.yaml").write_text("services:\n  database:\n    image: postgres:17\n    mem_limit: 512m\n")
     before = load_eval(folder, fixture_config())
     first = merged_compose(before)["services"]["default"]["image"]

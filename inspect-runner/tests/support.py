@@ -27,7 +27,7 @@ def fixture_config(path=None):
               for key in ("opus-5.5", "gpt-5.5", "kimi-k3", "glm-5.3")}
     prices = dict(input=5.0, output=25.0, input_cache_read=0.5, input_cache_write=6.25)
     return Config(epochs=3, time_limits={"quiz": 300, "build": 1200, "act": 1200}, cost_limit=5,
-                  max_attempts=2, concurrency=1, search=True, search_limit=20, search_price_usd=0.05, native_search_price_usd=0.01,
+                  max_attempts=2, concurrency=1, search=True, search_limit=20,
                   grader={"model": "mockllm/grader", "effort": "low", "max_tokens": 4096}, models=models,
                   agents={
                       "claude-code-opus-5.5": dict(harness="claude_code", model="opus-5.5", cli_model="claude-opus-5-5", search="exa"),
@@ -42,7 +42,7 @@ def small_config():
     prices = dict(input=1, output=1, input_cache_read=1, input_cache_write=1)
     model = dict(model="mockllm/test", effort="high")
     return Config(epochs=3, time_limits={"quiz": 10, "build": 1200, "act": 1200}, cost_limit=2, max_attempts=2,
-                  concurrency=1, search=False, search_limit=20, search_price_usd=0.05, native_search_price_usd=0.01, prices={"mockllm/test": prices},
+                  concurrency=1, search=False, search_limit=20, prices={"mockllm/test": prices},
                   grader={**model, "max_tokens": 10},
                   models={"test": model},
                   agents={"test-agent": {"model": "test", "harness": "claude_code", "cli_model": "test", "search": "exa"}})

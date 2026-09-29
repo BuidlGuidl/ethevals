@@ -17,6 +17,7 @@ from ethevals.loader import load_eval
 from ethevals.publish import publish_logs
 from ethevals.rows import fold_rows, read_rows, write_rows, store_rows
 
+BASE_BRANCH = "system"
 RESULTS_BRANCH = "ci/results"
 
 
@@ -33,7 +34,7 @@ def stored_file(ref, path):
 
 def result_record(own_rows=()):
     rows = []
-    for ref in ("refs/remotes/origin/main", f"refs/remotes/origin/{RESULTS_BRANCH}"):
+    for ref in (f"refs/remotes/origin/{BASE_BRANCH}", f"refs/remotes/origin/{RESULTS_BRANCH}"):
         content = stored_file(ref, "results/rows.jsonl") or ""
         rows = fold_rows(rows, [json.loads(line) for line in content.splitlines() if line.strip()])
     return fold_rows(rows, own_rows)
@@ -62,8 +63,8 @@ def commit_results(rows, repo, publish):
     environment = {**os.environ, "GIT_AUTHOR_NAME": "github-actions[bot]", "GIT_COMMITTER_NAME": "github-actions[bot]",
                    "GIT_AUTHOR_EMAIL": "41898282+github-actions[bot]@users.noreply.github.com",
                    "GIT_COMMITTER_EMAIL": "41898282+github-actions[bot]@users.noreply.github.com"}
-    # The publisher's checkout can be old. Source always comes from current main.
-    base = "refs/remotes/origin/main"
+    # The publisher's checkout can be old. Source always comes from the current base branch.
+    base = f"refs/remotes/origin/{BASE_BRANCH}"
     parents = ["-p", base]
     ref = f"refs/remotes/origin/{RESULTS_BRANCH}"
     has_results = subprocess.run(["git", "show-ref", "--verify", "--quiet", ref]).returncode == 0
@@ -92,9 +93,9 @@ def commit_results(rows, repo, publish):
     if subprocess.run(["git", "diff", "--quiet", base, ref]).returncode == 0:
         return
     existing = json.loads(command("gh", "pr", "list", "--repo", repo, "--head", RESULTS_BRANCH,
-                                  "--base", "main", "--state", "open", "--json", "number", capture_output=True).stdout)
+                                  "--base", BASE_BRANCH, "--state", "open", "--json", "number", capture_output=True).stdout)
     if not existing:
-        command("gh", "pr", "create", "--repo", repo, "--head", RESULTS_BRANCH, "--base", "main",
+        command("gh", "pr", "create", "--repo", repo, "--head", RESULTS_BRANCH, "--base", BASE_BRANCH,
                 "--title", "Record eval results", "--body",
                 "Add completed epochs and execution errors. Full logs for scored epochs link to results releases. "
                 "Approve the PR checks before merging. Errors retry automatically within the attempt cap on the next run.")

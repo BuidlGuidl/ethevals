@@ -114,7 +114,7 @@ def test_custom_compose_prepares_stock_images_for_check_and_run(tmp_path, monkey
     monkeypatch.setattr(preparation, "IMAGES", images)
     monkeypatch.setattr(sandboxes, "IMAGES", images)
     folder = tmp_path / "evals/building/custom"
-    shutil.copytree(ROOT / "evals/building/erc20-points-token", folder)
+    shutil.copytree(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", folder)
     (folder / "compose.yaml").write_text("services:\n  extra:\n    image: " + tag + "\n    mem_limit: 64m\n")
     config = fixture_config()
     evaluation = load_eval(folder, config)

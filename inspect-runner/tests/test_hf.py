@@ -21,12 +21,17 @@ from support import build_task, fixture_config, fixture_quiz
 
 def test_hf_cli_exports_fixture_rows_card_and_benchmark(tmp_path, config_path):
     evals = [fixture_quiz(tmp_path, "unit"), fixture_quiz(tmp_path, "choice", choices=["wei", "ether"], target="A")]
+    rubric = fixture_quiz(tmp_path, "rubric")
+    (rubric.folder / "scorer/rubric.md").write_text("## explained\nDid the answer explain the unit?\n")
+    evals.append(load_eval(rubric.folder, fixture_config()))
     output = tmp_path / "hf"
     result = subprocess.run([sys.executable, "-m", "ethevals.cli", "export-hf", "--output", str(output),
                              "--hf-repo", "example/ethereum", "--license", "cc-by-4.0",
                              "--config", str(config_path), "--evals", *[str(item.folder) for item in evals]], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["rows"] == 2
+    assert json.loads(result.stdout)["skipped"] == [
+        {"eval_id": "concepts/rubric", "reason": "rubric cannot be exported"}]
     text = (output / "README.md").read_text()
     card = yaml.safe_load(text.split("---", 2)[1])
     assert card["license"] == "cc-by-4.0"
@@ -161,13 +166,10 @@ def test_blank_choice_fails_at_load(tmp_path, blank):
         fixture_quiz(tmp_path, choices=["wei", blank, "ether"], target="C")
 
 
-@pytest.mark.parametrize("unsupported", ["alternatives", "second-scorer"])
-def test_validate_rejects_unexportable_vanilla_quiz(tmp_path, unsupported, config_path):
+def test_validate_rejects_unexportable_vanilla_quiz(tmp_path, config_path):
     evaluation = fixture_quiz(tmp_path, modes=["internet"])
     path = evaluation.folder / "scorer/target.yaml"
-    target = {"target": ["wei", "ether"] if unsupported == "alternatives" else "wei"}
-    if unsupported == "second-scorer":
-        (evaluation.folder / "scorer/rubric.md").write_text("## unit\nIs the unit correct?\n")
+    target = {"target": ["wei", "ether"]}
     path.write_text(yaml.safe_dump(target))
     declaration = evaluation.declaration.model_dump()
     declaration["modes"] = ["vanilla"]
@@ -175,7 +177,7 @@ def test_validate_rejects_unexportable_vanilla_quiz(tmp_path, unsupported, confi
     result = subprocess.run([sys.executable, "-m", "ethevals.cli", "validate", "--evals", str(evaluation.folder), "--config", str(config_path)],
                             capture_output=True, text=True)
     assert result.returncode == 2
-    assert ("cannot preserve alternative targets" if unsupported == "alternatives" else "scorer files do not match type quiz") in result.stderr
+    assert "cannot preserve alternative targets" in result.stderr
 
 
 @pytest.mark.parametrize("args", [["run", "--publish"], ["check", "--publish"], ["export-hf"],
