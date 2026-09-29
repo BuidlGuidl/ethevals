@@ -81,6 +81,7 @@ Use `--evals` to select folders and `--output` to choose a results directory.
 `--models` selects bare models for vanilla; `--agents` selects agents for internet and skills.
 Each selector requires a matching mode. Without selectors or mode flags, the runner selects every model, agent, and mode.
 `--effort low|medium|high|xhigh` overrides model and agent effort for that invocation.
+Omit a model's `effort` in the config to use its provider's default; rows then record `effort: null`.
 Each eval runs only in modes it declares.
 The skills mode adds the repo's Ethereum skills pack to the internet mode. The scenario type is not supported yet.
 

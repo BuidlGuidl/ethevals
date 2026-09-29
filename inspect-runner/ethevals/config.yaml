@@ -1,3 +1,6 @@
+# TODO: For real runs, set opus-5.5 and gpt-6-sol effort to high.
+# Omit effort for kimi-k3 and glm-5.3 to use provider defaults.
+# Set grader effort to medium.
 epochs: 3
 time_limits: {quiz: 300, build: 1200, act: 1200}
 cost_limit: 5.0
@@ -15,16 +18,16 @@ search_price_usd: 0.05 # Reserve at the cap: 10 search results or 5 fetched page
 models:
   opus-5.5:
     model: openrouter/anthropic/claude-opus-5.5
-    effort: high
+    effort: low
   gpt-6-sol:
     model: openrouter/openai/gpt-6-sol
-    effort: high
+    effort: low
   kimi-k3:
     model: openrouter/moonshotai/kimi-k3
-    effort: high
+    effort: low
   glm-5.3:
     model: openrouter/z-ai/glm-5.3
-    effort: high
+    effort: low
 agents:
   claude-code-opus-5.5:
     harness: claude_code

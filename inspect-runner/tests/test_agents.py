@@ -58,6 +58,26 @@ def test_unknown_harness_fails_config_validation():
         Config.model_validate(data)
 
 
+@pytest.mark.parametrize("mode,key", [("vanilla", "opus-5.5"), ("internet", "claude-code-opus-5.5")])
+@pytest.mark.parametrize("effort", [None, "medium"])
+def test_optional_effort_reaches_model_call(monkeypatch, mode, key, effort):
+    data = fixture_config().model_dump()
+    del data["models"]["opus-5.5"]["effort"]
+    config = Config.model_validate(data)
+    if effort:
+        config.models["opus-5.5"].effort = effort
+    actor = agent(config, key, mode)
+    observed = []
+
+    def reply(messages, tools, tool_choice, config):
+        observed.append(config.reasoning_effort)
+        return ModelOutput.from_content("mockllm/opus-5.5", "8004")
+
+    monkeypatch.setattr(actor.model.api, "outputs", reply)
+    output = asyncio.run(actor.model.generate([ChatMessageUser(content="Name the ERC.")]))
+    assert (output.completion, observed, actor.metadata["effort"]) == ("8004", [effort], effort)
+
+
 @pytest.mark.parametrize("arguments,expected_type,expected", [
     ('{"input":"text(42);"}', "custom_tool_call", "text(42);"),
     ('{}', "function_call", {}),

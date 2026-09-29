@@ -42,7 +42,7 @@ Effort = Literal["low", "medium", "high", "xhigh"]
 
 class ModelSettings(Declaration):
     model: str
-    effort: Effort
+    effort: Effort | None = None
 
 
 class AgentConfig(Declaration):

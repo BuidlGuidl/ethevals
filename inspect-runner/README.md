@@ -145,9 +145,10 @@ A batch with any refused method fails as a whole.
 The filter rejects WebSockets and unsigned sends; refusal messages enter the Inspect log.
 
 `agents.py` defines harness factories and pins their versions.
-`config.yaml` lists `models` with provider slugs and effort, and `agents` with harnesses and model keys.
+`config.yaml` lists `models` with provider slugs and optional effort, and `agents` with harnesses and model keys.
 Each agent's `cli_model` selects its CLI's model identity. Agents inherit effort from their model entry.
 `actors.py` sets Inspect's `reasoning_effort` from that entry; `--effort low|medium|high|xhigh` overrides it for a run.
+Omitted effort leaves the provider's default in effect and records `effort: null` in rows.
 `--models` selects vanilla models; `--agents` selects internet and skills agents. Defaults include every model, agent, and mode.
 Model requests pass through Inspect's host bridge.
 Exa search also runs on the host, which alone reads optional `EXA_API_KEY`.

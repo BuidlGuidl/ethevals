@@ -25,10 +25,18 @@ def test_selector_requires_a_matching_mode(command, selection, message):
 
 
 @pytest.mark.parametrize("effort", [None, "medium"])
-def test_default_plan_selects_models_and_agents(tmp_path, effort):
+@pytest.mark.parametrize("omit_effort", [False, True])
+def test_default_plan_selects_models_and_agents(tmp_path, effort, omit_effort):
+    from ethevals.config import load_config
+    data = load_config().model_dump()
+    if omit_effort:
+        for model in data["models"].values():
+            del model["effort"]
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(data))
     arguments = ["--effort", effort] if effort else []
     result = eval_cli("plan", "--evals", ROOT / "evals/concepts/agent-registries",
-                      "--config", ROOT / "inspect-runner/ethevals/config.yaml",
+                      "--config", config_path,
                       "--epochs", 1, "--output", tmp_path, *arguments)
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
@@ -37,7 +45,7 @@ def test_default_plan_selects_models_and_agents(tmp_path, effort):
     agents = [("claude_code", expected[0][1]), ("codex_cli", expected[1][1]),
               ("opencode", expected[2][1]), ("opencode", expected[3][1])]
     assert [(row["mode"], row["harness"], row["model"], row["effort"]) for row in report["missing"]] == [
-        (mode, harness, model, effort or "high") for mode, actors in
+        (mode, harness, model, effort or (None if omit_effort else "low")) for mode, actors in
         [("vanilla", expected), ("internet", agents), ("skills", agents)] for harness, model in actors]
     assert (report["missing_epochs"], report["worst_case_usd"]) == (12, 136.0)
 
@@ -149,17 +157,18 @@ def test_plan_includes_scoring_and_only_sandbox_container_time(folder, mode, sec
     assert [(row["eval_id"], row["wall_seconds"]) for row in report["missing"]] == [(folder, seconds)]
 
 
-def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path, monkeypatch):
+@pytest.mark.parametrize("effort", [None, "high"])
+def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path, monkeypatch, effort):
     config, evaluation = catalog_quiz()
-    first = config.models["opus-5.5"].model_copy(update={"model": "mockllm/shared"})
-    config.models = {"high": first, "low": first.model_copy(update={"effort": "low"})}
+    first = config.models["opus-5.5"].model_copy(update={"model": "mockllm/shared", "effort": effort})
+    config.models = {"first": first, "low": first.model_copy(update={"effort": "low"})}
     config.grader.model = "mockllm/grader"
     # Both providers are MockLLM. The gate key never reaches a provider request.
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-offline-gate-key")
-    success, rows = run([evaluation], config, tmp_path, models=["high", "low"], modes=["vanilla"], epochs=1, budget=20)
+    success, rows = run([evaluation], config, tmp_path, models=["first", "low"], modes=["vanilla"], epochs=1, budget=20)
     assert success
     assert [(row["effort"], row["status"], row["attempt"]) for row in rows] == [
-        ("high", "failed", 1), ("low", "failed", 1)]
+        (effort, "failed", 1), ("low", "failed", 1)]
 
 
 @pytest.mark.parametrize("mode", ["vanilla", "internet", "skills"])

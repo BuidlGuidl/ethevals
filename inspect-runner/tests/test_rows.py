@@ -221,10 +221,10 @@ def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path
     assert third[0]["model"] == "mockllm/gpt-6-sol"
     stored = [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()]
     assert sorted(row["model"] for row in stored) == ["mockllm/gpt-6-sol", "mockllm/opus-5.5"]
-    config.models["opus-5.5"].effort = "low"
+    config.models["opus-5.5"].effort = "medium"
     success, fourth = run([evaluation], config, output, models=["opus-5.5"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True
-    assert fourth[0]["effort"] == "low"
+    assert fourth[0]["effort"] == "medium"
     assert len(list((output / "logs").rglob("*.eval"))) == 3
 
 

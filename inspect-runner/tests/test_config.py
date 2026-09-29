@@ -17,7 +17,9 @@ BUILD = ROOT / "evals/building/erc20-points-token"
 @pytest.mark.parametrize("effort", ["hihg", "none", "minimal", "max"])
 def test_validate_rejects_unsupported_effort(folder, tmp_path, effort):
     path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump(fixture_config().model_dump()).replace("effort: high", f"effort: {effort}"))
+    data = fixture_config().model_dump()
+    data["models"]["opus-5.5"]["effort"] = effort
+    path.write_text(yaml.safe_dump(data))
     result = eval_cli("validate", "--evals", folder, "--config", path)
     assert result.returncode == 2
     assert "models.opus-5.5.effort" in result.stderr
