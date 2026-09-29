@@ -57,6 +57,9 @@ main { padding: 38px 28px 32px; max-width: 1600px; margin: auto; display: grid; 
 .toolbar { display: flex; justify-content: space-between; align-items: end; flex-wrap: wrap; gap: 14px; }
 .toolbar p { margin-top: 5px; }
 .mode-label { color: var(--muted); border: 1px solid var(--border); border-radius: 5px; padding: 7px 12px; font-size: 12px; }
+.mode-switch { display: flex; border: 1px solid var(--border); border-radius: 5px; padding: 3px; }
+.mode-switch button { min-height: 38px; padding: 7px 14px; border-radius: 3px; font-size: 12px; }
+.mode-switch button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
 .table-shell { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .table-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
 .board { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }

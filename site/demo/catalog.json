@@ -17,7 +17,8 @@
     "prompt": "Which ERC defines onchain identity, reputation, and validation registries for AI agents? Reply with just the number.",
     "modes": [
       "vanilla",
-      "internet"
+      "internet",
+      "skills"
     ],
     "id": "concepts/agent-registries",
     "pillar": "concepts",

@@ -133,14 +133,14 @@ def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path,
         ("high", "failed", 1), ("low", "failed", 1)]
 
 
-@pytest.mark.parametrize("mode", ["vanilla", "internet"])
+@pytest.mark.parametrize("mode", ["vanilla", "internet", "skills"])
 def test_planned_identity_matches_every_configured_provider(monkeypatch, mode):
     config, evaluation = catalog_quiz()
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
     for key, settings in config.agents.items():
         planned, _ = select_actors(config, [key], [mode], planning=True)
         actual, _ = select_actors(config, [key], [mode])
-        expected = (evaluation.id, evaluation.hash, settings.harness if mode == "internet" else None,
+        expected = (evaluation.id, evaluation.hash, settings.harness if mode != "vanilla" else None,
                     settings.model, settings.effort, mode, 1)
         for selection in (planned, actual):
             actor = selection(evaluation)[0][1]

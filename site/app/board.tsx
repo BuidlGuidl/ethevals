@@ -40,23 +40,30 @@ function Score({ cell, label, open }: {
   </button>;
 }
 
-function ResultsTable({ data, mode, onOpen }: { data: BoardData; mode: Mode; onOpen: (selection: Selection) => void }) {
+function ResultsTable({ data, mode, onOpen, onMode }: {
+  data: BoardData; mode: Mode; onOpen: (selection: Selection) => void;
+  onMode?: (mode: "internet" | "skills") => void;
+}) {
   const [expanded, setExpanded] = useState<Pillar[]>(["concepts"]);
   const [column, setColumn] = useState<string | null>(null);
   const table = data.tables[mode];
   const agents = table.agents;
   const evaluations = pillars.flatMap((pillar) => table.pillars[pillar].evals.map((entry) => data.evaluations[entry.id]));
-  const title = mode === "internet" ? "Agent table" : "Knowledge table";
+  const title = mode !== "vanilla" ? "Agent table" : "Knowledge table";
 
-  return <section className="board-section" id={mode === "internet" ? "agents" : "knowledge"} aria-label={title}>
+  return <section className="board-section" id={mode !== "vanilla" ? "agents" : "knowledge"} aria-label={title}>
     <div className="toolbar">
-      <div><h2>{title}</h2><p className="muted">{mode === "internet"
+      <div><h2>{title}</h2><p className="muted">{mode !== "vanilla"
         ? "Can I trust my agent with Ethereum?" : "What does a bare model know about Ethereum?"}</p></div>
-      {/* The mode label is the reserved place for a future skills toggle. */}
-      <div className="mode-label">{mode === "internet" ? "Internet · no Ethereum skills" : "Vanilla · no harness or tools"}</div>
+      {onMode ? <div className="mode-switch" role="group" aria-label="Agent mode">
+        {(["internet", "skills"] as const).map((value) => <button key={value}
+          aria-pressed={mode === value} onClick={() => onMode(value)}>
+          {value === "internet" ? "Internet" : "Skills"}
+        </button>)}
+      </div> : <div className="mode-label">Vanilla · no harness or tools</div>}
     </div>
     {!agents.length ? <div className="empty">
-      <h3>{mode === "internet" ? "No agent epochs yet" : "No knowledge epochs yet"}</h3>
+      <h3>{mode !== "vanilla" ? "No agent epochs yet" : "No knowledge epochs yet"}</h3>
       <p>No published results match the current evals. Scores will appear after epochs finish.</p>
       <details><summary>Browse {evaluations.length} evals</summary><div className="catalog">
         {evaluations.map((evaluation) => <article key={evaluation.id}>
@@ -224,6 +231,7 @@ export function Detail({ selection, data, onSelect, onClose }: {
 }
 
 export default function Board({ data }: { data: BoardData }) {
+  const [mode, setMode] = useState<"internet" | "skills">("internet");
   const [selection, setSelection] = useState<Selection | null>(null);
   return <>
     <a className="skip-link" href="#main">Skip to results</a>
@@ -232,7 +240,9 @@ export default function Board({ data }: { data: BoardData }) {
       <header className="page-heading"><h1>Ethereum work, measured.</h1><p>How well agents do Ethereum work, and what bare models know.</p></header>
       {data.demo && <aside className="demo-banner"><strong>Demo data</strong><span>All results and extra evals on this page are invented. These are not model rankings.</span></aside>}
       <section className="pillar-strip" aria-label="Pillars">{pillars.map((pillar) => <div key={pillar}><h2>{names[pillar]}</h2><p>{descriptions[pillar]}</p></div>)}</section>
-      <ResultsTable data={data} mode="internet" onOpen={setSelection} />
+      <ResultsTable data={data} mode={mode} onOpen={setSelection} onMode={(value) => {
+        setMode(value); setSelection(null);
+      }} />
       <ResultsTable data={data} mode="vanilla" onOpen={setSelection} />
       <section id="scoring" className="scoring"><h2>How scoring works</h2>
         <p>An epoch passes when every named check passes. Each eval score is the share of scored epochs that passed.</p>

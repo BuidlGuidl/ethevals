@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Literal
 
 from inspect_ai.dataset import Sample
+from inspect_ai.tool import Skill
 from pydantic import Field
 
 from .config import Config, Declaration, Mode, parse_file
@@ -10,6 +11,7 @@ from .scorers import TargetScorer, rubric_questions
 from .check_script import script_path, validate_script
 from .sandboxes import IMAGES, SOLC_VERSIONS, validate_compose
 from .files import manifest, content_hash, inline_file
+from .skills import PACK, PREFIX, pack_skills
 
 PILLARS = {"concepts", "transactions", "building", "security"}
 
@@ -23,7 +25,17 @@ class EvalDeclaration(Declaration):
 
 
 def eval_hash(folder: Path) -> str:
-    return content_hash(manifest(folder))
+    return content_hash(eval_inputs(folder)[0])
+
+
+def eval_inputs(folder: Path):
+    files = manifest(folder)
+    if "eval.yaml" not in files:
+        raise ValueError(f"{folder / 'eval.yaml'}: required regular file is missing")
+    declaration = parse_file(EvalDeclaration, folder / "eval.yaml", files["eval.yaml"])
+    if "skills" in declaration.modes:
+        files.update({PREFIX + name: data for name, data in manifest(PACK).items()})
+    return files, declaration
 
 
 @dataclass(frozen=True)
@@ -36,6 +48,7 @@ class Eval:
     scorer_kinds: list[str]
     target: TargetScorer | None
     files: dict[str, bytes]
+    skills: list[Skill]
 
     def sample(self) -> Sample:
         # Only workspace files are eligible for copying into a future sandbox.
@@ -63,10 +76,8 @@ def load_eval(folder: Path, config: Config) -> Eval:
     if folder.is_symlink():
         raise ValueError(f"{folder}: symlinks are not allowed in an eval folder")
     folder = folder.resolve()
-    files = manifest(folder)
-    if "eval.yaml" not in files:
-        raise ValueError(f"{folder / 'eval.yaml'}: required regular file is missing")
-    declaration = parse_file(EvalDeclaration, folder / "eval.yaml", files["eval.yaml"])
+    files, declaration = eval_inputs(folder)
+    skills = pack_skills(files) if "skills" in declaration.modes else []
     if declaration.type == "scenario":
         raise ValueError(f"{folder / 'eval.yaml'}: type: scenario is not supported yet")
     if any(not choice.strip() for choice in declaration.choices or []):
@@ -113,7 +124,7 @@ def load_eval(folder: Path, config: Config) -> Eval:
     if "compose.yaml" in files:
         validate_compose(folder / "compose.yaml", data=files["compose.yaml"])
     return Eval(folder, f"{folder.parent.name}/{folder.name}", content_hash(files),
-                folder.parent.name, declaration, kinds, target, files)
+                folder.parent.name, declaration, kinds, target, files, skills)
 
 
 def validate_hf_export(declaration: EvalDeclaration, target: TargetScorer, source: str) -> None:

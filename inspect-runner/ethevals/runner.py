@@ -9,7 +9,9 @@ from inspect_ai import Task, eval, task_with
 from inspect_ai.util import SandboxEnvironmentSpec
 
 from .actors import Agent, Grader, select_actors
-from .config import Config, read_yaml
+from .config import Config, read_yaml, uses_sandbox
+from .files import inline_file
+from .skills import skill_index
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
 from .planning import plan, budget_check
@@ -36,11 +38,13 @@ def task_limits(evaluation, config):
 
 def build_task(evaluation: Eval, config: Config, agent: Agent, grader: Grader,
                mode: str, epochs: int, compose: Path | None) -> Task:
-    if mode == "skills":
-        raise ValueError("The skills mode is not implemented yet")
     if mode not in evaluation.declaration.modes:
         raise ValueError(f"{evaluation.folder / 'eval.yaml'}: modes: {mode!r} is not declared")
     sample = evaluation.sample()
+    if mode == "skills":
+        name = "CLAUDE.md" if agent.metadata["harness"] == "claude_code" else "AGENTS.md"
+        existing = evaluation.files.get(f"workspace/{name}", b"")
+        sample.files[f"/workspace/{name}"] = inline_file(existing + b"\n\n" + skill_index(evaluation.skills).encode())
     images = {}
     if agent.sandbox_for(evaluation):
         services = read_yaml(compose)["services"]
@@ -58,7 +62,7 @@ def build_task(evaluation: Eval, config: Config, agent: Agent, grader: Grader,
                 "chain_inputs": image_inputs(image="chain") if images.get("chain") == image_tag(image="chain") else {},
                 "cost_limit_usd": config.cost_limit,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
-                "search_limit": config.search_limit if mode == "internet" and config.search else 0,
+                "search_limit": config.search_limit if uses_sandbox(mode) and config.search else 0,
                 "search_price_usd": config.search_price_usd,
                 "working_limit_seconds": working_limit, "time_limit_seconds": time_limit,
                 "scoring_limit_seconds": scoring_limit}

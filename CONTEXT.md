@@ -24,7 +24,7 @@ A mode where a bare model answers a quiz through a plain API call, with no harne
 A mode where an agent works as it normally would, with the web, a shell, its workspace, and the eval's services. No Ethereum skills are installed.
 
 **Skills**:
-The internet mode with Ethereum skills installed. Not supported yet.
+The internet mode with the repo's Ethereum skills pack installed.
 
 ## What an eval is made of
 
@@ -95,7 +95,7 @@ The share of scored epochs that passed. Errors do not enter the denominator. The
 _Avoid_: partial score
 
 **Eval hash**:
-A fingerprint of captured file paths and bytes in an eval folder, excluding local artifacts. Results under an older hash do not describe the current eval.
+A fingerprint of captured file paths and bytes in an eval folder, excluding local artifacts. Evals that declare skills also include the skills pack. Results under an older hash do not describe the current eval.
 
 **Results row**:
 The latest record of one epoch: its eval, agent, mode, checks, and cost. It names the local log and links to published logs.
@@ -129,7 +129,7 @@ A type where the agent changes chain state by sending transactions.
 ## What the system publishes
 
 **Agent table**:
-Scores for agents in the internet mode. The skills mode is not supported yet.
+Scores for agents in the internet or skills mode.
 
 **Knowledge table**:
 Scores for bare models on quizzes in the vanilla mode.

@@ -13,13 +13,13 @@ class Harness:
     factory: Callable
     version: str
 
-    def build(self, config, model):
+    def build(self, config, model, skills=None):
         from .search import exa_tools
         # Codex code mode calls MCP from a script, outside a direct model tool proposal.
         # The host tool enforces the per-epoch request cap for every caller.
         bridges = [BridgedToolsSpec(name="exa", tools=exa_tools(config.search_limit),
                                    require_proposal=False)] if config.search else []
-        return self.factory(model, version=self.version, bridged_tools=bridges)
+        return self.factory(model, version=self.version, bridged_tools=bridges, skills=skills)
 
 
 def claude(model, **settings):
@@ -87,10 +87,10 @@ HARNESSES = {
 
 
 @solver
-def internet_solver(harness: str, config, model):
+def internet_solver(harness: str, config, model, skills=None):
     if harness not in HARNESSES:
         raise ValueError(f"Harness {harness!r} has no internet solver yet")
-    agent = HARNESSES[harness].build(config, model)
+    agent = HARNESSES[harness].build(config, model, skills)
 
     async def solve(state, generate):
         if state.choices:

@@ -80,7 +80,7 @@ uv run ethevals run --agents opus --modes vanilla internet --epochs 1 --budget 1
 Use `--evals` to select folders and `--output` to choose a results directory.
 Without agent or mode flags, the runner selects all configured agents in vanilla mode.
 Each eval runs only in modes it declares.
-The skills mode and scenario type are not supported yet.
+The skills mode adds the repo's Ethereum skills pack to the internet mode. The scenario type is not supported yet.
 
 `run` succeeds when execution succeeds, even when an agent fails its checks.
 Repeat the command to resume missing epochs.

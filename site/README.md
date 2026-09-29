@@ -28,7 +28,7 @@ Demo mode and an explicit rows path cannot be combined.
 A missing default rows file produces the empty state; a missing explicit file fails the build.
 Malformed rows and duplicate epochs fail with their file and line.
 The loader accepts schema version 4 and displays only current eval hashes.
-Skills rows stay outside both tables.
+The agent table switches between internet and skills rows.
 The build reports loaded, current, and stale row counts.
 
 Published rows supply full log URLs. The site does not publish or copy real logs.

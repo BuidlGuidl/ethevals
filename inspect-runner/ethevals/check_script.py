@@ -9,14 +9,15 @@ from inspect_ai.scorer import scorer, accuracy
 
 from .sandboxes import runner_exec, scoring_exec, stop_agent
 from .scoring_base import checks_score, scoring_boundary
+from .config import uses_sandbox
 
 SETUP_TIMEOUT = 120
 CHECK_SECONDS = 120
 
 
 def validate_script(declaration, files):
-    if declaration.modes != ["internet"]:
-        raise ValueError("check_script requires an act eval with modes: [internet]")
+    if not all(uses_sandbox(mode) for mode in declaration.modes):
+        raise ValueError("check_script requires an act eval with agent modes only")
     script_path(files, "check", required=True)
     script_path(files, "setup")
 

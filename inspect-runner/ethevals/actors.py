@@ -55,7 +55,7 @@ def agent(config, key, mode, planning=False):
         model, metadata = None, actor_metadata(item, config)
     else:
         model, metadata = model_actor(item, config)
-    harness = item.harness if mode == "internet" else None
+    harness = item.harness if uses_sandbox(mode) else None
     if harness == "codex_cli" and not planning:
         model = CodexModel(model)
     metadata.update(harness=harness, harness_version=HARNESSES[harness].version if harness else None)
@@ -65,7 +65,7 @@ def agent(config, key, mode, planning=False):
             if evaluation.declaration.type != "quiz":
                 raise ValueError("The vanilla mode supports only quiz evals")
             return quiz_solver(evaluation)
-        return internet_solver(harness, config, item)
+        return internet_solver(harness, config, item, evaluation.skills if mode == "skills" else None)
 
     return Agent(model, metadata, solve, lambda evaluation: uses_sandbox(mode), key=key)
 
@@ -85,7 +85,9 @@ def select_actors(config, agents=None, modes=None, answer=None, *, planning=Fals
         grade = check_grader()
 
         def agents_for(evaluation):
-            selected = modes or [CHECK_MODES[evaluation.declaration.type]]
+            selected = modes or [next((mode for mode in evaluation.declaration.modes
+                                      if uses_sandbox(mode) == uses_sandbox(CHECK_MODES[evaluation.declaration.type])),
+                                     CHECK_MODES[evaluation.declaration.type])]
             return [(mode, check_agent(evaluation, answer, mode=mode))
                     for mode in dict.fromkeys(evaluation.declaration.modes) if mode in selected]
     else:

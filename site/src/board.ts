@@ -4,7 +4,7 @@ export type { Row } from "./rows";
 export const pillars = ["concepts", "transactions", "building", "security"] as const;
 export type Pillar = (typeof pillars)[number];
 export type Mode = "vanilla" | "internet" | "skills";
-export type TableMode = Exclude<Mode, "skills">;
+export type TableMode = Mode;
 export type EvalType = "quiz" | "build" | "act";
 
 export interface Eval {
@@ -102,9 +102,8 @@ function pillarCell(cells: EvalCell[]): PillarCell {
 // The loader supplies current, checked rows. Group each row and compute each cell once.
 export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): BoardData {
   const groups = new Map<string, Row[]>();
-  const agents: Record<TableMode, Map<string, Agent>> = { internet: new Map(), vanilla: new Map() };
+  const agents: Record<TableMode, Map<string, Agent>> = { internet: new Map(), skills: new Map(), vanilla: new Map() };
   for (const row of rows) {
-    if (row.mode === "skills") continue;
     const key = agentKey(row);
     agents[row.mode].set(key, { model: row.model, harness: row.harness, effort: row.effort });
     const group = JSON.stringify([row.eval_id, row.mode, key]);
@@ -112,7 +111,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
     groups.get(group)!.push(row);
   }
   const tables = {} as BoardData["tables"];
-  for (const mode of ["internet", "vanilla"] as const) {
+  for (const mode of ["internet", "skills", "vanilla"] as const) {
     const columns = [...agents[mode].values()].sort((a, b) => agentKey(a).localeCompare(agentKey(b), "en"));
     const table = { agents: columns, pillars: {} as Table["pillars"] };
     // The knowledge table shows quizzes only. Both table and panel use these rows.

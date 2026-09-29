@@ -119,6 +119,23 @@ test("cost adds both roles and keeps a missing price unknown", () => {
   assert.equal(epochCost(row({ model_cost_usd: 0, grader_cost_usd: 0 })), 0);
 });
 
+test("the agent switch and skills details use their own scores", () => {
+  const data = buildBoard([{ ...evaluation, modes: ["vanilla", "internet", "skills"] }],
+    [row(), row({ mode: "skills", ...failure })]);
+  const html = renderToStaticMarkup(createElement(Board, { data }));
+  assert.ok(html.includes('aria-label="Agent mode"'));
+  assert.ok(html.includes('aria-pressed="true">Internet</button>'));
+  assert.ok(html.includes('aria-pressed="false">Skills</button>'));
+  const panel = renderToStaticMarkup(createElement(Detail, {
+    data, selection: { evaluation, pillar: "concepts", agent, mode: "skills" },
+    onSelect: () => {}, onClose: () => {},
+  }));
+  assert.ok(panel.includes("0%"));
+  assert.ok(panel.includes("The answer differs."));
+  assert.deepEqual([data.tables.internet.pillars.concepts.cells[agentKey(agent)].score,
+    data.tables.skills.pillars.concepts.cells[agentKey(agent)].score], [1, 0]);
+});
+
 test("row parsing keeps long named-check reasons and reports malformed verdicts with a line number", () => {
   const reason = "The expected answer differs. ".repeat(60).trim();
   assert.equal(parseRows(JSON.stringify(row({ ...failure, checks: { answer: { passed: false, reason } } })), "results.jsonl", [evaluation])[0].checks.answer.reason, reason);

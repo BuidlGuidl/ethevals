@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import yaml
 
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
@@ -39,6 +40,9 @@ def pytest_collection_modifyitems(config, items):
 def folder(tmp_path):
     target = tmp_path / "concepts" / "quiz"
     shutil.copytree(ROOT / "evals/concepts/agent-registries", target)
+    declaration = yaml.safe_load((target / "eval.yaml").read_text())
+    declaration["modes"] = ["vanilla", "internet"]
+    (target / "eval.yaml").write_text(yaml.safe_dump(declaration, default_flow_style=None))
     return target
 
 

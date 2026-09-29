@@ -54,7 +54,11 @@ Do not rely on their secrecy from an agent with internet access.
 Use `[vanilla]` for a bare-model quiz, or `[vanilla, internet]` to include agents.
 Hugging Face publication includes targets, so internet-mode agents can look them up.
 Use `[internet]` for builds and acts.
-The `scenario` type and `skills` mode are not supported yet.
+The `scenario` type is not supported yet.
+
+Add `skills` to `modes` to run agents with the whole [skills pack](../skills/README.md).
+Skills mode uses the internet mode's tools and limits, with an index in each harness's instruction file.
+Pack changes update the hashes of every eval that declares `skills`.
 
 ### Write a free-text quiz
 

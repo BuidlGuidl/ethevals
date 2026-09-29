@@ -5,6 +5,7 @@ from typing import NamedTuple
 
 from .rows import epoch_identity
 from .scorers import rubric_budget
+from .config import uses_sandbox
 
 CONTAINER_SECONDS = 300
 PREPARATION_SECONDS = 1800
@@ -76,7 +77,7 @@ def plan(evals, config, agents_for, previous, *, epochs=None, retry_errors=False
         # Reserve every remaining runner attempt. Runtime spends one per invocation.
         remaining = max(1, config.max_attempts - attempt + 1)
         per_attempt = config.cost_limit + rubric_budget(evaluation, config)
-        if mode == "internet" and config.search:
+        if uses_sandbox(mode) and config.search:
             per_attempt += config.search_limit * config.search_price_usd
         row = {"eval_id": evaluation.id, "eval_hash": evaluation.hash, "type": evaluation.declaration.type,
                **actor.metadata, "mode": mode, "epoch": epoch, "attempt": attempt,

@@ -32,7 +32,7 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
     if (!line.trim()) return [];
     try {
       const row = rowSchema.parse(JSON.parse(line));
-      if (row.mode === "internet" && !row.harness) throw new Error("Internet rows require a harness.");
+      if (row.mode !== "vanilla" && !row.harness) throw new Error("Agent rows require a harness.");
       if (row.mode === "vanilla" && row.harness !== null) throw new Error("Vanilla rows cannot have a harness.");
       if (row.mode === "vanilla" && row.type !== "quiz") throw new Error("Vanilla rows require a quiz eval.");
       const evaluation = current.get(row.eval_id);

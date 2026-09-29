@@ -83,13 +83,17 @@ test("v4 cost limits retain runner reasons and count as failed epochs", (t) => {
     [0, 1, 0, "Epoch reached cost limit 5.0. Budget spent."]);
 });
 
-test("loader excludes stale rows and the board parks skills", (t) => {
+test("loader excludes stale rows and keeps skills in a separate agent table", (t) => {
   const f = fixture(t);
   f.write([{}, { epoch: 2, eval_hash: "old" }, { epoch: 3, mode: "skills" }]);
   const board = loadBoard({}, f.site);
   const cell = board.tables.internet.pillars.concepts.evals[0].cells['["model-a","harness-a","high"]'];
   assert.deepEqual([cell.passed, cell.total, cell.score], [1, 1, 1]);
   assert.deepEqual(board.tables.internet.agents, [{ model: "model-a", harness: "harness-a", effort: "high" }]);
+  const skills = board.tables.skills.pillars.concepts.evals[0].cells['["model-a","harness-a","high"]'];
+  assert.deepEqual([skills.passed, skills.total, skills.epochs[0].epoch], [1, 1, 3]);
+  f.write([{ mode: "skills", harness: null }]);
+  assert.throws(() => loadBoard({}, f.site), /Agent rows require a harness/);
 });
 
 test("missing default rows give an explicit empty state, while an override is required to exist", (t) => {
