@@ -30,6 +30,7 @@ def parse_args(argv=None):
     for name in ("run", "plan", "check", "validate", "catalog", "export-hf"):
         parsers[name].add_argument("--evals", nargs="+", help="Eval folders. Defaults to evals/*/*.")
         parsers[name].add_argument("--config", type=Path)
+        parsers[name].set_defaults(effort=None)
     parsers["run"].add_argument("--output", type=Path, default=Path("results"))
     parsers["plan"].add_argument("--output", type=Path, default=Path("results"))
     parsers["check"].add_argument("--output", type=Path, default=Path("results/check"))
@@ -66,10 +67,7 @@ def main(argv=None) -> int:
             print(json.dumps(publish_logs(args.output, args.repo, args.run_id, args.commit,
                                          publish=args.publish), indent=2))
             return 0
-        config = load_config(args.config)
-        if getattr(args, "effort", None):
-            for model in config.models.values():
-                model.effort = args.effort
+        config = load_config(args.config, effort=args.effort)
         paths = [Path(value) for value in args.evals] if args.evals else sorted(Path("evals").glob("*/*"))
         if not paths:
             raise ValueError("No eval folders found. Use --evals or start from the repository root.")
@@ -85,7 +83,7 @@ def main(argv=None) -> int:
                 print(f"{evaluation.id} {evaluation.hash}")
             return 0
         if args.command == "plan":
-            agents_for, _ = select_actors(config, args.agents, args.modes, models=args.models, planning=True)
+            agents_for, _ = select_actors(config, agents=args.agents, modes=args.modes, models=args.models, planning=True)
             report = budget_check(plan(evals, config, agents_for, previous_rows(args.output, args.rows),
                           epochs=args.epochs, retry_errors=args.retry_errors, wall_seconds=args.wall_seconds).report, args.budget)
             print(json.dumps(report, indent=2))

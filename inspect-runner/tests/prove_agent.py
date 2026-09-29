@@ -11,10 +11,9 @@ from unittest.mock import patch
 
 from inspect_ai import eval
 from inspect_ai.log import read_eval_log
-from inspect_ai.model import GenerateConfig, ModelOutput, get_model
+from inspect_ai.model import ModelOutput, get_model
 
 from support import build_task, fixture_config, valid_search_result
-from ethevals.agents import CodexModel
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
 from ethevals.preparation import build_images, prepare_compose
@@ -188,12 +187,11 @@ console.log(JSON.stringify({matches, files, environments}));
             "reason": "The submitted token uses OpenZeppelin without holder controls." if passed else "The workspace contains an empty contract.",
         }))
 
-    task.model = get_model("mockllm/model", config=GenerateConfig(reasoning_effort=model.effort), custom_outputs=reply)
-    if harness == "codex_cli":
-        task.model = CodexModel(task.model)
+    provider = task.model.source if harness == "codex_cli" else task.model
     started = time.monotonic()
     from inspect_ai.agent._bridge import anthropic_api_impl, completions, responses_impl
     with ExitStack() as stack:
+        stack.enter_context(patch.object(provider.api, "outputs", reply))
         for module, name in [(anthropic_api_impl, "generate_config_from_anthropic"),
                              (completions, "generate_config_from_openai_completions"),
                              (responses_impl, "generate_config_from_openai_responses")]:
@@ -206,15 +204,20 @@ console.log(JSON.stringify({matches, files, environments}));
     assert row["status"] == ("passed" if args.answer == "reference" else "failed"), row
     assert search_ok
     assert row["mode"] == args.mode, row
+    log = read_eval_log(logs[0].location, resolve_attachments=True)
+    request = next(event for event in log.samples[0].events if event.event == "model")
+    (args.output / "first-request.json").write_text(request.model_dump_json(indent=2))
+    messages = "\n".join(message.text for message in request.input)
+    tools = json.dumps([tool.model_dump(mode="json") for tool in request.tools])
     if args.mode == "skills":
-        log = read_eval_log(logs[0].location, resolve_attachments=True)
-        request = next(event for event in log.samples[0].events if event.event == "model")
-        (args.output / "first-request.json").write_text(request.model_dump_json(indent=2))
-        messages = "\n".join(message.text for message in request.input)
         index = skill_index(evaluation.skills).strip()
         assert index in messages, "The first request lacks the common index."
-        native = messages.replace(index, "") + json.dumps([tool.model_dump(mode="json") for tool in request.tools])
+        native = messages.replace(index, "") + tools
         assert "standards" in native and "Ethereum token and protocol standards" in native, "The first request lacks the native skill entry."
+    else:
+        assert "# Ethereum skills" not in messages, "The internet request contains the skills index."
+        assert "Ethereum token and protocol standards" not in messages + tools, "The internet request contains the native skill entry."
+        print(json.dumps({"internet_skills_absent": True}), flush=True)
     if args.exa_canary:
         import zipfile
         for archive in (args.output / "logs").glob("*.eval"):

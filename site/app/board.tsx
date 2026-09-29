@@ -41,9 +41,8 @@ function Score({ cell, label, open }: {
 }
 
 function ResultsTable({ data, mode, onOpen, onMode }: {
-  data: BoardData; mode: Mode; onOpen: (selection: Selection) => void;
-  onMode?: (mode: "internet" | "skills") => void;
-}) {
+  data: BoardData; onOpen: (selection: Selection) => void;
+} & ({ mode: "vanilla"; onMode?: never } | { mode: "internet" | "skills"; onMode: (mode: "internet" | "skills") => void })) {
   const [expanded, setExpanded] = useState<Pillar[]>(["concepts"]);
   const [column, setColumn] = useState<string | null>(null);
   const table = data.tables[mode];
@@ -58,7 +57,7 @@ function ResultsTable({ data, mode, onOpen, onMode }: {
         ? "Can I trust my agent with Ethereum?" : "What does a bare model know about Ethereum?"}</p></div>
       {agentTable ? <div className="mode-switch" role="group" aria-label="Agent mode">
         {(["internet", "skills"] as const).map((value) => <button key={value}
-          aria-pressed={mode === value} onClick={() => onMode?.(value)}>
+          aria-pressed={mode === value} onClick={() => onMode(value)}>
           {value === "internet" ? "Internet" : "Skills"}
         </button>)}
       </div> : <div className="mode-label">Vanilla · no harness or tools</div>}
@@ -86,7 +85,7 @@ function ResultsTable({ data, mode, onOpen, onMode }: {
               onMouseEnter={() => setColumn(agentKey(agent))}>
               <span className="agent-name">{agent.model}</span>
               {agent.harness && <span className="subline">{agent.harness}</span>}
-              <span className="subline">Effort: {agent.effort ?? "not recorded"}</span>
+              <span className="subline">Effort: {agent.effort ?? "provider default"}</span>
             </th>)}
           </tr></thead>
           {pillars.map((pillar) => {

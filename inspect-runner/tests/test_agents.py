@@ -1,7 +1,7 @@
 import json
 
 from ethevals import agents
-from ethevals.actors import agent
+from ethevals.actors import select_actors
 from ethevals.config import Config
 from ethevals.images.tag import image_tag
 from inspect_ai.agent import AgentState
@@ -18,7 +18,7 @@ import asyncio
 import inspect
 import pytest
 
-from support import fixture_config
+from support import catalog_quiz, fixture_config
 
 
 
@@ -30,7 +30,7 @@ def test_registry_builds_solver(key, harness):
     config = fixture_config()
     for search in [True, False]:
         config.search = search
-        solve = agents.HARNESSES[harness].build(config, config.agents[key])
+        solve = agents.HARNESSES[harness].build(config, config.agents[key].cli_model)
         assert inspect.iscoroutinefunction(solve)
         assert list(inspect.signature(solve).parameters) == ["state", "generate"]
 
@@ -44,7 +44,8 @@ def test_agent_selects_model_and_effort(key, model, harness):
     config = fixture_config()
     config.models[config.agents[key].model].model = "mockllm/model"
     config.models[config.agents[key].model].effort = "low"
-    actor = agent(config, key, "internet")
+    actors_for, _ = select_actors(config, agents=[key], modes=["internet"])
+    actor = actors_for(catalog_quiz()[1])[0][1]
     assert str(actor.model) == "mockllm/model"
     assert actor.model.config.reasoning_effort == "low"
     assert actor.metadata["harness"] == harness
@@ -66,7 +67,8 @@ def test_optional_effort_reaches_model_call(monkeypatch, mode, key, effort):
     config = Config.model_validate(data)
     if effort:
         config.models["opus-5.5"].effort = effort
-    actor = agent(config, key, mode)
+    actors_for, _ = select_actors(config, modes=[mode], **{"models" if mode == "vanilla" else "agents": [key]})
+    actor = actors_for(catalog_quiz()[1])[0][1]
     observed = []
 
     def reply(messages, tools, tool_choice, config):
@@ -160,7 +162,8 @@ def test_codex_active_agent_adapts_every_bridge_model(tmp_path, requested, monke
     from inspect_ai.solver import solver
     config = fixture_config()
     config.models["gpt-6-sol"].model = "mockllm/model"
-    actor = agent(config, "codex-cli-gpt-6-sol", "internet")
+    actors_for, _ = select_actors(config, agents=["codex-cli-gpt-6-sol"], modes=["internet"])
+    actor = actors_for(catalog_quiz()[1])[0][1]
     monkeypatch.setattr(actor.model.source.api, "outputs", lambda *args: ModelOutput.for_tool_call(
         "mockllm/model", "exec", {"input": "text(42);"}))
     calls = []

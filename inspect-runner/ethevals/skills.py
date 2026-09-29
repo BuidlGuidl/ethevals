@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from inspect_ai.tool import Skill, read_skills
+from inspect_ai.tool._tools._skill.read import SkillParsingError
 
 from .files import manifest
 
@@ -20,7 +21,7 @@ def pack_skills() -> tuple[dict[str, bytes], list[Skill]]:
             path.write_bytes(data)
         try:
             skills = read_skills(sorted(path for path in root.iterdir() if path.is_dir()))
-        except Exception as error:
+        except (OSError, ValueError, SkillParsingError) as error:
             raise ValueError(f"{PACK}: {str(error).replace(str(root), str(PACK))}") from error
         if not skills:
             raise ValueError(f"{PACK}: the skills pack must contain at least one skill")

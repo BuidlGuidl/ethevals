@@ -8,7 +8,7 @@ from pathlib import Path
 from inspect_ai import Task, eval, task_with
 from inspect_ai.util import SandboxEnvironmentSpec
 
-from .actors import Agent, Grader, select_actors
+from .actors import Actor, Grader, select_actors
 from .config import Config, read_yaml, uses_sandbox
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
@@ -34,7 +34,7 @@ def task_limits(evaluation, config):
     return working_limit, time_limit, scoring_limit
 
 
-def build_task(evaluation: Eval, config: Config, agent: Agent, grader: Grader,
+def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
                mode: str, epochs: int, compose: Path | None) -> Task:
     if mode not in evaluation.declaration.modes:
         raise ValueError(f"{evaluation.folder / 'eval.yaml'}: modes: {mode!r} is not declared")
@@ -79,7 +79,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         rows_file: Path | None = None, agents=None, models=None, modes=None, answer=None,
         budget=None, wall_seconds=None) -> tuple[bool, list[dict]]:
     previous = previous_rows(output, rows_file)
-    agents_for, _ = select_actors(config, agents, modes, answer, models=models, planning=True)
+    agents_for, _ = select_actors(config, agents=agents, modes=modes, answer=answer, models=models, planning=True)
     initial = plan(evals, config, agents_for, previous, wall_seconds=wall_seconds,
                    epochs=epochs, fresh=fresh, retry_errors=retry_errors)
     report = budget_check(initial.report, budget, required=not answer)
@@ -105,7 +105,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
             logging.getLogger(__name__).error("%s: container preparation failed: %s", evaluation.id, error)
     tasks = []
     if prepared:
-        agents_for, grade = select_actors(config, agents, modes, answer, models=models)
+        agents_for, grade = select_actors(config, agents=agents, modes=modes, answer=answer, models=models)
         actors = {evaluation.id: {(mode, actor.key): actor for mode, actor in agents_for(evaluation)}
                   for evaluation in evals}
         for original, mode, planned_actor, epoch, attempt in initial.admitted:

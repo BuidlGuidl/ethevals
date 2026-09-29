@@ -40,14 +40,30 @@ def test_default_plan_selects_models_and_agents(tmp_path, effort, omit_effort):
                       "--epochs", 1, "--output", tmp_path, *arguments)
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
-    expected = [(None, "openrouter/anthropic/claude-opus-5.5"), (None, "openrouter/openai/gpt-6-sol"),
-                (None, "openrouter/moonshotai/kimi-k3"), (None, "openrouter/z-ai/glm-5.3")]
-    agents = [("claude_code", expected[0][1]), ("codex_cli", expected[1][1]),
-              ("opencode", expected[2][1]), ("opencode", expected[3][1])]
+    expected = [(None, model) for model in data["models"].values()]
+    agents = [(agent["harness"], data["models"][agent["model"]]) for agent in data["agents"].values()]
     assert [(row["mode"], row["harness"], row["model"], row["effort"]) for row in report["missing"]] == [
-        (mode, harness, model, effort or (None if omit_effort else "low")) for mode, actors in
+        (mode, harness, model["model"], effort or model.get("effort")) for mode, actors in
         [("vanilla", expected), ("internet", agents), ("skills", agents)] for harness, model in actors]
-    assert (report["missing_epochs"], report["worst_case_usd"]) == (12, 136.0)
+    count = len(expected) + 2 * len(agents)
+    search = 2 * len(agents) * data["search_limit"] * data["search_price_usd"] if data["search"] else 0
+    assert (report["missing_epochs"], report["worst_case_usd"]) == (count, (count * data["cost_limit"] + search) * data["max_attempts"])
+    assert [row["prices"] for row in report["missing"]] == [
+        data["prices"][model["model"]] for _, model in expected + agents + agents]
+
+
+@pytest.mark.parametrize("selectors,expected", [
+    ([], [("vanilla", 4), ("internet", 4), ("skills", 4)]),
+    (["--models", "opus-5.5"], [("vanilla", 1)]),
+    (["--agents", "claude-code-opus-5.5"], [("internet", 1), ("skills", 1)]),
+    (["--models", "opus-5.5", "--agents", "claude-code-opus-5.5"], [("vanilla", 1), ("internet", 1), ("skills", 1)]),
+])
+def test_plan_derives_modes_from_selectors(tmp_path, selectors, expected):
+    from collections import Counter
+    result = eval_cli("plan", "--evals", ROOT / "evals/concepts/agent-registries",
+                      "--epochs", 1, "--output", tmp_path, *selectors)
+    assert result.returncode == 0, result.stderr
+    assert list(Counter(row["mode"] for row in json.loads(result.stdout)["missing"]).items()) == expected
 
 
 def test_declared_modes_skip_ineligible_evals(folder, tmp_path):
@@ -182,11 +198,11 @@ def test_planned_identity_matches_every_configured_provider(monkeypatch, mode):
         planned, _ = select_actors(config, **selection, planning=True)
         actual, _ = select_actors(config, **selection)
         harness = settings.harness if mode != "vanilla" else None
-        settings = config.models[settings.model] if harness else settings
+        model = config.models[settings.model] if harness else settings
         expected = (evaluation.id, evaluation.hash, harness,
-                    settings.model, settings.effort, mode, 1)
-        for selection in (planned, actual):
-            actor = selection(evaluation)[0][1]
+                    model.model, model.effort, mode, 1)
+        for actors_for in (planned, actual):
+            actor = actors_for(evaluation)[0][1]
             assert epoch_identity({"eval_id": evaluation.id, "eval_hash": evaluation.hash, "mode": mode,
                                    **actor.metadata}, 1) == expected
 
@@ -226,7 +242,7 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
 def test_build_plan_reserves_capped_grader_requests():
     config = fixture_config()
     evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
-    agents_for, _ = select_actors(config, ["claude-code-opus-5.5"], ["internet"], planning=True)
+    agents_for, _ = select_actors(config, agents=["claude-code-opus-5.5"], modes=["internet"], planning=True)
     report = budget_check(plan([evaluation], config, agents_for, [], epochs=1).report, 29.6)
     assert report["missing"][0]["per_attempt_usd"] == 14.75445
     assert (report["worst_case_usd"], report["within_budget"]) == (29.5089, True)

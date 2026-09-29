@@ -6,7 +6,7 @@ from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
 
 from .config import uses_sandbox
-from .actors import Agent, Grader, quiz_solver
+from .actors import Actor, Grader, quiz_solver
 from .scorers import target_reference
 from .check_script import run_solution
 
@@ -48,7 +48,7 @@ def check_agent(evaluation, answer, mode=None):
     def reply(messages, tools, tool_choice, config):
         return ModelOutput.from_content("mockllm/model", check.reply)
 
-    return Agent(get_model("mockllm/model", custom_outputs=reply), {
+    return Actor(get_model("mockllm/model", custom_outputs=reply), {
         "model": "mockllm/model", "harness": None, "harness_version": None,
         "effort": None, "prices": {}, "cost_source": "mock",
     }, lambda evaluation: check.solver, lambda evaluation: uses_sandbox(mode or CHECK_MODES[evaluation.declaration.type]), True)

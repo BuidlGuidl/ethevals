@@ -109,9 +109,9 @@ def test_skill_index_preserves_workspace_instructions_and_internet_prompt(folder
     monkeypatch.setattr("ethevals.agents.sandbox", Workspace)
     monkeypatch.setitem(HARNESSES, harness, replace(HARNESSES[harness], factory=factory))
     state = SimpleNamespace(choices=[])
-    ordinary = internet_solver(harness, config, config.agents[agent])
+    ordinary = internet_solver(config, config.agents[agent])
     assert asyncio.run(ordinary(state, None)) == (existing or "", [])
-    solve = internet_solver(harness, config, config.agents[agent], evaluation.skills)
+    solve = internet_solver(config, config.agents[agent], evaluation.skills)
     instructions, installed = asyncio.run(solve(state, None))
     prefix = existing + "\n\n" if existing else ""
     assert instructions.startswith(prefix + "# Ethereum skills\n")

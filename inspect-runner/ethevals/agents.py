@@ -17,27 +17,27 @@ class Harness:
     version: str
     instructions: str
 
-    def build(self, config, model, skills=None):
+    def build(self, config, cli_model: str, skills=None):
         from .search import exa_tools
         # Codex code mode calls MCP from a script, outside a direct model tool proposal.
         # The host tool enforces the per-epoch request cap for every caller.
         bridges = [BridgedToolsSpec(name="exa", tools=exa_tools(config.search_limit),
                                    require_proposal=False)] if config.search else []
-        return self.factory(model, version=self.version, bridged_tools=bridges, skills=skills)
+        return self.factory(cli_model, version=self.version, bridged_tools=bridges, skills=skills)
 
 
-def claude(model, **settings):
+def claude(cli_model: str, **settings):
     return as_solver(claude_code(
-        cwd="/workspace", model_config=model.cli_model,
+        cwd="/workspace", model_config=cli_model,
         disallowed_tools=["WebSearch"], retry_refusals=0, retry_uncaught_errors=0,
         **settings,
     ))
 
 
-def codex(model, **settings):
+def codex(cli_model: str, **settings):
     # The active agent is a CodexModel, so every bridge fallback uses it.
     return as_solver(codex_cli(
-        cwd="/workspace", model_config=model.cli_model,
+        cwd="/workspace", model_config=cli_model,
         web_search="disabled", retry_refusals=0,
         **settings,
     ))
@@ -70,10 +70,10 @@ def restore_codex_calls(output, tools):
     return output
 
 
-def open_code(model, **settings):
+def open_code(cli_model: str, **settings):
     provider = json.loads((Path(__file__).with_name("images") / "opencode-models.json").read_text())
     return as_solver(opencode(
-        cwd="/workspace", retry_refusals=0, opencode_model=model.cli_model,
+        cwd="/workspace", retry_refusals=0, opencode_model=cli_model,
         env={"OPENROUTER_API_KEY": "sk-none",
              "OPENCODE_CONFIG_CONTENT": json.dumps({"provider": {"openrouter": provider}})},
         **settings,
@@ -88,14 +88,13 @@ HARNESSES = {
 
 
 @solver
-def internet_solver(harness: str, config, model, skills=None):
-    if harness not in HARNESSES:
-        raise ValueError(f"Harness {harness!r} has no internet solver yet")
-    agent = HARNESSES[harness].build(config, model, skills)
+def internet_solver(config, agent, skills=None):
+    harness = HARNESSES[agent.harness]
+    run_agent = harness.build(config, agent.cli_model, skills)
 
     async def solve(state, generate):
         if skills:
-            path = "/workspace/" + HARNESSES[harness].instructions
+            path = "/workspace/" + harness.instructions
             try:
                 existing = await sandbox().read_file(path)
             except FileNotFoundError:
@@ -103,7 +102,7 @@ def internet_solver(harness: str, config, model, skills=None):
             await sandbox().write_file(path, "\n\n".join(filter(None, [existing, skill_index(skills)])))
         if state.choices:
             async def invoke(state, **kwargs):
-                return await agent(state, generate)
+                return await run_agent(state, generate)
             return await multiple_choice()(state, invoke)
-        return await agent(state, generate)
+        return await run_agent(state, generate)
     return solve

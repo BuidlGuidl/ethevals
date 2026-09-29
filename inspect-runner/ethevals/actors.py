@@ -19,7 +19,7 @@ def quiz_solver(evaluation):
 
 
 @dataclass
-class Agent:
+class Actor:
     model: Model
     metadata: dict
     solver_for: Callable
@@ -49,14 +49,9 @@ def model_actor(item, config, prefix=""):
     return model, actor_metadata(item, config, prefix)
 
 
-def agent(config, key, mode, planning=False):
-    settings = config.agents[key] if uses_sandbox(mode) else None
-    item = config.models[settings.model if settings else key]
-    if planning:
-        model, metadata = None, actor_metadata(item, config)
-    else:
-        model, metadata = model_actor(item, config)
-    harness = settings.harness if settings else None
+def actor(config, key, mode, item, agent=None, planning=False):
+    model, metadata = (None, actor_metadata(item, config)) if planning else model_actor(item, config)
+    harness = agent.harness if agent else None
     if harness == "codex_cli" and not planning:
         model = CodexModel(model)
     metadata.update(harness=harness, harness_version=HARNESSES[harness].version if harness else None)
@@ -66,17 +61,16 @@ def agent(config, key, mode, planning=False):
             if evaluation.declaration.type != "quiz":
                 raise ValueError("The vanilla mode supports only quiz evals")
             return quiz_solver(evaluation)
-        return internet_solver(harness, config, settings, evaluation.skills if mode == "skills" else None)
+        return internet_solver(config, agent, evaluation.skills if mode == "skills" else None)
 
-    return Agent(model, metadata, solve, lambda evaluation: uses_sandbox(mode), key=key)
+    return Actor(model, metadata, solve, lambda evaluation: uses_sandbox(mode), key=key)
 
 
 def grader(config):
-    model, metadata = model_actor(config.grader, config, "grader_")
-    return Grader(model, metadata)
+    return Grader(*model_actor(config.grader, config, "grader_"))
 
 
-def select_actors(config, agents=None, modes=None, answer=None, *, models=None, planning=False):
+def select_actors(config, *, models=None, agents=None, modes=None, answer=None, planning=False):
     from .checks import CHECK_MODES, check_agent, check_grader
     if unknown := set(agents or []) - config.agents.keys():
         raise ValueError(f"Unknown agent names: {', '.join(sorted(unknown))}")
@@ -84,10 +78,11 @@ def select_actors(config, agents=None, modes=None, answer=None, *, models=None, 
         raise ValueError(f"Unknown model names: {', '.join(sorted(unknown))}")
     if modes and set(modes) - set(get_args(Mode)):
         raise ValueError(f"Unknown modes: {modes}")
-    selected_modes = list(dict.fromkeys(modes or get_args(Mode)))
-    if agents and not any(uses_sandbox(mode) for mode in selected_modes):
+    selected_modes = list(dict.fromkeys(modes or (["vanilla"] if models and not agents else
+                          ["internet", "skills"] if agents and not models else get_args(Mode))))
+    if modes and agents and not any(uses_sandbox(mode) for mode in selected_modes):
         raise ValueError("--agents requires an internet or skills mode")
-    if models and "vanilla" not in selected_modes:
+    if modes and models and "vanilla" not in selected_modes:
         raise ValueError("--models requires the vanilla mode")
     if answer:
         grade = check_grader()
@@ -100,8 +95,11 @@ def select_actors(config, agents=None, modes=None, answer=None, *, models=None, 
                     for mode in dict.fromkeys(evaluation.declaration.modes) if mode in selected]
     else:
         grade = None if planning else grader(config)
-        actors = [(mode, agent(config, key, mode, planning)) for mode in selected_modes
-                  for key in ((agents or config.agents) if uses_sandbox(mode) else (models or config.models))]
+        actors = []
+        for mode in selected_modes:
+            for key in (agents or config.agents) if uses_sandbox(mode) else (models or config.models):
+                agent = config.agents[key] if uses_sandbox(mode) else None
+                actors.append((mode, actor(config, key, mode, config.models[agent.model if agent else key], agent, planning)))
 
         def agents_for(evaluation):
             return [(mode, actor) for mode, actor in actors if mode in evaluation.declaration.modes]

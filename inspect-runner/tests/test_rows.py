@@ -561,7 +561,6 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
     from ethevals import agents
     from inspect_ai.util import sandbox
     from ethevals.sandboxes import runner_exec
-    from ethevals.actors import agent
     config = fixture_config()
     config.models["opus-5.5"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
@@ -585,7 +584,8 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
 
     monkeypatch.setitem(agents.HARNESSES, "claude_code", replace(
         agents.HARNESSES["claude_code"], factory=lambda *a, **kw: killed, version="proof"))
-    task = actor_task(evaluation, config, agent(config, "claude-code-opus-5.5", "internet"), check_grader(), "internet", 1, compose)
+    actors_for, _ = select_actors(config, agents=["claude-code-opus-5.5"], modes=["internet"])
+    task = actor_task(evaluation, config, actors_for(evaluation)[0][1], check_grader(), "internet", 1, compose)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
     assert row["status"] == "error", row
     assert f"Error executing claude code agent {cli_code}" in row["error_reason"]

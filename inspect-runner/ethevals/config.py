@@ -92,5 +92,9 @@ class Config(Declaration):
         return self
 
 
-def load_config(path: Path | None = None) -> Config:
-    return parse_file(Config, path or Path(__file__).with_name("config.yaml"))
+def load_config(path: Path | None = None, *, effort: Effort | None = None) -> Config:
+    config = parse_file(Config, path or Path(__file__).with_name("config.yaml"))
+    if effort:
+        for model in config.models.values():
+            model.effort = effort
+    return config

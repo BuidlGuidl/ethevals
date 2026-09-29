@@ -112,6 +112,13 @@ test("the table and panel both label an empty pillar as No evals yet", () => {
   assert.ok(panel.includes("No evals yet for this mode."));
 });
 
+test("the board labels null effort as the provider default", () => {
+  const data = buildBoard([evaluation], [row({ effort: null }), row({ effort: "medium" })]);
+  const html = renderToStaticMarkup(createElement(Board, { data }));
+  assert.ok(html.includes("Effort: provider default"));
+  assert.ok(html.includes("Effort: medium"));
+});
+
 test("cost adds both roles and keeps a missing price unknown", () => {
   assert.equal(epochCost(row()), 0.25);
   assert.equal(epochCost(row({ grader_cost_usd: null })), null);
