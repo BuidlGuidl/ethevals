@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 from ethevals.files import inline_file
-from ethevals.loader import eval_hash, load_eval
+from ethevals.loader import load_eval
 import pytest
 
 from support import build_task, fixture_config
@@ -59,23 +59,23 @@ def test_loader_preserves_target_and_prompt(folder):
 
 
 def test_hash_tracks_every_file_and_name(folder):
-    original = eval_hash(folder)
+    original = load_eval(folder, fixture_config()).hash
     path = folder / "workspace/code.txt"
     path.write_text("hello")
-    added = eval_hash(folder)
+    added = load_eval(folder, fixture_config()).hash
     assert added != original
     path.write_text("goodbye")
-    changed = eval_hash(folder)
+    changed = load_eval(folder, fixture_config()).hash
     assert changed != added
     path.rename(folder / "workspace/renamed.txt")
-    assert eval_hash(folder) != changed
+    assert load_eval(folder, fixture_config()).hash != changed
     (folder / "workspace/renamed.txt").unlink()
-    assert eval_hash(folder) == original
+    assert load_eval(folder, fixture_config()).hash == original
 
 
 def test_hash_ignores_local_artifacts_but_includes_new_author_files(folder):
     (folder / "workspace/.gitkeep").unlink()
-    original = eval_hash(folder)
+    original = load_eval(folder, fixture_config()).hash
     (folder / ".DS_Store").write_bytes(b"Finder")
     for name in ["out", "cache", "lib", "__pycache__"]:
         (folder / name).mkdir()
@@ -83,9 +83,9 @@ def test_hash_ignores_local_artifacts_but_includes_new_author_files(folder):
         path = folder / "workspace" / name
         path.mkdir()
         (path / "generated").write_text("local artifact")
-    assert eval_hash(folder) == original
+    assert load_eval(folder, fixture_config()).hash == original
     (folder / "workspace/code.sol").write_text("contract New {}")
-    assert eval_hash(folder) != original
+    assert load_eval(folder, fixture_config()).hash != original
     assert load_eval(folder, fixture_config()).sample().files == {
         "/workspace/code.sol": inline_file(b"contract New {}")}
     for name in ("lib", "out", "cache"):

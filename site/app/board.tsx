@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   pillars, agentKey,
-  type BoardData, type Cell, type DisplayEval as Eval, type TableMode as Mode, type Pillar, type Epoch, type Agent,
+  type BoardData, type Cell, type DisplayEval as Eval, type Mode, type Pillar, type Epoch, type Agent,
 } from "../src/board";
 
 const names: Record<Pillar, string> = {
@@ -49,21 +49,22 @@ function ResultsTable({ data, mode, onOpen, onMode }: {
   const table = data.tables[mode];
   const agents = table.agents;
   const evaluations = pillars.flatMap((pillar) => table.pillars[pillar].evals.map((entry) => data.evaluations[entry.id]));
-  const title = mode !== "vanilla" ? "Agent table" : "Knowledge table";
+  const agentTable = mode !== "vanilla";
+  const title = agentTable ? "Agent table" : "Knowledge table";
 
-  return <section className="board-section" id={mode !== "vanilla" ? "agents" : "knowledge"} aria-label={title}>
+  return <section className="board-section" id={agentTable ? "agents" : "knowledge"} aria-label={title}>
     <div className="toolbar">
-      <div><h2>{title}</h2><p className="muted">{mode !== "vanilla"
+      <div><h2>{title}</h2><p className="muted">{agentTable
         ? "Can I trust my agent with Ethereum?" : "What does a bare model know about Ethereum?"}</p></div>
-      {onMode ? <div className="mode-switch" role="group" aria-label="Agent mode">
+      {agentTable ? <div className="mode-switch" role="group" aria-label="Agent mode">
         {(["internet", "skills"] as const).map((value) => <button key={value}
-          aria-pressed={mode === value} onClick={() => onMode(value)}>
+          aria-pressed={mode === value} onClick={() => onMode?.(value)}>
           {value === "internet" ? "Internet" : "Skills"}
         </button>)}
       </div> : <div className="mode-label">Vanilla · no harness or tools</div>}
     </div>
     {!agents.length ? <div className="empty">
-      <h3>{mode !== "vanilla" ? "No agent epochs yet" : "No knowledge epochs yet"}</h3>
+      <h3>{agentTable ? "No agent epochs yet" : "No knowledge epochs yet"}</h3>
       <p>No published results match the current evals. Scores will appear after epochs finish.</p>
       <details><summary>Browse {evaluations.length} evals</summary><div className="catalog">
         {evaluations.map((evaluation) => <article key={evaluation.id}>

@@ -1,17 +1,21 @@
 from inspect_ai.agent import as_solver, BridgedToolsSpec
 from inspect_ai.model import Model
 from inspect_ai.solver import multiple_choice, solver
+from inspect_ai.util import sandbox
 from inspect_swe import claude_code, codex_cli, opencode
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from .skills import skill_index
+
 
 @dataclass(frozen=True)
 class Harness:
     factory: Callable
     version: str
+    instructions: str
 
     def build(self, config, model, skills=None):
         from .search import exa_tools
@@ -80,9 +84,9 @@ def open_code(model, **settings):
 
 
 HARNESSES = {
-    "claude_code": Harness(claude, "2.1.274"),
-    "codex_cli": Harness(codex, "0.158.0"),
-    "opencode": Harness(open_code, "1.18.33"),
+    "claude_code": Harness(claude, "2.1.274", "CLAUDE.md"),
+    "codex_cli": Harness(codex, "0.158.0", "AGENTS.md"),
+    "opencode": Harness(open_code, "1.18.33", "AGENTS.md"),
 }
 
 
@@ -93,6 +97,13 @@ def internet_solver(harness: str, config, model, skills=None):
     agent = HARNESSES[harness].build(config, model, skills)
 
     async def solve(state, generate):
+        if skills:
+            path = "/workspace/" + HARNESSES[harness].instructions
+            try:
+                existing = await sandbox().read_file(path)
+            except FileNotFoundError:
+                existing = ""
+            await sandbox().write_file(path, "\n\n".join(filter(None, [existing, skill_index(skills)])))
         if state.choices:
             async def invoke(state, **kwargs):
                 return await agent(state, generate)
