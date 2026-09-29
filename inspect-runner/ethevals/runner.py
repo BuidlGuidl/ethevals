@@ -2,14 +2,13 @@ import hashlib
 import json
 import logging
 import os
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from inspect_ai import Task, eval, task_with
 from inspect_ai.util import SandboxEnvironmentSpec
 
-from .actors import Player, Grader, select_actors
+from .actors import Player, Grader, select_actors, player, grader
 from .config import Config, read_yaml
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
@@ -72,23 +71,22 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
 def run(evals: list[Eval], config: Config, output: Path, *,
         epochs: int | None = None, fresh: bool = False, retry_errors: bool = False,
         rows_file: Path | None = None, models=None, modes=None, answer=None, delay=0,
-        budget=None, wall_seconds=None, before_paid=None) -> tuple[bool, list[dict]]:
-    started = time.monotonic()
+        budget=None, wall_seconds=None) -> tuple[bool, list[dict]]:
     previous = previous_rows(output, rows_file)
-    players, _ = select_actors(config, models, modes, answer, delay, planning=True)
+    players, grade = select_actors(config, models, modes, answer, delay, planning=True)
     paid = not answer
     selected, pending, exhausted = epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
     initial = plan(evals, config, players, previous, wall_seconds=wall_seconds,
                    selection=(selected, pending, exhausted))
     report = budget_check(initial.report, budget, required=paid)
     output.mkdir(parents=True, exist_ok=True)
-    if paid and budget is not None and budget < report["cheapest_group_usd"]:
-        (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
+    (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
+    if not report["within_budget"]:
         raise ValueError("Budget exceeded. No player or grader ran.")
-    if paid and pending and not os.environ.get("OPENROUTER_API_KEY"):
+    if paid and initial.admitted and not os.environ.get("OPENROUTER_API_KEY"):
         raise ValueError("OPENROUTER_API_KEY is required for missing paid epochs")
     prepared, discovery_errors = {}, []
-    if any(actor.sandbox_for(evaluation) for evaluation, _, actor, _, _ in pending):
+    if any(item.actor.sandbox_for(item.evaluation) for item in initial.admitted):
         check_capacity(config)
     for evaluation in evals:
         work = [item for item in initial.admitted if item.evaluation.id == evaluation.id]
@@ -100,21 +98,18 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         except (ValueError, RuntimeError) as error:
             discovery_errors.append({"eval_id": evaluation.id, "eval_hash": evaluation.hash, "error": str(error)})
             logging.getLogger(__name__).error("%s: check discovery failed: %s", evaluation.id, error)
-    selection = (selected, [item for item in pending if item.evaluation.id in prepared], exhausted)
-    prepared_plan = plan(evals, config, players, previous, wall_seconds=wall_seconds,
-                         selection=selection, preparation_seconds=time.monotonic() - started)
-    report = budget_check(prepared_plan.report, budget, required=paid)
-    (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
-    if not report["within_budget"]:
-        raise ValueError("Budget exceeded. No player or grader ran.")
     tasks = []
-    if prepared_plan.admitted:
-        players, grade = select_actors(config, models, modes, answer, delay)
-        actors = {evaluation.id: {(mode, actor.key): actor for mode, actor in players(evaluation)}
-                  for evaluation in evals}
-        for original, mode, planned_actor, epoch, attempt in prepared_plan.admitted:
+    actors = {}
+    if prepared:
+        grade = grader(config) if paid else grade
+        for original, mode, planned_actor, epoch, attempt in initial.admitted:
+            if original.id not in prepared:
+                continue
             evaluation, compose = prepared[original.id]
-            actor = actors[original.id][mode, planned_actor.key]
+            key = (mode, planned_actor.key)
+            if paid and key not in actors:
+                actors[key] = player(config, planned_actor.key, mode)
+            actor = actors[key] if paid else planned_actor
             task = build_task(evaluation, config, actor, grade, mode, 1, compose)
             task.metadata.update(epoch=epoch, attempt=attempt)
             tasks.append(task_with(task, name=f"{task.name}-epoch-{epoch}"))
@@ -124,8 +119,6 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         error_path.write_text(json.dumps(previous_errors + discovery_errors, indent=2) + "\n")
     try:
         if tasks:
-            if paid and before_paid:
-                before_paid()
             concurrency = min(config.max_tasks, config.max_samples)
             eval(tasks, log_dir=str(output / "logs"), model_roles={"grader": grade.model},
                  retry_on_error=0, fail_on_error=False, max_samples=concurrency,

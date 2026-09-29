@@ -226,8 +226,7 @@ def slow_player():
     return solve
 
 
-def test_slow_setup_preserves_player_time_and_timeout_is_error(tmp_path, monkeypatch):
-    import ethevals.preparation as preparation
+def test_slow_setup_preserves_player_time(tmp_path):
     config = load_config()
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
     files = {**evaluation.files,
@@ -245,11 +244,3 @@ def test_slow_setup_preserves_player_time_and_timeout_is_error(tmp_path, monkeyp
     row = results_rows(log)[0]
     assert (row["status"], row["checks"]) == ("passed", {"script:ran": {"passed": True, "reason": "Player reached grading."}})
     assert row["model_tokens"] > 0
-    # Check setup's own deadline separately from the player's limits.
-    task = build_task(evaluation, config, player, check_grader(), "internet", 1, compose)
-    monkeypatch.setattr(preparation, "SETUP_SECONDS", .2)
-    log = eval(task, log_dir=str(tmp_path / "timeout"), display="none", retry_on_error=0)[0]
-    row = results_rows(log)[0]
-    assert row["status"] == "error"
-    assert "Eval setup exceeded its time limit" in row["error_reason"]
-    assert row["model_tokens"] == 0

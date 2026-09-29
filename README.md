@@ -189,7 +189,7 @@ Use a fresh key, fund it, and deploy the task's contracts.
 The script returns JSON with a `files` mapping of workspace paths to text.
 The fixture supplies `chain.json` with the key, contract addresses, and `http://chain:8545`.
 Setup and check code stay in the chain container. Only those selected output files reach the agent.
-Setup has its own 120-second script limit and a 150-second total limit, including file transfer.
+Setup has its own 120-second script limit.
 Setup consumes neither the player's time allowance nor its recorded working time. Setup failures and timeouts are errors.
 
 Write `scorer/check.py` to print named checks with boolean `passed` and a one-line `reason`.
@@ -381,125 +381,41 @@ Use `ETHEVALS_SAMPLE=1 pnpm build` for the labelled sample board.
 
 ## CI and committed results
 
-`results/rows.jsonl` records attempts. `results/runs.json` records recovered CI artifacts.
-Logs, discovery caches, and free-check outputs stay out of Git.
-The site reads this same file. It shows execution errors without a release link because the publisher skips error logs.
+Pull requests run `Free checks` without model keys, with a read-only token.
+They check eval folders, reference solutions, untouched workspaces, Docker scoring, the HF export, and the site's tests and build.
 
-Pull requests run `Free checks` on `pull_request`, with no model keys and a read-only token.
-The checks validate eval folders and Compose rules, run reference and empty cases, and run pytest.
-They also run Docker scoring and chain proofs, the offline HF proof, and the site's tests and build.
-The real-agent Docker proofs stay outside PR checks. They download agent CLIs and query keyless Exa, which can rate-limit.
-Run them locally with the command in "Prove the agent path without a key".
+After merge, `Eval results` queues one run at a time and reads rows from `main` and `ci/results`.
+It plans missing epochs once, then runs that plan.
+Passed and failed epochs are complete; errors retry within `max_attempts`.
+The plan lists exhausted errors and reserves model, grader, and search costs for every remaining attempt.
+The budget check runs before preparation or provider construction and also guards local `ethevals run`.
+`ETHEVALS_BUDGET_USD` sets the budget; its default of zero blocks missing paid work.
+A manual dispatch can supply a different `budget`.
 
-Each push to `main` starts `Eval results`. Runs share one concurrency group and never cancel an active run.
-Results-only pushes are excluded, so recording a run receipt cannot create a loop of results PRs.
-`queue: max` retains up to 100 pending runs, including manual budget overrides. GitHub cancels arrivals beyond that limit.
-See [GitHub's concurrency rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
-The job checks out the latest `main` after it leaves the queue.
-It also reads committed rows from the pending `ci/results` branch, so an unmerged results PR cannot cause duplicate spending.
-The job plans every configured model in vanilla and internet modes, limited to each eval's declared modes.
-Skills mode remains unimplemented.
-
-To print the same missing epochs and budget estimate without a key:
+CI uses a 16,200-second window, with 1,800 seconds for job preparation.
+Each epoch reserves its Inspect time limit plus 300 seconds for container startup and cleanup.
+Shortest epochs run first while their total fits the remaining window.
+An epoch that cannot fit an empty window is a config error.
+Only admitted evals enter preparation; deferred epochs stay missing for the next run.
+The paid step stops at 310 minutes inside the 330-minute job timeout.
+Prices remain guesses, and an in-flight call can exceed its cost limit.
 
 ```sh
 uv run ethevals plan --rows results/rows.jsonl --modes vanilla internet --budget 100 --wall-seconds 16200
 ```
 
-Passed and failed epochs are complete. Errors can use the remaining attempts under `max_attempts`.
-The plan lists errors that exhausted their attempts. A discovery failure leaves its epochs missing and spends no player allowance.
-Each epoch reserves player, grader, and search costs for every remaining attempt.
-`run()` owns this gate. Missing paid epochs require `--budget` and a key before it builds a provider.
-`plan` reads the same rows and local logs and uses the same budget check.
-CI gives preparation and epochs 16,200 seconds within its 330-minute job.
-The execution step stops at 310 minutes, which leaves 20 minutes for artifact upload before the job deadline.
-A budget below the cheapest pending group stops before preparation. Final admission deducts measured image-build and discovery time.
-Image builds stop after 1,800 seconds. Each discovery scorer has a 600-second deadline and no retry.
-Sandbox epochs include 180 seconds for startup, 60 for cleanup, and a fixed 120-second workspace-copy allowance.
-Inspect copies workspace files outside our deadline. That allowance is not an enforced bound. Act setup adds 150 seconds.
-Task initialization and final cleanup each have a 60-second deadline, charged once per distinct Compose file.
-Slow sample cleanup logs a warning and preserves scored rows. Final task cleanup retries leftover containers.
-The reserve is `preparation + lifecycle + sum(durations) / m + (1 - 1/m) * longest_duration`, with `m = 1` in CI.
-Inspect refills vacant task slots. The runner uses the same concurrency for tasks, samples, and sandboxes.
-Admission takes the shortest whole groups first. A group is one eval, mode, and epoch across all configured models.
-Existing completed cells stay recorded. Groups that fit an empty window admit all remaining cells or none.
-Larger groups split into single-model items. A single epoch that cannot fit an empty window rejects the plan.
-Execution uses the admitted items without selecting epochs again.
-The standalone CI plan admits 12 of 72 epochs, reserves 12,240 seconds, and defers 60, with zero preparation time.
-The run saves its final count in `plan.json` after preparation.
-Epochs that do not fit remain missing for the next run. `plan-paid` fails if every pending epoch remains deferred.
-Only initially admitted evals enter preparation. `--wall-seconds` sets this reserve locally.
-The current build reserves $29.7288 per attempt, or $59.4576 with both attempts left, including the search reserve.
-The gate uses this worst-case estimate. Prices remain guesses, and an in-flight player call can exceed its cost limit.
-The gate is not a provider billing cap.
+The run job holds model keys and a read token; the publish job holds the write token.
+The publisher runs even after failure or timeout and rebuilds rows from that workflow run's log artifacts.
+It commits rows before log uploads, then adds release links in a later commit.
+Attempt count and completion time decide which row wins, regardless of publication order.
+The results commit starts from current `origin/main` and opens or updates the `ci/results` PR.
+Merge that PR to put rows on the board.
+Results-only pushes do not start paid work.
+If publication fails, rerun the publish job before merging again; a merge before that retry can repeat spending within the budget.
+Log artifacts last 14 days.
 
-History supplies a separate expected-cost estimate for one attempt, matched by eval type, model, harness, effort, mode, and answer kind.
-The plan reports how many missing epochs have history. Its total expected estimate is null unless all have history.
-The gate never uses that estimate.
-
-`ETHEVALS_BUDGET_USD` sets the automatic run's budget. Its default is zero, which stops missing paid work before any model call.
-If the estimate exceeds the budget, inspect the saved `plan.json` artifact.
-Then dispatch `Eval results` on `main` with a higher `budget` input.
-Each invocation runs at most one attempt per missing identity. The estimate reserves every remaining attempt.
-
-The publisher runs after failed or timed-out execution and downloads all artifacts from that workflow run.
-It rebuilds every recovered artifact's rows and commits all rows and receipts before any log upload.
-Uploads proceed in numeric attempt order. A failed older upload cannot block a newer receipt or upload.
-Release links arrive in a later commit. A failed upload cannot erase recorded attempts.
-The publisher reads only `origin/main`, `origin/ci/results`, and artifact rows. It builds its commit from current `main`.
-Higher attempt counts win, followed by the row's completion time. Argument order cannot change the result.
-Retried old publications preserve newer rows and source. Epoch numbers sort numerically.
-After a key-free plan chooses paid work, CI uploads `paid-started.json` as the tiny `paid-RUN-ATTEMPT` artifact.
-The upload must succeed before the step with model keys starts. The paid step copies the marker into its log artifact.
-That marker holds the executing run ID, attempt, and source commit.
-The publisher takes receipt keys and release names from the marker, including on a publish-only retry.
-Gated and zero-work plans create no marker or receipt. A reserved attempt still needs a receipt if preparation later fails.
-The recovery check has a five-minute deadline and its own read token.
-It compares `paid-RUN-ATTEMPT` artifact names with receipts and downloads nothing.
-If an artifact remains unrecorded, the run stops and names the run to recover.
-Log artifacts retain data for 14 days. Paid markers last 90 days and block retries even when no log artifact uploaded.
-The metadata scan stops after 100 pages and fails closed if more remain. It does not assume artifact order.
-An expired but listed paid marker also blocks. Deleted markers beyond retention cannot protect old lost work.
-
-To recover a failed run, download its `eval-run-RUN_ID-ATTEMPT` artifact before it expires.
-Fetch current `main` and `ci/results` into a checkout.
-Run the publisher on the extracted artifact:
-
-```sh
-uv run python scripts/ci.py publish-results --output recovered/results/ci-run \
-  --repo BuidlGuidl/ethevals --publish
-```
-
-This command writes GitHub results and requires `GH_TOKEN`. Retrying the publication job performs the same recovery.
-The artifact preserves the original run ID and attempt. Existing assets can be uploaded again without repeating player calls.
-If recovery is impossible, record the executing identity and the reason for accepting lost spend:
-
-```sh
-uv run python scripts/ci.py accept-loss --repo BuidlGuidl/ethevals \
-  --run-id RUN_ID-ATTEMPT --reason 'Artifact expired; accept the lost spend' --publish
-```
-
-This command records `accepted_loss` in `results/runs.json` and opens a results PR.
-It cannot reconstruct missing rows. Future runs can repeat those epochs and spend again.
-Omit `--publish` to inspect the proposed command without a remote write.
-Locally, rerun `ethevals run` with the same output folder. Its logs restore completed epochs and attempt counts.
-
-The job appends changed records to `ci/results` and opens a results PR against `main`.
-An unchanged retry still opens a missing PR whenever `ci/results` differs from `main`.
-It retains the previous results branch as a parent, so it never needs a force push.
-Merge that PR to put the rows on the board. A merge with no missing epochs makes no model calls.
-The built-in token's PR checks wait for a maintainer to approve them.
-A GitHub App token avoids that wait; choosing and installing an App remains Shiv's decision.
-See [GitHub's token rules](https://docs.github.com/en/actions/concepts/security/github_token).
-
-The paid job holds only `OPENROUTER_API_KEY` and optional `EXA_API_KEY` during execution.
-Its token has read access. The publication job holds the write token and no model keys.
-Agent containers have internet by design and can reach the runner host's network.
-Treat merged evals as code that runs beside the paid job's credentials.
-
-`Publish HF dataset` runs only through manual dispatch on `main`.
-It exports vanilla quizzes, then uploads them with `HF_TOKEN` to the selected dataset repository.
-It requires the dataset name and an explicit license. The workflow does not choose a license.
+`Publish HF dataset` exports vanilla quizzes and uploads them with `HF_TOKEN` after manual dispatch on `main`.
+It requires the dataset name and an explicit license.
 
 Set up GitHub and Hugging Face once:
 

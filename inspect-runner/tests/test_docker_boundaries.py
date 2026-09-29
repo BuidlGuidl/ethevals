@@ -86,26 +86,6 @@ def test_killed_check_wrapper_after_setup_exports_error(tmp_path):
     assert "check.py wrapper exited 137 without a script status" in row["error_reason"]
 
 
-def test_slow_cleanup_keeps_the_scored_row(tmp_path, monkeypatch, caplog):
-    import anyio
-    from ethevals.preparation import DockerSandboxEnvironment
-    original = DockerSandboxEnvironment.sample_cleanup.__func__
-
-    async def slow(cls, *args, **kwargs):
-        await original(cls, *args, **kwargs)
-        await anyio.sleep(2)
-
-    monkeypatch.setattr(DockerSandboxEnvironment, "sample_cleanup", classmethod(slow))
-    monkeypatch.setattr("ethevals.preparation.CLEANUP_SECONDS", 1)
-    config = load_config()
-    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    compose = prepare_compose(evaluation, tmp_path)
-    task = build_task(evaluation, config, check_player(evaluation, "reference", mode="internet"), check_grader(), "internet", 1, compose)
-    row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert (row["status"], row["passed"]) == ("passed", True), row
-    assert "Sample cleanup exceeded its deadline" in caplog.text
-
-
 def test_scoring_deadline_kills_a_process_that_ignores_term(tmp_path):
     import anyio
     from ethevals.sandboxes import scoring_exec

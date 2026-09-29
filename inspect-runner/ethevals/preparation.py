@@ -2,7 +2,6 @@
 import hashlib
 import json
 import subprocess
-import logging
 from dataclasses import replace
 
 import anyio
@@ -20,12 +19,7 @@ from .config import read_yaml
 from .images.tag import image_tag
 
 CHECK_SETS = {}
-SETUP_SECONDS = 150
-STARTUP_SECONDS = 180
-WORKSPACE_COPY_SECONDS = 120  # Inspect copies files outside sample_init; reserve an allowance.
-CLEANUP_SECONDS = 60
 DISCOVERY_SECONDS = 600
-TASK_LIFECYCLE_SECONDS = 60
 
 
 @sandboxenv(name="ethevals_docker")
@@ -33,39 +27,18 @@ class EvalDocker(DockerSandboxEnvironment):
     """Run scorer setup before Inspect starts sample time and cost limits."""
 
     @classmethod
-    async def task_init(cls, task_name, config):
-        with anyio.fail_after(TASK_LIFECYCLE_SECONDS):
-            await super().task_init(task_name, config)
-
-    @classmethod
-    async def task_cleanup(cls, task_name, config, cleanup):
-        with anyio.fail_after(TASK_LIFECYCLE_SECONDS, shield=True):
-            await super().task_cleanup(task_name, config, cleanup)
-
-    @classmethod
     async def sample_init(cls, task_name, config, metadata):
-        with anyio.fail_after(STARTUP_SECONDS):
-            environments = await super().sample_init(task_name, config, metadata)
+        environments = await super().sample_init(task_name, config, metadata)
         try:
             evaluation = EVALUATIONS[(metadata["eval_id"], metadata["eval_hash"])]
-            with anyio.fail_after(SETUP_SECONDS):
-                for item in evaluation.scorers:
-                    if setup := SCORERS[item.kind].setup:
-                        await setup(item, evaluation, environments)
-        except BaseException as error:
-            with anyio.move_on_after(CLEANUP_SECONDS, shield=True):
+            for item in evaluation.scorers:
+                if setup := SCORERS[item.kind].setup:
+                    await setup(item, evaluation, environments)
+        except BaseException:
+            with anyio.CancelScope(shield=True):
                 await super().sample_cleanup(task_name, config, environments, False)
-            if isinstance(error, TimeoutError):
-                raise RuntimeError("Eval setup exceeded its time limit.") from error
             raise
         return environments
-
-    @classmethod
-    async def sample_cleanup(cls, task_name, config, environments, interrupted):
-        with anyio.move_on_after(CLEANUP_SECONDS, shield=True) as scope:
-            await super().sample_cleanup(task_name, config, environments, interrupted)
-        if scope.cancel_called:
-            logging.getLogger(__name__).warning("Sample cleanup exceeded its deadline; task cleanup will retry.")
 
 
 def docker_command(command):

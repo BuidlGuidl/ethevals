@@ -1,4 +1,4 @@
-"""Recover attempts from Inspect logs before starting another paid run."""
+"""Resume attempts and publish rows from Inspect logs."""
 import argparse
 import itertools
 import json
@@ -9,7 +9,7 @@ import pytest
 from inspect_ai.log import read_eval_log, write_eval_log
 
 from ethevals.actors import select_actors
-from ethevals.config import load_config
+from ethevals.config import Config, load_config
 from ethevals.loader import load_eval
 from ethevals.planning import plan
 from ethevals.rows import epoch_identity, fold_rows, previous_rows, read_rows, write_rows
@@ -52,7 +52,7 @@ def test_runner_exception_after_eval_retains_rows_and_plan_reads_logs(tmp_path, 
 
 def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(tmp_path, monkeypatch):
     config, evaluation = quiz()
-    output, rows = tmp_path / "run", tmp_path / "rows.jsonl"
+    output = tmp_path / "eval-run-12-1"
     run([evaluation], config, output, answer="reference", epochs=2)
     logs = sorted((output / "logs").glob("*.eval"))
     log = read_eval_log(str(logs[1]))
@@ -60,74 +60,19 @@ def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(
     log.samples = []
     write_eval_log(log, str(logs[1]))
     (output / "rows.jsonl").unlink()
-    (output / "paid-started.json").write_text(json.dumps({"run_id": "12-1", "commit": "a" * 40}))
     persisted = []
-    monkeypatch.setattr(ci, "commit_results", lambda rows, saved, *args: persisted.append((rows, saved)))
+    monkeypatch.setattr(ci, "commit_results", lambda rows, *args: persisted.append(rows))
 
     def failed(*args, **kwargs):
         raise RuntimeError("Release upload failed")
 
     monkeypatch.setattr(ci, "publish_logs", failed)
-    args = argparse.Namespace(output=output, repo="owner/repo", publish=True)
+    args = argparse.Namespace(output=tmp_path, repo="owner/repo", commit="a" * 40, publish=True)
     assert ci.publish_artifacts(args) == 1
-    assert sorted((r["status"], r["attempt"]) for r in persisted[0][0]) == [("error", 2), ("passed", 1)]
-    assert persisted[0][1] == {"12-1": {"commit": "a" * 40}}
+    assert sorted((r["status"], r["attempt"]) for r in persisted[0]) == [("error", 2), ("passed", 1)]
     players, _ = select_actors(config, answer="reference", planning=True)
-    report = plan([evaluation], config, players, persisted[0][0], epochs=2).report
+    report = plan([evaluation], config, players, persisted[0], epochs=2).report
     assert (report["missing_epochs"], len(report["exhausted_errors"])) == (0, 1)
-
-
-def test_publication_retry_uses_artifact_identity_and_gate_ignores_step_names(tmp_path, monkeypatch):
-    import io
-    import zipfile
-    from datetime import datetime, timezone
-    config, evaluation = quiz()
-    output = tmp_path / "run"
-    run([evaluation], config, output, answer="reference", epochs=1)
-    marker = {"run_id": "12-1", "commit": "a" * 40}
-    (output / "paid-started.json").write_text(json.dumps(marker))
-    archive = io.BytesIO()
-    with zipfile.ZipFile(archive, "w") as contents:
-        contents.writestr("results/ci-run/paid-started.json", json.dumps(marker))
-    saved = {}
-    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
-    monkeypatch.setattr(ci, "stored_file", lambda ref, path: json.dumps(saved) if path == ci.RECEIPTS else "")
-    artifact = {"id": 1, "name": "paid-12-1", "expired": False,
-                "created_at": datetime.now(timezone.utc).isoformat()}
-    queries = []
-
-    def api(*args, **kwargs):
-        assert not args[-1].endswith("/zip")
-        queries.append(args[-1])
-        return subprocess.CompletedProcess(args, 0, stdout=archive.getvalue() if args[-1].endswith("/zip")
-                                           else json.dumps({"artifacts": [
-                                               {**artifact, "id": 0, "created_at": "1900-01-01T00:00:00Z"}, artifact]}))
-
-    monkeypatch.setattr(ci, "command", api)
-    with pytest.raises(ValueError, match="12-1"):
-        ci.require_recorded_runs("owner/repo")
-    monkeypatch.setattr(ci, "commit_results", lambda rows, receipts, *args: saved.update(receipts))
-    published = []
-
-    def logs(output, repo, run_id, commit, **kwargs):
-        published.append((run_id, commit))
-        return {"rows_file": str(output / "rows.jsonl"), "assets": []}
-
-    monkeypatch.setattr(ci, "publish_logs", logs)
-    args = argparse.Namespace(output=output, repo="owner/repo", publish=True)
-    assert ci.publish_artifacts(args) == 0
-    ci.require_recorded_runs("owner/repo")
-    assert saved == {"12-1": {"commit": "a" * 40}}
-    assert published == [("12-1", "a" * 40)]
-    assert all("/jobs" not in query and "/zip" not in query for query in queries)
-
-    # A zero-work or gated artifact cannot create a receipt or PR.
-    idle = tmp_path / "idle"
-    idle.mkdir()
-    args.output = idle
-    assert ci.publish_artifacts(args) == 0
-    assert saved == {"12-1": {"commit": "a" * 40}}
-    assert published == [("12-1", "a" * 40)]
 
 
 def test_paid_run_needs_budget_before_constructing_provider(tmp_path, monkeypatch):
@@ -140,100 +85,58 @@ def test_paid_run_needs_budget_before_constructing_provider(tmp_path, monkeypatc
         run([evaluation], config, tmp_path, models=["opus"], epochs=1, budget=0)
 
 
-def test_time_plan_only_runs_epochs_that_fit(tmp_path):
-    config, evaluation = quiz()
-    success, rows = run([evaluation], config, tmp_path, answer="reference", epochs=3, wall_seconds=1100)
-    assert success
-    assert [(r["epoch"], r["status"]) for r in rows] == [(1, "passed")]
-    report = json.loads((tmp_path / "plan.json").read_text())
-    assert report["reserved_wall_seconds"] == 1020 + report["preparation_seconds"]
-    assert report["deferred_epochs"] == 2
-    players, _ = select_actors(config, answer="reference", planning=True)
-    assert [r["epoch"] for r in plan([evaluation], config, players, previous_rows(tmp_path), epochs=3).report["missing"]] == [2, 3]
+def small_config():
+    prices = dict(input=1, output=1, input_cache_read=1, input_cache_write=1)
+    model = dict(model="mockllm/test", effort="high", price_source="test", prices=prices)
+    return Config(epochs=3, time_limit=10, cost_limit=2, max_attempts=2,
+                  max_tasks=1, max_samples=1, search_provider=None,
+                  grader={**model, "max_tokens": 10},
+                  models={"test": {**model, "harness": None}})
 
 
-def test_admission_counts_discovery_and_startup_and_interleaves_models():
-    config, evaluation = quiz()
-    config.max_tasks = config.max_samples = 2
-    players, _ = select_actors(config, ["opus", "codex"], ["vanilla"], planning=True)
-    report = plan([evaluation], config, players, [], epochs=3, wall_seconds=1700, preparation_seconds=100).report
-    assert [(row["model"], row["epoch"]) for row in report["missing"]] == [
-        ("openrouter/anthropic/claude-opus-5.5", 1), ("openrouter/openai/gpt-6-sol", 1)]
-    assert (report["reserved_wall_seconds"], report["deferred_epochs"]) == (1630, 4)
-    assert [row["epoch"] for row in report["missing"]] == [1, 1]
-    internet, _ = select_actors(config, ["opus", "codex"], ["internet"], planning=True)
-    report = plan([evaluation], config, internet, [], epochs=3, wall_seconds=3700, preparation_seconds=100).report
-    assert (report["missing_epochs"], report["reserved_wall_seconds"], report["task_lifecycle_seconds"]) == (4, 3670, 120)
-
-
-def test_ci_jobs_record_all_72_epochs(tmp_path):
-    from collections import Counter
-    config = load_config()
-    evals = [load_eval(path, config) for path in sorted((ROOT / "evals").glob("*/*"))]
-    players, _ = select_actors(config, modes=["vanilla", "internet"], planning=True)
-    report = plan(evals, config, players, [], wall_seconds=16200).report
-    assert dict(Counter(row["model"] for row in report["missing"])) == {
-        "openrouter/anthropic/claude-opus-5.5": 3, "openrouter/openai/gpt-6-sol": 3,
-        "openrouter/moonshotai/kimi-k3": 3, "openrouter/z-ai/glm-5.3": 3}
-    assert (report["missing_epochs"], report["reserved_wall_seconds"] ) == (12, 12240)
-    assert {row["mode"] for row in report["missing"]} == {"vanilla"}
-    recorded, jobs = [], []
+def test_admission_reaches_every_epoch():
+    config = small_config()
+    evals = [load_eval(ROOT / "evals/concepts" / name, config)
+             for name in ("agent-registries", "wei-per-ether")]
+    players, _ = select_actors(config, modes=["vanilla"], planning=True)
+    recorded = []
     while True:
-        report = plan(evals, config, players, recorded, wall_seconds=16200).report
-        assert report["missing_epochs"] > 0, report
-        jobs.append(report["missing_epochs"])
+        report = plan(evals, config, players, recorded, wall_seconds=2600).report
+        assert report["missing_epochs"] > 0
         recorded = fold_rows(recorded, [{**row, "status": "passed"} for row in report["missing"]])
-        write_rows(tmp_path / "rows.jsonl", recorded)
-        recorded = read_rows(tmp_path / "rows.jsonl")
         if not report["deferred_epochs"]:
             break
-        assert len(jobs) < 72
-    assert len(recorded) == 72
-    assert jobs == [12, 12, 9, 9, 9, 3, 3, 3, 3, 3, 3, 3]
-    assert {row["type"] for row in recorded} == {"quiz", "build", "act"}
-    assert plan(evals, config, players, recorded, wall_seconds=16200).report["missing_epochs"] == 0
-    print(f"CI jobs: {len(jobs)}; admitted per job: {jobs}")
+        assert len(recorded) < 6
+    assert [(row["eval_id"], row["epoch"]) for row in recorded] == [
+        ("concepts/agent-registries", 1), ("concepts/agent-registries", 2),
+        ("concepts/agent-registries", 3), ("concepts/wei-per-ether", 1),
+        ("concepts/wei-per-ether", 2), ("concepts/wei-per-ether", 3)]
+    assert plan(evals, config, players, recorded, wall_seconds=2600).report["missing_epochs"] == 0
 
 
 def test_plan_rejects_one_epoch_larger_than_empty_window():
-    config = load_config()
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
-    players, _ = select_actors(config, ["opus"], ["internet"], planning=True)
-    with pytest.raises(ValueError, match="single epoch.*building/erc20-points-token.*4620"):
-        plan([evaluation], config, players, [], wall_seconds=4619)
-    report = plan([evaluation], config, players, [], epochs=1, wall_seconds=4620).report
-    assert (report["missing_epochs"], report["reserved_wall_seconds"]) == (1, 4620)
+    config = small_config()
+    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    players, _ = select_actors(config, modes=["vanilla"], planning=True)
+    with pytest.raises(ValueError, match="Config error: a single epoch.*concepts/agent-registries"):
+        plan([evaluation], config, players, [], wall_seconds=2000)
 
 
-def test_run_executes_final_admission_without_selecting_again(tmp_path, monkeypatch):
-    import ethevals.planning as planning
-    import ethevals.runner as runner
-    config, evaluation = quiz()
-    config.max_tasks = config.max_samples = 2
-    selection = planning.epoch_selection
-    selected = 0
-
-    def once(*args, **kwargs):
-        nonlocal selected
-        selected += 1
-        assert selected == 1
-        return selection(*args, **kwargs)
-
-    monkeypatch.setattr(runner, "epoch_selection", once)
-    monkeypatch.setattr(planning, "epoch_selection", lambda *args, **kwargs: pytest.fail("Plan selected work again"))
-    from types import SimpleNamespace
-    monkeypatch.setattr(runner, "time", SimpleNamespace(monotonic=iter([0, 100]).__next__))
-    success, rows = run([evaluation], config, tmp_path, answer="reference", epochs=3, wall_seconds=1700)
+def test_run_executes_saved_plan(tmp_path):
+    config = small_config()
+    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    success, rows = run([evaluation], config, tmp_path, answer="reference", wall_seconds=2600)
     report = json.loads((tmp_path / "plan.json").read_text())
     assert success
-    assert [(r["epoch"], r["status"]) for r in rows] == [(1, "passed"), (2, "passed")]
-    assert [r["epoch"] for r in report["missing"]] == [1, 2]
-    assert report["preparation_seconds"] == 100
+    assert [(row["epoch"], row["status"]) for row in rows] == [(1, "passed"), (2, "passed")]
+    assert [row["epoch"] for row in report["missing"]] == [1, 2]
+    assert [row["epoch"] for row in report["deferred"]] == [3]
 
 
 def test_run_prepares_only_initially_admitted_evals(tmp_path, monkeypatch):
     import ethevals.runner as runner
-    config, evaluation = quiz()
+    config = small_config()
+    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     deferred = load_eval(ROOT / "evals/concepts/wei-per-ether", config)
     original = runner.prepare_eval
 
@@ -243,7 +146,7 @@ def test_run_prepares_only_initially_admitted_evals(tmp_path, monkeypatch):
         return original(evaluation, *args)
 
     monkeypatch.setattr(runner, "prepare_eval", prepare)
-    success, rows = run([evaluation, deferred], config, tmp_path, answer="reference", epochs=1, wall_seconds=1100)
+    success, rows = run([evaluation, deferred], config, tmp_path, answer="reference", epochs=1, wall_seconds=2200)
     assert (success, [(row["eval_id"], row["status"]) for row in rows]) == (
         True, [("concepts/agent-registries", "passed")])
 
@@ -279,7 +182,6 @@ def test_planned_identity_matches_every_configured_provider(monkeypatch, mode):
 def test_late_publication_retains_current_source_and_newer_rows(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GH_TOKEN", "inert-test-token")
-    monkeypatch.setattr(ci, "RECEIPTS", Path("results/runs.json"))
     ci.command("git", "init", "-b", "main", capture_output=True)
     ci.command("git", "config", "user.name", "Test")
     ci.command("git", "config", "user.email", "test@example.org")
@@ -311,20 +213,20 @@ def test_late_publication_retains_current_source_and_newer_rows(tmp_path, monkey
         return real_command(*args, **kwargs)
 
     monkeypatch.setattr(ci, "command", local_only)
-    ci.commit_results(*ci.result_record(read_rows(rows)), "owner/repo", True)
+    ci.commit_results(ci.result_record(read_rows(rows)), "owner/repo", True)
     assert real_command("git", "show", f"{pushed[-1]}:source.txt", capture_output=True).stdout == "new source"
-    assert ci.result_record()[0] == newer
+    assert ci.result_record() == newer
     # Retrying the same old observation after a newer publication preserves both rows.
     write_rows(rows, [old])
-    ci.commit_results(*ci.result_record(read_rows(rows)), "owner/repo", True)
-    assert ci.result_record()[0] == newer
+    ci.commit_results(ci.result_record(read_rows(rows)), "owner/repo", True)
+    assert ci.result_record() == newer
 
 
-def test_budget_below_cheapest_group_stops_before_preparation(tmp_path, monkeypatch):
-    config = load_config()
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
-    monkeypatch.setattr("ethevals.runner.prepare_compose", lambda *a: pytest.fail("Preparation ran"))
+def test_budget_stops_before_preparation(tmp_path, monkeypatch):
+    config = small_config()
+    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    monkeypatch.setattr("ethevals.runner.prepare_eval", lambda *a: pytest.fail("Preparation ran"))
     with pytest.raises(ValueError, match="Budget exceeded"):
-        run([evaluation], config, tmp_path, budget=1, epochs=1, modes=["internet"])
+        run([evaluation], config, tmp_path, budget=1, epochs=1, modes=["vanilla"])
     report = json.loads((tmp_path / "plan.json").read_text())
-    assert (report["cheapest_group_usd"], report["missing_epochs"]) == (237.8304, 4)
+    assert (report["worst_case_usd"], report["missing_epochs"], report["within_budget"]) == (4, 1, False)

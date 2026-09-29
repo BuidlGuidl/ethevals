@@ -72,23 +72,11 @@ It skips the write when the content is unchanged.
 CI uses a fresh output directory and reads only that run's logs.
 After an abrupt kill, the logs remain the recovery source until the next command exports rows.
 The runner also exports rows if `eval()` raises. Both `plan` and `run` fold rows from these logs.
-CI rebuilds all recovered artifacts' rows and commits every row and receipt before any log upload.
-It uploads each artifact in numeric attempt order and collects failures. An older failure cannot hide newer paid work.
-Publication reads only `origin/main`, `origin/ci/results`, and artifact rows.
-An unchanged retry opens a missing results PR whenever the results branch differs from main.
-An unrecorded earlier CI attempt blocks new paid work and names the artifact to recover.
-Retry its publication job before the 14-day artifact expires. See the root README for local recovery commands.
-The artifact's `paid-started.json` supplies the executing run ID, attempt, and source commit.
-A retry of publication keeps that identity. Gated and zero-work plans create no marker or receipt.
-CI uploads a tiny `paid-RUN-ATTEMPT` marker after planning and before the step with model keys.
-The upload must succeed first. A reserved attempt still needs a receipt if preparation later fails.
-Markers last 90 days; logs last 14 days. Missing log artifacts still block the next paid run.
-The separate recovery step compares marker names with receipts, downloads nothing, and stops after five minutes.
-Expired but listed markers block too. Deleted markers beyond retention cannot protect old lost work.
-Its metadata scan permits 100 pages and fails closed if more remain. Artifact order does not affect the result.
-`scripts/ci.py accept-loss --run-id RUN_ID-ATTEMPT --reason TEXT --repo OWNER/REPO --publish` records an unrecoverable loss.
-An accepted loss cannot restore rows. Missing epochs can spend again.
-Publication uses current `main` and current results. Attempt count and completion time decide which row wins.
+CI rebuilds rows from each run's logs and commits them before log uploads.
+The publisher folds those rows with `origin/main` and `origin/ci/results`.
+It builds the results commit on current `origin/main`, even when its checkout is older.
+If publication fails, rerun the publish job before the 14-day artifact expires.
+See the root README for workflow setup.
 The log store only grows. Retry logs never replace earlier logs.
 Rows cover the whole store, with the latest row per eval ID, eval hash, agent, mode, and epoch number.
 The fold chooses the higher attempt count, then `completed_at`. A release link enriches the same observation.
@@ -116,23 +104,15 @@ It shares epoch selection with `run` and uses the runtime's `cost_limit`, `rubri
 Search adds `search_limit * search_price_usd` to each internet attempt's reserve.
 CI uses `--wall-seconds 16200` for preparation and epochs within its 330-minute job.
 The execution step has a 310-minute deadline, which leaves 20 minutes for artifact upload.
-A budget below the cheapest pending group stops before preparation. Final admission deducts measured build and discovery time.
-Builds have a 1,800-second timeout. Discovery scoring has a 600-second deadline and no retry.
-Sandbox epochs include 180 seconds for startup, 60 for cleanup, and a fixed 120-second workspace-copy allowance.
-Inspect copies files outside our deadline; the copy allowance is not enforced. Act setup adds 150 seconds.
-Task initialization and final cleanup each have a 60-second deadline, charged once per distinct Compose file.
-Slow sample cleanup logs a warning and preserves scored rows. Final task cleanup retries leftover containers.
-Admission uses `preparation + lifecycle + sum(durations) / m + (1 - 1/m) * longest_duration`.
-CI sets `m = 1` for tasks, samples, and sandboxes.
-Admission takes shortest whole groups first: one eval, mode, and epoch across every configured model.
-Recorded completed cells stay recorded. Groups that fit an empty window admit all remaining cells or none.
-Larger groups split into single-model items. A single epoch that cannot fit an empty window rejects the plan.
-With zero preparation time, CI admits 12 of 72 epochs and reserves 12,240 seconds. `run()` saves its final count after preparation.
-Execution uses those admitted items. Only initially admitted evals enter preparation.
-Deferred epochs remain missing. `plan-paid` fails if every pending epoch remains deferred.
-`--budget USD` exits with code 1 when the worst-case estimate exceeds the budget.
-The plan also lists exhausted errors and an expected-cost estimate from recorded spend.
-See the root README for workflow setup and the limit on this billing estimate.
+The job reserves 1,800 seconds for preparation.
+Each epoch reserves its Inspect time limit plus 300 seconds for container startup and cleanup.
+Shortest epochs run first while their sum fits the remaining window.
+An epoch that cannot fit an empty window is a config error.
+The runner plans once and prepares only admitted evals.
+Deferred epochs remain missing for the next run.
+`plan --budget USD` exits with code 1 when the worst-case cost exceeds the budget.
+The plan also lists exhausted errors.
+See the root README for the limits of this cost estimate.
 
 | Fields | Meaning |
 | --- | --- |
@@ -429,7 +409,6 @@ The script contract is:
 - The runner adds the `script:` prefix and normalizes reasons to one line.
 - Setup and check scripts each have a 120-second limit and a 1 MiB output limit per stream.
 - Capped readers finish before the runner reads either output file. One extra byte detects overflow.
-- Setup has a separate 150-second total limit, including file transfer.
 - Setup consumes neither the player's time allowance nor its recorded working time. Setup timeouts are errors.
 - Script failures include the last 4 KiB of stderr. Failed discovery lists each failing check and its reason.
 - Public setup values remain visible to the agent.

@@ -71,22 +71,10 @@ pnpm build
 A row with `log_file: results-12345-1/epoch.eval` links to
 `https://github.com/BuidlGuidl/ethevals/releases/download/results-12345-1/epoch.eval`.
 Rows from other runs carry other release tags, so one base reaches all releases.
-CI records all recovered artifacts' attempts and receipts before any log upload.
-Rows live in `results/rows.jsonl`; receipts live in `results/runs.json`.
-Uploads proceed in numeric attempt order. An older failure cannot block newer receipts or uploads.
-It adds release links afterward. Failed publication leaves scores and attempt counts intact.
-The publisher rebuilds rows from the run artifact's logs, including interrupted attempts.
-An unrecorded earlier artifact blocks paid CI work. Retry its publication job before the 14-day artifact expires.
-The root README gives the local recovery command.
-Receipt and release identities come from the artifact's executing run and attempt, even after a publish-only retry.
-CI uploads a tiny `paid-RUN-ATTEMPT` marker after planning and before the step with model keys.
-Gated and zero-work plans create no marker or receipt. Reserved attempts need receipts even if preparation later fails.
-Markers last 90 days; logs last 14 days. A missing log artifact still blocks paid work.
-Recovery compares marker names with receipts and downloads nothing. Its separate step has a five-minute deadline and a read token.
-Expired but listed markers block too. Deleted markers beyond retention cannot protect old lost work.
-It scans at most 100 metadata pages and fails closed if more remain, without assuming artifact order.
-The root README documents `scripts/ci.py accept-loss` for artifacts that cannot be recovered.
-That receipt accepts lost spend. Missing rows can cause future runs to pay for those epochs again.
+CI records attempts before log uploads and adds release links afterward.
+The publisher rebuilds rows from each run's logs, including interrupted attempts.
+If publication fails, rerun the publish job before the 14-day artifact expires.
+The root README describes the paid CI path.
 Execution errors remain visible without log links. Their unpublished logs stay in the workflow artifact.
 The publisher writes linked rows after the upload succeeds, in a file named for the release.
 Its dry run writes nothing. It excludes key-free, stale-hash, skills, and already published logs.

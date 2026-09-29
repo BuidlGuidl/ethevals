@@ -11,7 +11,6 @@ on:
         type: string
 permissions:
   contents: read
-  actions: read # Check earlier run attempts before paid work.
 concurrency:
   group: eval-results
   queue: max
@@ -32,42 +31,18 @@ jobs:
         with:
           enable-cache: false
       - run: uv sync --frozen
-      - run: git rev-parse HEAD > source-sha.txt
-      - name: Check recovery receipts
-        timeout-minutes: 5
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RESULTS_REPO: ${{ github.repository }}
-        run: uv run python scripts/ci.py recovery-check --repo "$RESULTS_REPO"
-      - name: Plan paid work
-        id: plan
-        env:
-          RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
-        run: uv run python scripts/ci.py plan-paid --budget "$RUN_BUDGET" --restore-results --output results/paid-marker
-      - name: Record paid intent
-        if: steps.plan.outputs.ready == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: paid-${{ github.run_id }}-${{ github.run_attempt }}
-          path: results/paid-marker/paid-started.json
-          retention-days: 90
-          if-no-files-found: error
       - name: Plan and run missing epochs
-        if: steps.plan.outputs.ready == 'true'
         timeout-minutes: 310
         env:
           RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
-          ETHEVALS_PAID_MARKER: results/paid-marker/paid-started.json
         run: uv run python scripts/ci.py after-merge --budget "$RUN_BUDGET" --restore-results --output results/ci-run
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: eval-run-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            results/ci-run/
-            source-sha.txt
+          path: results/ci-run/
           retention-days: 14
           if-no-files-found: error
   publish:
@@ -97,7 +72,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RESULTS_REPO: ${{ github.repository }}
+          RESULTS_COMMIT: ${{ github.sha }}
         run: >-
           uv run python scripts/ci.py publish-results
           --output results/artifact
-          --repo "$RESULTS_REPO" --publish
+          --repo "$RESULTS_REPO" --commit "$RESULTS_COMMIT" --publish

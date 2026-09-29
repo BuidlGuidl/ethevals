@@ -1,12 +1,13 @@
 """Select epochs once for both the budget plan and the runner."""
 import math
-from collections import defaultdict
 from dataclasses import dataclass
 from typing import NamedTuple
 
 from .rows import epoch_identity
-from .scorers import rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS, SCORERS
-from .preparation import SETUP_SECONDS, STARTUP_SECONDS, CLEANUP_SECONDS, TASK_LIFECYCLE_SECONDS, WORKSPACE_COPY_SECONDS
+from .scorers import rubric_budget
+
+CONTAINER_SECONDS = 300
+PREPARATION_SECONDS = 1800
 
 
 class Epoch(NamedTuple):
@@ -34,12 +35,7 @@ def budget_check(report, budget, *, required=False):
 
 def epoch_seconds(evaluation, config, actor):
     working = evaluation.declaration.time_limit or config.time_limits.get(evaluation.declaration.type, config.time_limit)
-    seconds = 3 * working + scoring_seconds(evaluation) + SCORING_OVERHEAD_SECONDS
-    if actor.sandbox_for(evaluation):
-        seconds += STARTUP_SECONDS + CLEANUP_SECONDS + WORKSPACE_COPY_SECONDS
-        if any(SCORERS[item.kind].setup for item in evaluation.scorers):
-            seconds += SETUP_SECONDS
-    return seconds
+    return 3 * working + CONTAINER_SECONDS
 
 
 def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, retry_errors=False):
@@ -64,82 +60,35 @@ def epoch_selection(evals, config, players, previous, epochs=None, fresh=False, 
 
 
 def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, fresh=False, wall_seconds=None,
-         selection=None, preparation_seconds=0):
+         selection=None):
     if wall_seconds is not None and (not math.isfinite(wall_seconds) or wall_seconds <= 0):
         raise ValueError("Wall seconds must be finite and positive")
     selection = selection or epoch_selection(evals, config, players, previous, epochs, fresh, retry_errors)
     _, pending, exhausted = selection
-    missing, deferred, admitted, total, longest, reserved = [], [], [], 0, 0, preparation_seconds
-    lifecycle = 0
-    concurrency = min(config.max_tasks, config.max_samples)
-    groups = defaultdict(list)
-    for item in pending:
-        groups[item.evaluation.id, item.mode, item.epoch].append(item)
-    rows = {}
-    for item in pending:
+    missing, deferred, admitted = [], [], []
+    reserved = PREPARATION_SECONDS if pending else 0
+    for item in sorted(pending, key=lambda item: epoch_seconds(item.evaluation, config, item.actor)):
         evaluation, mode, actor, epoch, attempt = item
-        metadata = {"eval_id": evaluation.id, "eval_hash": evaluation.hash, "type": evaluation.declaration.type,
-                    **actor.metadata, "mode": mode, "epoch": epoch}
+        seconds = epoch_seconds(evaluation, config, actor)
+        if wall_seconds is not None and PREPARATION_SECONDS + seconds > wall_seconds:
+            raise ValueError(f"Config error: a single epoch of {evaluation.id} needs {seconds} seconds plus "
+                             f"{PREPARATION_SECONDS} seconds for preparation; --wall-seconds is {wall_seconds:g}")
         # Reserve every remaining runner attempt. Runtime spends one per invocation.
         remaining = max(1, config.max_attempts - attempt + 1)
         per_attempt = config.cost_limit + rubric_budget(evaluation, config)
         if mode == "internet" and config.search_provider:
             per_attempt += config.search_limit * config.search_price_usd
-        history = [row["model_cost_usd"] + row["grader_cost_usd"] for row in previous
-                   if all(row.get(key) == metadata.get(key) for key in ("type", "model", "harness", "effort", "mode", "answer_kind"))
-                   and row.get("model_cost_usd") is not None and row.get("grader_cost_usd") is not None]
-        seconds = epoch_seconds(evaluation, config, actor)
-        row = {**metadata, "attempt": attempt, "remaining_attempts": remaining,
-                        "wall_seconds": seconds,
-                        "per_attempt_usd": per_attempt, "worst_case_usd": per_attempt * remaining,
-                        "expected_usd_estimate": sum(history) / len(history) if history else None}
-        rows[id(item)] = row
-    queue = sorted(groups.values(), key=lambda group: sum(rows[id(item)]["wall_seconds"] for item in group))
-    if wall_seconds is not None:
-        for item in pending:
-            overhead = 2 * TASK_LIFECYCLE_SECONDS if item.actor.sandbox_for(item.evaluation) else 0
-            minimum = overhead + rows[id(item)]["wall_seconds"]
-            if minimum > wall_seconds:
-                raise ValueError(f"A single epoch of {item.evaluation.id} needs {minimum} seconds in an empty window; "
-                                 f"--wall-seconds is {wall_seconds:g}")
-        split_queue = []
-        for group in queue:
-            durations = [rows[id(item)]["wall_seconds"] for item in group]
-            compose_files = {item.evaluation.hash for item in group if item.actor.sandbox_for(item.evaluation)}
-            empty_bound = (preparation_seconds + 2 * TASK_LIFECYCLE_SECONDS * len(compose_files)
-                           + sum(durations) / concurrency + (1 - 1 / concurrency) * max(durations))
-            split_queue.extend([[item] for item in group] if empty_bound > wall_seconds else [group])
-        queue = split_queue
-    compositions = set()
-    for group in queue:
-        group_rows = [rows[id(item)] for item in group]
-        seconds = sum(row["wall_seconds"] for row in group_rows)
-        group_longest = max(row["wall_seconds"] for row in group_rows)
-        # prepare_compose writes one immutable path per eval hash.
-        compose_files = {item.evaluation.hash for item in group if item.actor.sandbox_for(item.evaluation)}
-        task_overhead = 2 * TASK_LIFECYCLE_SECONDS * len(compose_files - compositions)
-        # Task initialization and final cleanup can run outside the sample dispatcher.
-        bound = (preparation_seconds + lifecycle + task_overhead
-                 + (total + seconds) / concurrency + (1 - 1 / concurrency) * max(longest, group_longest))
-        if wall_seconds is not None and bound > wall_seconds:
-            deferred.extend(group_rows)
+        row = {"eval_id": evaluation.id, "eval_hash": evaluation.hash, "type": evaluation.declaration.type,
+               **actor.metadata, "mode": mode, "epoch": epoch, "attempt": attempt,
+               "remaining_attempts": remaining, "wall_seconds": seconds,
+               "per_attempt_usd": per_attempt, "worst_case_usd": per_attempt * remaining}
+        if wall_seconds is not None and reserved + seconds > wall_seconds:
+            deferred.append(row)
         else:
-            missing.extend(group_rows)
-            admitted.extend(group)
-            compositions.update(compose_files)
-            total += seconds
-            longest = max(longest, group_longest)
-            lifecycle += task_overhead
-            reserved = bound
+            missing.append(row)
+            admitted.append(item)
+            reserved += seconds
     return Plan({"missing": missing, "missing_epochs": len(missing),
-            "cheapest_group_usd": min((sum(rows[id(item)]["worst_case_usd"] for item in group) for group in queue), default=0),
-            "deferred": deferred, "deferred_epochs": len(deferred), "wall_seconds": wall_seconds,
-            "reserved_wall_seconds": reserved,
-            "preparation_seconds": preparation_seconds, "concurrency": concurrency,
-            "task_lifecycle_seconds": lifecycle,
-            "exhausted_errors": exhausted,
-            "worst_case_usd": round(sum(row["worst_case_usd"] for row in missing), 8),
-            "expected_usd_estimate": round(sum(row["expected_usd_estimate"] for row in missing), 8)
-            if all(row["expected_usd_estimate"] is not None for row in missing) else None,
-            "history_covered_epochs": sum(row["expected_usd_estimate"] is not None for row in missing),
-            "cost_note": "Worst case includes configured model, grader, and search prices for remaining attempts. The player limit can overshoot by an in-flight call. Expected cost covers one attempt's model and grader spend only; null means incomplete history."}, admitted)
+                 "deferred": deferred, "deferred_epochs": len(deferred), "wall_seconds": wall_seconds,
+                 "reserved_wall_seconds": reserved, "exhausted_errors": exhausted,
+                 "worst_case_usd": round(sum(row["worst_case_usd"] for row in missing), 8)}, admitted)
