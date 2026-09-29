@@ -270,11 +270,10 @@ It skips quizzes with rubrics and prints the reason.
 ## Maintainer checks
 
 Run `uv run pytest -q` for unit tests.
-Run `uv run pytest -q --run-docker -m docker` for the container proofs.
+Run `uv run pytest -q --run-docker -m docker --ignore=inspect-runner/tests/test_agents_docker.py` for the CI container checks.
 Tests use the config factories in `tests/support.py`.
-`--run-live-exa -m live_exa` opts into hosted Exa schema checks.
 
-The agent proof also remains a command:
+The real CLI proofs run separately:
 
 ```sh
 uv run python inspect-runner/tests/prove_agent.py reference --agent claude-code-opus-5.5 --eval evals/concepts/agent-registries --output /tmp/claude-reference

@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from ethevals.actors import select_actors
-from ethevals.config import Config, load_config as read_config
+from ethevals.config import Config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.runner import build_task as actor_task, run
@@ -20,9 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 INPUTS = TemporaryDirectory()
 
 
-def fixture_config(path=None):
-    if path is not None:
-        return read_config(path)
+def fixture_config():
     models = {key: {"model": f"mockllm/{key}", "effort": "low"}
               for key in ("opus-5.5", "gpt-5.5", "kimi-k3", "glm-5.3")}
     prices = dict(input=5.0, output=25.0, input_cache_read=0.5, input_cache_write=6.25)

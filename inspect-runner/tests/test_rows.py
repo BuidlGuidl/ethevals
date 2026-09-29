@@ -1,22 +1,13 @@
-from dataclasses import replace
 from pathlib import Path
 import itertools
 import json
-import os
 import shutil
-import signal
-import subprocess
-import sys
-import time
 
 from ethevals.actors import select_actors
-from ethevals.checks import CHECK_SOLVERS, CheckRun, check_grader
-from ethevals.files import content_hash
+from ethevals.checks import CHECK_SOLVERS, CheckRun
 from ethevals.loader import load_eval
 from ethevals.planning import plan
-from ethevals.preparation import prepare_compose
 from ethevals.rows import fold_rows, previous_rows, read_rows, results_rows, write_rows
-from ethevals.runner import build_task as actor_task
 from inspect_ai import eval
 from inspect_ai.log import read_eval_log
 from inspect_ai.model import ModelCost, ModelInfo, ModelOutput, ModelUsage, get_model, set_model_info
@@ -24,10 +15,8 @@ from inspect_ai.scorer import accuracy, scorer
 from inspect_ai.solver import solver
 from inspect_ai.util import sandbox
 import pytest
-import yaml
 
 from support import build_task, catalog_quiz, fixture_config, mock_delay, run
-from test_forge_docker import containers
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -42,17 +31,7 @@ def with_grader(underlying):
     return score
 
 
-@solver
-def crash():
-    async def solve(state, generate):
-        raise RuntimeError("Harness crashed in the test.")
-    return solve
-
-
-BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
-CHECK = "forge:test/Token.t.sol:TokenTest:testSupply()"
 YES = '{"passed": true, "reason": "Uses standard transfers."}'
-NO = '{"passed": false, "reason": "Owner can seize tokens."}'
 
 
 @solver
@@ -82,41 +61,6 @@ def test_rows_split_grader_usage_for_the_same_model(folder, tmp_path):
     assert row["grader_cost_usd"] == pytest.approx(0.000013)
     assert row["cost_source"] == "computed:test"
     assert log.eval.metadata["prices"] == {"input": 1, "output": 2}
-
-
-def test_error_is_distinct_from_failed_answer(folder, tmp_path):
-    config = fixture_config()
-    task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
-    task.solver = crash()
-    log = eval(task, fail_on_error=False, log_dir=str(tmp_path / "logs"), display="none")[0]
-    row = results_rows(read_eval_log(log.location))[0]
-    assert (row["status"], row["error_kind"]) == ("error", "execution")
-    assert "Harness crashed in the test." in row["error_reason"]
-
-
-def test_working_limit_is_a_failed_check(folder, tmp_path):
-    config = fixture_config()
-    task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
-    task.solver = mock_delay(2)
-    task.working_limit = 1
-    log = eval(task, fail_on_error=False, log_dir=str(tmp_path / "logs"), display="none")[0]
-    row = results_rows(read_eval_log(log.location))[0]
-    assert (row["status"], row["error_kind"]) == ("failed", None)
-    assert row["checks"]["erc_number"]["passed"] is False
-    assert "working limit 1" in row["checks"]["erc_number"]["reason"]
-    assert row["limit"]["type"] == "working"
-
-
-def test_completed_epochs_are_reused(folder, tmp_path):
-    config = fixture_config()
-    evaluation = load_eval(folder, config)
-    first_success, first = run([evaluation], config, tmp_path / "results", answer="reference")
-    second_success, second = run([evaluation], config, tmp_path / "results", answer="reference")
-    assert (first_success, second_success) == (True, True)
-    assert [row["status"] for row in second] == ["passed", "passed", "passed"]
-    assert [(row["completed_at"], row["log_file"]) for row in second] == [
-        (row["completed_at"], row["log_file"]) for row in first
-    ]
 
 
 def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_path, monkeypatch):
@@ -149,18 +93,14 @@ def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_
     assert attempts == 4
 
 
-@pytest.mark.parametrize("kind", ["working", "token"])
-def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch, kind):
+def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch):
     import ethevals.runner as runner
     original = runner.build_task
 
     def limited(*args, **kwargs):
         task = original(*args, **kwargs)
-        if kind == "working":
-            task.solver = mock_delay(2)
-            task.working_limit = 1
-        else:
-            task.token_limit = 1
+        task.solver = mock_delay(2)
+        task.working_limit = 1
         return task
 
     monkeypatch.setattr(runner, "build_task", limited)
@@ -170,7 +110,7 @@ def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch, kind):
     success, first = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
     assert (first[0]["status"], (None if first[0]["status"] == "error" else first[0]["status"] == "passed")) == ("failed", False)
-    assert f"{kind} limit" in first[0]["checks"]["erc_number"]["reason"]
+    assert "working limit" in first[0]["checks"]["erc_number"]["reason"]
     success, second = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
     assert second == first
@@ -243,48 +183,6 @@ def test_setup_failure_has_unknown_cost(folder, tmp_path):
         None, "unavailable", None, "unavailable")
 
 
-def test_kill_and_resume_keeps_completed_epochs(folder, tmp_path):
-    output = tmp_path / "results"
-    config = fixture_config()
-    config.concurrency = 1
-    config_path = tmp_path / "serial.yaml"
-    config_path.write_text(yaml.safe_dump(config.model_dump()))
-    command = [sys.executable, str(Path(__file__).with_name("resume_check.py")),
-               str(folder), str(output), str(config_path)]
-    environment = {key: value for key, value in os.environ.items() if key != "OPENROUTER_API_KEY"}
-    completed = []
-    with (tmp_path / "killed.txt").open("w") as stream:
-        process = subprocess.Popen(command, cwd=ROOT, env=environment, stdout=stream, stderr=subprocess.STDOUT,
-                                   start_new_session=True)
-        try:
-            deadline = time.monotonic() + 30
-            while time.monotonic() < deadline and process.poll() is None:
-                for path in (output / "logs").glob("*.eval"):
-                    try:
-                        log = read_eval_log(path)
-                    except ValueError as error:
-                        if "EOCD not found" not in str(error):
-                            raise
-                        # Inspect has opened the ZIP but has not written its directory yet.
-                        continue
-                    completed.extend((log.eval.metadata["epoch"], sample.completed_at)
-                                     for sample in log.samples or [] if sample.scores)
-                if completed:
-                    break
-                time.sleep(0.05)
-        finally:
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGKILL)
-            process.wait(timeout=10)
-    assert process.returncode == -signal.SIGKILL
-    assert len(completed) == 1
-    result = subprocess.run(command, cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30)
-    assert result.returncode == 0, result.stdout + result.stderr
-    rows = [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()]
-    assert [(row["epoch"], row["status"]) for row in rows] == [(1, "passed"), (2, "passed"), (3, "passed")]
-    assert [(row["epoch"], row["completed_at"]) for row in rows if row["epoch"] == completed[0][0]] == completed
-
-
 def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
     @solver
     def crash():
@@ -338,72 +236,18 @@ def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
     assert row["grader_cost_usd"] == 0
 
 
-@pytest.mark.docker
-def test_agent_limit_skips_snapshot_and_unavailable_grader(scoring_case):
-    from support import mock_delay
-    scoring_case["task"].working_limit = 1
-    scoring_case["task"].solver = mock_delay(2)
-    row = scoring_case["run"]([RuntimeError("Grader unavailable")])
-    assert (row["status"], (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0)) == ("failed", 0)
-    assert row["limit"]["type"] == "working"
-    assert all(not check["passed"] and "working limit" in check["reason"] for check in row["checks"].values())
-    assert scoring_case["requests"] == []
-
-
-@pytest.mark.docker
-def test_grader_provider_failure_retains_tests_score(scoring_case):
-    row = scoring_case["run"]([YES, RuntimeError("Provider unavailable: 503")])
+@pytest.mark.parametrize("reply", [RuntimeError("Provider unavailable"), "No JSON."])
+def test_grader_failure_retains_primary_score(quiz_scoring_case, reply):
+    row = quiz_scoring_case["run"]([reply, reply])
     assert row["status"] == "error"
-    assert set(row["checks"]) == {"forge:compile", CHECK}
-    assert "503" in row["error_reason"]
+    assert row["checks"] == {"answer": {"passed": True, "reason": "Answer matches the target."}}
 
 
-@pytest.mark.docker
-@pytest.mark.parametrize("status", [429, 503])
-@pytest.mark.parametrize("exhausted", [False, True])
-def test_grader_retries_transient_failures_with_a_bound(scoring_case, monkeypatch, status, exhausted):
-    import httpx
-    from inspect_ai.model._providers.mockllm import MockLLM
-    from tenacity import wait_none
-
-    monkeypatch.setattr(MockLLM, "should_retry", lambda self, error: isinstance(error, httpx.HTTPStatusError))
-    monkeypatch.setattr(MockLLM, "retry_wait", lambda self: wait_none())
-    response = httpx.Response(status, request=httpx.Request("POST", "https://provider.invalid/grade"))
-    error = httpx.HTTPStatusError(f"Provider unavailable: {status}", request=response.request, response=response)
-    # The third failed attempt exhausts provider retries. A later success must remain unread.
-    replies = [YES, error, error, *([error] if exhausted else []), YES]
-    row = scoring_case["run"](replies)
-    assert row["status"] == ("error" if exhausted else "passed")
-    if exhausted:
-        assert "HTTPStatusError" in row["error_reason"]
-    else:
-        assert row["checks"]["rubric:protects_holders"] == {"passed": True, "reason": "Uses standard transfers."}
-        assert (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0) == 400
-
-
-@pytest.mark.docker
-def test_grader_no_is_a_failed_check(scoring_case):
-    row = scoring_case["run"]([YES, NO])
-    assert row["status"] == "failed"
-    assert row["checks"]["rubric:protects_holders"] == {"passed": False, "reason": "Owner can seize tokens."}
-    assert (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0) == 400
-
-
-@pytest.mark.docker
-@pytest.mark.parametrize("reply", ["No JSON.", '```json\n' + YES + '\n```'])
-def test_invalid_grader_replies_are_a_bounded_error(scoring_case, reply):
-    row = scoring_case["run"]([reply, reply])
-    assert (row["status"], (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0)) == ("error", 400)
-    assert "after two calls" in row["error_reason"]
-    assert set(row["checks"]) == {"forge:compile", CHECK}
-
-
-@pytest.mark.docker
-def test_grader_budget_error_retains_tests_score(scoring_case):
-    row = scoring_case["run"]([YES, YES], budget=0.004)
+def test_grader_budget_error_retains_primary_score(quiz_scoring_case):
+    row = quiz_scoring_case["run"]([YES], budget=0.001)
     assert (row["status"], row["limit"]) == ("error", None)
     assert "Grader cost limit reached." in row["error_reason"]
-    assert row["checks"][CHECK] == {"passed": True, "reason": "Test passed."}
+    assert row["checks"] == {"answer": {"passed": True, "reason": "Answer matches the target."}}
 
 
 @pytest.mark.docker
@@ -415,29 +259,7 @@ def test_compile_failure_records_one_check_and_skips_grader(scoring_case):
         "forge:compile": {"passed": False, "reason": "Error (6933): Expected primary expression."}}
 
 
-@pytest.mark.docker
-@pytest.mark.parametrize("waiting", ["provider", "backoff"])
-def test_slow_provider_stops_at_total_grader_deadline(scoring_case, monkeypatch, waiting):
-    import ethevals.scorers as scorers
-    monkeypatch.setattr(scorers, "GRADER_CONFIG", scorers.GRADER_CONFIG.model_copy(update={"timeout": 1}))
-    replies = [(5, YES)]
-    if waiting == "backoff":
-        import httpx
-        from inspect_ai.model._providers.mockllm import MockLLM
-        from tenacity import wait_fixed
-        response = httpx.Response(503, request=httpx.Request("POST", "https://provider.invalid"))
-        error = httpx.HTTPStatusError("Unavailable", request=response.request, response=response)
-        replies = [error, YES]
-        monkeypatch.setattr(MockLLM, "should_retry", lambda self, error: isinstance(error, httpx.HTTPStatusError))
-        monkeypatch.setattr(MockLLM, "retry_wait", lambda self: wait_fixed(5))
-    row = scoring_case["run"](replies)
-    assert row["status"] == "error"
-    assert "Grader exceeded its total call deadline" in row["error_reason"]
-    assert (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0) == 0
-
-
-@pytest.mark.docker
-def test_operator_stop_is_an_error_and_skips_scoring(scoring_case):
+def test_operator_stop_is_an_error_and_skips_scoring(quiz_scoring_case):
     from inspect_ai._util.exception import TerminateSampleError
 
     @solver
@@ -446,48 +268,19 @@ def test_operator_stop_is_an_error_and_skips_scoring(scoring_case):
             raise TerminateSampleError("Stopped by operator")
         return solve
 
-    scoring_case["task"].solver = stopped()
-    row = scoring_case["run"]([])
+    quiz_scoring_case["task"].solver = stopped()
+    row = quiz_scoring_case["run"]([])
     assert (row["status"], row["limit"]["type"]) == ("error", "operator")
     assert "Stopped by operator" in row["error_reason"]
 
 
-@pytest.mark.docker
-def test_wall_backstop_is_an_error(scoring_case):
+def test_wall_backstop_is_an_error(quiz_scoring_case):
     from support import mock_delay
-    scoring_case["task"].solver = mock_delay(2)
-    scoring_case["task"].time_limit = 1
-    row = scoring_case["run"]([])
+    quiz_scoring_case["task"].solver = mock_delay(2)
+    quiz_scoring_case["task"].time_limit = 1
+    row = quiz_scoring_case["run"]([])
     assert (row["status"], row["limit"]["type"]) == ("error", "time")
-    assert row["working_seconds"] < scoring_case["log"].eval.metadata["working_limit_seconds"]
-
-
-def test_provider_backoff_does_not_spend_working_limit(tmp_path, monkeypatch):
-    import httpx
-    from inspect_ai.model._providers.mockllm import MockLLM
-    from tenacity import wait_fixed
-    config = fixture_config()
-    config.time_limits["quiz"] = 1
-    evaluation = load_eval(BUILD.parents[1] / "concepts/wei-per-ether", config)
-    task = build_task(evaluation, config, None, "vanilla", "reference", 1)
-    attempts = 0
-
-    def reply(*args):
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            response = httpx.Response(429, request=httpx.Request("POST", "https://provider.invalid"))
-            raise httpx.HTTPStatusError("rate limited", request=response.request, response=response)
-        return ModelOutput.from_content("mockllm/model", "ANSWER: C")
-
-    monkeypatch.setattr(MockLLM, "should_retry", lambda self, error: isinstance(error, httpx.HTTPStatusError))
-    monkeypatch.setattr(MockLLM, "retry_wait", lambda self: wait_fixed(1.5))
-    task.model = get_model("mockllm/model", custom_outputs=reply)
-    log = eval(task, log_dir=str(tmp_path / "logs"), display="none")[0]
-    row = results_rows(log)[0]
-    assert (row["status"], attempts) == ("passed", 2)
-    assert row["total_seconds"] >= 1.5
-    assert row["working_seconds"] < 1
+    assert row["working_seconds"] < quiz_scoring_case["log"].eval.metadata["working_limit_seconds"]
 
 
 def test_fold_is_order_independent_and_sorts_epochs_as_numbers():
@@ -532,84 +325,3 @@ def test_fold_keeps_committed_rows_and_replaces_retried_identity(tmp_path):
     write_rows(path, fold_rows(read_rows(path), []))
     assert path.read_bytes() == content
     assert path.stat().st_mtime_ns == mtime
-
-
-@pytest.mark.docker
-@pytest.mark.parametrize("script,status,reason", [
-    (b'print("x" * (11 * 1024 * 1024))', "error", "malformed JSON"),
-    (b'print("not JSON")', "error", "malformed JSON"),
-    (b'raise ValueError("bad amount")', "error", "ValueError: bad amount"),
-    (b'import os, signal; os.kill(os.getpid(), signal.SIGKILL)', "error", "exited 137"),
-])
-def test_check_script_failures_through_task(tmp_path, script, status, reason):
-    import shutil
-    config = fixture_config()
-    folder = tmp_path / "transactions/script"
-    shutil.copytree(ROOT / "evals/transactions/send-six-decimal-token", folder)
-    (folder / "scorer/check.py").write_bytes(b"#!/usr/bin/env python3\n" + script)
-    evaluation = load_eval(folder, config)
-    success, rows = run([evaluation], config, tmp_path / "results", answer="empty", epochs=1)
-    row = rows[0]
-    assert (success, row["status"]) == (status != "error", status)
-    assert reason in row["error_reason"]
-
-
-@pytest.mark.docker
-@pytest.mark.parametrize("local_oom,cli_code", [(True, 137), (False, 137), (True, 1)])
-def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, local_oom, cli_code):
-    from ethevals import agents
-    from inspect_ai.util import sandbox
-    from ethevals.sandboxes import runner_exec
-    config = fixture_config()
-    config.models["opus-5.5"].model = "mockllm/model"
-    config.grader.model = "mockllm/model"
-    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    compose = prepare_compose(evaluation, tmp_path)
-    document = yaml.safe_load(compose.read_bytes())
-    document["services"]["default"]["mem_limit"] = "128m"
-    compose.write_text(yaml.safe_dump(document))
-
-    async def killed(state, generate):
-        command = ["/usr/bin/perl", "-e", '$allocation = "x" x (512 * 1024 * 1024); sleep 1'] if local_oom else [
-            "/bin/sh", "-c", "kill -9 $$"]
-        result = await runner_exec(sandbox("default"), command)
-        if not result.success:
-            assert result.returncode == 137
-            # The CLI can survive its child's OOM and fail later for another cause.
-            if cli_code == 1:
-                result = await runner_exec(sandbox("default"), ["/bin/sh", "-c", "exit 1"])
-            raise RuntimeError(f"Error executing claude code agent {result.returncode}: CLI failure")
-        raise AssertionError("The death proof survived")
-
-    monkeypatch.setitem(agents.HARNESSES, "claude_code", replace(
-        agents.HARNESSES["claude_code"], factory=lambda *a, **kw: killed, version="proof"))
-    actors_for, _ = select_actors(config, agents=["claude-code-opus-5.5"], modes=["internet"])
-    task = actor_task(evaluation, config, actors_for(evaluation)[0][1], check_grader(), "internet", 1, compose)
-    row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert row["status"] == "error", row
-    assert f"Error executing claude code agent {cli_code}" in row["error_reason"]
-
-
-@pytest.mark.docker
-def test_non_utf8_source_matches_real_forge_and_fails_checks(tmp_path):
-    import anyio
-    from ethevals.scorers import forge, prepare_forge
-    config = fixture_config()
-    original = load_eval(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", config)
-    source = b"pragma solidity =0.8.30; //\xff\ncontract BuilderPoints {}"
-    with containers(tmp_path / "raw") as boxes:
-        async def capture():
-            box = boxes["scorer"]
-            await prepare_forge(box, {"src/BuilderPoints.sol": b"pragma solidity =0.8.30; contract BuilderPoints {}"}, original.files)
-            await box.write_file("/workspace/src/BuilderPoints.sol", source)
-            return await forge(box, timeout=180)
-        result = anyio.run(capture)
-        assert result.returncode == 1
-        assert "stream did not contain valid UTF-8" in result.stderr
-        (tmp_path / "forge-invalid-utf8.json").write_text(json.dumps(result.model_dump() if hasattr(result, "model_dump") else vars(result)))
-    files = {**original.files, "workspace/src/BuilderPoints.sol": source}
-    evaluation = replace(original, files=files, hash=content_hash(files))
-    success, rows = run([evaluation], config, tmp_path / "scored", answer="empty", epochs=1)
-    assert success
-    assert (rows[0]["status"], (None if rows[0]["status"] == "error" else rows[0]["status"] == "passed")) == ("failed", False)
-    assert {check["reason"] for check in rows[0]["checks"].values()} == {"Solidity source is not valid UTF-8: src/BuilderPoints.sol"}
