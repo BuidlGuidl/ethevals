@@ -157,7 +157,7 @@ def compiler_diagnostic(stdout: str, stderr: str) -> str | None:
         reason = next((line for line in lines if line.startswith("CompilerError:")), None)
     version = next((line for line in lines if re.search(r"No solc version|invalid solc version|incompatible versions", line, re.I)), None)
     if reason is None and version:
-        reason = f"{version} Scoring is offline. Available solc versions: {', '.join(SOLC_VERSIONS)}."
+        reason = f"{version} Available solc versions: {', '.join(SOLC_VERSIONS)}."
     return reason
 
 
@@ -427,7 +427,7 @@ def rubric_scorer(config, evaluation):
 
 def tests_workspace(config):
     return {"foundry.toml": (IMAGES / "foundry.toml").read_bytes()}, (
-        f"Scoring is offline. Available solc versions: {', '.join(SOLC_VERSIONS)}. "
+        f"Available solc versions: {', '.join(SOLC_VERSIONS)}. "
         "Grading uses the supplied foundry.toml. Changes to compiler settings or remappings do not affect grading. "
         "OpenZeppelin and forge-std come from the image. Other Solidity dependencies must use relative imports under src/ or lib/."
     )

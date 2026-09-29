@@ -55,13 +55,12 @@ class DockerBox:
 def containers(tmp_path, environment=None):
     assert not any(os.environ.get(name) for name in (
         "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
-    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_bytes())
-    data["services"]["default"].pop("build")
+    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", load_config())
+    path = prepare_compose(evaluation, tmp_path)
+    data = yaml.safe_load(path.read_bytes())
     for service in data["services"].values():
         service["environment"] = environment or {}
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", load_config())
-    evaluation = replace(evaluation, files={**evaluation.files, "compose.yaml": yaml.safe_dump(data).encode()})
-    path = prepare_compose(evaluation, tmp_path)
+    path.write_text(yaml.safe_dump(data))
     prefix = ["docker", "compose", "-p", "proof-" + uuid.uuid4().hex[:12], "-f", str(path)]
     try:
         result = command([*prefix, "up", "-d"])
@@ -74,19 +73,17 @@ def containers(tmp_path, environment=None):
 
 
 def test_compose_sees_only_the_normalized_document(tmp_path):
-    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_bytes())
-    data["services"]["default"].pop("build")
-    data["services"]["default"]["environment"] = {"TOKEN": b"$SECRET_PROBE"}
+    data = {"services": {"extra": {"image": "postgres:17", "mem_limit": "512m", "environment": {"TOKEN": b"$SECRET_PROBE"}}}}
     with pytest.raises(ValueError, match="unsupported YAML scalar"):
         validate_compose(tmp_path / "binary.yaml", data=yaml.safe_dump(data).encode())
-    data["services"]["default"]["environment"] = {"TOKEN": "$$SECRET_PROBE"}
+    data["services"]["extra"]["environment"] = {"TOKEN": "$$SECRET_PROBE"}
     raw = yaml.safe_dump(data).encode() + b"# author comment\n"
     evaluation = load_eval(ROOT / "evals/building/erc20-points-token", load_config())
     path = prepare_compose(replace(evaluation, files={**evaluation.files, "compose.yaml": raw}), tmp_path)
     result = command(["docker", "compose", "-f", str(path), "config", "--format", "json"],
                      env={**os.environ, "SECRET_PROBE": "inert-canary"})
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["services"]["default"]["environment"] == {"TOKEN": "$$SECRET_PROBE"}
+    assert json.loads(result.stdout)["services"]["extra"]["environment"] == {"TOKEN": "$$SECRET_PROBE"}
     assert path.read_bytes() != raw
 
 
@@ -140,11 +137,6 @@ def test_reference_failures_owned_libraries_and_frozen_writer(tmp_path):
 def test_unavailable_compiler_fails_offline_and_names_available_versions(tmp_path):
     with containers(tmp_path) as boxes:
         box = boxes["scorer"]
-        details = json.loads(command(["docker", "inspect", box.container]).stdout)[0]
-        networks = list(details["NetworkSettings"]["Networks"])
-        assert len(networks) == 1
-        assert json.loads(command(["docker", "network", "inspect", networks[0]]).stdout)[0]["Internal"] is True
-
         async def proof():
             installed = await runner_exec(box, ["/bin/sh", "-c", "ls /home/agent/.svm/*/solc-*"])
             assert installed.stdout.strip() == "/home/agent/.svm/0.8.30/solc-0.8.30"

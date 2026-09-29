@@ -66,7 +66,7 @@ def test_killed_check_wrapper_after_setup_exports_error(tmp_path):
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
     compose = prepare_compose(evaluation, tmp_path)
     evaluation = prepare_eval(evaluation, tmp_path, compose)
-    files = {**evaluation.files, "scorer/check.py": b'import os, signal\n'
+    files = {**evaluation.files, "scorer/check.py": b'#!/usr/bin/env python3\nimport os, signal\n'
              b'print(\'{"balance":{"passed":true,"reason":"Balance matches."}}\', flush=True)\n'
              b'os.kill(os.getppid(), signal.SIGKILL)\n'}
     evaluation = replace(evaluation, files=files, hash=content_hash(files))
@@ -113,7 +113,7 @@ def test_oom_during_grading_fails_fixed_checks(tmp_path, monkeypatch, kind):
     document["services"]["chain" if kind == "act" else "scorer"]["mem_limit"] = "128m"
     files = dict(evaluation.files)
     if kind == "act":
-        files["scorer/check.py"] = b"allocation = bytearray(512 * 1024 * 1024)\n"
+        files["scorer/check.py"] = b"#!/usr/bin/env python3\nallocation = bytearray(512 * 1024 * 1024)\n"
     evaluation = replace(evaluation, files=files, hash=content_hash(files))
     compose = prepare_compose(evaluation, tmp_path)
     compose.write_text(yaml.safe_dump(document))
@@ -205,18 +205,11 @@ def test_custom_compose_prepares_stock_images_for_check_and_run(tmp_path, monkey
     dockerfile = images / "Dockerfile"
     dockerfile.write_text(dockerfile.read_text() + "\nLABEL build-proof=" + uuid.uuid4().hex + "\n")
     tag = image_tag(images)
-    for path in images.glob("*.compose.yaml"):
-        data = yaml.safe_load(path.read_bytes())
-        for name in ("default", "scorer"):
-            data["services"][name]["image"] = tag
-        path.write_text(yaml.safe_dump(data))
     monkeypatch.setattr(preparation, "IMAGES", images)
     monkeypatch.setattr(sandboxes, "IMAGES", images)
     folder = tmp_path / "evals/building/custom"
     shutil.copytree(ROOT / "evals/building/erc20-points-token", folder)
-    document = yaml.safe_load((images / "stock.compose.yaml").read_bytes())
-    document["services"]["default"].pop("build")
-    (folder / "compose.yaml").write_text(yaml.safe_dump(document))
+    (folder / "compose.yaml").write_text("services:\n  extra:\n    image: " + tag + "\n    mem_limit: 64m\n")
     config = load_config()
     evaluation = load_eval(folder, config)
     for output, fresh in [(tmp_path / "pr", True), (tmp_path / "after-merge", False)]:

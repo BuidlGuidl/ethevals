@@ -42,9 +42,9 @@ def test_docker_timeout_during_oom_inspection_is_an_error(scoring_case, monkeypa
 
 
 @pytest.mark.parametrize("cause,status", [("wrapper", "error"), ("host_timeout", "error"),
-    ("earlier_oom_wrapper", "error"), ("author125", "failed"),
-    ("read_timeout", "error"), ("missing", "error"), ("crash", "failed"), ("json", "failed"),
-    ("schema", "failed"), ("deadline", "failed"), ("output", "failed"), ("pass", "passed")])
+    ("earlier_oom_wrapper", "error"), ("author125", "error"),
+    ("read_timeout", "error"), ("missing", "error"), ("crash", "error"), ("json", "error"),
+    ("schema", "error"), ("deadline", "failed"), ("output", "failed"), ("pass", "passed")])
 def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status):
     from dataclasses import replace
     from inspect_ai import eval
@@ -61,10 +61,8 @@ def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status
             code, stdout = 0, ""
             if "/sys/fs/cgroup/memory.events" in command:
                 stdout = "oom 5\noom_kill 5\n" if cause == "earlier_oom_wrapper" else "oom 0\noom_kill 0\n"
-            elif "--freeze" in command:
-                stdout = "{}"
-            elif "/usr/bin/test" in command:
-                code = 1 if cause == "missing" else 0
+            elif "/usr/bin/find" in command:
+                stdout = "" if cause == "missing" else "/eval/scorer/check.py\n"
             elif "/usr/bin/timeout" in command:
                 if cause == "host_timeout":
                     raise TimeoutError("Host compose exec timed out")

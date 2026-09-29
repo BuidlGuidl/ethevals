@@ -14,7 +14,7 @@ from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
 from .planning import plan, budget_check
 from .scorers import named_checks, EVALUATIONS, SCORERS, check_names, rubric_budget, scoring_seconds, SCORING_OVERHEAD_SECONDS
-from .sandboxes import compose_file
+from .sandboxes import compose_file, merged_compose
 from .preparation import prepare_eval, prepare_compose, check_capacity
 from .images.tag import image_inputs, image_tag
 
@@ -39,7 +39,7 @@ def build_task(evaluation: Eval, config: Config, player: Player, grader: Grader,
     if player.sandbox_for(evaluation):
         compose = compose or compose_file(evaluation.declaration.type)
         sample.sandbox = SandboxEnvironmentSpec(type="ethevals_docker", config=str(compose))
-        images = {name: service["image"] for name, service in read_yaml(compose)["services"].items()}
+        images = {name: service["image"] for name, service in merged_compose(evaluation)["services"].items()}
         limit = read_yaml(compose)["services"]["default"]["mem_limit"]
         sample.input += f"\nYour container has a {limit} memory limit, shared by the CLI and its tools. Exceeding it fails the epoch's checks.\n"
     else:
@@ -90,7 +90,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         raise ValueError("OPENROUTER_API_KEY is required for missing paid epochs")
     prepared, discovery_errors = {}, []
     if any(item.actor.sandbox_for(item.evaluation) for item in initial.admitted):
-        check_capacity(config)
+        check_capacity(config, [item.evaluation for item in initial.admitted if item.actor.sandbox_for(item.evaluation)])
     for evaluation in evals:
         work = [item for item in initial.admitted if item.evaluation.id == evaluation.id]
         if not work:

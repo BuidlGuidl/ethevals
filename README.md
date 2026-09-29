@@ -16,12 +16,7 @@ uv sync --frozen
 ```
 
 Docker is required for builds and internet epochs. Vanilla quiz checks need no Docker.
-Preparation builds the stock images named by each eval's Compose file, including custom Compose files.
-To build the Solidity image ahead of time:
-
-```sh
-docker compose -f inspect-runner/ethevals/images/stock.compose.yaml build default
-```
+Preparation merges each eval's extra services into the stock Compose file and builds the stock images.
 
 The image includes Foundry 1.5.1, Solidity 0.8.30, OpenZeppelin 5.4.0, and forge-std 1.9.7.
 The last two dependencies live in a root-owned directory. Submitted copies cannot replace them during grading.
@@ -29,9 +24,7 @@ It also supplies Node 20.11.0 and ripgrep for OpenCode. Rebuild the image after 
 Both image names hash their Dockerfile and copied files. Grading settings in `foundry.toml` do not rename an image.
 The runner hashes `Dockerfile` and `solc.json`. The chain hashes `Chain.Dockerfile`, `solc.json`, and `rpc_filter.py`.
 `solc.json` supplies the compiler version, URLs, and checksums for both images and the runner's compiler list.
-Preparation rejects a declared stock image name that differs from its computed name.
-After changing build inputs, run `uv run python inspect-runner/ethevals/images/tag.py`.
-Use its output in `stock.compose.yaml` and `act.compose.yaml`, then rebuild.
+The runner writes computed image tags into the merged Compose file. Evals never declare stock image tags.
 These names identify inputs, not image bytes. The runner's apt packages remain unpinned, so fresh builds can differ.
 
 ## Run without a key
@@ -184,7 +177,7 @@ Set `type: act`, `modes: [internet]`, and a prompt in `eval.yaml`.
 Declare `scorers: [{kind: check_script}]` in `scorer/scorer.yaml`.
 Keep the starting files under `workspace/`.
 
-Write `scorer/setup.py` to prepare the chain before the agent starts.
+Write `scorer/setup` or `scorer/setup.<ext>` to prepare the chain before the agent starts.
 Use a fresh key, fund it, and deploy the task's contracts.
 The script returns JSON with a `files` mapping of workspace paths to text.
 The fixture supplies `chain.json` with the key, contract addresses, and `http://chain:8545`.
@@ -192,22 +185,19 @@ Setup and check code stay in the chain container. Only those selected output fil
 Setup has its own 120-second script limit.
 Setup consumes neither the player's time allowance nor its recorded working time. Setup failures and timeouts are errors.
 
-Write `scorer/check.py` to print named checks with boolean `passed` and a one-line `reason`.
-Write `scorer/solution/run.sh` to sign and send through the public RPC URL, using the supplied key.
-The reference runs in the offline scorer, which also receives the workspace and setup's selected files.
-Author scripts can reach the private containers. They cannot reach the host or internet.
-Compose requires `internal: true` and `com.docker.network.bridge.inhibit_ipv4: "true"` on the private network.
-The runner discovers check names from that reference before any agent epoch.
-Wrong amounts, missing verdicts, and crashed check scripts keep the same check set.
+Write `scorer/check` or `scorer/check.<ext>` to print named checks with boolean `passed` and a one-line `reason`.
+Put reference files under `scorer/solution/`. They overlay the workspace; an optional `run.sh` runs next.
+Reference transactions use the public RPC URL and supplied key.
+Scripts run through their shebangs and can reach the internet.
+The runner passes `RPC_URL` for private chain controls and `PUBLIC_RPC_URL` for the agent's RPC.
+Script crashes and malformed output are errors, so a broken checker cannot pass the free check.
+See the [script contract](inspect-runner/README.md#act-scoring) for output shapes.
 
 The stock chain uses Anvil 1.5.1 behind an RPC allowlist in the same container.
 Anvil listens on localhost. The agent can read chain state and send signed raw transactions through the filter.
 It cannot use unlocked sends, unsigned sends, signing methods, WebSockets, or chain controls.
 A namespace blocklist misses `eth_sendUnsignedTransaction`, which moves value without a key.
-The runner stops the agent's processes once, then closes the filter.
-The request already forwarding finishes. Waiting requests fail.
-Capture disables mining, clears the pool, and waits for an empty block after any active mining.
-The check reads the state at that final block. No interval mining runs.
+The runner stops the agent's processes, disables automining, and waits for active mining before checking chain state.
 
 The chain image builds independently of the runner image.
 It uses digest-pinned Python 3.13.7 and Foundry 1.5.1 images, plus checksum-pinned solc 0.8.30 for each architecture.
@@ -298,10 +288,10 @@ This Mac's Docker VM reports 8,217,686,016 bytes. One epoch plus the 1 GiB host 
 A schema-valid grader reply without a reason fails that rubric check. Transport and invalid-JSON failures remain errors.
 Forge streams through capped readers. The wrapper waits for both reader processes before the scorer reads their files.
 The cap is 10 MiB per stream, with one extra byte to detect overflow.
-Compilation reasons use the coded diagnostic, without source frames. Only compiler-version failures include the offline compiler note.
+Compilation reasons use the coded diagnostic, without source frames. Only compiler-version failures list available compiler versions.
 Forge and the rubric read one workspace snapshot after the runner stops the agent's processes.
 The supplied `foundry.toml` defines grading settings and dependency remappings. Agent edits to it do not affect grading.
-Scoring is offline with solc 0.8.30. The prompt and compiler-version failures list that available compiler.
+Scoring has internet and uses the installed solc 0.8.30 without downloading compilers. The prompt and compiler-version failures list that available compiler.
 The scorer container has no internet network. Compiler downloads happen only when the image builds.
 The rubric reads Forge's compiled source records, with the agent's `src/` files first.
 It excludes unused libraries, private tests, and the runner's libraries.
@@ -334,7 +324,7 @@ ADR 0002 remains proposed until this paid test succeeds.
 | Scorer or chain exceeds its own cgroup memory limit | Failed checks |
 | In-container scoring timeout or output overflow | Failed checks |
 | Agent CLI exits 137 after its own container OOM | Failed checks, deliberate fail-closed rule |
-| Author check script crashes, exits 125, or returns a malformed verdict | Failed checks, deliberate fail-closed rule |
+| Author check script crashes, exits 125, or returns a malformed verdict | Error |
 | Grader returns a schema-valid verdict with an empty reason | That rubric check fails |
 | Player reaches its working-time or cost limit | Failed checks |
 | Missing script, wrapper exit 125, or host exec or file-copy failure | Error |
@@ -345,7 +335,7 @@ ADR 0002 remains proposed until this paid test succeeds.
 | Operator stop or wall-clock stop before the working limit | Error |
 
 Author scripts must return a verdict for any chain state.
-Their crashes fail closed so an agent cannot evade a failed check by crashing the checker.
+Their crashes are errors, so the free check rejects a checker that cannot handle the untouched workspace.
 
 ## Prove the agent path without a key
 

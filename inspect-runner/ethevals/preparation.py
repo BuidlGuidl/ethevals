@@ -14,7 +14,7 @@ from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
 import yaml
 
 from .scorers import EVALUATIONS, SCORERS, checks_score
-from .sandboxes import IMAGES, compose_file, validate_compose
+from .sandboxes import IMAGES, compose_file, merged_compose, memory_bytes
 from .config import read_yaml
 from .images.tag import image_tag
 
@@ -50,7 +50,7 @@ def docker_command(command):
 
 def check_cache_path(evaluation, output, compose=None):
     path = compose or compose_file(evaluation.declaration.type)
-    images = {name: service["image"] for name, service in read_yaml(path)["services"].items()}
+    images = read_yaml(path)["services"]
     inputs = [evaluation.hash.encode(),
               image_tag(IMAGES).encode(), (IMAGES / "foundry.toml").read_bytes(), b"scorer-discovery-v3"]
     if "chain" in images:
@@ -62,32 +62,27 @@ def check_cache_path(evaluation, output, compose=None):
 
 
 def prepare_compose(evaluation, output):
-    if "compose.yaml" not in evaluation.files:
-        stock = compose_file(evaluation.declaration.type)
-        document = yaml.safe_load(stock.read_bytes())
-        for service in document["services"].values():
-            service.pop("build", None)
-        data = yaml.safe_dump(document).encode()
-    else:
-        data = evaluation.files["compose.yaml"]
+    document = merged_compose(evaluation)
     path = output.resolve() / "inputs" / evaluation.hash / "compose.yaml"
-    normalized = validate_compose(path, data=data)
-    images = {service["image"] for service in yaml.safe_load(normalized)["services"].values()}
-    stock = compose_file("act")
-    builders = [name for name, service in read_yaml(stock)["services"].items()
-                if "build" in service and service["image"] in images]
-    docker_command(["docker", "compose", "-f", str(stock), "build", *builders])
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(normalized)
+    for service in document["services"].values():
+        if build := service.get("build"):
+            service["build"] = {"context": str(IMAGES), **({} if isinstance(build, str) else build)}
+            service["build"]["context"] = str((IMAGES / service["build"]["context"]).resolve())
+    path.write_text(yaml.safe_dump(document))
+    builders = [name for name, service in document["services"].items() if "build" in service]
+    docker_command(["docker", "compose", "-f", str(path), "build", *builders])
+    for service in document["services"].values():
+        service.pop("build", None)
+    path.write_text(yaml.safe_dump(document))
     return path
 
 
-def check_capacity(config):
+def check_capacity(config, evaluations):
     memory = int(docker_command(["docker", "info", "--format", "{{.MemTotal}}"]).stdout)
     concurrency = min(config.max_tasks, config.max_samples)
-    services = read_yaml(IMAGES / "act.compose.yaml")["services"]
-    per_epoch = sum(int(service["mem_limit"][:-1]) * {"g": 1024**3, "m": 1024**2}[service["mem_limit"][-1]]
-                    for service in services.values())
+    per_epoch = max(sum(memory_bytes(service["mem_limit"]) for service in merged_compose(evaluation)["services"].values())
+                    for evaluation in evaluations)
     if concurrency * per_epoch + 1024**3 > memory:
         raise ValueError(f"Docker memory must cover {per_epoch / 1024**3:g} GiB per concurrent epoch plus 1 GiB for the host. Reduce concurrency.")
 

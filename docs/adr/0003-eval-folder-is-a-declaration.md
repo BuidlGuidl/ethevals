@@ -8,6 +8,13 @@ A quiz's answer uses Inspect's own sample fields. `target` is one accepted answe
 
 With this shape, a team adds an eval without learning Inspect or Python, and tools can read every eval without running it.
 
+A check script is one runnable file named `scorer/check` or `scorer/check.<ext>`. Optional setup uses `setup` or `setup.<ext>`.
+The runner executes each file directly. Its shebang selects the language; Bash with `cast` or `forge` and Python are available.
+Scripts receive `RPC_URL` for private chain controls and `PUBLIC_RPC_URL` for the agent's filtered RPC.
+Setup finishes before the agent starts and returns only selected workspace files. Neither script reaches the agent.
+Check scripts report named checks with boolean `passed` and string `reason` values. Crashes and malformed output are errors.
+Reference files under `scorer/solution/` overlay the workspace, then an optional `run.sh` runs for both build and act evals.
+
 ## Considered options
 
 - Evals written as Python code, as Inspect's own evals are: every author would have to learn the runner, and no tool could read an eval without running it.

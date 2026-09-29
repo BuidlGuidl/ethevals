@@ -14,7 +14,9 @@ raw = subprocess.check_output(['cast', 'mktx', target, '--private-key', key, '--
 chain = Chain()
 tx = chain.forward({'jsonrpc':'2.0', 'id':1, 'method':'eth_sendRawTransaction', 'params':[raw]})
 started = time.monotonic()
-block = chain.freeze()
+rpc('evm_setAutomine', [False])
+rpc('evm_mine')
+block = rpc('eth_getBlockByNumber', ['latest', False])['hash']
 elapsed = time.monotonic() - started
 before = rpc('eth_getBlockByNumber', ['latest', False])['hash']
 nonce = rpc('eth_getTransactionCount', [sender, 'latest'])

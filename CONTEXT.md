@@ -49,7 +49,7 @@ A local Ethereum chain that runs as a service. The agent reaches it only over RP
 _Avoid_: node
 
 **Setup**:
-An optional script that prepares the services before the agent starts, such as deploying a contract to the chain. It never reaches the agent.
+An optional runnable file under `scorer/`, named `setup` or `setup.<ext>`, that prepares services before the agent starts. Its shebang selects the language. It can use the internet and return workspace files. The script never reaches the agent.
 
 **Scorer**:
 Everything that decides whether an epoch passed: a target, tests, a rubric, a check script, or several of these. It never reaches the agent.
@@ -68,7 +68,7 @@ The model that answers a rubric.
 _Avoid_: judge
 
 **Check script**:
-A program that inspects the chain or the workspace after the agent finishes and reports checks.
+A runnable file under `scorer/`, named `check` or `check.<ext>`, that inspects the chain or workspace after the agent finishes. Its shebang selects the language. It can use the internet and reports named checks with `passed` and `reason` values. A script error is an eval error.
 
 **Reference solution**:
 A working answer that ships with a build or act eval. It proves the scorer can pass.

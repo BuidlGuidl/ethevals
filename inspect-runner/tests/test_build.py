@@ -58,60 +58,44 @@ def test_agent_sample_contains_only_workspace_files():
     assert (sample.sandbox.type, Path(sample.sandbox.config).name) == ("ethevals_docker", "stock.compose.yaml")
 
 
-@pytest.mark.parametrize("service", ["default", "scorer"])
-@pytest.mark.parametrize("limit", [None, "1g"])
-def test_custom_compose_requires_bounded_memory(tmp_path, service, limit):
-    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_bytes())
-    data["services"]["default"].pop("build")
-    data["services"][service]["mem_limit"] = limit
-    with pytest.raises(ValueError, match="requires mem_limit:"):
-        validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump(data).encode())
-
-
-def test_concurrency_must_fit_docker_memory(monkeypatch):
-    from types import SimpleNamespace
-    from ethevals.preparation import check_capacity
-    monkeypatch.setattr("ethevals.preparation.docker_command", lambda args: SimpleNamespace(stdout=str(8 * 1024**3)))
-    config = load_config()
-    check_capacity(config)
-    config.max_tasks = config.max_samples = 3
-    with pytest.raises(ValueError, match="5.25 GiB per concurrent epoch plus 1 GiB for the host"):
-        check_capacity(config)
-
-
 @pytest.mark.parametrize("extra,reason", [
     ({"privileged": True}, "privileged"),
-    ({"volumes": ["/tmp:/host"]}, "volumes are forbidden"),
-    ({"volumes": [{"type": "bind", "source": "/tmp", "target": "/host"}]}, "volumes are forbidden"),
+    ({"volumes": ["/tmp:/host"]}, "host mounts"),
+    ({"volumes": [{"type": "bind", "source": "/tmp", "target": "/host"}]}, "host mounts"),
     ({"network_mode": "host"}, "forbidden options"),
     ({"build": "."}, "forbidden options"),
     ({"environment": {"KEY": None}}, "inherited host environment"),
-    ({"user": "root"}, "runner image and the agent user"),
-    ({"image": "outside/agent:latest"}, "runner image and the agent user"),
-    ({"environment": {"LD_PRELOAD": "/workspace/inject.so"}}, "startup environment overrides"),
+    ({"networks": ["private", "internet"]}, "private network"),
+    ({"mem_limit": 0}, "positive mem_limit"),
 ])
 def test_unsafe_compose_is_rejected(tmp_path, extra, reason):
-    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
-    data["services"]["default"].pop("build")
-    path = tmp_path / "compose.yaml"
-    path.write_text(yaml.safe_dump(data))
-    validate_compose(path)
-    data["services"]["default"].update(extra)
-    path.write_text(yaml.safe_dump(data))
+    data = {"services": {"database": {"image": "postgres:17", "mem_limit": "512m", **extra}}}
     with pytest.raises(ValueError, match=reason):
-        validate_compose(path)
+        validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump(data).encode())
 
 
-def test_services_cannot_join_internet(tmp_path):
-    data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
-    data["services"]["default"].pop("build")
-    data["services"]["chain"] = yaml.safe_load((IMAGES / "act.compose.yaml").read_text())["services"]["chain"]
-    data["services"]["chain"].pop("build")
-    data["services"]["chain"]["networks"] = ["private", "internet"]
-    path = tmp_path / "compose.yaml"
-    path.write_text(yaml.safe_dump(data))
-    with pytest.raises(ValueError, match="only default can join internet"):
-        validate_compose(path)
+def test_extra_services_and_real_memory_limits(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from ethevals.preparation import check_capacity
+    from ethevals.sandboxes import merged_compose
+    extra = {"services": {name: {"image": "postgres:17", "mem_limit": "512m"}
+                          for name in ("one", "two", "three", "four")}}
+    config = load_config()
+    evaluation = load_eval(BUILD, config)
+    evaluation = replace(evaluation, files={**evaluation.files, "compose.yaml": yaml.safe_dump(extra).encode()})
+    services = merged_compose(evaluation)["services"]
+    assert set(services) == {"default", "scorer", "one", "two", "three", "four"}
+    assert services["four"] == {"image": "postgres:17", "mem_limit": "512m", "networks": ["private"]}
+    monkeypatch.setattr("ethevals.preparation.docker_command", lambda args: SimpleNamespace(stdout=str(7 * 1024**3)))
+    with pytest.raises(ValueError, match="7 GiB per concurrent epoch plus 1 GiB"):
+        check_capacity(config, [evaluation])
+
+
+@pytest.mark.parametrize("name", ["default", "scorer", "chain"])
+def test_author_cannot_replace_runner_services(tmp_path, name):
+    with pytest.raises(ValueError, match="belong to the runner"):
+        validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump({"services": {name: {}}}).encode())
 
 
 @pytest.mark.parametrize("name,link", [("../scorer/secret", False), ("src/Escape.sol", True)])

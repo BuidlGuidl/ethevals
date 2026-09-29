@@ -2,14 +2,12 @@ services:
   default:
     mem_limit: 3g
     build: .
-    image: ethevals-solidity:inputs-f7690ccd7debdf27
     init: true
     networks: [private, internet]
   scorer:
     mem_limit: 2g
-    image: ethevals-solidity:inputs-f7690ccd7debdf27
     init: true
-    networks: [private]
+    networks: [private, internet]
 networks:
   private:
     internal: true

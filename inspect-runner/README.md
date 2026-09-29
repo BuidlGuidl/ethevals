@@ -269,14 +269,8 @@ After compilation, unexplained missing names produce `status: error`.
 Unknown signal exits and output without results or a compiler diagnostic also produce errors.
 Invalid Solidity bytes and confirmed OOM kills fail the fixed checks.
 Stock limits are 3 GiB for the agent, 2 GiB for the scorer, and 256 MiB for the chain.
-Custom Compose files require those limits and permit at most three services. Capacity comes from the stock Compose limits.
-One concurrent epoch reserves at most 5.25 GiB on the private runner's 8 GB of RAM.
-That runner has 2 CPUs and 14 GB of disk. Local concurrency must also fit Docker's memory capacity.
+Each extra service declares its own memory limit. Capacity sums the merged Compose limits.
 The capacity check reserves another 1 GiB for the host before preparation.
-The keyless proofs measured peaks of 1100.9 MiB for the agent, 25.4 MiB for the scorer, and 39.4 MiB for the chain.
-Each reference agent also ran Forge. All chosen limits exceed twice the peaks; the scorer retains at least 2 GiB.
-The root README lists every CLI measurement. These scripted proofs do not measure long paid sessions.
-This Mac's Docker VM has 8,217,686,016 bytes. Both machines use one concurrent task plus a 1 GiB host reserve.
 Scoring reads `memory.events` before each command and after OOM-like failures, including Forge's killed compiler child.
 Both `oom` and `oom_kill` must rise for that command. Ordinary failed tests need no second memory exec.
 A host kill without both deltas remains an error. An agent CLI exit 137 with both deltas fails every check.
@@ -286,7 +280,7 @@ Docker exec failures and capture timeouts remain errors. Only a known submission
 Forge streams through readers with a 10 MiB cap per stream and one extra byte to detect overflow.
 The wrapper waits for both reader process IDs before the scorer reads each file.
 The cap applies only to captured output, so Forge can write larger build-info files.
-Compilation reasons use the coded diagnostic. Only compiler-version failures include the offline compiler note.
+Compilation reasons use the coded diagnostic. Only compiler-version failures list available compiler versions.
 Scorer-side Forge output enters log events as byte counts. Compilation reasons exclude private source lines and code frames.
 Workspace failures fail all the eval's Forge and rubric checks with the snapshot reason.
 The fixed set keeps the same denominator across successful and failed submissions.
@@ -316,27 +310,18 @@ Scorer options in logs contain only the eval ID and hash. The scorer resolves ca
 
 ## Compose rules
 
-Custom Compose files declare `default` and `scorer` services.
-`prepare_compose` builds every stock image they name, just as it does for stock Compose files.
-Other service images must exist locally or be pullable. Inspect receives a normalized file without stock build directives.
-Those two services require the stock runner image and its unprivileged `agent` user.
-The `chain` service requires the computed stock chain image name. Other services can choose their own images.
-These rules keep process control and runner-owned dependencies outside the eval author's control.
-All services join the `private` network with `internal: true` and `com.docker.network.bridge.inhibit_ipv4: "true"`.
-The bridge has no host IPv4 address. Private-only services can reach each other, but cannot reach the host or internet.
-Only `default` also joins the `internet` network. The scorer has no internet access.
-The player container retains internet and host access through its internet network.
-No service publishes host ports. Privileged mode, host namespaces, host paths, and external volumes are rejected.
-The agent and scorer cannot mount volumes. Other services can use declared private named volumes.
-Custom Docker builds are rejected because their contexts can include scorer files.
-Stock image builds use the runner-owned `images/` directory as their context.
-Host environment inheritance is rejected. Service environment values must be explicit.
-Decoded YAML values cannot contain `$VAR` or `${VAR}` substitutions. `$$` remains a literal dollar sign.
-Only plain strings, numbers, booleans, and null are accepted as YAML scalars. Binary and timestamp values are rejected.
-Compose receives the validated, re-serialized document under `inputs/<hash>/compose.yaml`, never the author's bytes.
-The agent and scorer cannot override loader or shell startup environment variables.
-Every privileged collector command and scorer command uses a runner-owned environment and fixed executable paths.
-Author values such as `TAR_OPTIONS`, `PATH`, and `FOUNDRY_FFI` cannot alter those commands.
+An eval's optional `compose.yaml` lists extra services and named volumes only.
+The runner supplies `default`, `scorer`, `chain`, and the networks, then writes the computed stock image tags.
+Each extra service needs an image and a positive `mem_limit`. It joins only `private`, which the runner supplies by default.
+The merged limits plus a 1 GiB host reserve must fit Docker memory at the configured concurrency.
+There is no service-count cap.
+The agent, scorer, and chain containers also join `internet`. Author services cannot join it.
+Anvil's unfiltered RPC listens on loopback inside the chain container, beyond the agent's reach.
+CI rejects privileged mode, host mounts, host namespaces, external volumes, custom builds, and host environment inheritance.
+Explicit environment values cannot interpolate host variables. Named volumes are allowed for extra services.
+The runner validates and serializes the merged file under `inputs/<hash>/compose.yaml`.
+Stock image builds use the runner-owned `images/` directory. Stock files contain no image tags.
+Every scorer command uses a runner-owned environment.
 
 The normal pytest suite skips Docker proofs. Run `uv run pytest -q --run-docker -m docker` to include them.
 The proofs cover Compose normalization, collection, compiled evidence, library ownership, and frozen writers.
@@ -351,8 +336,8 @@ The [token fixture](../evals/transactions/send-six-decimal-token) sends 12.5 tok
 Its two checks inspect the recipient's exact balance and the transaction's sender.
 Both checks fail on the untouched chain.
 
-The stock compose file adds one `chain` service on the private network.
-The chain image builds independently of the runner image and installs no packages from a changing apt index.
+The stock compose file adds one `chain` service on the private and internet networks.
+The chain image builds independently and includes jq for shell scripts.
 It copies Foundry 1.5.1 binaries from digest `sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e`.
 Its Python 3.13.7 base uses digest `sha256:adafcc17694d715c905b4c7bebd96907a1fd5cf183395f0ebc4d3428bd22d92d`.
 Both image indexes include arm64 and amd64.
@@ -370,10 +355,9 @@ It allows standard wallet reads and `eth_sendRawTransaction`.
 The full list lives in [rpc_filter.py](ethevals/images/rpc_filter.py).
 It rejects the whole batch if any member names a refused method.
 It rejects WebSocket upgrades, other HTTP paths, and bodies above 2 MiB.
-Batches permit at most 100 requests. The filter permits at most 32 active connections.
+Batches permit at most 100 requests.
 Refused methods return JSON-RPC error `-32601`. The epoch log retains refusal messages.
-Each refusal uses at most 1 KiB. The log stops at 1 MiB and never writes refusals to container stdout.
-Capture retains the whole bounded refusal log in an Inspect info event.
+Capture includes the refusal log in an Inspect info event.
 Upstream responses above 2 MiB return `Chain response too large.`
 
 The allowlist blocks unknown methods by default.
@@ -383,26 +367,17 @@ Agents must sign locally with the fresh key that setup funds.
 
 The script contract is:
 
-- `scorer/setup.py` is optional. It runs once before the player, in `/eval` inside the chain container.
-- All private files under `scorer/`, except `solution/`, reach that container from the captured eval manifest.
-- Scripts run with Python 3. `RPC_URL` points directly to Anvil. `SOLC` points to `/opt/solc`.
-- `cast` and `forge` are available in both containers.
-- Author scripts can reach private containers. They cannot reach the host or internet.
-- Setup prints exactly one JSON object, `{"files": {"chain.json": "file contents"}}`.
-- File paths must be relative workspace paths. Setup cannot replace declared workspace files.
-- Setup's selected files reach both agent and scorer. Setup can retain private state under `/eval` for the check script.
-- `scorer/solution/run.sh` is required. The reference runs with Bash in the offline scorer after setup.
-- The scorer also receives the declared workspace files.
-- The solution uses the same public RPC URL and key that an agent receives.
-- `scorer/check.py` is required. It runs after capture, in `/eval` with direct Anvil access.
-- The check script prints one JSON object keyed by stable names matching `[a-z][a-z0-9_]*`.
-- Each value has exactly `passed`, a boolean, and `reason`, a nonempty string.
+- Each script is one runnable file named `check` or `check.<ext>`, or optional `setup` or `setup.<ext>`, under `scorer/`.
+- The runner executes the file itself. Its shebang selects Bash, Python, or another installed interpreter.
+- Scripts run in `/eval` inside the chain container with internet access. `cast`, `forge`, and `jq` are available.
+- `RPC_URL` points to unfiltered Anvil, `PUBLIC_RPC_URL` points to the agent's filtered RPC, and `SOLC` names the installed compiler.
+- Setup prints `{"files": {"chain.json": "file contents"}}`. Paths must be relative and cannot replace declared workspace files.
+- Only selected output files reach the agent. Private setup state stays in `/eval` for the check script.
+- Reference files under `scorer/solution/` overlay the workspace, then an optional `run.sh` runs. Build and act evals share this rule.
+- Check output maps names matching `[a-z][a-z0-9_]*` to boolean `passed` and nonempty string `reason` values.
 - The runner adds the `script:` prefix and normalizes reasons to one line.
-- Setup and check scripts each have a 120-second limit and a 1 MiB output limit per stream.
-- Capped readers finish before the runner reads either output file. One extra byte detects overflow.
-- Setup consumes neither the player's time allowance nor its recorded working time. Setup timeouts are errors.
-- Script failures include the last 4 KiB of stderr. Failed discovery lists each failing check and its reason.
-- Public setup values remain visible to the agent.
+- Setup and check each have a 120-second timeout. Setup finishes before the agent's clock starts.
+- Script crashes and malformed output are errors. The free check rejects an error in either the reference or untouched run.
 
 For example, a check script can print:
 
@@ -413,25 +388,20 @@ For example, a check script can print:
 A free reference run discovers names and must pass every check before player epochs can start.
 The names remain fixed across passing transfers, wrong amounts, missing checks, and script crashes.
 Extra runtime names cannot add checks. Missing checks fail with a reason.
-A crashed or malformed author check script, including exit 125, fails the full set under a deliberate fail-closed rule.
+A crashed or malformed author check script is an error.
 An agent CLI exit 137 caused by its own container OOM is the second deliberate fail-closed rule.
 The wrapper clears the old author status before each script. Missing status, reader failures, and FIFO failures remain errors.
-Scripts must return a verdict for any chain state. An agent cannot evade a failure by crashing the checker.
+Scripts must return a verdict for any chain state. A checker crash records an error.
 An in-container timeout or output overflow also fails the full set.
 Missing scripts, wrapper exit 125, host exec timeouts, and output-copy failures remain errors.
 Setup failures, failed discovery, and Docker failures remain runner errors.
 Player working-time and cost limits fail the fixed set and skip further scoring.
 Operator stops and wall-clock stops before the working limit remain errors.
-The [classification table](../README.md#failure-classification) lists every boundary and the deliberate script exception.
+The [classification table](../README.md#failure-classification) lists every boundary.
 
 The generic boundary first stops the agent's processes, including detached senders.
-Capture closes the filter and waits for the request that already holds the forwarding lock.
-Requests waiting for that lock fail. Further public RPC requests fail too.
-The runner disables mining and drops queued and pending transactions through localhost RPC.
-An awaited manual mine takes Anvil's mining lock and seals an empty block after any active mining finishes.
-Capture records that final block's hash. It adds one empty block even if the player sent no transaction.
-The check script reads that fixed chain state. It must inspect state without changing it.
-The agent cannot reopen the filter's local Unix control socket.
+The runner disables automining and waits for a manual mine because Anvil can return before mining finishes.
+The unfiltered RPC stays private during grading.
 
 `ethevals check` runs the reference and untouched cases through this full pipeline.
 The real Claude Code proof supports the act fixture with `--eval evals/transactions/send-six-decimal-token`.

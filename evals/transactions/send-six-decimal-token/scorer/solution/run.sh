@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-# Setup emits one JSON line with quoted string values.
+# Read the public values that setup gave the agent.
 read_value() { sed -n 's/.*"'"$1"'": "\([^"]*\)".*/\1/p' /workspace/chain.json; }
 rpc=$(read_value rpc_url)
 token=$(read_value token)

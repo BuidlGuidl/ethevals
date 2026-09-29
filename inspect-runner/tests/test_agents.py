@@ -170,13 +170,6 @@ def test_codex_active_player_adapts_every_bridge_model(tmp_path, requested, monk
     assert (log.status, calls) == ("success", [("custom_tool_call", "text(42);")])
 
 
-def test_stock_image_tag_matches_inputs():
-    directory = Path(agents.__file__).with_name("images")
-    compose = yaml.safe_load((directory / "stock.compose.yaml").read_text())
-    assert {service["image"] for service in compose["services"].values()} == {image_tag(directory)}, (
-        "Image inputs changed. Run python inspect-runner/ethevals/images/tag.py and update both compose image tags."
-    )
-
 
 def test_image_tag_changes_with_each_input(tmp_path):
     (tmp_path / "Dockerfile").write_text("FROM scratch\n")
