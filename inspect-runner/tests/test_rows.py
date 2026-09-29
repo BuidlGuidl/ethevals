@@ -231,16 +231,16 @@ def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path
     success, first = run([evaluation], config, output, models=["opus-5.5"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True
     config.prices[config.models["opus-5.5"].model].input = 99.0
-    config.grader.model = "mockllm/gpt-6-sol"
+    config.grader.model = "mockllm/gpt-5.5"
     config.time_limits["quiz"] = 400
     success, second = run([evaluation], config, output, models=["opus-5.5"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True
     assert second == first
-    success, third = run([evaluation], config, output, models=["gpt-6-sol"], modes=["vanilla"], epochs=1, budget=100)
+    success, third = run([evaluation], config, output, models=["gpt-5.5"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True
-    assert third[0]["model"] == "mockllm/gpt-6-sol"
+    assert third[0]["model"] == "mockllm/gpt-5.5"
     stored = [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()]
-    assert sorted(row["model"] for row in stored) == ["mockllm/gpt-6-sol", "mockllm/opus-5.5"]
+    assert sorted(row["model"] for row in stored) == ["mockllm/gpt-5.5", "mockllm/opus-5.5"]
     config.models["opus-5.5"].effort = "medium"
     success, fourth = run([evaluation], config, output, models=["opus-5.5"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True

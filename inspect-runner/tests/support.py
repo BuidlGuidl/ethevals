@@ -24,14 +24,14 @@ def fixture_config(path=None):
     if path is not None:
         return read_config(path)
     models = {key: {"model": f"mockllm/{key}", "effort": "low"}
-              for key in ("opus-5.5", "gpt-6-sol", "kimi-k3", "glm-5.3")}
+              for key in ("opus-5.5", "gpt-5.5", "kimi-k3", "glm-5.3")}
     prices = dict(input=5.0, output=25.0, input_cache_read=0.5, input_cache_write=6.25)
     return Config(epochs=3, time_limits={"quiz": 300, "build": 1200, "act": 1200}, cost_limit=5,
                   max_attempts=2, concurrency=1, search=True, search_limit=20, search_price_usd=0.05, native_search_price_usd=0.01,
                   grader={"model": "mockllm/grader", "effort": "low", "max_tokens": 4096}, models=models,
                   agents={
                       "claude-code-opus-5.5": dict(harness="claude_code", model="opus-5.5", cli_model="claude-opus-5-5", search="exa"),
-                      "codex-cli-gpt-6-sol": dict(harness="codex_cli", model="gpt-6-sol", cli_model="gpt-6-sol", search="exa"),
+                      "codex-cli-gpt-5.5": dict(harness="codex_cli", model="gpt-5.5", cli_model="gpt-5.5", search="exa"),
                       "opencode-kimi-k3": dict(harness="opencode", model="kimi-k3", cli_model="openrouter/moonshotai/kimi-k3", search="exa"),
                       "opencode-glm-5.3": dict(harness="opencode", model="glm-5.3", cli_model="openrouter/z-ai/glm-5.3", search="exa"),
                   }, prices={name: prices for name in [*(item["model"] for item in models.values()),

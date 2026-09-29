@@ -87,11 +87,10 @@ For a first paid Claude Code test, set `ANTHROPIC_API_KEY` and run:
 uv run ethevals run --evals evals/concepts/agent-registries evals/building/erc20-points-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
 ```
 
-For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-6-sol`.
-The Codex native-search proof currently fails on CLI 0.159.0: GPT-6 sol's Responses Lite mode exposes no search tool.
-Resolve that failure before a paid Codex test. Claude Code 2.1.284 passes the scripted native-search proof.
+For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-5.5`.
+Codex runs GPT-5.5 because Codex routes GPT-6 models through a search endpoint that Inspect's bridge does not support yet.
 Only a paid run proves model access, usable native-search results, grader verdicts, and agreement with the provider's bill.
-The grader uses medium effort and 32,768 output tokens, including thinking, to leave room for its JSON verdict.
+The grader uses low effort and 32,768 output tokens, including thinking, to leave room for its JSON verdict.
 
 Use `--evals` to select folders and `--output` to choose a results directory.
 `--models` selects bare models for vanilla; `--agents` selects agents for internet and skills.

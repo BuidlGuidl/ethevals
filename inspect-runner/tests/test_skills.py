@@ -79,7 +79,7 @@ def test_validate_rejects_a_skill_name_that_differs_from_its_folder(folder, tmp_
     assert "concepts/quiz " in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("agent,name", [("claude-code-opus-5.5", "CLAUDE.md"), ("codex-cli-gpt-6-sol", "AGENTS.md"), ("opencode-kimi-k3", "AGENTS.md")])
+@pytest.mark.parametrize("agent,name", [("claude-code-opus-5.5", "CLAUDE.md"), ("codex-cli-gpt-5.5", "AGENTS.md"), ("opencode-kimi-k3", "AGENTS.md")])
 @pytest.mark.parametrize("existing", [None, "Keep the author's instructions."])
 def test_skill_index_preserves_workspace_instructions_and_internet_prompt(folder, monkeypatch, agent, name, existing):
     from ethevals.agents import HARNESSES, internet_solver

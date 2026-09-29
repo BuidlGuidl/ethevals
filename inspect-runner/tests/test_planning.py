@@ -249,7 +249,7 @@ def test_build_plan_reserves_capped_grader_requests():
     assert (report["worst_case_usd"], report["within_budget"]) == (29.5089, True)
 
 
-@pytest.mark.parametrize("key", ["claude-code-opus-5.5", "codex-cli-gpt-6-sol"])
+@pytest.mark.parametrize("key", ["claude-code-opus-5.5", "codex-cli-gpt-5.5"])
 def test_plan_reserves_native_searches(key):
     config, evaluation = catalog_quiz()
     config.agents[key].search = "native"
@@ -271,7 +271,7 @@ def test_plan_reserves_native_searches(key):
 ])
 def test_paid_run_names_only_missing_provider_keys(tmp_path, monkeypatch, present, missing):
     config, evaluation = catalog_quiz()
-    for key, provider in [("gpt-6-sol", "openai"), ("kimi-k3", "openrouter")]:
+    for key, provider in [("gpt-5.5", "openai"), ("kimi-k3", "openrouter")]:
         model = config.models[key]
         config.prices[f"{provider}/test"] = config.prices[model.model]
         model.model = f"{provider}/test"
@@ -282,5 +282,5 @@ def test_paid_run_names_only_missing_provider_keys(tmp_path, monkeypatch, presen
         monkeypatch.setenv(key, "inert-test-key")
     monkeypatch.setattr("ethevals.actors.model_actor", lambda *args: pytest.fail("Provider constructed"))
     with pytest.raises(ValueError) as error:
-        run([evaluation], config, tmp_path, models=["gpt-6-sol", "kimi-k3"], epochs=1, budget=100)
+        run([evaluation], config, tmp_path, models=["gpt-5.5", "kimi-k3"], epochs=1, budget=100)
     assert str(error.value) == f"Missing provider keys for paid epochs: {missing}"

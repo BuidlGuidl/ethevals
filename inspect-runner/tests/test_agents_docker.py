@@ -8,7 +8,7 @@ import pytest
 
 
 @pytest.mark.docker
-@pytest.mark.parametrize("agent", ["claude-code-opus-5.5", "codex-cli-gpt-6-sol", "opencode-kimi-k3", "opencode-glm-5.3"])
+@pytest.mark.parametrize("agent", ["claude-code-opus-5.5", "codex-cli-gpt-5.5", "opencode-kimi-k3", "opencode-glm-5.3"])
 @pytest.mark.parametrize("answer", ["reference", "empty"])
 @pytest.mark.parametrize("evaluation,mode", [
     ("building/erc20-points-token", "internet"),
@@ -28,7 +28,7 @@ def test_agent_proof(tmp_path, agent, answer, evaluation, mode):
 
 
 @pytest.mark.docker
-@pytest.mark.parametrize("agent", ["claude-code-opus-5.5", "codex-cli-gpt-6-sol", "opencode-kimi-k3"])
+@pytest.mark.parametrize("agent", ["claude-code-opus-5.5", "codex-cli-gpt-5.5", "opencode-kimi-k3"])
 def test_exa_key_stays_out_of_each_harness_archive(tmp_path, agent):
     environment = os.environ.copy()
     for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY"):

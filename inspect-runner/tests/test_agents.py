@@ -8,7 +8,7 @@ from inspect_ai.agent import AgentState
 from inspect_ai.agent._bridge.responses_impl import inspect_responses_api_request_impl, responses_output_items_from_assistant_message, tools_from_responses_tool
 from inspect_ai.agent._bridge.types import AgentBridge
 from inspect_ai.agent._bridge.util import bridge_generate, in_bridge_model_generate
-from inspect_ai.model import ChatMessageUser, GenerateConfig, ModelOutput, get_model
+from inspect_ai.model import ChatMessageUser, ContentToolUse, GenerateConfig, ModelOutput, get_model
 from inspect_ai.model._openai import chat_tool_calls_from_openai
 from inspect_ai.tool import ToolInfo
 from inspect_swe._codex_cli._events.consumer import CodexConsumer
@@ -23,7 +23,7 @@ from support import catalog_quiz, fixture_config
 
 
 @pytest.mark.parametrize("key,harness", [
-    ("claude-code-opus-5.5", "claude_code"), ("codex-cli-gpt-6-sol", "codex_cli"),
+    ("claude-code-opus-5.5", "claude_code"), ("codex-cli-gpt-5.5", "codex_cli"),
     ("opencode-kimi-k3", "opencode"), ("opencode-glm-5.3", "opencode"),
 ])
 def test_registry_builds_solver(key, harness):
@@ -36,7 +36,7 @@ def test_registry_builds_solver(key, harness):
 
 
 @pytest.mark.parametrize("key,model,harness", [
-    ("codex-cli-gpt-6-sol", "openrouter/openai/gpt-6-sol", "codex_cli"),
+    ("codex-cli-gpt-5.5", "openrouter/openai/gpt-5.5", "codex_cli"),
     ("opencode-kimi-k3", "openrouter/moonshotai/kimi-k3", "opencode"),
     ("opencode-glm-5.3", "openrouter/z-ai/glm-5.3", "opencode"),
 ])
@@ -54,8 +54,8 @@ def test_agent_selects_model_and_effort(key, model, harness):
 
 def test_unknown_harness_fails_config_validation():
     data = fixture_config().model_dump()
-    data["agents"]["codex-cli-gpt-6-sol"]["harness"] = "missing"
-    with pytest.raises(ValidationError, match="agents.codex-cli-gpt-6-sol.harness: unknown harness 'missing'"):
+    data["agents"]["codex-cli-gpt-5.5"]["harness"] = "missing"
+    with pytest.raises(ValidationError, match="agents.codex-cli-gpt-5.5.harness: unknown harness 'missing'"):
         Config.model_validate(data)
 
 
@@ -155,14 +155,29 @@ def test_inspect_still_needs_custom_call_adapter():
     assert json.loads(call.arguments) == {"input": "text(42);"}
 
 
-@pytest.mark.parametrize("requested", ["inspect", "gpt-6-sol", "another-model", "openai/other"])
+def test_codex_native_search_result_reaches_responses_client():
+    reply = ModelOutput.from_content("mockllm/model", "Found ERC-8004.")
+    reply.message.content = [ContentToolUse(tool_type="web_search", id="ws_proof", name="search",
+                                          arguments='{"type":"search","query":"ERC-8004"}', result="Found ERC-8004.")]
+    model = agents.CodexModel(get_model("mockllm/model", custom_outputs=[reply], memoize=False))
+    bridge = AgentBridge(AgentState(messages=[]), model_aliases={"inspect": model})
+    response = asyncio.run(inspect_responses_api_request_impl({
+        "model": "inspect", "input": [{"role": "user", "content": "Find ERC-8004"}],
+        "tools": [{"type": "web_search"}],
+    }, None, None, None, bridge))
+    search = response.output[0]
+    assert (search.type, search.id, search.action.type, search.action.query) == (
+        "web_search_call", "ws_proof", "search", "ERC-8004")
+
+
+@pytest.mark.parametrize("requested", ["inspect", "gpt-5.5", "another-model", "openai/other"])
 def test_codex_active_agent_adapts_every_bridge_model(tmp_path, requested, monkeypatch):
     from inspect_ai import Task, eval
     from inspect_ai.dataset import Sample
     from inspect_ai.solver import solver
     config = fixture_config()
-    config.models["gpt-6-sol"].model = "mockllm/model"
-    actors_for, _ = select_actors(config, agents=["codex-cli-gpt-6-sol"], modes=["internet"])
+    config.models["gpt-5.5"].model = "mockllm/model"
+    actors_for, _ = select_actors(config, agents=["codex-cli-gpt-5.5"], modes=["internet"])
     actor = actors_for(catalog_quiz()[1])[0][1]
     monkeypatch.setattr(actor.model.source.api, "outputs", lambda *args: ModelOutput.for_tool_call(
         "mockllm/model", "exec", {"input": "text(42);"}))

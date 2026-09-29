@@ -100,7 +100,7 @@ Task construction rejects reserves that cannot fit Inspect's scoring window.
 The grader reserve uses capped evidence, prompt, question size, and the configured output cap.
 It covers two calls per question and three provider attempts per call.
 `rubric_budget()` uses the largest configured input price without a cache discount.
-The direct Anthropic grader uses medium effort and `max_tokens: 32768`, which includes thinking and the JSON verdict.
+The direct Anthropic grader uses low effort and `max_tokens: 32768`, which includes thinking and the JSON verdict.
 The larger output allowance also increases the grader reserve.
 Each grader call has a total deadline that includes provider retry backoff.
 The constants live beside the scorer implementation.
@@ -163,8 +163,7 @@ Model requests pass through Inspect's host bridge.
 Claude Code and Codex use their providers' own search.
 Claude Code sets `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` to `search_limit`; each call allows up to eight searches.
 Codex uses live search. Its search count is not capped.
-The native-search proof currently fails on Codex 0.159.0: GPT-6 sol's Responses Lite mode omits hosted search tools.
-The proof also finds no standalone search tool. Resolve this bridge limitation before a paid Codex test.
+Codex runs GPT-5.5 because Codex routes GPT-6 models through a search endpoint that Inspect's bridge does not support yet.
 Both native-search agents reserve `search_limit * 8 * native_search_price_usd` per attempt.
 For Codex, that reserve is an allowance, not a worst-case bound. Inspect's live cost limit counts only token costs.
 Setting `search: false` at the config root disables search for every agent.
@@ -180,7 +179,7 @@ For a first paid Claude Code test, set `ANTHROPIC_API_KEY` and run:
 uv run ethevals run --evals evals/concepts/agent-registries evals/building/erc20-points-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
 ```
 
-For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-6-sol`.
+For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-5.5`.
 Only a paid run proves provider model access, native-search results, sufficient grader output, and fee agreement with the bill.
 
 ## Script contract
@@ -251,11 +250,10 @@ The agent proof also remains a command:
 
 ```sh
 uv run python inspect-runner/tests/prove_agent.py reference --agent claude-code-opus-5.5 --eval evals/concepts/agent-registries --output /tmp/claude-reference
-uv run python inspect-runner/tests/prove_agent.py reference --agent codex-cli-gpt-6-sol --eval evals/concepts/agent-registries --output /tmp/codex-reference
+uv run python inspect-runner/tests/prove_agent.py reference --agent codex-cli-gpt-5.5 --eval evals/concepts/agent-registries --output /tmp/codex-reference
 ```
 
 Strip provider credentials before these commands.
 Claude Code and Codex proofs require native search through mockllm and check the CLI's next request and logged fees.
-Claude Code 2.1.284 passes. Codex 0.159.0 fails because it offers no native search tool.
 OpenCode proofs use Exa.
 `--exa-canary` selects Exa with offline replies and checks that its inert key stays out of containers and logs.

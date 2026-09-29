@@ -57,8 +57,8 @@ For the first paid Claude Code test, set `ANTHROPIC_API_KEY` and use:
 uv run ethevals run --evals evals/concepts/agent-registries evals/building/erc20-points-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
 ```
 
-For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-6-sol`.
-Resolve the failing Codex 0.159.0 native-search proof before running a paid Codex epoch.
+For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-5.5`.
+Codex runs GPT-5.5 because Codex routes GPT-6 models through a search endpoint that Inspect's bridge does not support yet.
 Before remote writes, read [CI and publication](inspect-runner/README.md#ci-and-publication).
 Paid CI starts only after merge with a configured budget. Its default budget is zero.
 

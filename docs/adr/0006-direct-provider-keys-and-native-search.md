@@ -5,6 +5,7 @@ status: accepted
 # Use direct provider keys and native search
 
 Claude Code uses Anthropic directly, and Codex CLI uses OpenAI directly, with each provider's own search.
+Codex runs GPT-5.5 because Codex routes GPT-6 models through a search endpoint that Inspect's bridge does not support yet.
 This matches how people use those agents. Their bare models and the grader use direct keys too.
 Kimi and GLM stay on OpenRouter in OpenCode with Exa.
 

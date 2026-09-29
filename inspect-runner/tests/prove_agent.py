@@ -106,7 +106,7 @@ console.log(JSON.stringify({matches, files, environments}));
     requests = []
     efforts = []
     search_ok = False
-    search_call = 2 if harness == "codex_cli" else 1
+    search_call = 2 if harness == "codex_cli" and not native_search else 1
     work_call = search_call + 1 + (native_search and harness == "claude_code")
     search_marker = "native-search-proof-8004"
 
@@ -136,9 +136,9 @@ console.log(JSON.stringify({matches, files, environments}));
             assert expected in system, system
             assert "claude" not in system.lower(), system
             assert cli_identity in system, system
-        if harness == "codex_cli" and calls == 1:
-            return ModelOutput.for_tool_call("mockllm/model", "exec", {
-                "input": "text(ALL_TOOLS.map(tool => tool.name));",
+        if harness == "codex_cli" and not native_search and calls == 1:
+            return ModelOutput.for_tool_call("mockllm/model", "tool_search", {
+                "query": "exa web_search_exa", "limit": 1,
             })
         if native_search and calls < work_call:
             if harness == "claude_code" and calls == 1:
@@ -156,20 +156,20 @@ console.log(JSON.stringify({matches, files, environments}));
             block = ContentToolUse(tool_type="web_search", id="srvtoolu_native_proof", name="web_search" if harness == "claude_code" else "search",
                                    arguments=json.dumps({"type": "search", "query": search_marker}), result=result)
             output = ModelOutput.from_content("mockllm/model", search_marker) if harness == "claude_code" else ModelOutput.for_tool_call(
-                "mockllm/model", "exec", {"input": "text(ALL_TOOLS.map(tool => tool.name));"})
+                "mockllm/model", "exec_command", {"cmd": "true"})
             output.message.content = [block, ContentText(text=search_marker)]
             return output
         if native_search and calls == work_call:
             assert search_marker in json.dumps(requests[-1]), "The CLI did not return the native search result."
+            if harness == "codex_cli":
+                search = next(item for item in requests[-1]["input"] if item.get("type") == "web_search_call")
+                assert (search["id"], search["action"]["query"]) == ("srvtoolu_native_proof", search_marker), search
             search_ok = True
             print(json.dumps({"native_search_received_by_cli": harness, "marker": search_marker}), flush=True)
         if not native_search and calls == search_call:
             arguments = {"query": "site:ethereum.org ERC-20 token standard", "numResults": 1,
                          "objective": "Find the official ERC-20 token standard and its methods."}
-            if harness == "codex_cli":
-                name, arguments = "exec", {"input": "text(await tools.mcp__exa__web_search_exa(" + json.dumps(arguments) + "));"}
-            else:
-                name = next(name for name in tool_names if "web_search_exa" in name)
+            name = next(name for name in tool_names if "web_search_exa" in name)
             return ModelOutput.for_tool_call("mockllm/model", name, arguments)
         if not native_search and calls == work_call:
             result = next(message for message in reversed(messages) if message.role == "tool")
@@ -197,7 +197,7 @@ console.log(JSON.stringify({matches, files, environments}));
                 f"printf '%s' '{encoded}' | base64 -d > /workspace/src/BuilderPoints.sol && forge build"
             )
             if harness == "codex_cli":
-                name, arguments = "exec", {"input": "text(await tools.exec_command(" + json.dumps({"cmd": command}) + "));"}
+                name, arguments = "exec_command", {"cmd": command}
             else:
                 name = "Bash" if harness == "claude_code" else "bash"
                 arguments = {"command": command, "description": "Write the requested token"}

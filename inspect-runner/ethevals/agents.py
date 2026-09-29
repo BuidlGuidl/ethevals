@@ -1,6 +1,7 @@
 from inspect_ai.agent import as_solver, BridgedToolsSpec
 from inspect_ai.model import Model
 from inspect_ai.solver import multiple_choice, solver
+from inspect_ai.tool import ToolInfo
 from inspect_ai.util import sandbox
 from inspect_swe import claude_code, codex_cli, opencode
 import json
@@ -60,7 +61,7 @@ class CodexModel(Model):
 def restore_codex_calls(output, tools):
     # Inspect 0.3.271 forwards namespaced custom tools to non-OpenAI providers,
     # but never restores their custom reply type. Keep malformed calls recoverable.
-    custom = {tool.name for tool in tools if tool.options
+    custom = {tool.name for tool in tools if isinstance(tool, ToolInfo) and tool.options
               and (tool.options.get("__responses_namespace__") or [None])[0] == "functions"
               and "custom_format" in tool.options}
     for choice in output.choices:
