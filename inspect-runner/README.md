@@ -145,8 +145,10 @@ A batch with any refused method fails as a whole.
 The filter rejects WebSockets and unsigned sends; refusal messages enter the Inspect log.
 
 `agents.py` defines harness factories and pins their versions.
-`actors.py` pairs a harness with the configured model, effort, and prices.
-`agent_model_config` selects the CLI's model identity.
+`config.yaml` lists `models` with provider slugs and effort, and `agents` with harnesses and model keys.
+Each agent's `cli_model` selects its CLI's model identity. Agents inherit effort from their model entry.
+`actors.py` sets Inspect's `reasoning_effort` from that entry; `--effort low|medium|high|xhigh` overrides it for a run.
+`--models` selects vanilla models; `--agents` selects internet and skills agents. Defaults include every model, agent, and mode.
 Model requests pass through Inspect's host bridge.
 Exa search also runs on the host, which alone reads optional `EXA_API_KEY`.
 `search_limit` caps search and fetch calls together; failed calls consume a slot.
@@ -219,8 +221,8 @@ Tests use the config factories in `tests/support.py`.
 The agent proof also remains a command:
 
 ```sh
-uv run python inspect-runner/tests/prove_agent.py reference --exa-canary --output /tmp/agent-reference
-uv run python inspect-runner/tests/prove_agent.py empty --exa-canary --output /tmp/agent-empty
+uv run python inspect-runner/tests/prove_agent.py reference --agent claude-code-opus-5.5 --exa-canary --output /tmp/agent-reference
+uv run python inspect-runner/tests/prove_agent.py empty --agent claude-code-opus-5.5 --exa-canary --output /tmp/agent-empty
 ```
 
 Strip provider credentials before these commands.

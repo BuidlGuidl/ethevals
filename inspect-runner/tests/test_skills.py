@@ -16,7 +16,7 @@ def test_skills_plan_reserves_search_and_keeps_the_harness(folder, tmp_path):
     declaration = yaml.safe_load(path.read_text())
     declaration["modes"] = ["vanilla", "internet", "skills"]
     path.write_text(yaml.safe_dump(declaration))
-    result = eval_cli("plan", "--evals", folder, "--agents", "opus", "--modes", "skills",
+    result = eval_cli("plan", "--evals", folder, "--agents", "claude-code-opus-5.5", "--modes", "skills",
                       "--epochs", "1", "--budget", "12", "--output", tmp_path / "plan")
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
@@ -71,7 +71,7 @@ def test_validate_rejects_a_skill_name_that_differs_from_its_folder(folder, tmp_
     assert "concepts/quiz " in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("agent,name", [("opus", "CLAUDE.md"), ("codex", "AGENTS.md"), ("kimi", "AGENTS.md")])
+@pytest.mark.parametrize("agent,name", [("claude-code-opus-5.5", "CLAUDE.md"), ("codex-cli-gpt-6-sol", "AGENTS.md"), ("opencode-kimi-k3", "AGENTS.md")])
 def test_skill_index_preserves_workspace_instructions_and_internet_prompt(folder, agent, name):
     declaration = yaml.safe_load((folder / "eval.yaml").read_text())
     declaration["modes"].append("skills")

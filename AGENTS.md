@@ -40,6 +40,8 @@ Give Docker at least 7 GiB for one stock act epoch. The default concurrency is o
 ## Control spending and publication
 
 Run paid epochs only with explicit spending intent and a reviewed budget.
+Use `--models` for vanilla and `--agents` for internet or skills. Omitted selectors include all configured entries.
+Model entries own effort; agents reference model keys. Use `--effort low|medium|high|xhigh` to override model and agent effort.
 `OPENROUTER_API_KEY` funds model calls. Optional `EXA_API_KEY` stays on the host.
 The runner does not use `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_AUTH_TOKEN` for model calls.
 Inspect can read those variables, so keep all five unset for free work.

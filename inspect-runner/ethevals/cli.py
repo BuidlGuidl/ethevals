@@ -2,9 +2,10 @@ import argparse
 import json
 import subprocess
 from pathlib import Path
+from typing import get_args
 
 from .catalog import write_catalog
-from .config import load_config
+from .config import Effort, load_config
 from .loader import load_eval
 from .runner import run
 from .actors import select_actors
@@ -42,10 +43,12 @@ def parse_args(argv=None):
         command.add_argument("--retry-errors", action="store_true", help="Grant one further attempt to each selected error epoch.")
     for name in ("run", "plan"):
         parsers[name].add_argument("--agents", nargs="+", help="Agent names from config.yaml.")
+        parsers[name].add_argument("--models", nargs="+", help="Model names from config.yaml for vanilla mode.")
+        parsers[name].add_argument("--effort", choices=get_args(Effort), help="Override model and agent reasoning effort.")
         parsers[name].add_argument("--rows", type=Path, default=Path("results/rows.jsonl"), help="Committed rows used to find missing epochs.")
         parsers[name].add_argument("--budget", type=float, help="USD ceiling. Required for missing paid epochs.")
         parsers[name].add_argument("--wall-seconds", type=float, help="Bound preparation and scheduled epochs in wall seconds.")
-    parsers["check"].set_defaults(agents=None)
+    parsers["check"].set_defaults(agents=None, models=None)
     parsers["export-hf"].add_argument("--hf-repo", default=DEFAULT_REPO)
     parsers["export-hf"].add_argument("--license", help="HF dataset license identifier. Unset means undecided.")
     publisher = parsers["publish-logs"]
@@ -64,6 +67,9 @@ def main(argv=None) -> int:
                                          publish=args.publish), indent=2))
             return 0
         config = load_config(args.config)
+        if getattr(args, "effort", None):
+            for model in config.models.values():
+                model.effort = args.effort
         paths = [Path(value) for value in args.evals] if args.evals else sorted(Path("evals").glob("*/*"))
         if not paths:
             raise ValueError("No eval folders found. Use --evals or start from the repository root.")
@@ -79,7 +85,7 @@ def main(argv=None) -> int:
                 print(f"{evaluation.id} {evaluation.hash}")
             return 0
         if args.command == "plan":
-            agents_for, _ = select_actors(config, args.agents, args.modes, planning=True)
+            agents_for, _ = select_actors(config, args.agents, args.modes, models=args.models, planning=True)
             report = budget_check(plan(evals, config, agents_for, previous_rows(args.output, args.rows),
                           epochs=args.epochs, retry_errors=args.retry_errors, wall_seconds=args.wall_seconds).report, args.budget)
             print(json.dumps(report, indent=2))
@@ -88,7 +94,7 @@ def main(argv=None) -> int:
         passed = True
         for answer in answers:
             output = args.output / answer if args.command == "check" else args.output
-            success, rows = run(evals, config, output, agents=args.agents, modes=args.modes, answer=answer,
+            success, rows = run(evals, config, output, agents=args.agents, models=args.models, modes=args.modes, answer=answer,
                                 epochs=args.epochs, fresh=args.command == "check", retry_errors=args.retry_errors,
                                 rows_file=args.rows if args.command == "run" else None,
                                 budget=args.budget if args.command == "run" else None,

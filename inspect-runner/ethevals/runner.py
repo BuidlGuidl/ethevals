@@ -82,10 +82,10 @@ def build_task(evaluation: Eval, config: Config, agent: Agent, grader: Grader,
 
 def run(evals: list[Eval], config: Config, output: Path, *,
         epochs: int | None = None, fresh: bool = False, retry_errors: bool = False,
-        rows_file: Path | None = None, agents=None, modes=None, answer=None,
+        rows_file: Path | None = None, agents=None, models=None, modes=None, answer=None,
         budget=None, wall_seconds=None) -> tuple[bool, list[dict]]:
     previous = previous_rows(output, rows_file)
-    agents_for, _ = select_actors(config, agents, modes, answer, planning=True)
+    agents_for, _ = select_actors(config, agents, modes, answer, models=models, planning=True)
     initial = plan(evals, config, agents_for, previous, wall_seconds=wall_seconds,
                    epochs=epochs, fresh=fresh, retry_errors=retry_errors)
     report = budget_check(initial.report, budget, required=not answer)
@@ -111,7 +111,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
             logging.getLogger(__name__).error("%s: container preparation failed: %s", evaluation.id, error)
     tasks = []
     if prepared:
-        agents_for, grade = select_actors(config, agents, modes, answer)
+        agents_for, grade = select_actors(config, agents, modes, answer, models=models)
         actors = {evaluation.id: {(mode, actor.key): actor for mode, actor in agents_for(evaluation)}
                   for evaluation in evals}
         for original, mode, planned_actor, epoch, attempt in initial.admitted:

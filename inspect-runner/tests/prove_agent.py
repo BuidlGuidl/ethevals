@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from inspect_ai import eval
-from inspect_ai.model import ModelOutput, get_model
+from inspect_ai.model import GenerateConfig, ModelOutput, get_model
 
 from support import build_task, fixture_config, valid_search_result
 from ethevals.agents import CodexModel
@@ -22,7 +22,7 @@ from ethevals.preparation import build_images, prepare_compose
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("answer", choices=["reference", "empty"])
-    parser.add_argument("--model", choices=["opus", "codex", "kimi", "glm"], default="opus")
+    parser.add_argument("--agent", choices=list(fixture_config().agents), required=True)
     parser.add_argument("--eval", default="evals/building/erc20-points-token")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--exa-canary", action="store_true")
@@ -86,18 +86,21 @@ console.log(JSON.stringify({matches, files, environments}));
         search.exa_request = offline_exa
     assert not any(os.environ.get(name) for name in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN")), "Strip provider credentials before this proof."
     config = fixture_config()
-    config.agents[args.model].model = "mockllm/model"
+    settings = config.agents[args.agent]
+    model = config.models[settings.model]
+    model.model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(Path(args.eval), config)
     build_images()
     compose = prepare_compose(evaluation, args.output)
-    task = build_task(evaluation, config, args.model, "internet", None, 1, compose)
+    task = build_task(evaluation, config, args.agent, "internet", None, 1, compose)
     task.metadata.update(free_check=True, cost_source="mock", grader_cost_source="mock")
     calls = 0
     tool_names = set()
-    harness = config.agents[args.model].harness
-    cli_identity = config.agents[args.model].agent_model_config
+    harness = settings.harness
+    cli_identity = settings.cli_model
     requests = []
+    efforts = []
     search_ok = False
     search_call = 2 if harness == "codex_cli" else 1
 
@@ -112,6 +115,8 @@ console.log(JSON.stringify({matches, files, environments}));
     def reply(messages, tools, tool_choice, config):
         nonlocal calls, search_ok
         calls += 1
+        efforts.append(config.reasoning_effort)
+        assert config.reasoning_effort == model.effort, config.reasoning_effort
         tool_names.update(tool.name for tool in tools)
         if harness == "codex_cli":
             for message in messages:
@@ -178,7 +183,7 @@ console.log(JSON.stringify({matches, files, environments}));
             "reason": "The submitted token uses OpenZeppelin without holder controls." if passed else "The workspace contains an empty contract.",
         }))
 
-    task.model = get_model("mockllm/model", custom_outputs=reply)
+    task.model = get_model("mockllm/model", config=GenerateConfig(reasoning_effort=model.effort), custom_outputs=reply)
     if harness == "codex_cli":
         task.model = CodexModel(task.model)
     started = time.monotonic()
@@ -201,11 +206,8 @@ console.log(JSON.stringify({matches, files, environments}));
             with zipfile.ZipFile(archive) as log_archive:
                 for name in log_archive.namelist():
                     assert b"inert-offline-exa-canary" not in log_archive.read(name), name
-    effort = [(request.get("reasoning") or {}).get("effort") or
-              (request.get("output_config") or {}).get("effort") or
-              request.get("reasoning_effort") for request in requests]
-    print(json.dumps({"cli_effort": effort, "cli_models": [request["model"] for request in requests]}), flush=True)
-    assert effort and all(value == "high" for value in effort), effort
+    print(json.dumps({"bridge_effort": efforts, "cli_models": [request["model"] for request in requests]}), flush=True)
+    assert efforts and all(value == model.effort for value in efforts), efforts
     assert any("web_search_exa" in name for name in tool_names), tool_names
     assert not tool_names.intersection({"WebSearch", "websearch", "web_search", "web_search_preview", "web__run"}), tool_names
     if evaluation.declaration.type == "build":

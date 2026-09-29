@@ -23,8 +23,8 @@ from support import fixture_config
 
 
 @pytest.mark.parametrize("key,harness", [
-    ("opus", "claude_code"), ("codex", "codex_cli"),
-    ("kimi", "opencode"), ("glm", "opencode"),
+    ("claude-code-opus-5.5", "claude_code"), ("codex-cli-gpt-6-sol", "codex_cli"),
+    ("opencode-kimi-k3", "opencode"), ("opencode-glm-5.3", "opencode"),
 ])
 def test_registry_builds_solver(key, harness):
     config = fixture_config()
@@ -36,14 +36,14 @@ def test_registry_builds_solver(key, harness):
 
 
 @pytest.mark.parametrize("key,model,harness", [
-    ("codex", "openrouter/openai/gpt-6-sol", "codex_cli"),
-    ("kimi", "openrouter/moonshotai/kimi-k3", "opencode"),
-    ("glm", "openrouter/z-ai/glm-5.3", "opencode"),
+    ("codex-cli-gpt-6-sol", "openrouter/openai/gpt-6-sol", "codex_cli"),
+    ("opencode-kimi-k3", "openrouter/moonshotai/kimi-k3", "opencode"),
+    ("opencode-glm-5.3", "openrouter/z-ai/glm-5.3", "opencode"),
 ])
 def test_agent_selects_model_and_effort(key, model, harness):
     config = fixture_config()
-    config.agents[key].model = "mockllm/model"
-    config.agents[key].effort = "low"
+    config.models[config.agents[key].model].model = "mockllm/model"
+    config.models[config.agents[key].model].effort = "low"
     actor = agent(config, key, "internet")
     assert str(actor.model) == "mockllm/model"
     assert actor.model.config.reasoning_effort == "low"
@@ -53,8 +53,8 @@ def test_agent_selects_model_and_effort(key, model, harness):
 
 def test_unknown_harness_fails_config_validation():
     data = fixture_config().model_dump()
-    data["agents"]["codex"]["harness"] = "missing"
-    with pytest.raises(ValidationError, match="agents.codex.harness: unknown harness 'missing'"):
+    data["agents"]["codex-cli-gpt-6-sol"]["harness"] = "missing"
+    with pytest.raises(ValidationError, match="agents.codex-cli-gpt-6-sol.harness: unknown harness 'missing'"):
         Config.model_validate(data)
 
 
@@ -139,8 +139,8 @@ def test_codex_active_agent_adapts_every_bridge_model(tmp_path, requested, monke
     from inspect_ai.dataset import Sample
     from inspect_ai.solver import solver
     config = fixture_config()
-    config.agents["codex"].model = "mockllm/model"
-    actor = agent(config, "codex", "internet")
+    config.models["gpt-6-sol"].model = "mockllm/model"
+    actor = agent(config, "codex-cli-gpt-6-sol", "internet")
     monkeypatch.setattr(actor.model.source.api, "outputs", lambda *args: ModelOutput.for_tool_call(
         "mockllm/model", "exec", {"input": "text(42);"}))
     calls = []

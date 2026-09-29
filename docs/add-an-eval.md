@@ -36,7 +36,8 @@ Expected final lines for this example:
 3 results rows: results/author-guide/agent-registries/empty/rows.jsonl
 ```
 
-`check` makes no model calls and skips rubrics.
+`check` uses scripted answers, makes no model calls, and skips rubrics.
+For paid plans, `--models opus-5.5 --modes vanilla` selects a model; `--agents claude-code-opus-5.5 --modes internet` selects an agent.
 
 ## Choose an example to copy
 

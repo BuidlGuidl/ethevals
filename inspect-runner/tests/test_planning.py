@@ -13,6 +13,35 @@ from support import catalog_quiz, cli, eval_cli, fixture_config, run, small_conf
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.parametrize("command", ["plan", "run"])
+@pytest.mark.parametrize("selection,message", [
+    (["--modes", "vanilla", "--agents", "claude-code-opus-5.5"], "--agents requires an internet or skills mode"),
+    (["--modes", "internet", "skills", "--models", "opus-5.5"], "--models requires the vanilla mode"),
+])
+def test_selector_requires_a_matching_mode(command, selection, message):
+    result = eval_cli(command, "--evals", ROOT / "evals/concepts/agent-registries", *selection)
+    assert result.returncode == 2
+    assert message in result.stderr
+
+
+@pytest.mark.parametrize("effort", [None, "medium"])
+def test_default_plan_selects_models_and_agents(tmp_path, effort):
+    arguments = ["--effort", effort] if effort else []
+    result = eval_cli("plan", "--evals", ROOT / "evals/concepts/agent-registries",
+                      "--config", ROOT / "inspect-runner/ethevals/config.yaml",
+                      "--epochs", 1, "--output", tmp_path, *arguments)
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    expected = [(None, "openrouter/anthropic/claude-opus-5.5"), (None, "openrouter/openai/gpt-6-sol"),
+                (None, "openrouter/moonshotai/kimi-k3"), (None, "openrouter/z-ai/glm-5.3")]
+    agents = [("claude_code", expected[0][1]), ("codex_cli", expected[1][1]),
+              ("opencode", expected[2][1]), ("opencode", expected[3][1])]
+    assert [(row["mode"], row["harness"], row["model"], row["effort"]) for row in report["missing"]] == [
+        (mode, harness, model, effort or "high") for mode, actors in
+        [("vanilla", expected), ("internet", agents), ("skills", agents)] for harness, model in actors]
+    assert (report["missing_epochs"], report["worst_case_usd"]) == (12, 136.0)
+
+
 def test_declared_modes_skip_ineligible_evals(folder, tmp_path):
     path = folder / "eval.yaml"
     path.write_text(path.read_text().replace("[vanilla, internet]", "[internet]"))
@@ -45,9 +74,9 @@ def test_paid_run_needs_budget_before_constructing_provider(tmp_path, monkeypatc
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
     monkeypatch.setattr("ethevals.actors.model_actor", lambda *args: pytest.fail("Provider constructed"))
     with pytest.raises(ValueError, match="requires --budget"):
-        run([evaluation], config, tmp_path, agents=["opus"], epochs=1)
+        run([evaluation], config, tmp_path, agents=["claude-code-opus-5.5"], epochs=1)
     with pytest.raises(ValueError, match="Budget exceeded"):
-        run([evaluation], config, tmp_path, agents=["opus"], epochs=1, budget=0)
+        run([evaluation], config, tmp_path, agents=["claude-code-opus-5.5"], epochs=1, budget=0)
 
 
 def test_admission_reaches_every_epoch():
@@ -122,12 +151,12 @@ def test_plan_includes_scoring_and_only_sandbox_container_time(folder, mode, sec
 
 def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path, monkeypatch):
     config, evaluation = catalog_quiz()
-    first = config.agents["opus"].model_copy(update={"model": "mockllm/shared", "harness": None})
-    config.agents = {"high": first, "low": first.model_copy(update={"effort": "low"})}
+    first = config.models["opus-5.5"].model_copy(update={"model": "mockllm/shared"})
+    config.models = {"high": first, "low": first.model_copy(update={"effort": "low"})}
     config.grader.model = "mockllm/grader"
     # Both providers are MockLLM. The gate key never reaches a provider request.
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-offline-gate-key")
-    success, rows = run([evaluation], config, tmp_path, agents=["high", "low"], modes=["vanilla"], epochs=1, budget=20)
+    success, rows = run([evaluation], config, tmp_path, models=["high", "low"], modes=["vanilla"], epochs=1, budget=20)
     assert success
     assert [(row["effort"], row["status"], row["attempt"]) for row in rows] == [
         ("high", "failed", 1), ("low", "failed", 1)]
@@ -137,10 +166,13 @@ def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path,
 def test_planned_identity_matches_every_configured_provider(monkeypatch, mode):
     config, evaluation = catalog_quiz()
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
-    for key, settings in config.agents.items():
-        planned, _ = select_actors(config, [key], [mode], planning=True)
-        actual, _ = select_actors(config, [key], [mode])
-        expected = (evaluation.id, evaluation.hash, settings.harness if mode != "vanilla" else None,
+    for key, settings in (config.models if mode == "vanilla" else config.agents).items():
+        selection = {"models" if mode == "vanilla" else "agents": [key], "modes": [mode]}
+        planned, _ = select_actors(config, **selection, planning=True)
+        actual, _ = select_actors(config, **selection)
+        harness = settings.harness if mode != "vanilla" else None
+        settings = config.models[settings.model] if harness else settings
+        expected = (evaluation.id, evaluation.hash, harness,
                     settings.model, settings.effort, mode, 1)
         for selection in (planned, actual):
             actor = selection(evaluation)[0][1]
@@ -183,7 +215,7 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
 def test_build_plan_reserves_capped_grader_requests():
     config = fixture_config()
     evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
-    agents_for, _ = select_actors(config, ["opus"], ["internet"], planning=True)
+    agents_for, _ = select_actors(config, ["claude-code-opus-5.5"], ["internet"], planning=True)
     report = budget_check(plan([evaluation], config, agents_for, [], epochs=1).report, 29.6)
     assert report["missing"][0]["per_attempt_usd"] == 14.75445
     assert (report["worst_case_usd"], report["within_budget"]) == (29.5089, True)

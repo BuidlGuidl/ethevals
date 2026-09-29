@@ -204,25 +204,25 @@ def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path
     monkeypatch.setenv("OPENROUTER_API_KEY", "inert-test-key")
     config = fixture_config()
     config.grader.model = "mockllm/grader"
-    for key, item in config.agents.items():
+    for key, item in config.models.items():
         item.model = f"mockllm/{key}"
     evaluation = load_eval(folder, config)
     output = tmp_path / "results"
-    success, first = run([evaluation], config, output, agents=["opus"], epochs=1, budget=100)
+    success, first = run([evaluation], config, output, models=["opus-5.5"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True
-    config.prices[config.agents["opus"].model].input = 99.0
-    config.grader.model = "mockllm/codex"
+    config.prices[config.models["opus-5.5"].model].input = 99.0
+    config.grader.model = "mockllm/gpt-6-sol"
     config.time_limits["quiz"] = 400
-    success, second = run([evaluation], config, output, agents=["opus"], epochs=1, budget=100)
+    success, second = run([evaluation], config, output, models=["opus-5.5"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True
     assert second == first
-    success, third = run([evaluation], config, output, agents=["codex"], epochs=1, budget=100)
+    success, third = run([evaluation], config, output, models=["gpt-6-sol"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True
-    assert third[0]["model"] == "mockllm/codex"
+    assert third[0]["model"] == "mockllm/gpt-6-sol"
     stored = [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()]
-    assert sorted(row["model"] for row in stored) == ["mockllm/codex", "mockllm/opus"]
-    config.agents["opus"].effort = "low"
-    success, fourth = run([evaluation], config, output, agents=["opus"], epochs=1, budget=100)
+    assert sorted(row["model"] for row in stored) == ["mockllm/gpt-6-sol", "mockllm/opus-5.5"]
+    config.models["opus-5.5"].effort = "low"
+    success, fourth = run([evaluation], config, output, models=["opus-5.5"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True
     assert fourth[0]["effort"] == "low"
     assert len(list((output / "logs").rglob("*.eval"))) == 3
@@ -313,10 +313,10 @@ def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
 def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
     config = fixture_config()
     config.cost_limit = budget
-    config.agents["opus"].model = "mockllm/model"
+    config.models["opus-5.5"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    task = build_task(evaluation, config, "opus", "vanilla", None, 1)
+    task = build_task(evaluation, config, "opus-5.5", "vanilla", None, 1)
 
     @solver
     def forty_calls():
@@ -563,7 +563,7 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
     from ethevals.sandboxes import runner_exec
     from ethevals.actors import agent
     config = fixture_config()
-    config.agents["opus"].model = "mockllm/model"
+    config.models["opus-5.5"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     compose = prepare_compose(evaluation, tmp_path)
@@ -584,7 +584,7 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
         raise AssertionError("The death proof survived")
 
     monkeypatch.setitem(agents.HARNESSES, "claude_code", agents.Harness(lambda *a, **kw: killed, "proof"))
-    task = actor_task(evaluation, config, agent(config, "opus", "internet"), check_grader(), "internet", 1, compose)
+    task = actor_task(evaluation, config, agent(config, "claude-code-opus-5.5", "internet"), check_grader(), "internet", 1, compose)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
     assert row["status"] == "error", row
     assert f"Error executing claude code agent {cli_code}" in row["error_reason"]

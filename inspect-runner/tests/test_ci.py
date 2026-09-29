@@ -126,7 +126,7 @@ def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
     result = cli("scripts/ci.py", "after-merge", "--budget", budget, "--output", output,
                  "--config", config_path,
                  "--rows", tmp_path / "rows.jsonl", "--evals", ROOT / "evals/concepts/agent-registries",
-                 "--agents", "test", "--modes", "vanilla")
+                 "--models", "test", "--modes", "vanilla")
     assert result.returncode == 2
     assert "OPENROUTER_API_KEY is required" not in result.stderr
     assert not (output / "logs").exists()
@@ -177,7 +177,7 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path, status):
     before = rows.read_bytes(), rows.stat().st_mtime_ns
     output = tmp_path / "eval-run-1"
     result = cli("scripts/ci.py", "after-merge", "--output", output, "--rows", rows, "--config", config_path,
-                 "--evals", quiz.folder, "--agents", "test", "--modes", "vanilla", "--epochs", "1", "--budget", "0")
+                 "--evals", quiz.folder, "--models", "test", "--modes", "vanilla", "--epochs", "1", "--budget", "0")
     assert result.returncode == 0, result.stderr
     assert "1 results rows:" in result.stdout
     report = json.loads((output / "plan.json").read_text())

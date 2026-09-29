@@ -49,7 +49,7 @@ def folder(tmp_path):
 @pytest.fixture
 def scoring_case(tmp_path):
     config = fixture_config()
-    config.agents["opus"].model = "mockllm/agent"
+    config.models["opus-5.5"].model = "mockllm/agent"
     config.grader.model = "mockllm/grader"
     folder = tmp_path / "building/token"
     shutil.copytree(BUILD, folder)
@@ -59,7 +59,7 @@ def scoring_case(tmp_path):
         'pragma solidity ^0.8.30; import "../src/BuilderPoints.sol"; '
         'contract TokenTest { function testSupply() public { new Token(); } }')
     evaluation = load_eval(folder, config)
-    task = build_task(evaluation, config, "opus", "internet", None, 1, prepare_compose(evaluation, tmp_path))
+    task = build_task(evaluation, config, "claude-code-opus-5.5", "internet", None, 1, prepare_compose(evaluation, tmp_path))
     from ethevals.checks import solution
     task.solver = solution(evaluation, "reference")
     case = {"task": task, "requests": [], "configs": []}

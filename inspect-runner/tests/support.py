@@ -24,19 +24,14 @@ INPUTS = TemporaryDirectory()
 def fixture_config(path=None):
     if path is not None:
         return read_config(path)
-    prices = dict(input=5.0, output=25.0, input_cache_read=0.5, input_cache_write=6.25)
-    agents = {key: dict(model=f"mockllm/{key}", effort="high", harness=harness,
-                       agent_model_config=cli_model)
-              for key, harness, cli_model in [("opus", "claude_code", "claude-opus-5-5"),
-                  ("codex", "codex_cli", "gpt-6-sol"), ("kimi", "opencode", "openrouter/moonshotai/kimi-k3"),
-                  ("glm", "opencode", "openrouter/z-ai/glm-5.3")]}
-    return Config(epochs=3, time_limits={"quiz": 300, "build": 1200, "act": 1200},
-                  cost_limit=5.0, max_attempts=2, concurrency=1, search=True, search_limit=20, search_price_usd=0.05,
-                  grader=dict(model="mockllm/grader", effort="none", max_tokens=4096),
-                  agents=agents,
-                  prices={name: prices for name in [*(item["model"] for item in agents.values()),
-                                                    "mockllm/grader", "mockllm/model", "mockllm/agent",
-                                                    "mockllm/shared"]})
+    config = read_config()
+    prices = config.prices[config.grader.model]
+    for key, model in config.models.items():
+        model.model = f"mockllm/{key}"
+    config.grader.model = "mockllm/grader"
+    config.prices = {name: prices.model_copy() for name in [*(item.model for item in config.models.values()),
+                    "mockllm/grader", "mockllm/model", "mockllm/agent", "mockllm/shared"]}
+    return config
 
 
 def small_config():
@@ -45,7 +40,8 @@ def small_config():
     return Config(epochs=3, time_limits={"quiz": 10, "build": 1200, "act": 1200}, cost_limit=2, max_attempts=2,
                   concurrency=1, search=False, search_limit=20, search_price_usd=0.05, prices={"mockllm/test": prices},
                   grader={**model, "max_tokens": 10},
-                  agents={"test": {**model, "harness": None}})
+                  models={"test": model},
+                  agents={"test-agent": {"model": "test", "harness": "claude_code", "cli_model": "test"}})
 
 
 def fixture_quiz(tmp_path, name="units", *, modes=None, choices=None, **scorer):

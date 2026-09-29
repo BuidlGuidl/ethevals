@@ -50,12 +50,13 @@ def model_actor(item, config, prefix=""):
 
 
 def agent(config, key, mode, planning=False):
-    item = config.agents[key]
+    settings = config.agents[key] if uses_sandbox(mode) else None
+    item = config.models[settings.model if settings else key]
     if planning:
         model, metadata = None, actor_metadata(item, config)
     else:
         model, metadata = model_actor(item, config)
-    harness = item.harness if uses_sandbox(mode) else None
+    harness = settings.harness if settings else None
     if harness == "codex_cli" and not planning:
         model = CodexModel(model)
     metadata.update(harness=harness, harness_version=HARNESSES[harness].version if harness else None)
@@ -65,7 +66,7 @@ def agent(config, key, mode, planning=False):
             if evaluation.declaration.type != "quiz":
                 raise ValueError("The vanilla mode supports only quiz evals")
             return quiz_solver(evaluation)
-        return internet_solver(harness, config, item, evaluation.skills if mode == "skills" else None)
+        return internet_solver(harness, config, settings, evaluation.skills if mode == "skills" else None)
 
     return Agent(model, metadata, solve, lambda evaluation: uses_sandbox(mode), key=key)
 
@@ -75,12 +76,19 @@ def grader(config):
     return Grader(model, metadata)
 
 
-def select_actors(config, agents=None, modes=None, answer=None, *, planning=False):
+def select_actors(config, agents=None, modes=None, answer=None, *, models=None, planning=False):
     from .checks import CHECK_MODES, check_agent, check_grader
     if unknown := set(agents or []) - config.agents.keys():
         raise ValueError(f"Unknown agent names: {', '.join(sorted(unknown))}")
+    if unknown := set(models or []) - config.models.keys():
+        raise ValueError(f"Unknown model names: {', '.join(sorted(unknown))}")
     if modes and set(modes) - set(get_args(Mode)):
         raise ValueError(f"Unknown modes: {modes}")
+    selected_modes = list(dict.fromkeys(modes or get_args(Mode)))
+    if agents and not any(uses_sandbox(mode) for mode in selected_modes):
+        raise ValueError("--agents requires an internet or skills mode")
+    if models and "vanilla" not in selected_modes:
+        raise ValueError("--models requires the vanilla mode")
     if answer:
         grade = check_grader()
 
@@ -92,8 +100,8 @@ def select_actors(config, agents=None, modes=None, answer=None, *, planning=Fals
                     for mode in dict.fromkeys(evaluation.declaration.modes) if mode in selected]
     else:
         grade = None if planning else grader(config)
-        actors = [(mode, agent(config, key, mode, planning)) for mode in dict.fromkeys(modes or ["vanilla"])
-                  for key in agents or config.agents]
+        actors = [(mode, agent(config, key, mode, planning)) for mode in selected_modes
+                  for key in ((agents or config.agents) if uses_sandbox(mode) else (models or config.models))]
 
         def agents_for(evaluation):
             return [(mode, actor) for mode, actor in actors if mode in evaluation.declaration.modes]

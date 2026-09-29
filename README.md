@@ -57,7 +57,7 @@ Use `--config path/to/config.yaml` for a separate configuration.
 Print the missing work without keys, Docker, or model calls:
 
 ```sh
-uv run ethevals plan --agents opus --modes vanilla internet --epochs 1 --budget 100
+uv run ethevals plan --models opus-5.5 --agents claude-code-opus-5.5 --modes vanilla internet --epochs 1 --budget 100
 ```
 
 `--budget` is a USD ceiling for the plan's cost reserve.
@@ -74,11 +74,13 @@ The budget reserve is not a provider billing cap.
 Set `OPENROUTER_API_KEY` in your shell, then run the selected plan:
 
 ```sh
-uv run ethevals run --agents opus --modes vanilla internet --epochs 1 --budget 100
+uv run ethevals run --models opus-5.5 --agents claude-code-opus-5.5 --modes vanilla internet --epochs 1 --budget 100
 ```
 
 Use `--evals` to select folders and `--output` to choose a results directory.
-Without agent or mode flags, the runner selects all configured agents in vanilla mode.
+`--models` selects bare models for vanilla; `--agents` selects agents for internet and skills.
+Each selector requires a matching mode. Without selectors or mode flags, the runner selects every model, agent, and mode.
+`--effort low|medium|high|xhigh` overrides model and agent effort for that invocation.
 Each eval runs only in modes it declares.
 The skills mode adds the repo's Ethereum skills pack to the internet mode. The scenario type is not supported yet.
 

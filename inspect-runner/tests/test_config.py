@@ -14,12 +14,23 @@ ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "evals/building/erc20-points-token"
 
 
-def test_validate_rejects_effort_typo(folder, tmp_path):
+@pytest.mark.parametrize("effort", ["hihg", "none", "minimal", "max"])
+def test_validate_rejects_unsupported_effort(folder, tmp_path, effort):
     path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump(fixture_config().model_dump()).replace("effort: high", "effort: hihg"))
+    path.write_text(yaml.safe_dump(fixture_config().model_dump()).replace("effort: high", f"effort: {effort}"))
     result = eval_cli("validate", "--evals", folder, "--config", path)
     assert result.returncode == 2
-    assert "agents.opus.effort" in result.stderr
+    assert "models.opus-5.5.effort" in result.stderr
+
+
+def test_validate_rejects_unknown_model(folder, tmp_path):
+    path = tmp_path / "config.yaml"
+    config = fixture_config()
+    config.agents["claude-code-opus-5.5"].model = "missing"
+    path.write_text(config.model_dump_json())
+    result = eval_cli("validate", "--evals", folder, "--config", path)
+    assert result.returncode == 2
+    assert "agents.claude-code-opus-5.5.model: unknown model 'missing'" in result.stderr
 
 
 def test_type_time_limit_reaches_task(tmp_path):

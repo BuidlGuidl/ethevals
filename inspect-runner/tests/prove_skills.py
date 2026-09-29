@@ -19,14 +19,14 @@ from support import build_task, fixture_config
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--agent", choices=["opus", "codex", "kimi"], required=True)
+    parser.add_argument("--agent", choices=["claude-code-opus-5.5", "codex-cli-gpt-6-sol", "opencode-kimi-k3"], required=True)
     parser.add_argument("--mode", choices=["skills", "internet"], default="skills")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     assert not any(os.environ.get(name) for name in (
         "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "EXA_API_KEY"))
     config = fixture_config()
-    config.agents[args.agent].model = "mockllm/model"
+    config.models[config.agents[args.agent].model].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     config.prices["mockllm/model"] = config.prices["mockllm/model"].model_copy(
         update=dict(input=0, output=0, input_cache_read=0, input_cache_write=0))
@@ -35,7 +35,8 @@ def main():
     compose = prepare_compose(evaluation, args.output)
     task = build_task(evaluation, config, args.agent, args.mode, None, 1, compose)
     task.metadata.update(cost_source="mock", grader_cost_source="mock")
-    task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", "8004")] * 5)
+    task.model = get_model("mockllm/model", config=task.model.config,
+                           custom_outputs=[ModelOutput.from_content("mockllm/model", "8004")] * 5)
     if config.agents[args.agent].harness == "codex_cli":
         task.model = CodexModel(task.model)
     started = time.monotonic()

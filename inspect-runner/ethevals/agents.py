@@ -24,18 +24,17 @@ class Harness:
 
 def claude(model, **settings):
     return as_solver(claude_code(
-        cwd="/workspace", model_config=model.agent_model_config, effort=model.effort,
+        cwd="/workspace", model_config=model.cli_model,
         disallowed_tools=["WebSearch"], retry_refusals=0, retry_uncaught_errors=0,
-        env={"CLAUDE_CODE_EFFORT_LEVEL": model.effort}, **settings,
+        **settings,
     ))
 
 
 def codex(model, **settings):
     # The active agent is a CodexModel, so every bridge fallback uses it.
     return as_solver(codex_cli(
-        cwd="/workspace", model_config=model.agent_model_config,
+        cwd="/workspace", model_config=model.cli_model,
         web_search="disabled", retry_refusals=0,
-        config_overrides={"model_reasoning_effort": json.dumps(model.effort)},
         **settings,
     ))
 
@@ -69,10 +68,8 @@ def restore_codex_calls(output, tools):
 
 def open_code(model, **settings):
     provider = json.loads((Path(__file__).with_name("images") / "opencode-models.json").read_text())
-    for definition in provider["models"].values():
-        definition["options"] = {"reasoning": {"effort": model.effort}}
     return as_solver(opencode(
-        cwd="/workspace", retry_refusals=0, opencode_model=model.agent_model_config,
+        cwd="/workspace", retry_refusals=0, opencode_model=model.cli_model,
         env={"OPENROUTER_API_KEY": "sk-none",
              "OPENCODE_CONFIG_CONTENT": json.dumps({"provider": {"openrouter": provider}})},
         **settings,

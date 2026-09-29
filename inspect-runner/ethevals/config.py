@@ -37,14 +37,18 @@ class Prices(Declaration):
     input_cache_write: float = Field(ge=0)
 
 
+Effort = Literal["low", "medium", "high", "xhigh"]
+
+
 class ModelSettings(Declaration):
     model: str
-    effort: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+    effort: Effort
 
 
-class ModelConfig(ModelSettings):
-    harness: str | None
-    agent_model_config: str | None = None
+class AgentConfig(Declaration):
+    harness: str
+    model: str
+    cli_model: str
 
 
 class GraderConfig(ModelSettings):
@@ -68,7 +72,8 @@ class Config(Declaration):
     search: bool
     search_limit: int = Field(gt=0)
     search_price_usd: float = Field(gt=0, allow_inf_nan=False)
-    agents: dict[str, ModelConfig]
+    models: dict[str, ModelSettings]
+    agents: dict[str, AgentConfig]
     prices: dict[str, Prices]
 
     @model_validator(mode="after")
@@ -76,10 +81,12 @@ class Config(Declaration):
         from .agents import HARNESSES
         if self.time_limits.keys() != {"quiz", "build", "act"}:
             raise ValueError("time_limits requires quiz, build, and act")
-        for key, model in self.agents.items():
-            if model.harness is not None and model.harness not in HARNESSES:
-                raise ValueError(f"agents.{key}.harness: unknown harness {model.harness!r}")
-        for item in [self.grader, *self.agents.values()]:
+        for key, agent in self.agents.items():
+            if agent.harness not in HARNESSES:
+                raise ValueError(f"agents.{key}.harness: unknown harness {agent.harness!r}")
+            if agent.model not in self.models:
+                raise ValueError(f"agents.{key}.model: unknown model {agent.model!r}")
+        for item in [self.grader, *self.models.values()]:
             if item.model not in self.prices:
                 raise ValueError(f"prices.{item.model}: missing model prices")
         return self

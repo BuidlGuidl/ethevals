@@ -20,9 +20,9 @@ BUILD = ROOT / "evals/building/erc20-points-token"
 
 def test_agent_sample_contains_only_workspace_files():
     config = fixture_config()
-    config.agents["opus"].model = "mockllm/model"
+    config.models["opus-5.5"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
-    task = build_task(load_eval(BUILD, config), config, "opus", "internet", None, 1)
+    task = build_task(load_eval(BUILD, config), config, "claude-code-opus-5.5", "internet", None, 1)
     sample = task.dataset[0]
     assert sample.files == {
         "/workspace/foundry.toml": inline_file((IMAGES / "foundry.toml").read_bytes()),
