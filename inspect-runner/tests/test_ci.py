@@ -7,7 +7,7 @@ import subprocess
 from ethevals.actors import select_actors
 from ethevals.loader import load_eval
 from ethevals.planning import plan
-from ethevals.rows import fold_rows, read_rows, write_rows
+from ethevals.rows import fold_rows, previous_rows, read_rows, write_rows
 from inspect_ai.log import read_eval_log, write_eval_log
 import pytest
 
@@ -18,6 +18,27 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("ci", ROOT / "scripts/ci.py")
 ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
+
+
+@pytest.mark.parametrize("operation", ["resume", "publish"])
+@pytest.mark.xfail(strict=True, raises=ValueError, reason="store_rows cannot read a truncated .eval archive: EOCD not found")
+def test_truncated_log_keeps_completed_epoch(tmp_path, monkeypatch, operation):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    config, evaluation = catalog_quiz()
+    output = tmp_path / "eval-run-12-1"
+    run([evaluation], config, output, answer="reference", epochs=1)
+    complete = next((output / "logs").glob("*.eval"))
+    (output / "logs/unfinished.eval").write_bytes(complete.read_bytes()[:100])
+    if operation == "resume":
+        actors_for, _ = select_actors(config, answer="reference", planning=True)
+        report = plan([evaluation], config, actors_for, previous_rows(output), epochs=1).report
+        assert report["missing_epochs"] == 0
+    else:
+        recorded = []
+        monkeypatch.setattr(ci, "commit_results", lambda rows, *args: recorded.extend(rows))
+        monkeypatch.setattr(ci, "publish_logs", lambda *args, **kwargs: {"rows_file": str(output / "rows.jsonl")})
+        assert ci.publish_artifacts(argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True)) == 0
+        assert any((r["eval_hash"], r["epoch"], r["status"]) == (evaluation.hash, 1, "passed") for r in recorded)
 
 
 def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(tmp_path, monkeypatch):
