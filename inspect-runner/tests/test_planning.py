@@ -56,11 +56,13 @@ def test_declared_modes_skip_ineligible_evals(folder, tmp_path):
     config = fixture_config()
     vanilla = load_eval(ROOT / "evals/concepts/wei-per-ether", config)
     internet = load_eval(folder, config)
-    success, rows = run([internet, vanilla], config, tmp_path / "results", answer="reference", epochs=1)
+    success, rows = run([internet, vanilla], config, tmp_path / "results", answer="reference", epochs=1,
+                        modes=["vanilla"])
     assert success is True
     assert [(row["eval_id"], row["mode"], row["status"]) for row in rows] == [
         ("concepts/wei-per-ether", "vanilla", "passed")]
-    result = eval_cli("check", "--evals", folder, vanilla.folder, "--epochs", 1, "--output", tmp_path / "check")
+    result = eval_cli("check", "--evals", folder, vanilla.folder, "--modes", "vanilla",
+                     "--epochs", 1, "--output", tmp_path / "check")
     assert result.returncode == 0, result.stdout + result.stderr
     path.write_text(path.read_text().replace("[internet]", "[internet, skills]"))
     assert load_eval(folder, config).declaration.modes == ["internet", "skills"]

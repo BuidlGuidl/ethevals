@@ -93,9 +93,9 @@ def select_actors(config, agents=None, modes=None, answer=None, *, models=None, 
         grade = check_grader()
 
         def agents_for(evaluation):
-            selected = modes or [next((mode for mode in evaluation.declaration.modes
-                                      if uses_sandbox(mode) == uses_sandbox(CHECK_MODES[evaluation.declaration.type])),
-                                     CHECK_MODES[evaluation.declaration.type])]
+            declared = evaluation.declaration.modes
+            default = CHECK_MODES[evaluation.declaration.type]
+            selected = modes or [default if default in declared else declared[0]]
             return [(mode, check_agent(evaluation, answer, mode=mode))
                     for mode in dict.fromkeys(evaluation.declaration.modes) if mode in selected]
     else:

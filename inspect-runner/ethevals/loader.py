@@ -11,7 +11,7 @@ from .scorers import TargetScorer, rubric_questions
 from .check_script import script_path, validate_script
 from .sandboxes import IMAGES, SOLC_VERSIONS, validate_compose
 from .files import manifest, content_hash, inline_file
-from .skills import PACK, PREFIX, pack_skills
+from .skills import pack_skills
 
 PILLARS = {"concepts", "transactions", "building", "security"}
 
@@ -22,20 +22,6 @@ class EvalDeclaration(Declaration):
     type: Literal["quiz", "scenario", "build", "act"]
     modes: list[Mode] = Field(min_length=1)
     choices: list[str] | None = Field(default=None, min_length=2, max_length=26)
-
-
-def eval_hash(folder: Path) -> str:
-    return content_hash(eval_inputs(folder)[0])
-
-
-def eval_inputs(folder: Path):
-    files = manifest(folder)
-    if "eval.yaml" not in files:
-        raise ValueError(f"{folder / 'eval.yaml'}: required regular file is missing")
-    declaration = parse_file(EvalDeclaration, folder / "eval.yaml", files["eval.yaml"])
-    if "skills" in declaration.modes:
-        files.update({PREFIX + name: data for name, data in manifest(PACK).items()})
-    return files, declaration
 
 
 @dataclass(frozen=True)
@@ -76,8 +62,14 @@ def load_eval(folder: Path, config: Config) -> Eval:
     if folder.is_symlink():
         raise ValueError(f"{folder}: symlinks are not allowed in an eval folder")
     folder = folder.resolve()
-    files, declaration = eval_inputs(folder)
-    skills = pack_skills(files) if "skills" in declaration.modes else []
+    files = manifest(folder)
+    if "eval.yaml" not in files:
+        raise ValueError(f"{folder / 'eval.yaml'}: required regular file is missing")
+    declaration = parse_file(EvalDeclaration, folder / "eval.yaml", files["eval.yaml"])
+    skills = []
+    if "skills" in declaration.modes:
+        pack, skills = pack_skills()
+        files.update(pack)
     if declaration.type == "scenario":
         raise ValueError(f"{folder / 'eval.yaml'}: type: scenario is not supported yet")
     if any(not choice.strip() for choice in declaration.choices or []):

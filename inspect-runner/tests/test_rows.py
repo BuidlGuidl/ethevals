@@ -583,7 +583,8 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
             raise RuntimeError(f"Error executing claude code agent {result.returncode}: CLI failure")
         raise AssertionError("The death proof survived")
 
-    monkeypatch.setitem(agents.HARNESSES, "claude_code", agents.Harness(lambda *a, **kw: killed, "proof"))
+    monkeypatch.setitem(agents.HARNESSES, "claude_code", replace(
+        agents.HARNESSES["claude_code"], factory=lambda *a, **kw: killed, version="proof"))
     task = actor_task(evaluation, config, agent(config, "claude-code-opus-5.5", "internet"), check_grader(), "internet", 1, compose)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
     assert row["status"] == "error", row

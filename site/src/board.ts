@@ -4,7 +4,6 @@ export type { Row } from "./rows";
 export const pillars = ["concepts", "transactions", "building", "security"] as const;
 export type Pillar = (typeof pillars)[number];
 export type Mode = "vanilla" | "internet" | "skills";
-export type TableMode = Mode;
 export type EvalType = "quiz" | "build" | "act";
 
 export interface Eval {
@@ -60,14 +59,14 @@ export interface Table {
 export interface BoardData {
   demo: boolean;
   evaluations: Record<string, DisplayEval>;
-  tables: Record<TableMode, Table>;
+  tables: Record<Mode, Table>;
 }
 
 export function agentKey(agent: Agent): string {
   return JSON.stringify([agent.model, agent.harness, agent.effort]);
 }
 
-function evalCell(evaluation: Eval, mode: TableMode, rows: Row[]): EvalCell {
+function evalCell(evaluation: Eval, mode: Mode, rows: Row[]): EvalCell {
   const scored = rows.filter((row) => row.status !== "error");
   const passed = scored.filter((row) => row.status === "passed").length;
   return {
@@ -102,7 +101,7 @@ function pillarCell(cells: EvalCell[]): PillarCell {
 // The loader supplies current, checked rows. Group each row and compute each cell once.
 export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): BoardData {
   const groups = new Map<string, Row[]>();
-  const agents: Record<TableMode, Map<string, Agent>> = { internet: new Map(), skills: new Map(), vanilla: new Map() };
+  const agents: Record<Mode, Map<string, Agent>> = { internet: new Map(), skills: new Map(), vanilla: new Map() };
   for (const row of rows) {
     const key = agentKey(row);
     agents[row.mode].set(key, { model: row.model, harness: row.harness, effort: row.effort });

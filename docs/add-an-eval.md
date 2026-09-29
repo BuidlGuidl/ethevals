@@ -59,7 +59,7 @@ The `scenario` type is not supported yet.
 
 Add `skills` to `modes` to run agents with the whole [skills pack](../skills/README.md).
 Skills mode uses the internet mode's tools and limits, with an index in each harness's instruction file.
-Pack changes update the hashes of every eval that declares `skills`.
+Pack changes update the hashes of every eval that declares `skills`, excluding top-level pack files such as `skills/README.md`.
 
 ### Write a free-text quiz
 

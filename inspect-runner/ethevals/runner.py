@@ -10,8 +10,6 @@ from inspect_ai.util import SandboxEnvironmentSpec
 
 from .actors import Agent, Grader, select_actors
 from .config import Config, read_yaml, uses_sandbox
-from .files import inline_file
-from .skills import skill_index
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
 from .planning import plan, budget_check
@@ -41,10 +39,6 @@ def build_task(evaluation: Eval, config: Config, agent: Agent, grader: Grader,
     if mode not in evaluation.declaration.modes:
         raise ValueError(f"{evaluation.folder / 'eval.yaml'}: modes: {mode!r} is not declared")
     sample = evaluation.sample()
-    if mode == "skills":
-        name = "CLAUDE.md" if agent.metadata["harness"] == "claude_code" else "AGENTS.md"
-        existing = evaluation.files.get(f"workspace/{name}", b"")
-        sample.files[f"/workspace/{name}"] = inline_file(existing + b"\n\n" + skill_index(evaluation.skills).encode())
     images = {}
     if agent.sandbox_for(evaluation):
         services = read_yaml(compose)["services"]
