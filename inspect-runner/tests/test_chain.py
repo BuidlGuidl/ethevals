@@ -4,6 +4,7 @@ import threading
 from pathlib import Path
 
 import pytest
+from inspect_ai.util import ExecResult
 
 from ethevals.images import rpc_filter
 from ethevals.loader import load_eval
@@ -327,3 +328,18 @@ def test_control_reads_fragmented_reply_to_eof(tmp_path, monkeypatch, capsys):
     finally:
         thread.join(5)
         server.close()
+
+
+def test_earlier_chain_oom_does_not_change_wrapper_failure(monkeypatch):
+    import anyio
+    from ethevals.check_script import script_result
+
+    class Box:
+        async def exec(self, command, **kwargs):
+            if "/sys/fs/cgroup/memory.events" in command:
+                return ExecResult(success=True, returncode=0, stdout="oom 8\noom_kill 3\n", stderr="")
+            code = 125 if "/usr/bin/timeout" in command else 0
+            return ExecResult(success=code == 0, returncode=code, stdout="", stderr="")
+
+    with pytest.raises(RuntimeError, match="Cannot capture check script output"):
+        anyio.run(script_result, "check", Box())

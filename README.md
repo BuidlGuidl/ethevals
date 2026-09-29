@@ -277,7 +277,8 @@ Local runs also check Docker's memory capacity before preparation, with at least
 Reduce `max_tasks` or `max_samples` when the Docker VM has less memory.
 Both `oom` and `oom_kill` must rise between the before and after readings for that command.
 Ordinary failed tests need no second memory exec. OOM-like exits also check the counters after execution.
-An agent solver failure with both deltas positive fails every check. Task notes tell the agent its memory limit.
+An agent CLI exit 137 with both deltas positive fails every check. Other CLI failures remain errors.
+Rows record the agent container's `memory.peak` in `agent_memory_peak_bytes`. Task notes tell the agent its memory limit.
 An external kill without a local memory-limit event remains an error.
 
 The September 29 keyless Docker proofs measured cgroup `memory.peak` with a temporary 4 GiB agent limit.
@@ -332,7 +333,7 @@ ADR 0002 remains proposed until this paid test succeeds.
 | Agent processes escape the bounded stop loop | Failed checks |
 | Scorer or chain exceeds its own cgroup memory limit | Failed checks |
 | In-container scoring timeout or output overflow | Failed checks |
-| Agent solver fails after its own container OOM | Failed checks, deliberate fail-closed rule |
+| Agent CLI exits 137 after its own container OOM | Failed checks, deliberate fail-closed rule |
 | Author check script crashes, exits 125, or returns a malformed verdict | Failed checks, deliberate fail-closed rule |
 | Grader returns a schema-valid verdict with an empty reason | That rubric check fails |
 | Player reaches its working-time or cost limit | Failed checks |
@@ -421,11 +422,13 @@ Slow sample cleanup logs a warning and preserves scored rows. Final task cleanup
 The reserve is `preparation + lifecycle + sum(durations) / m + (1 - 1/m) * longest_duration`, with `m = 1` in CI.
 Inspect refills vacant task slots. The runner uses the same concurrency for tasks, samples, and sandboxes.
 Admission takes the shortest whole groups first. A group is one eval, mode, and epoch across all configured models.
-Existing completed cells stay recorded; admission takes all remaining cells in their group or none.
+Existing completed cells stay recorded. Groups that fit an empty window admit all remaining cells or none.
+Larger groups split into single-model items. A single epoch that cannot fit an empty window rejects the plan.
 Execution uses the admitted items without selecting epochs again.
 The standalone CI plan admits 12 of 72 epochs, reserves 12,240 seconds, and defers 60, with zero preparation time.
 The run saves its final count in `plan.json` after preparation.
-Epochs that do not fit remain missing for the next run. `--wall-seconds` sets this reserve locally.
+Epochs that do not fit remain missing for the next run. `plan-paid` fails if every pending epoch remains deferred.
+Only initially admitted evals enter preparation. `--wall-seconds` sets this reserve locally.
 The current build reserves $29.7288 per attempt, or $59.4576 with both attempts left, including the search reserve.
 The gate uses this worst-case estimate. Prices remain guesses, and an in-flight player call can exceed its cost limit.
 The gate is not a provider billing cap.

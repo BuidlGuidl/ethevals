@@ -18,8 +18,8 @@ from test_docker import ROOT, containers
 pytestmark = pytest.mark.docker
 
 
-@pytest.mark.parametrize("local_oom", [True, False])
-def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, local_oom):
+@pytest.mark.parametrize("local_oom,cli_code", [(True, 137), (False, 137), (True, 1)])
+def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, local_oom, cli_code):
     from ethevals import agents
     from inspect_ai.util import sandbox
     from ethevals.sandboxes import runner_exec
@@ -38,17 +38,52 @@ def test_agent_container_death_through_exported_rows(tmp_path, monkeypatch, loca
             "/bin/sh", "-c", "kill -9 $$"]
         result = await runner_exec(sandbox("default"), command)
         if not result.success:
-            raise RuntimeError(f"Agent exited {result.returncode}")
+            assert result.returncode == 137
+            # The CLI can survive its child's OOM and fail later for another cause.
+            if cli_code == 1:
+                result = await runner_exec(sandbox("default"), ["/bin/sh", "-c", "exit 1"])
+            raise RuntimeError(f"Error executing claude code agent {result.returncode}: CLI failure")
         raise AssertionError("The death proof survived")
 
     monkeypatch.setitem(agents.AGENTS, "claude_code", agents.Harness(lambda *a, **kw: killed, "proof"))
     task = build_task(evaluation, config, player(config, "opus", "internet"), check_grader(), "internet", 1, compose)
     row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
-    assert (row["status"], row["passed"]) == (("failed", False) if local_oom else ("error", None)), row
+    assert (row["status"], row["passed"]) == (("failed", False) if local_oom and cli_code == 137 else ("error", None)), row
+    assert isinstance(row["agent_memory_peak_bytes"], int)
+    assert row["agent_memory_peak_bytes"] > 0
     if local_oom:
+        assert row["agent_memory_peak_bytes"] >= 128 * 1024 * 1024
+    if local_oom and cli_code == 137:
         assert {c["reason"] for c in row["checks"].values()} == {"Agent exceeded its container memory limit."}
     else:
-        assert "Agent exited" in row["error_reason"]
+        assert f"Error executing claude code agent {cli_code}" in row["error_reason"]
+
+
+def test_killed_check_wrapper_after_setup_exports_error(tmp_path):
+    from inspect_ai.solver import solver
+    from inspect_ai.util import sandbox
+    config = load_config()
+    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
+    compose = prepare_compose(evaluation, tmp_path)
+    evaluation = prepare_eval(evaluation, tmp_path, compose)
+    files = {**evaluation.files, "scorer/check.py": b'import os, signal\n'
+             b'print(\'{"balance":{"passed":true,"reason":"Balance matches."}}\', flush=True)\n'
+             b'os.kill(os.getppid(), signal.SIGKILL)\n'}
+    evaluation = replace(evaluation, files=files, hash=content_hash(files))
+    compose = prepare_compose(evaluation, tmp_path)
+    task = build_task(evaluation, config, check_player(evaluation, "empty"), check_grader(), "internet", 1, compose)
+
+    @solver
+    def setup_succeeded():
+        async def solve(state, generate):
+            assert await sandbox("chain").read_file("/eval/script.status") == "0"
+            return state
+        return solve
+
+    task.solver = setup_succeeded()
+    row = results_rows(eval(task, log_dir=str(tmp_path / "logs"), display="none")[0])[0]
+    assert (row["status"], row["passed"]) == ("error", None), row
+    assert "check.py wrapper exited 137 without a script status" in row["error_reason"]
 
 
 def test_slow_cleanup_keeps_the_scored_row(tmp_path, monkeypatch, caplog):

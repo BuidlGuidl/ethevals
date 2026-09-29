@@ -91,7 +91,7 @@ def run(evals: list[Eval], config: Config, output: Path, *,
     if any(actor.sandbox_for(evaluation) for evaluation, _, actor, _, _ in pending):
         check_capacity(config)
     for evaluation in evals:
-        work = [item for item in pending if item.evaluation.id == evaluation.id]
+        work = [item for item in initial.admitted if item.evaluation.id == evaluation.id]
         if not work:
             continue
         try:

@@ -95,6 +95,21 @@ def plan(evals, config, players, previous, *, epochs=None, retry_errors=False, f
                         "expected_usd_estimate": sum(history) / len(history) if history else None}
         rows[id(item)] = row
     queue = sorted(groups.values(), key=lambda group: sum(rows[id(item)]["wall_seconds"] for item in group))
+    if wall_seconds is not None:
+        for item in pending:
+            overhead = 2 * TASK_LIFECYCLE_SECONDS if item.actor.sandbox_for(item.evaluation) else 0
+            minimum = overhead + rows[id(item)]["wall_seconds"]
+            if minimum > wall_seconds:
+                raise ValueError(f"A single epoch of {item.evaluation.id} needs {minimum} seconds in an empty window; "
+                                 f"--wall-seconds is {wall_seconds:g}")
+        split_queue = []
+        for group in queue:
+            durations = [rows[id(item)]["wall_seconds"] for item in group]
+            compose_files = {item.evaluation.hash for item in group if item.actor.sandbox_for(item.evaluation)}
+            empty_bound = (preparation_seconds + 2 * TASK_LIFECYCLE_SECONDS * len(compose_files)
+                           + sum(durations) / concurrency + (1 - 1 / concurrency) * max(durations))
+            split_queue.extend([[item] for item in group] if empty_bound > wall_seconds else [group])
+        queue = split_queue
     compositions = set()
     for group in queue:
         group_rows = [rows[id(item)] for item in group]

@@ -166,7 +166,7 @@ def test_admission_counts_discovery_and_startup_and_interleaves_models():
     assert (report["missing_epochs"], report["reserved_wall_seconds"], report["task_lifecycle_seconds"]) == (4, 3670, 120)
 
 
-def test_deferred_long_epochs_keep_admission_balanced_across_models():
+def test_ci_jobs_record_all_72_epochs(tmp_path):
     from collections import Counter
     config = load_config()
     evals = [load_eval(path, config) for path in sorted((ROOT / "evals").glob("*/*"))]
@@ -177,6 +177,32 @@ def test_deferred_long_epochs_keep_admission_balanced_across_models():
         "openrouter/moonshotai/kimi-k3": 3, "openrouter/z-ai/glm-5.3": 3}
     assert (report["missing_epochs"], report["reserved_wall_seconds"] ) == (12, 12240)
     assert {row["mode"] for row in report["missing"]} == {"vanilla"}
+    recorded, jobs = [], []
+    while True:
+        report = plan(evals, config, players, recorded, wall_seconds=16200).report
+        assert report["missing_epochs"] > 0, report
+        jobs.append(report["missing_epochs"])
+        recorded = fold_rows(recorded, [{**row, "status": "passed"} for row in report["missing"]])
+        write_rows(tmp_path / "rows.jsonl", recorded)
+        recorded = read_rows(tmp_path / "rows.jsonl")
+        if not report["deferred_epochs"]:
+            break
+        assert len(jobs) < 72
+    assert len(recorded) == 72
+    assert jobs == [12, 12, 9, 9, 9, 3, 3, 3, 3, 3, 3, 3]
+    assert {row["type"] for row in recorded} == {"quiz", "build", "act"}
+    assert plan(evals, config, players, recorded, wall_seconds=16200).report["missing_epochs"] == 0
+    print(f"CI jobs: {len(jobs)}; admitted per job: {jobs}")
+
+
+def test_plan_rejects_one_epoch_larger_than_empty_window():
+    config = load_config()
+    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
+    players, _ = select_actors(config, ["opus"], ["internet"], planning=True)
+    with pytest.raises(ValueError, match="single epoch.*building/erc20-points-token.*4620"):
+        plan([evaluation], config, players, [], wall_seconds=4619)
+    report = plan([evaluation], config, players, [], epochs=1, wall_seconds=4620).report
+    assert (report["missing_epochs"], report["reserved_wall_seconds"]) == (1, 4620)
 
 
 def test_run_executes_final_admission_without_selecting_again(tmp_path, monkeypatch):
@@ -203,6 +229,23 @@ def test_run_executes_final_admission_without_selecting_again(tmp_path, monkeypa
     assert [(r["epoch"], r["status"]) for r in rows] == [(1, "passed"), (2, "passed")]
     assert [r["epoch"] for r in report["missing"]] == [1, 2]
     assert report["preparation_seconds"] == 100
+
+
+def test_run_prepares_only_initially_admitted_evals(tmp_path, monkeypatch):
+    import ethevals.runner as runner
+    config, evaluation = quiz()
+    deferred = load_eval(ROOT / "evals/concepts/wei-per-ether", config)
+    original = runner.prepare_eval
+
+    def prepare(evaluation, *args):
+        if evaluation.id == deferred.id:
+            raise RuntimeError("Deferred eval was prepared")
+        return original(evaluation, *args)
+
+    monkeypatch.setattr(runner, "prepare_eval", prepare)
+    success, rows = run([evaluation, deferred], config, tmp_path, answer="reference", epochs=1, wall_seconds=1100)
+    assert (success, [(row["eval_id"], row["status"]) for row in rows]) == (
+        True, [("concepts/agent-registries", "passed")])
 
 
 def test_admitted_config_keys_keep_different_efforts_on_the_same_model(tmp_path, monkeypatch):
@@ -275,3 +318,13 @@ def test_late_publication_retains_current_source_and_newer_rows(tmp_path, monkey
     write_rows(rows, [old])
     ci.commit_results(*ci.result_record(read_rows(rows)), "owner/repo", True)
     assert ci.result_record()[0] == newer
+
+
+def test_budget_below_cheapest_group_stops_before_preparation(tmp_path, monkeypatch):
+    config = load_config()
+    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
+    monkeypatch.setattr("ethevals.runner.prepare_compose", lambda *a: pytest.fail("Preparation ran"))
+    with pytest.raises(ValueError, match="Budget exceeded"):
+        run([evaluation], config, tmp_path, budget=1, epochs=1, modes=["internet"])
+    report = json.loads((tmp_path / "plan.json").read_text())
+    assert (report["cheapest_group_usd"], report["missing_epochs"]) == (237.8304, 4)

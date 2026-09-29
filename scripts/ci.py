@@ -108,6 +108,8 @@ def plan_paid(args, evals, config):
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     ready = bool(report["missing"])
+    if not ready and report["deferred_epochs"]:
+        raise ValueError(f"No epochs admitted; {report['deferred_epochs']} remain deferred. Increase --wall-seconds.")
     if ready:
         marker = {"run_id": f"{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}",
                   "commit": command("git", "rev-parse", "HEAD", capture_output=True).stdout.strip()}

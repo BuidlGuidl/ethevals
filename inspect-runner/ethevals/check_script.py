@@ -38,7 +38,7 @@ async def script_result(name, box=None):
         raise RuntimeError(f"Missing scorer script: {name}.py")
     execute = runner_exec if name == "setup" else scoring_exec
     result = await execute(box, ["/bin/bash", "-c",
-        '/bin/rm -f /eval/script.stdout.pipe /eval/script.stderr.pipe; '
+        '/bin/rm -f /eval/script.status /eval/script.stdout.pipe /eval/script.stderr.pipe || exit 125; '
         '/usr/bin/mkfifo /eval/script.stdout.pipe /eval/script.stderr.pipe || exit 125; '
         '{ /usr/bin/head -c 1048577 > /eval/script.stdout; status=$?; /bin/cat > /dev/null; exit "$status"; } < /eval/script.stdout.pipe & out=$!; '
         '{ /usr/bin/head -c 1048577 > /eval/script.stderr; status=$?; /bin/cat > /dev/null; exit "$status"; } < /eval/script.stderr.pipe & err=$!; '
@@ -53,12 +53,18 @@ async def script_result(name, box=None):
         timeout=SETUP_TIMEOUT if name == "setup" else CHECK_SECONDS)
     if result.returncode == 125:
         raise RuntimeError("Cannot capture check script output.")
+    if not result.success:
+        try:
+            status = int(await box.read_file("/eval/script.status"))
+        except FileNotFoundError as error:
+            raise RuntimeError(f"{name}.py wrapper exited {result.returncode} without a script status.") from error
+        if status == 0:
+            raise RuntimeError(f"{name}.py wrapper exited {result.returncode} after a successful script.")
     stdout = await box.read_file("/eval/script.stdout", text=False)
     stderr = await box.read_file("/eval/script.stderr", text=False)
     if max(len(stdout), len(stderr)) > 1048576:
         raise SubmissionFailed("Check script exceeded its 1 MiB output limit.")
     if not result.success:
-        status = int(await box.read_file("/eval/script.status"))
         raise SubmissionFailed(f"{name}.py exited {status}: {stderr[-4096:].decode('utf-8', errors='replace')}")
     try:
         return json.loads(stdout)

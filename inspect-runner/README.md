@@ -125,9 +125,11 @@ Slow sample cleanup logs a warning and preserves scored rows. Final task cleanup
 Admission uses `preparation + lifecycle + sum(durations) / m + (1 - 1/m) * longest_duration`.
 CI sets `m = 1` for tasks, samples, and sandboxes.
 Admission takes shortest whole groups first: one eval, mode, and epoch across every configured model.
-Recorded completed cells stay recorded. Each group admits all remaining cells or none.
+Recorded completed cells stay recorded. Groups that fit an empty window admit all remaining cells or none.
+Larger groups split into single-model items. A single epoch that cannot fit an empty window rejects the plan.
 With zero preparation time, CI admits 12 of 72 epochs and reserves 12,240 seconds. `run()` saves its final count after preparation.
-Execution uses those admitted items. Deferred epochs remain missing.
+Execution uses those admitted items. Only initially admitted evals enter preparation.
+Deferred epochs remain missing. `plan-paid` fails if every pending epoch remains deferred.
 `--budget USD` exits with code 1 when the worst-case estimate exceeds the budget.
 The plan also lists exhausted errors and an expected-cost estimate from recorded spend.
 See the root README for workflow setup and the limit on this billing estimate.
@@ -306,7 +308,8 @@ The root README lists every CLI measurement. These scripted proofs do not measur
 This Mac's Docker VM has 8,217,686,016 bytes. Both machines use one concurrent task plus a 1 GiB host reserve.
 Scoring reads `memory.events` before each command and after OOM-like failures, including Forge's killed compiler child.
 Both `oom` and `oom_kill` must rise for that command. Ordinary failed tests need no second memory exec.
-A host kill without both deltas remains an error. Agent solver failures with both deltas fail every check.
+A host kill without both deltas remains an error. An agent CLI exit 137 with both deltas fails every check.
+Other CLI failures remain errors. Rows record the agent container's `memory.peak` in `agent_memory_peak_bytes`.
 Task notes tell the agent its memory limit. Setup uses the runner executor, not the scoring executor.
 Docker exec failures and capture timeouts remain errors. Only a known submission-rule violation raises `SubmissionFailed`.
 Forge streams through readers with a 10 MiB cap per stream and one extra byte to detect overflow.
@@ -441,8 +444,8 @@ A free reference run discovers names and must pass every check before player epo
 The names remain fixed across passing transfers, wrong amounts, missing checks, and script crashes.
 Extra runtime names cannot add checks. Missing checks fail with a reason.
 A crashed or malformed author check script, including exit 125, fails the full set under a deliberate fail-closed rule.
-An agent solver failure caused by its own container OOM is the second deliberate fail-closed rule.
-The wrapper records the author's exit status separately. Reader and FIFO failures remain errors.
+An agent CLI exit 137 caused by its own container OOM is the second deliberate fail-closed rule.
+The wrapper clears the old author status before each script. Missing status, reader failures, and FIFO failures remain errors.
 Scripts must return a verdict for any chain state. An agent cannot evade a failure by crashing the checker.
 An in-container timeout or output overflow also fails the full set.
 Missing scripts, wrapper exit 125, host exec timeouts, and output-copy failures remain errors.

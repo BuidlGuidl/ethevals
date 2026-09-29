@@ -138,6 +138,7 @@ def results_rows(log: EvalLog) -> list[dict]:
             "grader_prices": metadata.get("grader_prices", {}),
             "working_seconds": sample.working_time,
             "total_seconds": sample.total_time,
+            "agent_memory_peak_bytes": (sample.metadata or {}).get("agent_memory_peak_bytes"),
             "log_file": location,
             "log_sample_id": sample.id,
             "log_epoch": sample.epoch,
