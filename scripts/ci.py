@@ -17,7 +17,6 @@ from ethevals.loader import load_eval
 from ethevals.publish import publish_logs
 from ethevals.rows import fold_rows, read_rows, write_rows, store_rows
 from ethevals.runner import run
-from ethevals.sandboxes import IMAGES, validate_compose
 
 RESULTS_BRANCH = "ci/results"
 
@@ -135,8 +134,6 @@ def publish_artifacts(args):
 
 
 def checks(args, evals):
-    for path in IMAGES.glob("*.compose.yaml"):
-        validate_compose(path, stock=True)
     command(sys.executable, "-m", "ethevals.cli", "validate")
     command(sys.executable, "-m", "ethevals.cli", "check", "--output", args.output / "check")
     command(sys.executable, "-m", "pytest", "-q")

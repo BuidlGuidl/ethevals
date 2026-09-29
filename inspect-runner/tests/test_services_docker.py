@@ -86,7 +86,7 @@ def test_free_check_rejects_broken_untouched_checker(tmp_path, failure):
     shutil.copytree(ROOT / "evals/transactions/send-six-decimal-token", folder)
     path = folder / "scorer/check.py"
     broken = "raise RuntimeError('untouched checker crashed')" if failure == "crash" else "print('invalid JSON'); raise SystemExit(0)"
-    path.write_text(path.read_text().replace("latest =", f"if balance == 0:\n    {broken}\nlatest ="))
+    path.write_text(path.read_text().replace("sent =", f"if balance == 0:\n    {broken}\nsent ="))
     result = subprocess.run(["uv", "run", "ethevals", "check", "--evals", str(folder), "--epochs", "1",
                              "--output", str(tmp_path / "check")], capture_output=True, text=True, timeout=300)
     assert result.returncode == 1, result.stdout + result.stderr

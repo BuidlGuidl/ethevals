@@ -3,6 +3,11 @@ from ethevals.checks import check_player, check_grader
 from ethevals.runner import build_task as actor_task
 from ethevals.runner import run as actor_run
 from dataclasses import replace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from ethevals.preparation import prepare_compose
+
+INPUTS = TemporaryDirectory()
 
 
 def build_task(evaluation, config, key, mode, answer, epochs, compose=None):
@@ -10,6 +15,8 @@ def build_task(evaluation, config, key, mode, answer, epochs, compose=None):
         evaluation = replace(evaluation, discovered_checks={"tests": ("forge:test/Token.t.sol:TokenTest:testSupply()",)})
     actor = check_player(evaluation, answer, mode=mode) if answer else player(config, key, mode)
     grade = check_grader() if answer else grader(config)
+    if compose is None and actor.sandbox_for(evaluation):
+        compose = prepare_compose(evaluation, Path(INPUTS.name))
     return actor_task(evaluation, config, actor, grade, mode, epochs, compose)
 
 

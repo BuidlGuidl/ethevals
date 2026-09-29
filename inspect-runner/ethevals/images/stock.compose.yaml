@@ -1,7 +1,6 @@
 services:
   default:
     mem_limit: 3g
-    build: .
     init: true
     networks: [private, internet]
   scorer:

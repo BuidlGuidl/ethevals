@@ -18,7 +18,7 @@ from ethevals.search import valid_search_result
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
 from support import build_task
-from ethevals.preparation import prepare_eval, prepare_compose
+from ethevals.preparation import build_images, prepare_eval, prepare_compose
 
 
 def main():
@@ -91,6 +91,7 @@ console.log(JSON.stringify({matches, files, environments}));
     config.models[args.model].model = "mockllm/model"
     config.grader.model = "mockllm/model"
     evaluation = load_eval(Path(args.eval), config)
+    build_images()
     compose = prepare_compose(evaluation, args.output)
     evaluation = prepare_eval(evaluation, args.output, compose)
     task = build_task(evaluation, config, args.model, "internet", None, 1, compose)

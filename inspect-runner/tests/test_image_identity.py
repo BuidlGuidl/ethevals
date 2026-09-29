@@ -47,7 +47,8 @@ def test_rows_record_both_build_identities(tmp_path):
     config = load_config()
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
     evaluation = replace(evaluation, discovered_checks={"check_script": ("script:balance",)})
-    task = build_task(evaluation, config, check_player(evaluation, "empty"), check_grader(), "internet", 1)
+    task = build_task(evaluation, config, check_player(evaluation, "empty"), check_grader(), "internet", 1,
+                      prepare_compose(evaluation, tmp_path))
     task.dataset[0].sandbox = task.dataset[0].files = None
 
     def build(*args):

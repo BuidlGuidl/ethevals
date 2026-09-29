@@ -61,19 +61,15 @@ def check_cache_path(evaluation, output, compose=None):
     return output / "inputs" / evaluation.hash / key / "checks.json"
 
 
+def build_images():
+    for image, dockerfile in (("runner", "Dockerfile"), ("chain", "Chain.Dockerfile")):
+        docker_command(["docker", "build", "-f", str(IMAGES / dockerfile), "-t", image_tag(IMAGES, image), str(IMAGES)])
+
+
 def prepare_compose(evaluation, output):
     document = merged_compose(evaluation)
     path = output.resolve() / "inputs" / evaluation.hash / "compose.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
-    for service in document["services"].values():
-        if build := service.get("build"):
-            service["build"] = {"context": str(IMAGES), **({} if isinstance(build, str) else build)}
-            service["build"]["context"] = str((IMAGES / service["build"]["context"]).resolve())
-    path.write_text(yaml.safe_dump(document))
-    builders = [name for name, service in document["services"].items() if "build" in service]
-    docker_command(["docker", "compose", "-f", str(path), "build", *builders])
-    for service in document["services"].values():
-        service.pop("build", None)
     path.write_text(yaml.safe_dump(document))
     return path
 

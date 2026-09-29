@@ -197,7 +197,7 @@ The stock chain uses Anvil 1.5.1 behind an RPC allowlist in the same container.
 Anvil listens on localhost. The agent can read chain state and send signed raw transactions through the filter.
 It cannot use unlocked sends, unsigned sends, signing methods, WebSockets, or chain controls.
 A namespace blocklist misses `eth_sendUnsignedTransaction`, which moves value without a key.
-The runner stops the agent's processes, disables automining, and waits for active mining before checking chain state.
+The runner stops the agent's processes and waits for active mining before checking chain state.
 
 The chain image builds independently of the runner image.
 It uses digest-pinned Python 3.13.7 and Foundry 1.5.1 images, plus checksum-pinned solc 0.8.30 for each architecture.
@@ -292,7 +292,6 @@ Compilation reasons use the coded diagnostic, without source frames. Only compil
 Forge and the rubric read one workspace snapshot after the runner stops the agent's processes.
 The supplied `foundry.toml` defines grading settings and dependency remappings. Agent edits to it do not affect grading.
 Scoring has internet and uses the installed solc 0.8.30 without downloading compilers. The prompt and compiler-version failures list that available compiler.
-The scorer container has no internet network. Compiler downloads happen only when the image builds.
 The rubric reads Forge's compiled source records, with the agent's `src/` files first.
 It excludes unused libraries, private tests, and the runner's libraries.
 The grader receives the files that fit the request cap and a count of omitted files.

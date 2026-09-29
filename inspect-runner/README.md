@@ -400,7 +400,7 @@ Operator stops and wall-clock stops before the working limit remain errors.
 The [classification table](../README.md#failure-classification) lists every boundary.
 
 The generic boundary first stops the agent's processes, including detached senders.
-The runner disables automining and waits for a manual mine because Anvil can return before mining finishes.
+The runner waits for a manual mine because Anvil can return before mining finishes.
 The unfiltered RPC stays private during grading.
 
 `ethevals check` runs the reference and untouched cases through this full pipeline.
@@ -440,9 +440,7 @@ The stock image includes Node 20.11.0 and ripgrep for OpenCode.
 Both image names hash their Dockerfile and copied files, in the order declared by `images/tag.py`.
 Each filename and file's bytes have a NUL separator. The name uses the first 16 hexadecimal characters of SHA-256.
 The runner's inputs are `Dockerfile` and `solc.json`. The chain adds `rpc_filter.py` to `Chain.Dockerfile` and `solc.json`.
-Grading settings in `foundry.toml` affect the check cache only. Preparation refuses stale stock image names.
-After changing build inputs, run `uv run python inspect-runner/ethevals/images/tag.py`.
-Update the names in both stock Compose files before rebuilding.
+Grading settings in `foundry.toml` affect the check cache only.
 Names identify inputs, not image bytes. The runner's apt packages remain unpinned, so fresh builds can differ.
 The bridge downloads and stages the pinned agent binaries at runtime.
 

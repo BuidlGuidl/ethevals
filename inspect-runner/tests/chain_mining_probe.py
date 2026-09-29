@@ -14,7 +14,6 @@ raw = subprocess.check_output(['cast', 'mktx', target, '--private-key', key, '--
 chain = Chain()
 tx = chain.forward({'jsonrpc':'2.0', 'id':1, 'method':'eth_sendRawTransaction', 'params':[raw]})
 started = time.monotonic()
-rpc('evm_setAutomine', [False])
 rpc('evm_mine')
 block = rpc('eth_getBlockByNumber', ['latest', False])['hash']
 elapsed = time.monotonic() - started
@@ -27,3 +26,6 @@ print(json.dumps(dict(tx=tx, boundary=block, before=before, after=after, nonce=n
 assert block == before == after
 assert rpc('eth_getTransactionCount', [sender, 'latest']) == nonce
 assert rpc('eth_getBalance', [sender, 'latest']) == balance
+subprocess.run(['cast', 'send', '0x' + '33' * 20, '--private-key', key,
+                '--rpc-url', 'http://127.0.0.1:8546'], check=True, capture_output=True, timeout=10)
+assert rpc('eth_getTransactionCount', [sender, 'latest']) == '0x2'

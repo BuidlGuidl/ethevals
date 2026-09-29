@@ -38,13 +38,11 @@ def script_cache_inputs(images):
     return [b"script-check-names-v1"]
 
 
-async def script_result(name, box=None):
+async def script_result(path, box=None):
     box = box if box is not None else sandbox("chain")
-    found = await runner_exec(box, ["/usr/bin/find", "/eval/scorer", "-maxdepth", "1", "-type", "f"])
-    path = script_path([p.removeprefix("/eval/") for p in found.stdout.splitlines()], name, required=True)
     executable = "/eval/" + path
-    await runner_exec(box, ["/bin/chmod", "+x", executable])
-    execute = runner_exec if name == "setup" else scoring_exec
+    setup = PurePosixPath(path).name.split(".")[0] == "setup"
+    execute = runner_exec if setup else scoring_exec
     result = await execute(box, ["/bin/bash", "-c",
         '/bin/rm -f /eval/script.status /eval/script.stdout.pipe /eval/script.stderr.pipe || exit 125; '
         '/usr/bin/mkfifo /eval/script.stdout.pipe /eval/script.stderr.pipe || exit 125; '
@@ -58,7 +56,7 @@ async def script_result(name, box=None):
         'if (( result == 125 )); then exit 1; fi; exit "$result"',
         "script-output", "/usr/bin/env", "RPC_URL=http://127.0.0.1:8546", "PUBLIC_RPC_URL=http://chain:8545",
         "SOLC=/opt/solc", "FOUNDRY_OFFLINE=true", executable], cwd="/eval",
-        timeout=SETUP_TIMEOUT if name == "setup" else CHECK_SECONDS)
+        timeout=SETUP_TIMEOUT if setup else CHECK_SECONDS)
     if result.returncode == 125:
         raise RuntimeError("Cannot capture check script output.")
     if not result.success:
@@ -100,8 +98,10 @@ async def setup_script(config, evaluation, environments):
     for name, data in evaluation.files.items():
         if name.startswith("scorer/") and not name.startswith("scorer/solution/"):
             await box.write_file("/eval/" + name, data)
-    if script_path(evaluation.files, "setup"):
-        outputs = await script_result("setup", box)
+    scripts = [script_path(evaluation.files, name) for name in ("setup", "check")]
+    await runner_exec(box, ["/bin/chmod", "+x", *("/eval/" + path for path in scripts if path)])
+    if path := scripts[0]:
+        outputs = await script_result(path, box)
         for name, text in setup_files(outputs, evaluation.files).items():
             for destination in ("default", "scorer"):
                 await environments[destination].write_file("/workspace/" + name, text.encode())
@@ -128,11 +128,8 @@ async def run_solution(evaluation, box=None):
 
 async def capture_chain(config, evaluation, submission):
     box = sandbox("chain")
-    # Anvil returns transaction hashes before mining finishes. Stop future mining
-    # and wait for its mining mutex before the check reads state.
-    result = await runner_exec(box, ["/bin/bash", "-ec",
-        "cast rpc --rpc-url http://127.0.0.1:8546 evm_setAutomine false; "
-        "cast rpc --rpc-url http://127.0.0.1:8546 evm_mine"], timeout=60)
+    # Wait for Anvil's mining mutex before the check reads state.
+    result = await runner_exec(box, ["cast", "rpc", "--rpc-url", "http://127.0.0.1:8546", "evm_mine"], timeout=60)
     if not result.success:
         raise RuntimeError(f"Cannot settle chain mining: {result.stderr}")
     # Read bytes instead of Inspect's 20-line display.
@@ -156,14 +153,14 @@ def script_checks(value):
 async def discover_script(config, evaluation):
     await run_solution(evaluation)
     await capture_chain(config, evaluation, Submission())
-    return script_checks(await script_result("check"))
+    return script_checks(await script_result(script_path(evaluation.files, "check", required=True)))
 
 
 def check_script_scorer(config, evaluation):
     expected = evaluation.discovered_checks[config.kind]
 
     async def score(state, target, submission):
-        value = await script_result("check")
+        value = await script_result(script_path(evaluation.files, "check", required=True))
         checks = script_checks(value)
         missing = failed_checks(expected, "Check script did not report this check.")
         return checks_score({name: checks.get(name, missing[name]) for name in expected})

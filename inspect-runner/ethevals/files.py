@@ -7,20 +7,17 @@ JUNK_NAMES = {".DS_Store", "__pycache__", ".pytest_cache"}
 RESERVED_NAMES = {"out", "cache", "lib"}
 
 
-def eval_files(folder: Path, *, scorer=False, ignored=False, workspace=False, root=True):
-    for path in sorted(folder.iterdir()):
+def eval_files(folder: Path):
+    for path in sorted(folder.rglob("*")):
         if path.is_symlink():
             raise ValueError(f"{path}: symlinks are not allowed in an eval folder")
         if path.is_file() and path.stat().st_nlink > 1:
             raise ValueError(f"{path}: hard links are not allowed in an eval folder")
-        private = scorer or (root and path.name == "scorer")
-        reserved = path.name in RESERVED_NAMES and (workspace or private)
-        if private and reserved:
+        parts = path.relative_to(folder).parts
+        if parts[0] == "scorer" and path.name in RESERVED_NAMES:
             raise ValueError(f"{path}: reserved names are not allowed under scorer/")
-        skip = ignored or reserved or path.name in JUNK_NAMES
-        if path.is_dir():
-            yield from eval_files(path, scorer=private, ignored=skip, workspace=root and path.name == "workspace", root=False)
-        elif path.is_file() and not skip:
+        reserved = parts[0] in RESERVED_NAMES or (len(parts) > 1 and parts[0] == "workspace" and parts[1] in RESERVED_NAMES)
+        if path.is_file() and not reserved and not JUNK_NAMES.intersection(parts):
             yield path
 
 

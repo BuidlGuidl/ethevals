@@ -397,6 +397,8 @@ def test_hash_ignores_local_artifacts_but_includes_new_author_files(folder):
     original = eval_hash(folder)
     (folder / ".DS_Store").write_bytes(b"Finder")
     for name in ["out", "cache", "lib", "__pycache__"]:
+        (folder / name).mkdir()
+        (folder / name / "generated").write_text("local artifact")
         path = folder / "workspace" / name
         path.mkdir()
         (path / "generated").write_text("local artifact")

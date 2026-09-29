@@ -1,7 +1,6 @@
 services:
   default:
     mem_limit: 3g
-    build: .
     init: true
     networks: [private, internet]
   scorer:
@@ -10,9 +9,6 @@ services:
     networks: [private, internet]
   chain:
     mem_limit: 256m
-    build:
-      context: .
-      dockerfile: Chain.Dockerfile
     init: true
     networks: [private, internet]
     healthcheck:

@@ -188,8 +188,6 @@ def test_script_failure_includes_stderr_tail():
 
     class Box:
         async def exec(self, command, **kwargs):
-            if "/usr/bin/find" in command:
-                return ExecResult(success=True, returncode=0, stdout="/eval/scorer/setup.py\n", stderr="")
             if "/sys/fs/cgroup/memory.events" in command:
                 return ExecResult(success=True, returncode=0, stdout="oom 0\noom_kill 0\n", stderr="")
             return ExecResult(success=False, returncode=1, stdout="", stderr="")
@@ -200,7 +198,7 @@ def test_script_failure_includes_stderr_tail():
             return b"" if path.endswith("stdout") else b"x" * 6000 + b"\nValueError: bad setup amount"
 
     with pytest.raises(RuntimeError, match="ValueError: bad setup amount") as error:
-        anyio.run(script_result, "setup", Box())
+        anyio.run(script_result, "scorer/setup.py", Box())
     assert len(str(error.value)) < 4200
 
 
@@ -226,7 +224,7 @@ def test_failed_reference_discovery_names_checks(tmp_path, monkeypatch):
     assert "script:balance: Recipient holds zero." in log.samples[0].error.message
 
 
-def test_docker_build_error_is_local_to_eval_and_keeps_diagnostics(tmp_path, monkeypatch):
+def test_image_build_error_keeps_diagnostics(tmp_path, monkeypatch):
     import subprocess
     from ethevals.checks import check_player, check_grader
     from ethevals.runner import run
@@ -239,17 +237,13 @@ def test_docker_build_error_is_local_to_eval_and_keeps_diagnostics(tmp_path, mon
     original = subprocess.run
 
     def command(args, **kwargs):
-        if args[:2] == ["docker", "compose"] and "build" in args:
+        if args[:2] == ["docker", "build"]:
             raise subprocess.CalledProcessError(1, args, stderr="Docker: compiler checksum mismatch")
         return original(args, **kwargs)
 
     monkeypatch.setattr(preparation.subprocess, "run", command)
-    success, rows = run([act, quiz], config, tmp_path,
-                        answer="reference", epochs=1)
-    assert success is False
-    assert [(row["eval_id"], row["status"]) for row in rows] == [("concepts/wei-per-ether", "passed")]
-    assert json.loads((tmp_path / "discovery-errors.json").read_text()) == [{
-        "eval_id": act.id, "eval_hash": act.hash, "error": "Docker failed: Docker: compiler checksum mismatch"}]
+    with pytest.raises(RuntimeError, match="Docker failed: Docker: compiler checksum mismatch"):
+        run([act, quiz], config, tmp_path, answer="reference", epochs=1)
 
 
 
@@ -259,12 +253,10 @@ def test_earlier_chain_oom_does_not_change_wrapper_failure(monkeypatch):
 
     class Box:
         async def exec(self, command, **kwargs):
-            if "/usr/bin/find" in command:
-                return ExecResult(success=True, returncode=0, stdout="/eval/scorer/check.py\n", stderr="")
             if "/sys/fs/cgroup/memory.events" in command:
                 return ExecResult(success=True, returncode=0, stdout="oom 8\noom_kill 3\n", stderr="")
             code = 125 if "/usr/bin/timeout" in command else 0
             return ExecResult(success=code == 0, returncode=code, stdout="", stderr="")
 
     with pytest.raises(RuntimeError, match="Cannot capture check script output"):
-        anyio.run(script_result, "check", Box())
+        anyio.run(script_result, "scorer/check.py", Box())

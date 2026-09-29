@@ -14,7 +14,7 @@ from inspect_ai.util import sandbox
 from ethevals.checks import check_player, check_grader
 from ethevals.config import load_config
 from ethevals.loader import load_eval
-from ethevals.preparation import prepare_compose, prepare_eval
+from ethevals.preparation import build_images, prepare_compose, prepare_eval
 from ethevals.runner import build_task
 from ethevals.rows import export_rows
 from ethevals.sandboxes import runner_exec
@@ -84,6 +84,7 @@ def run_proof(output, variants=None):
     config = load_config()
     root = Path(__file__).resolve().parents[2]
     evaluation = load_eval(root / "evals/transactions/send-six-decimal-token", config)
+    build_images()
     compose = prepare_compose(evaluation, output)
     evaluation = prepare_eval(evaluation, output, compose)
     tasks = []

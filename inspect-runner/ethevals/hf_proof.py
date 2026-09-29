@@ -70,7 +70,7 @@ def prove(export: Path, evaluations: list[Eval], output: Path, config: Config) -
                         raise ValueError(f"{sample.id}: {route} did not produce one score: {log.error}")
                     observed[route] = next(iter(log.samples[0].scores.values())).value
                 runner = build_task(evaluation, config, check_player(evaluation, "reference"),
-                                    check_grader(), "vanilla", 1)
+                                    check_grader(), "vanilla", 1, None)
                 runner.model = model()
                 log = read_eval_log(eval(runner, log_dir=str(output / "logs"), display="none")[0].location)
                 rows = results_rows(log)

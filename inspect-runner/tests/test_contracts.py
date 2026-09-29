@@ -229,7 +229,6 @@ def test_grader_budget_covers_full_evidence_for_each_question():
 
 def test_compose_rejects_binary_yaml(tmp_path):
     document = yaml.safe_load((IMAGES / "stock.compose.yaml").read_bytes())
-    document["services"]["default"].pop("build")
     document["services"]["default"]["environment"] = {"TOKEN": b"$SECRET_PROBE"}
     with pytest.raises(ValueError, match="unsupported YAML scalar"):
         validate_compose(tmp_path / "compose.yaml", data=yaml.safe_dump(document).encode())

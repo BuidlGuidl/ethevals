@@ -9,7 +9,6 @@ from pathlib import Path
 
 import anyio
 import pytest
-import yaml
 from inspect_ai import eval
 from inspect_ai.solver import solver
 
@@ -19,7 +18,7 @@ from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose, prepare_eval
 from ethevals.runner import build_task
 from ethevals.rows import results_rows
-from ethevals.sandboxes import IMAGES, validate_compose
+from ethevals.sandboxes import IMAGES
 from ethevals.images.tag import image_tag
 
 pytestmark = pytest.mark.docker
@@ -82,21 +81,21 @@ def test_script_output_waits_for_readers_and_caps_each_stream(monkeypatch):
 
         async def proof():
             box = ChainBox(name)
-            docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py",
+            docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py; chmod +x /eval/scorer/check.py",
                    input='#!/usr/bin/env python3\nprint(\'{"balance":{"passed":true,"reason":"Exact balance."}}\')\n')
-            assert await scripts.script_result("check", box) == {"balance": {"passed": True, "reason": "Exact balance."}}
+            assert await scripts.script_result("scorer/check.py", box) == {"balance": {"passed": True, "reason": "Exact balance."}}
             for stream in ("stdout", "stderr"):
-                docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py",
+                docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py; chmod +x /eval/scorer/check.py",
                        input=f'#!/usr/bin/env python3\nimport sys\nsys.{stream}.write("x" * (2 * 1024 * 1024))\n')
                 with pytest.raises(SubmissionFailed, match="1 MiB"):
-                    await scripts.script_result("check", box)
+                    await scripts.script_result("scorer/check.py", box)
                 assert len(await box.read_file(f"/eval/script.{stream}", text=False)) == 1048577
-            docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py", input='#!/usr/bin/env python3\nraise SystemExit(125)\n')
+            docker("exec", "-i", name, "bash", "-c", "cat > /eval/scorer/check.py; chmod +x /eval/scorer/check.py", input='#!/usr/bin/env python3\nraise SystemExit(125)\n')
             with pytest.raises(RuntimeError, match="check.py exited 125"):
-                await scripts.script_result("check", box)
+                await scripts.script_result("scorer/check.py", box)
             docker("exec", name, "bash", "-c", "rm /eval/script.stdout; mkdir /eval/script.stdout")
             with pytest.raises(RuntimeError, match="Cannot capture check script output"):
-                await scripts.script_result("check", box)
+                await scripts.script_result("scorer/check.py", box)
 
         anyio.run(proof)
 
@@ -166,16 +165,13 @@ def test_clean_builder_needs_no_runner_image_and_amd64_smoke():
 
 def test_broken_chain_build_reports_dockers_message(tmp_path, monkeypatch):
     import ethevals.preparation as preparation
-    document = yaml.safe_load((IMAGES / "act.compose.yaml").read_bytes())
-    document["services"]["default"].pop("build")
-    document["services"]["chain"]["build"]["context"] = str(tmp_path)
-    (tmp_path / "Chain.Dockerfile").write_text(f"FROM {IMAGE}\nRUN echo chain-build-canary >&2; exit 73\n")
-    stock = tmp_path / "act.compose.yaml"
-    stock.write_text(yaml.safe_dump(document))
-    monkeypatch.setattr("ethevals.sandboxes.compose_file", lambda _: stock)
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", load_config())
+    import shutil
+    images = tmp_path / "images"
+    shutil.copytree(IMAGES, images)
+    (images / "Chain.Dockerfile").write_text(f"FROM {IMAGE}\nRUN echo chain-build-canary >&2; exit 73\n")
+    monkeypatch.setattr(preparation, "IMAGES", images)
     with pytest.raises(RuntimeError, match="chain-build-canary"):
-        prepare_compose(evaluation, tmp_path / "out")
+        preparation.build_images()
 
 
 @solver

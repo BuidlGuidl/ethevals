@@ -28,7 +28,6 @@ PASS = json.dumps({"test/Token.t.sol:TokenTest": {"test_results": {
 @pytest.mark.parametrize("value", ["$SECRET_PROBE", "${SECRET_PROBE}", "$$literal/$SECRET_PROBE"])
 def test_compose_rejects_both_interpolation_forms(tmp_path, value):
     data = yaml.safe_load((IMAGES / "stock.compose.yaml").read_text())
-    data["services"]["default"].pop("build")
     data["services"]["default"]["environment"] = {"LEAK": value}
     path = tmp_path / "compose.yaml"
     path.write_text(yaml.safe_dump(data))

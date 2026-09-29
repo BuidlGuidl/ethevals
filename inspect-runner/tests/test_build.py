@@ -55,7 +55,7 @@ def test_agent_sample_contains_only_workspace_files():
         "/workspace/foundry.toml": inline_file((IMAGES / "foundry.toml").read_bytes()),
         "/workspace/src/BuilderPoints.sol": inline_file((BUILD / "workspace/src/BuilderPoints.sol").read_bytes()),
     }
-    assert (sample.sandbox.type, Path(sample.sandbox.config).name) == ("ethevals_docker", "stock.compose.yaml")
+    assert (sample.sandbox.type, Path(sample.sandbox.config).name) == ("ethevals_docker", "compose.yaml")
 
 
 @pytest.mark.parametrize("extra,reason", [

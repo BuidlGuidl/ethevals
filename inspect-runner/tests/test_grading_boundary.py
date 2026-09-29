@@ -3,6 +3,7 @@ import pytest
 
 from test_contracts import scoring_case, YES
 from ethevals.scorers import prepare_forge, forge as real_forge
+from ethevals.preparation import prepare_compose
 
 
 @pytest.mark.parametrize("operation", ["stop_agent", "workspace_files"])
@@ -43,7 +44,7 @@ def test_docker_timeout_during_oom_inspection_is_an_error(scoring_case, monkeypa
 
 @pytest.mark.parametrize("cause,status", [("wrapper", "error"), ("host_timeout", "error"),
     ("earlier_oom_wrapper", "error"), ("author125", "error"),
-    ("read_timeout", "error"), ("missing", "error"), ("crash", "error"), ("json", "error"),
+    ("read_timeout", "error"), ("crash", "error"), ("json", "error"),
     ("schema", "error"), ("deadline", "failed"), ("output", "failed"), ("pass", "passed")])
 def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status):
     from dataclasses import replace
@@ -61,8 +62,6 @@ def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status
             code, stdout = 0, ""
             if "/sys/fs/cgroup/memory.events" in command:
                 stdout = "oom 5\noom_kill 5\n" if cause == "earlier_oom_wrapper" else "oom 0\noom_kill 0\n"
-            elif "/usr/bin/find" in command:
-                stdout = "" if cause == "missing" else "/eval/scorer/check.py\n"
             elif "/usr/bin/timeout" in command:
                 if cause == "host_timeout":
                     raise TimeoutError("Host compose exec timed out")
@@ -85,7 +84,8 @@ def test_check_script_boundary_through_rows(tmp_path, monkeypatch, cause, status
     config = load_config()
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
     evaluation = replace(evaluation, discovered_checks={"check_script": ("script:balance",)})
-    task = build_task(evaluation, config, check_player(evaluation, "empty"), check_grader(), "internet", 1)
+    task = build_task(evaluation, config, check_player(evaluation, "empty"), check_grader(), "internet", 1,
+                      prepare_compose(evaluation, tmp_path))
     task.dataset[0].sandbox = task.dataset[0].files = None
     monkeypatch.setattr("ethevals.scorers.stop_agent", stopped)
     monkeypatch.setattr("ethevals.check_script.sandbox", lambda name: Box())
@@ -146,7 +146,8 @@ def test_chain_capture_failure_is_an_error(tmp_path, monkeypatch, timeout):
     config = load_config()
     evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", config)
     evaluation = replace(evaluation, discovered_checks={"check_script": ("script:balance",)})
-    task = build_task(evaluation, config, check_player(evaluation, "empty"), check_grader(), "internet", 1)
+    task = build_task(evaluation, config, check_player(evaluation, "empty"), check_grader(), "internet", 1,
+                      prepare_compose(evaluation, tmp_path))
     task.dataset[0].sandbox = task.dataset[0].files = None
 
     async def stopped():
