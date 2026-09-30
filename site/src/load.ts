@@ -74,11 +74,12 @@ export function loadBoard(env: Record<string, string | undefined> = process.env,
   const bundledFiles = new Set(!demo && existsSync(path.join(bundle, "index.html")) && existsSync(path.join(bundle, "logs"))
     ? readdirSync(path.join(bundle, "logs"), { withFileTypes: true })
       .filter((file) => file.isFile() && file.name.endsWith(".eval")).map((file) => file.name) : []);
+  const viewerBase = env.NODE_ENV === "development" ? "/logs/index.html" : "/logs/";
   for (const table of Object.values(board.tables)) {
     for (const pillar of Object.values(table.pillars)) {
       for (const evaluation of pillar.evals) {
         for (const cell of Object.values(evaluation.cells)) {
-          for (const epoch of cell.epochs) epoch.logHref = logLink(epoch.logUrl, bundledFiles);
+          for (const epoch of cell.epochs) epoch.logHref = logLink(epoch.logUrl, bundledFiles, viewerBase);
         }
       }
     }

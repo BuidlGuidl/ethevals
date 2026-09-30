@@ -36,6 +36,7 @@ Published rows supply full log URLs.
 The token needs read-only Contents access to `BuidlGuidl/ethevals`.
 To download a run's logs from the repository root, run `gh release download <tag> --repo BuidlGuidl/ethevals --dir site/.logs`. The tag is in each row's `log_url`.
 Build and dev bundle local `.eval` files into an Inspect viewer; matching board links open it and retain a download link.
+`vercel.json` advertises byte-range support for bundled logs so Inspect can read their size when Vercel omits `Content-Length`.
 See [the runner reference](../inspect-runner/README.md#ci-and-publication) for publication.
 
 ## Scores
