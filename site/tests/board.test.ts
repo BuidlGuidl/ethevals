@@ -115,8 +115,8 @@ test("the table and panel both label an empty pillar as No evals yet", () => {
 test("the board labels null effort as the provider default", () => {
   const data = buildBoard([evaluation], [row({ effort: null }), row({ effort: "medium" })]);
   const html = renderToStaticMarkup(createElement(Board, { data }));
-  assert.ok(html.includes("Effort: provider default"));
-  assert.ok(html.includes("Effort: medium"));
+  assert.ok(html.includes('title="model-a · harness-a · effort provider default"'));
+  assert.ok(html.includes('title="model-a · harness-a · effort medium"'));
 });
 
 test("cost adds both roles and keeps a missing price unknown", () => {

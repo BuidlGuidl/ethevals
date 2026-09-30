@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
+import Image from "next/image";
+import { agentLabel, agentDetails, agentLogo, harnessLabel, modelLabel } from "../src/labels";
 import {
   pillars, agentKey,
   type BoardData, type Cell, type DisplayEval as Eval, type Mode, type Pillar, type Epoch, type Agent,
@@ -20,7 +22,6 @@ const money = (cost: number | null) => cost === null ? "Unknown" : `$${cost.toFi
 const countText = (cell: Cell) => `${cell.passed} of ${cell.total} epochs passed`;
 const cellText = (cell: Cell) => cell.state === "na" ? "Not applicable"
   : cell.state === "empty" ? "No evals yet" : cell.state === "pending" ? "No epochs yet" : percent(cell.score!);
-const agentName = (agent: Agent) => [agent.model, agent.harness].filter(Boolean).join(" · ");
 
 type Selection = { evaluation?: Eval; pillar: Pillar; agent: Agent; mode: Mode };
 
@@ -80,12 +81,13 @@ function ResultsTable({ data, mode, onOpen, onMode, hidden }: {
           <caption className="sr-only">{title}. Pillars expand to evals. Open a cell for epochs and checks.</caption>
           <thead><tr>
             <th scope="col" className="row-label" onMouseEnter={() => setColumn(null)}>Pillar / eval<span className="subline">Expand a pillar to see its evals</span></th>
-            {agents.map((agent) => <th key={agentKey(agent)} scope="col"
-              className={column === agentKey(agent) ? "column-hover" : ""}
+            {agents.map((agent) => <th key={agentKey(agent)} scope="col" title={agentDetails(agent)}
+              className={`agent-heading${column === agentKey(agent) ? " column-hover" : ""}`}
               onMouseEnter={() => setColumn(agentKey(agent))}>
-              <span className="agent-name">{agent.model}</span>
-              {agent.harness && <span className="subline">{agent.harness}</span>}
-              <span className="subline">Effort: {agent.effort ?? "provider default"}</span>
+              <span className="agent-name">
+                {agentLogo(agent) && <Image src={`/logos/${agentLogo(agent)}.svg`} width={16} height={16} alt="" unoptimized />}
+                <span>{agent.harness ? <>{harnessLabel(agent.harness)} <span className="muted">/ {modelLabel(agent.model)}</span></> : modelLabel(agent.model)}</span>
+              </span>
             </th>)}
           </tr></thead>
           {pillars.map((pillar) => {
@@ -106,7 +108,7 @@ function ResultsTable({ data, mode, onOpen, onMode, hidden }: {
                   className={column === agentKey(agent) ? "column-hover" : ""}
                   onMouseEnter={() => setColumn(agentKey(agent))} onFocus={() => setColumn(agentKey(agent))}>
                   <Score cell={pillarRow.cells[agentKey(agent)]}
-                    label={`${names[pillar]}, ${agentName(agent)}`}
+                    label={`${names[pillar]}, ${agentLabel(agent)}`}
                     open={() => onOpen({ pillar, agent, mode })} />
                 </td>)}
               </tr></tbody>
@@ -119,7 +121,7 @@ function ResultsTable({ data, mode, onOpen, onMode, hidden }: {
                     className={column === agentKey(agent) ? "column-hover" : ""}
                     onMouseEnter={() => setColumn(agentKey(agent))} onFocus={() => setColumn(agentKey(agent))}>
                     <Score cell={entry.cells[agentKey(agent)]}
-                      label={`${evaluation.title}, ${agentName(agent)}`}
+                      label={`${evaluation.title}, ${agentLabel(agent)}`}
                       open={() => onOpen({ evaluation, pillar, agent, mode })} />
                   </td>)}
                 </tr>; }) : <tr><td colSpan={agents.length + 1} className="no-evals">No evals yet for this mode.</td></tr>}
@@ -204,7 +206,8 @@ export function Detail({ selection, data, onSelect, onClose }: {
       if (event.target === event.currentTarget && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) onClose();
     }}>
     <header className="drawer-header"><div className="drawer-heading">
-      <p className="subline">{names[pillar]} · {mode} · {agentName(agent)}</p>
+      <p className="subline">{names[pillar]} · {mode} · {agentLabel(agent)}</p>
+      <p className="subline">{agentDetails(agent)}</p>
       <h2 id="detail-title">{evaluation?.title ?? names[pillar]}</h2>
       <p className="mono">{cellText(cell)}{cell.state === "score" && ` · ${countText(cell)}`}</p>
       {data.demo && <p className="demo-label">Demo data. Invented results.</p>}
