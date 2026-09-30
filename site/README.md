@@ -32,6 +32,8 @@ The agent table switches between internet and skills rows.
 The build reports loaded, current, and stale row counts.
 
 Published rows supply full log URLs.
+`ETHEVALS_LOGS_TOKEN` lets the build download missing release logs into `site/.logs/` for the bundled viewer.
+The token needs read-only Contents access to `BuidlGuidl/ethevals`.
 To download a run's logs from the repository root, run `gh release download <tag> --repo BuidlGuidl/ethevals --dir site/.logs`. The tag is in each row's `log_url`.
 Build and dev bundle local `.eval` files into an Inspect viewer; matching board links open it and retain a download link.
 See [the runner reference](../inspect-runner/README.md#ci-and-publication) for publication.
