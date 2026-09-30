@@ -1,0 +1,80 @@
+name: Eval results
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['results/**']
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: Worst-case USD budget for missing epochs
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: eval-results
+  queue: max
+  cancel-in-progress: false
+jobs:
+  run:
+    name: Run missing epochs
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: false
+      - run: uv sync --frozen
+      - name: Plan and run missing epochs
+        timeout-minutes: 340
+        env:
+          RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+        run: uv run python scripts/ci.py after-merge --modes vanilla internet skills --budget "$RUN_BUDGET" --restore-results --output results/ci-run
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: eval-run-${{ github.run_id }}-${{ github.run_attempt }}
+          path: results/ci-run/
+          retention-days: 14
+          if-no-files-found: error
+  publish:
+    name: Publish results
+    needs: run
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # Publish log assets and append the results branch.
+      pull-requests: write # Open the results PR.
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: eval-run-${{ github.run_id }}-*
+          path: results/artifact
+      - name: Publish logs and update the results PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULTS_REPO: ${{ github.repository }}
+        run: >-
+          uv run python scripts/ci.py publish-results
+          --output results/artifact
+          --repo "$RESULTS_REPO" --publish

@@ -1,0 +1,24 @@
+services:
+  default:
+    mem_limit: 3g
+    init: true
+    networks: [private, internet]
+  scorer:
+    mem_limit: 2g
+    init: true
+    networks: [private, internet]
+  chain:
+    mem_limit: 256m
+    init: true
+    networks: [private, internet]
+    healthcheck:
+      test: [CMD, cast, chain-id, --rpc-url, http://127.0.0.1:8545]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+networks:
+  private:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.inhibit_ipv4: "true"
+  internet: {}

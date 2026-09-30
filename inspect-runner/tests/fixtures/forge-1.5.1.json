@@ -1,0 +1,27 @@
+{
+  "reference": {
+    "stdout": "{\"test/Token.t.sol:Tests\":{\"duration\":\"248µs 334ns\",\"test_results\":{\"testToken()\":{\"status\":\"Success\",\"reason\":null,\"counterexample\":null,\"logs\":[],\"decoded_logs\":[],\"kind\":{\"Unit\":{\"gas\":5581}},\"traces\":[],\"labeled_addresses\":{},\"duration\":\"62µs 584ns\",\"breakpoints\":{},\"gas_snapshots\":{}}},\"warnings\":[]}}\n",
+    "stderr": "",
+    "returncode": 0
+  },
+  "constructor": {
+    "stdout": "{\"test/Token.t.sol:Tests\":{\"duration\":\"66µs 167ns\",\"test_results\":{\"constructor()\":{\"status\":\"Failure\",\"reason\":\"bad submission\",\"counterexample\":null,\"logs\":[],\"decoded_logs\":[],\"kind\":{\"Unit\":{\"gas\":0}},\"traces\":[],\"labeled_addresses\":{},\"duration\":\"0s\",\"breakpoints\":{},\"gas_snapshots\":{}}},\"warnings\":[]}}\n",
+    "stderr": "",
+    "returncode": 1
+  },
+  "syntax": {
+    "stdout": "Compiler run failed:\nError (6933): Expected primary expression.\n --> src/Token.sol:1:52:\n  |\n1 | pragma solidity =0.8.30; contract Token { uint x = ; }\n  |                                                    ^\n\n",
+    "stderr": "Error: Compilation failed\n",
+    "returncode": 1
+  },
+  "missing_method": {
+    "stdout": "Compiler run failed:\nError (9582): Member \"value\" not found or not visible after argument-dependent lookup in contract Token.\n --> test/Token.t.sol:5:48:\n  |\n5 |     function testToken() public view { require(token.value() == 1); }\n  |                                                ^^^^^^^^^^^\n\n",
+    "stderr": "Error: Compilation failed\n",
+    "returncode": 1
+  },
+  "version": {
+    "stdout": "",
+    "stderr": "Error: Encountered invalid solc version in src/Token.sol: No solc version installed that matches the version requirement: =0.8.29\nEncountered invalid solc version in src/Token.sol: No solc version installed that matches the version requirement: =0.8.29\n",
+    "returncode": 1
+  }
+}

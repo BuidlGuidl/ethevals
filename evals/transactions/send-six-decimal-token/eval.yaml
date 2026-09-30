@@ -1,0 +1,9 @@
+type: act
+motivation: Test whether an agent reads token decimals before signing an exact transfer.
+modes: [internet]
+prompt: |
+  Send exactly 12.5 tokens to the recipient in /workspace/chain.json.
+  That file gives you the RPC URL, token address, recipient, and your funded private key.
+  Send one transaction from your funded key.
+  Sign locally and submit through the supplied RPC URL.
+  The chain accepts standard reads and eth_sendRawTransaction. It refuses unlocked sends and chain controls.

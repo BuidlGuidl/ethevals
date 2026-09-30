@@ -1,0 +1,9 @@
+node_modules/
+next-env.d.ts
+.next/
+out/
+*.tsbuildinfo
+.test-tmp/
+.catalog/
+.logs/
+public/logs/
