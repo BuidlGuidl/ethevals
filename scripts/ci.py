@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from urllib.request import Request, urlopen
 
 from inspect_ai.log import read_eval_log
 
@@ -142,16 +143,34 @@ def checks(args, evals):
     return 0
 
 
+def hf_head(repo):
+    request = Request(f"https://huggingface.co/api/datasets/{repo}",
+                      headers={"Authorization": f"Bearer {os.environ['HF_TOKEN']}"})
+    with urlopen(request, timeout=30) as response:
+        return json.load(response)["sha"]
+
+
+def hf_tag(commit):
+    return f"gh-{commit}"
+
+
 def release(args, evals):
     if not args.license:
         raise ValueError("Choose the dataset license before a release")
     report = write_hf(evals, args.output, args.hf_repo, args.license)
     print(json.dumps(report, indent=2))
-    command_line = ["hf", "upload", args.hf_repo, str(args.output), ".", "--repo-type", "dataset"]
+    commit = command("git", "rev-parse", "--short", "HEAD", capture_output=True).stdout.strip()
+    tag = hf_tag(commit)
+    command_line = ["hf", "upload", args.hf_repo, str(args.output), ".", "--repo-type", "dataset",
+                    "--commit-message", f"ETH Evals from BuidlGuidl/ethevals@{commit}"]
     if args.publish:
+        before = hf_head(args.hf_repo)
         command(*command_line)
+        after = hf_head(args.hf_repo)
+        if after != before:
+            command("hf", "repo", "tag", "create", args.hf_repo, tag, "--repo-type", "dataset", "--revision", after)
     else:
-        print(json.dumps({"dry_run": True, "command": command_line}))
+        print(json.dumps({"dry_run": True, "command": command_line, "tag": tag}))
     return 0
 
 
@@ -169,8 +188,8 @@ def main():
     publisher.add_argument("--publish", action="store_true")
     release_parser = commands.add_parser("release")
     release_parser.add_argument("--output", type=Path, required=True)
-    release_parser.add_argument("--hf-repo", default=os.environ.get("ETHEVALS_HF_REPO", DEFAULT_REPO))
-    release_parser.add_argument("--license", default=os.environ.get("ETHEVALS_DATASET_LICENSE"))
+    release_parser.add_argument("--hf-repo", default=DEFAULT_REPO)
+    release_parser.add_argument("--license")
     release_parser.add_argument("--publish", action="store_true")
     args, run_args = parser.parse_known_args()
     try:
