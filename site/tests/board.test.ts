@@ -132,7 +132,7 @@ test("the agent switch and skills details use their own scores", () => {
   const html = renderToStaticMarkup(createElement(Board, { data }));
   assert.ok(html.includes('aria-label="Agent mode"'));
   assert.ok(html.includes('aria-pressed="true">Internet</button>'));
-  assert.ok(html.includes('aria-pressed="false">Skills</button>'));
+  assert.ok(html.includes('aria-pressed="false">With skills</button>'));
   const panel = renderToStaticMarkup(createElement(Detail, {
     data, selection: { evaluation, pillar: "concepts", agent, mode: "skills" },
     onSelect: () => {}, onClose: () => {},

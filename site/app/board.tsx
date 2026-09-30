@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   pillars, agentKey,
   type BoardData, type Cell, type DisplayEval as Eval, type Mode, type Pillar, type Epoch, type Agent,
@@ -30,18 +30,17 @@ function Score({ cell, label, open }: {
   const pillar = "scoredEvals" in cell;
   const tone = cell.score === null ? "" : cell.score < 0.25 ? "negative" : cell.score < 0.5 ? "caution" : "positive";
   return <button className="cell" onClick={open}
+    title={cell.state === "score" ? `${pillar ? `Mean of ${cell.scoredEvals} eval${cell.scoredEvals === 1 ? "" : "s"} · ` : ""}${countText(cell)}` : undefined}
     aria-label={`${label}. ${cellText(cell)}.${cell.state === "score" ? ` ${countText(cell)}.` : ""} Open details.`}>
     <span className={cell.state === "score" ? `score ${tone}` : cell.state === "empty" ? "empty-pillar" : cell.state}>{cellText(cell)}</span>
-    {cell.state === "score" && <>
-      <span className="subline">{pillar ? `Mean of ${cell.scoredEvals} eval${cell.scoredEvals === 1 ? "" : "s"}` : countText(cell)}</span>
-      {pillar && <span className="subline">{countText(cell)}</span>}
-    </>}
+    {cell.state === "score" && <span className={`scorebar ${tone}`} aria-hidden="true"
+      style={{ "--value": `${cell.score! * 100}%` } as CSSProperties}><i /></span>}
     {cell.errors > 0 && <span className="error-note">{cell.errors} {cell.errors === 1 ? "error" : "errors"} excluded</span>}
   </button>;
 }
 
-function ResultsTable({ data, mode, onOpen, onMode }: {
-  data: BoardData; onOpen: (selection: Selection) => void;
+function ResultsTable({ data, mode, onOpen, onMode, hidden }: {
+  data: BoardData; onOpen: (selection: Selection) => void; hidden: boolean;
 } & ({ mode: "vanilla"; onMode?: never } | { mode: "internet" | "skills"; onMode: (mode: "internet" | "skills") => void })) {
   const [expanded, setExpanded] = useState<Pillar[]>(["concepts"]);
   const [column, setColumn] = useState<string | null>(null);
@@ -49,16 +48,17 @@ function ResultsTable({ data, mode, onOpen, onMode }: {
   const agents = table.agents;
   const evaluations = pillars.flatMap((pillar) => table.pillars[pillar].evals.map((entry) => data.evaluations[entry.id]));
   const agentTable = mode !== "vanilla";
-  const title = agentTable ? "Agent table" : "Knowledge table";
+  const title = agentTable ? "Agent board" : "Pre-training (Vanilla)";
 
-  return <section className="board-section" id={agentTable ? "agents" : "knowledge"} aria-label={title}>
+  return <section className="board-section" id={agentTable ? "agents" : "knowledge"}
+    role="tabpanel" aria-labelledby={agentTable ? "agents-tab" : "knowledge-tab"} tabIndex={0} hidden={hidden}>
     <div className="toolbar">
       <div><h2>{title}</h2><p className="muted">{agentTable
         ? "Can I trust my agent with Ethereum?" : "What does a bare model know about Ethereum?"}</p></div>
       {agentTable ? <div className="mode-switch" role="group" aria-label="Agent mode">
         {(["internet", "skills"] as const).map((value) => <button key={value}
           aria-pressed={mode === value} onClick={() => onMode(value)}>
-          {value === "internet" ? "Internet" : "Skills"}
+          {value === "internet" ? "Internet" : "With skills"}
         </button>)}
       </div> : <div className="mode-label">Vanilla · no harness or tools</div>}
     </div>
@@ -219,7 +219,7 @@ export function Detail({ selection, data, onSelect, onClose }: {
         {evalCell && <Epochs key={`${evaluation.id}-${agentKey(agent)}-${mode}`} rows={evalCell.epochs} data={data} />}
       </> : <>
         <p>Each eval with scored epochs has equal weight. Missing and errored epochs never count as zero.</p>
-        {cell.state === "score" && <p className="muted">{percent(cell.score!)} is the mean of {pillarRow.cells[key].scoredEvals} eval scores. The epoch count below each score adds their epochs together.</p>}
+        {cell.state === "score" && <p className="muted">{percent(cell.score!)} is the mean of {pillarRow.cells[key].scoredEvals} eval scores. The epoch count in each score tooltip adds their epochs together.</p>}
         <div className="eval-list">{pillarRow.evals.map((entry) => { const item = data.evaluations[entry.id]; return <button key={item.id} onClick={() => onSelect({ ...selection, evaluation: item })}>
           <span>{item.title}<span className="eval-id">{item.type} · {item.id}</span></span>
           <span className="mono">{cellText(entry.cells[key])}</span>
@@ -232,18 +232,37 @@ export function Detail({ selection, data, onSelect, onClose }: {
 
 export default function Board({ data }: { data: BoardData }) {
   const [mode, setMode] = useState<"internet" | "skills">("internet");
+  const [tab, setTab] = useState<"agents" | "knowledge">("agents");
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [selection, setSelection] = useState<Selection | null>(null);
   return <>
     <a className="skip-link" href="#main">Skip to results</a>
-    <nav className="topnav" aria-label="Results tables"><a className="brand" href="#main">ETH Evals</a><a href="#agents">Agents</a><a href="#knowledge">Knowledge</a><a href="#scoring">How scoring works</a></nav>
+    <nav className="topnav" aria-label="Results tables"><a className="brand" href="#main">ETH Evals</a><a href="#scoring">How scoring works</a></nav>
     <main id="main">
-      <header className="page-heading"><h1>Ethereum work, measured.</h1><p>How well agents do Ethereum work, and what bare models know.</p></header>
+      <header className="page-heading"><h1>Ethereum, evaluated.</h1><p>How well agents do Ethereum work, and what bare models know.</p></header>
       {data.demo && <aside className="demo-banner"><strong>Demo data</strong><span>All results and extra evals on this page are invented. These are not model rankings.</span></aside>}
       <section className="pillar-strip" aria-label="Pillars">{pillars.map((pillar) => <div key={pillar}><h2>{names[pillar]}</h2><p>{descriptions[pillar]}</p></div>)}</section>
-      <ResultsTable data={data} mode={mode} onOpen={setSelection} onMode={(value) => {
-        setMode(value); setSelection(null);
-      }} />
-      <ResultsTable data={data} mode="vanilla" onOpen={setSelection} />
+      <div className="board-section">
+        <div className="page-tabs" role="tablist" aria-label="Board">
+          {(["agents", "knowledge"] as const).map((value, index, tabs) => <button key={value}
+            ref={(element) => { tabRefs.current[index] = element; }}
+            id={`${value}-tab`} role="tab" aria-selected={tab === value} aria-controls={value}
+            tabIndex={tab === value ? 0 : -1} onClick={() => setTab(value)}
+            onKeyDown={(event) => {
+              const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+                : event.key === "ArrowRight" ? (index + 1) % tabs.length
+                : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : null;
+              if (next === null) return;
+              event.preventDefault();
+              setTab(tabs[next]);
+              tabRefs.current[next]?.focus();
+            }}>{value === "agents" ? "Agent board" : "Pre-training (Vanilla)"}</button>)}
+        </div>
+        <ResultsTable data={data} mode={mode} hidden={tab !== "agents"} onOpen={setSelection} onMode={(value) => {
+          setMode(value); setSelection(null);
+        }} />
+        <ResultsTable data={data} mode="vanilla" hidden={tab !== "knowledge"} onOpen={setSelection} />
+      </div>
       <section id="scoring" className="scoring"><h2>How scoring works</h2>
         <p>An epoch passes when every named check passes. Each eval score is the share of scored epochs that passed.</p>
         <p>A pillar score is the mean of its eval scores. Evals without scored epochs do not enter the mean.</p>

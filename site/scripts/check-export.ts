@@ -5,7 +5,7 @@ const expected = process.argv[2];
 assert.ok(expected === "demo" || expected === "empty", "Pass demo or empty.");
 const html = readFileSync("out/index.html", "utf8");
 assert.ok(existsSync("out/_next/static"), "The export must contain static assets.");
-assert.ok(html.includes("Agent table") && html.includes("Knowledge table"));
+assert.ok(html.includes("Agent board") && html.includes("Pre-training (Vanilla)"));
 if (expected === "demo") {
   assert.ok(html.includes("<strong>Demo data</strong>"), "The demo banner must be visible.");
   assert.ok(html.includes("Demo model A"));
