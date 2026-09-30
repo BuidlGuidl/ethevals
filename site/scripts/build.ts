@@ -11,4 +11,4 @@ function run(command: string, args: string[], cwd: string) {
 if (process.env.ETHEVALS_DEMO !== "1") {
   run("uv", ["run", "ethevals", "catalog", "--output", path.join(siteRoot, ".catalog")], path.dirname(siteRoot));
 }
-run("pnpm", ["exec", "next", "build"], siteRoot);
+run("pnpm", ["exec", "next", process.argv[2] ?? "build"], siteRoot);

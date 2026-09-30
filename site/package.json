@@ -5,6 +5,7 @@
   "packageManager": "pnpm@9.14.2",
   "engines": { "node": ">=22.0.0" },
   "scripts": {
+    "dev": "tsx scripts/build.ts dev",
     "build": "tsx scripts/build.ts",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint .",

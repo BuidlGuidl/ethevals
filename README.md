@@ -65,15 +65,14 @@ The agent table shows internet results by harness, model, and effort.
 The knowledge table shows vanilla quiz results for bare models.
 Open a cell to read its prompt, epoch checks, costs, and published log links.
 
-From `site/`, build the static board:
+From `site/`, start the local board:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm build
-python3 -m http.server 8000 --directory out
+pnpm run dev
 ```
 
-Open <http://localhost:8000>.
+Open the local URL printed by Next.js, normally <http://localhost:3000>.
 Without results, the board shows its empty state and eval catalog.
 See [the site guide](site/README.md) for demo data, settings, and site checks.
 

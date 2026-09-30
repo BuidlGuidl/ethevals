@@ -130,9 +130,11 @@ A type where the agent changes chain state by sending transactions.
 
 **Agent table**:
 Scores for agents in the internet or skills mode.
+Its current board tab label is "Agent board", a working label that can change.
 
 **Knowledge table**:
 Scores for bare models on quizzes in the vanilla mode.
+Its current board tab label is "Pre-training (Vanilla)", a working label that can change.
 
 **Dataset**:
 The quiz evals that run in the vanilla mode, published to Hugging Face as JSONL, one line per eval with its prompt and target.

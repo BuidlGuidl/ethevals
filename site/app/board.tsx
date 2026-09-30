@@ -51,7 +51,7 @@ function ResultsTable({ data, mode, onOpen, onMode, hidden }: {
   const title = agentTable ? "Agent board" : "Pre-training (Vanilla)";
 
   return <section className="board-section" id={agentTable ? "agents" : "knowledge"}
-    role="tabpanel" aria-labelledby={agentTable ? "agents-tab" : "knowledge-tab"} tabIndex={0} hidden={hidden}>
+    role="tabpanel" aria-labelledby={agentTable ? "agents-tab" : "knowledge-tab"} hidden={hidden}>
     <div className="toolbar">
       <div><h2>{title}</h2><p className="muted">{agentTable
         ? "Can I trust my agent with Ethereum?" : "What does a bare model know about Ethereum?"}</p></div>
@@ -272,7 +272,8 @@ export default function Board({ data }: { data: BoardData }) {
         <p className="subline">Only results for current eval hashes appear. Reference answers, empty answers, and other mock checks never enter the board.</p>
       </section>
       <footer>ETH Evals · Costs are in USD and include the model and grader. Unknown cost stays unknown.</footer>
-      <noscript>The tables show their initial state. Enable JavaScript to expand pillars and open epoch details.</noscript>
+      <noscript><style>{'[role="tabpanel"][hidden] { display: grid !important; }'}</style>
+        The tables show their initial state. Enable JavaScript to expand pillars and open epoch details.</noscript>
     </main>
     {selection && <Detail selection={selection} data={data} onSelect={setSelection} onClose={() => setSelection(null)} />}
   </>;
