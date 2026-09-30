@@ -143,32 +143,32 @@ def checks(args, evals):
     return 0
 
 
-def hf_head(repo):
-    request = Request(f"https://huggingface.co/api/datasets/{repo}",
-                      headers={"Authorization": f"Bearer {os.environ['HF_TOKEN']}"})
+def hf_get(repo, path):
+    token = os.environ.get("HF_TOKEN")
+    request = Request(f"https://huggingface.co/api/datasets/{repo}/{path}",
+                      headers={"Authorization": f"Bearer {token}"} if token else {})
     with urlopen(request, timeout=30) as response:
-        return json.load(response)["sha"]
+        return json.load(response)
 
 
-def hf_tag(commit):
-    return f"gh-{commit}"
+def hf_tag(sha):
+    return f"gh-{sha[:7]}"
 
 
 def release(args, evals):
     if not args.license:
         raise ValueError("Choose the dataset license before a release")
-    report = write_hf(evals, args.output, args.hf_repo, args.license)
-    print(json.dumps(report, indent=2))
-    commit = command("git", "rev-parse", "--short", "HEAD", capture_output=True).stdout.strip()
+    print(json.dumps(write_hf(evals, args.output, args.hf_repo, args.license), indent=2))
+    commit = command("git", "rev-parse", "HEAD", capture_output=True).stdout.strip()
     tag = hf_tag(commit)
+    message = f"ETH Evals from BuidlGuidl/ethevals@{commit}"
     command_line = ["hf", "upload", args.hf_repo, str(args.output), ".", "--repo-type", "dataset",
-                    "--commit-message", f"ETH Evals from BuidlGuidl/ethevals@{commit}"]
+                    "--commit-message", message]
     if args.publish:
-        before = hf_head(args.hf_repo)
         command(*command_line)
-        after = hf_head(args.hf_repo)
-        if after != before:
-            command("hf", "repo", "tag", "create", args.hf_repo, tag, "--repo-type", "dataset", "--revision", after)
+        head, tags = hf_get(args.hf_repo, "commits/main")[0], hf_get(args.hf_repo, "refs")["tags"]
+        if head["title"] == message and tag not in {ref["name"] for ref in tags}:
+            command("hf", "repo", "tag", "create", args.hf_repo, tag, "--repo-type", "dataset", "--revision", head["id"])
     else:
         print(json.dumps({"dry_run": True, "command": command_line, "tag": tag}))
     return 0
