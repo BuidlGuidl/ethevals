@@ -1,15 +1,8 @@
 name: Publish HF dataset
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      dataset:
-        description: HF dataset repository, owner/name
-        type: string
-        required: true
-      license:
-        description: Chosen HF license identifier
-        type: string
-        required: true
 permissions:
   contents: read
 concurrency:
@@ -33,6 +26,4 @@ jobs:
       - name: Export and upload
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_DATASET: ${{ inputs.dataset }}
-          HF_LICENSE: ${{ inputs.license }}
-        run: uv run python scripts/ci.py release --output out/hf --hf-repo "$HF_DATASET" --license "$HF_LICENSE" --publish
+        run: uv run python scripts/ci.py release --output out/hf --license mit --publish

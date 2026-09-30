@@ -266,7 +266,8 @@ CI gets the release's source commit from its Inspect logs.
 It skips quizzes with rubrics and prints the reason.
 `--hf-repo` and `--license` set dataset card values.
 `scripts/ci.py release` previews the HF upload; `--publish` performs it.
-[release.yml](../.github/workflows/release.yml) publishes the dataset on manual dispatch with the `HF_TOKEN` secret.
+[release.yml](../.github/workflows/release.yml) publishes to `buidlguidl/ethevals-test` on every push to `main` with `HF_TOKEN`.
+It tags dataset changes `gh-<short sha>` and supports manual reruns without inputs.
 
 ## Maintainer checks
 

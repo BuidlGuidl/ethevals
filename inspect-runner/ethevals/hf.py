@@ -11,7 +11,7 @@ from .loader import Eval, validate_hf_export
 from .actors import quiz_solver_spec
 from .scorers import target_scorer_spec
 
-DEFAULT_REPO = "ethereum-foundation/hf-ethevals-dataset"
+DEFAULT_REPO = "buidlguidl/ethevals-test"
 
 
 def config_name(evaluation: Eval) -> str:

@@ -294,5 +294,6 @@ A paid run starts only when CI runs after merge and a maintainer has set a budge
 `ETHEVALS_BUDGET_USD` defaults to zero, which blocks missing paid work.
 CI opens a separate results PR. Merging that PR puts the results on the board.
 Changing an included eval file changes its hash and makes earlier results stale.
-Hugging Face publication is a separate manual workflow for vanilla quizzes.
+CI publishes vanilla quizzes to `buidlguidl/ethevals-test` on every push to `main`.
+It tags dataset changes `gh-<short sha>`.
 See [CI and publication](../inspect-runner/README.md#ci-and-publication) for operator steps.
