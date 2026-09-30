@@ -31,7 +31,9 @@ The loader accepts schema version 4 and displays only current eval hashes.
 The agent table switches between internet and skills rows.
 The build reports loaded, current, and stale row counts.
 
-Published rows supply full log URLs. The site does not publish or copy real logs.
+Published rows supply full log URLs.
+To download release logs from the repository root, run `gh release download results-36609870957-1 --repo BuidlGuidl/ethevals --dir site/.logs`.
+Build and dev bundle local `.eval` files into an Inspect viewer; matching board links open it and retain a download link.
 See [the runner reference](../inspect-runner/README.md#ci-and-publication) for publication.
 
 ## Scores

@@ -10,7 +10,7 @@ if (expected === "demo") {
   assert.ok(html.includes("<strong>Demo data</strong>"), "The demo banner must be visible.");
   assert.ok(html.includes("Demo model A"));
   assert.ok(html.includes("2 of 3 epochs passed"));
-  assert.ok(html.includes('aria-label="Concepts, Demo model A · Demo harness A. 83%.'), "The concepts pillar must show the rounded mean of 2/3 and 1/1.");
+  assert.ok(html.includes('aria-label="Concepts, Demo harness A / Demo model A. 83%.'), "The concepts pillar must show the rounded mean of 2/3 and 1/1.");
 } else {
   assert.ok(html.includes("No agent epochs yet") && html.includes("No knowledge epochs yet"));
   assert.ok(!html.includes("Demo model") && !html.includes("<strong>Demo data</strong>"));

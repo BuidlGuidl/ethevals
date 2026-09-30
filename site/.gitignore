@@ -5,3 +5,5 @@ out/
 *.tsbuildinfo
 .test-tmp/
 .catalog/
+.logs/
+public/logs/

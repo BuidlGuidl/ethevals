@@ -31,6 +31,7 @@ export type Epoch = Pick<Row, "epoch" | "status" | "checks" | "error_kind" | "er
   cost: number | null;
   issue: string;
   logUrl: string | null;
+  logHref?: string | null;
 };
 
 interface Counts {

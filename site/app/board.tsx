@@ -145,7 +145,7 @@ function Epochs({ rows, data }: { rows: Epoch[]; data: BoardData }) {
   const [selected, setSelected] = useState(0);
   const epoch = rows[selected];
   if (!epoch) return null;
-  const href = epoch.logUrl;
+  const href = epoch.logHref ?? epoch.logUrl;
   return <>
     <div className="table-scroll" tabIndex={0} role="region" aria-label="Epoch results. Scroll horizontally for all fields.">
       <table className="epoch-table"><caption className="sr-only">Epoch results and costs including the grader</caption>
@@ -172,7 +172,8 @@ function Epochs({ rows, data }: { rows: Epoch[]; data: BoardData }) {
         <p>Grader: <span className="mono">{money(epoch.grader_cost_usd)}</span></p>
         <p className="muted">{epoch.cost_source}</p>
       </div>
-      {href ? <a href={href} target="_blank" rel="noreferrer">{data.demo ? "Open demo log" : "Open full log"}</a>
+      {href ? <div><a href={href} target="_blank" rel="noreferrer">{data.demo ? "Open demo log" : "Open log"}</a>
+        {epoch.logUrl && href !== epoch.logUrl && <> · <a className="subline" href={epoch.logUrl} target="_blank" rel="noreferrer">download</a></>}</div>
         : <p className="muted">Full log not published.</p>}
     </section>
   </>;

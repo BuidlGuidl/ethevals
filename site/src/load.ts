@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { buildBoard, pillars, agentKey, type BoardData, type Eval } from "./board";
 import { rowSchema, type Row } from "./rows";
 import { siteRoot } from "./paths";
+import { logLink } from "./logs";
 
 // This checks the JSON transport. The runner owns eval declarations and hashes.
 const catalogSchema = z.array(z.object({
@@ -68,5 +69,19 @@ export function loadBoard(env: Record<string, string | undefined> = process.env,
   const current = new Map(evaluations.map((evaluation) => [evaluation.id, evaluation.hash]));
   const shown = rows.filter((row) => current.get(row.eval_id) === row.eval_hash);
   console.log(`${filename}${exists ? "" : " (missing; empty board)"}: ${rows.length} read, ${shown.length} current, ${rows.length - shown.length} stale.`);
-  return buildBoard(evaluations, shown, demo);
+  const board = buildBoard(evaluations, shown, demo);
+  const bundle = path.join(root, "public/logs");
+  const bundledFiles = new Set(!demo && existsSync(path.join(bundle, "index.html")) && existsSync(path.join(bundle, "logs"))
+    ? readdirSync(path.join(bundle, "logs"), { withFileTypes: true })
+      .filter((file) => file.isFile() && file.name.endsWith(".eval")).map((file) => file.name) : []);
+  for (const table of Object.values(board.tables)) {
+    for (const pillar of Object.values(table.pillars)) {
+      for (const evaluation of pillar.evals) {
+        for (const cell of Object.values(evaluation.cells)) {
+          for (const epoch of cell.epochs) epoch.logHref = logLink(epoch.logUrl, bundledFiles);
+        }
+      }
+    }
+  }
+  return board;
 }

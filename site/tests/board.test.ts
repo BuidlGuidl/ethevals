@@ -107,7 +107,7 @@ test("the table and panel both label an empty pillar as No evals yet", () => {
     data, selection: { pillar: "transactions", agent, mode: "internet" },
     onSelect: () => {}, onClose: () => {},
   }));
-  assert.ok(table.includes('aria-label="Transactions, model-a · harness-a. No evals yet. Open details."'));
+  assert.ok(table.includes('aria-label="Transactions, harness-a / model-a. No evals yet. Open details."'));
   assert.ok(panel.includes('<p class="mono">No evals yet</p>'));
   assert.ok(panel.includes("No evals yet for this mode."));
 });

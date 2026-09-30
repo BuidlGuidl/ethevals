@@ -17,7 +17,8 @@ const providers = new Map([
 
 export const modelLabel = (id: string) => models.get(id) ?? id;
 export const harnessLabel = (id: string) => harnesses.get(id)?.label ?? id;
-export const agentLabel = (agent: Agent) => [modelLabel(agent.model), agent.harness && harnessLabel(agent.harness)].filter(Boolean).join(" · ");
+export const agentLabel = (agent: Agent) => agent.harness
+  ? `${harnessLabel(agent.harness)} / ${modelLabel(agent.model)}` : modelLabel(agent.model);
 export const agentDetails = (agent: Agent) => [agent.model, agent.harness, `effort ${agent.effort ?? "provider default"}`].filter(Boolean).join(" · ");
 export const agentLogo = (agent: Agent) => agent.harness
   ? harnesses.get(agent.harness)?.logo
