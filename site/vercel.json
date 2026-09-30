@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "headers": [
+    {
+      "source": "/logs/logs/:file.eval",
+      "headers": [{ "key": "Accept-Ranges", "value": "bytes" }]
+    }
+  ]
+}
