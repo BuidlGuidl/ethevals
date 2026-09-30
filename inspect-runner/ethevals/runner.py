@@ -42,8 +42,6 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
         services = read_yaml(compose)["services"]
         sample.sandbox = SandboxEnvironmentSpec(type="ethevals_docker", config=str(compose))
         images = {name: service["image"] for name, service in services.items()}
-        limit = services["default"]["mem_limit"]
-        sample.input += f"\nYour container has a {limit} memory limit, shared by the CLI and its tools. Exceeding it can end the epoch with an error.\n"
     else:
         sample.files = None
     working_limit, time_limit, scoring_limit = task_limits(evaluation, config)

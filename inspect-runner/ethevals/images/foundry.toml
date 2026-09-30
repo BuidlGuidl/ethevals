@@ -2,7 +2,7 @@
 src = "src"
 test = "test"
 libs = ["lib"]
-remappings = ["@openzeppelin/contracts/=/opt/ethevals/lib/openzeppelin-contracts/contracts/", "forge-std/=/opt/ethevals/lib/forge-std/src/"]
+remappings = ["@openzeppelin/contracts/=/opt/solidity/lib/openzeppelin-contracts/contracts/", "forge-std/=/opt/solidity/lib/forge-std/src/"]
 ffi = false
 fs_permissions = []
 auto_detect_remappings = false

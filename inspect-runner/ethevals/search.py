@@ -13,10 +13,10 @@ from inspect_ai.util import store
 
 EXA_URL = "https://mcp.exa.ai/mcp"
 TOOLS = json.loads(Path(__file__).with_name("exa-tools.json").read_text())
-CAP_MESSAGE = "Search failed: epoch search cap reached."
+CAP_MESSAGE = "Search failed: search limit reached."
 RESULT_CAP = 10
 URL_CAP = 5
-CAP_DESCRIPTION = " Runner limits: numResults is clamped to 1–10 whole results, default 10. Fetch accepts at most 5 URLs per call; larger batches are rejected."
+CAP_DESCRIPTION = " Search limits: numResults is clamped to 1–10 whole results, default 10. Fetch accepts at most 5 URLs per call; larger batches are rejected."
 
 
 async def exa_request(url, name, arguments, key):

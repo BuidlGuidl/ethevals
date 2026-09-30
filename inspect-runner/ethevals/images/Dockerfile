@@ -31,7 +31,7 @@ RUN node --input-type=module -e 'import fs from "node:fs"; import crypto from "n
 RUN forge install OpenZeppelin/openzeppelin-contracts@v5.4.0 --no-git
 RUN forge install foundry-rs/forge-std@77041d2ce690e692d6e03cc812b57d1ddaa4d505 --no-git
 USER root
-RUN mkdir -p /opt/ethevals && cp -a /workspace/lib /opt/ethevals/lib && \
-    chown -R root:root /opt/ethevals && chmod -R a-w /opt/ethevals
+RUN mkdir -p /opt/solidity && cp -a /workspace/lib /opt/solidity/lib && \
+    chown -R root:root /opt/solidity && chmod -R a-w /opt/solidity
 USER agent
 CMD ["sleep", "infinity"]
