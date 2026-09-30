@@ -17,7 +17,7 @@ from ethevals.loader import load_eval
 from ethevals.publish import publish_logs
 from ethevals.rows import fold_rows, read_rows, write_rows, store_rows
 
-BASE_BRANCH = "system"
+BASE_BRANCH = "main"
 RESULTS_BRANCH = "ci/results"
 
 

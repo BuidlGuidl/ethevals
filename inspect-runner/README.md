@@ -241,17 +241,17 @@ The checker can send further transactions while automining remains active.
 ## CI and publication
 
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
-[results.yml](../.github/workflows/results.yml) queues paid runs after `system` changes, excluding results-only changes.
+[results.yml](../.github/workflows/results.yml) queues paid runs after `main` changes, excluding results-only changes.
 It uses `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, optional `EXA_API_KEY`, and the `ETHEVALS_BUDGET_USD` repository variable.
 A manual dispatch budget overrides that variable; the fallback budget is zero.
 The paid job has no write token and a six-hour limit.
 Its run step stops after 340 minutes, which leaves time to upload finished epochs even after a timeout.
-A separate publisher holds no model keys and runs after failed or timed-out steps on `system`.
+A separate publisher holds no model keys and runs after failed or timed-out steps on `main`.
 It downloads artifacts from every attempt of the workflow run. The next run resumes missing epochs.
 
 `scripts/ci.py after-merge` restores pending results and calls the main runner CLI.
 `publish-results` rebuilds each artifact's rows and records them before any log upload.
-It folds `origin/system`, `origin/ci/results`, and artifact rows onto current `system`.
+It folds `origin/main`, `origin/ci/results`, and artifact rows onto current `main`.
 Successful uploads add log links and update the results pull request without a force push.
 A retry can reopen a missing pull request without repeating a successful push.
 If publication fails, rerun the workflow before starting another paid run to avoid paying for missing rows again.
