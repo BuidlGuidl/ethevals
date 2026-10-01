@@ -105,5 +105,8 @@ def test_skill_index_preserves_workspace_instructions(folder, monkeypatch):
     monkeypatch.setattr("ethevals.agents.sandbox", Workspace)
     monkeypatch.setitem(HARNESSES, "claude_code", replace(HARNESSES["claude_code"], factory=factory))
     solve = internet_solver(config, config.agents["claude-code-opus-5.5"], evaluation.skills)
-    assert asyncio.run(solve(SimpleNamespace(choices=[]), None)) == ["standards"]
+    assert asyncio.run(solve(SimpleNamespace(choices=[]), None)) == [
+        "addresses", "building-blocks", "security", "standards"]
     assert instructions.read_text().startswith("Keep the author's instructions.\n\n# Ethereum skills\n")
+    for name in ["addresses", "building-blocks", "security", "standards"]:
+        assert f"- {name}: " in instructions.read_text()

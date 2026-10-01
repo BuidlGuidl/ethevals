@@ -31,17 +31,17 @@ An eval with a `chain` needs `setup/setup.s.sol`, and `validate` rejects `setup/
 | Path | Holds | The agent sees it |
 | --- | --- | --- |
 | `eval.yaml` | the prompt and the declaration | the prompt |
-| `workspace/` | the agent's starting files: a README, a stub, a `foundry.toml`, source to read | yes, as shipped |
+| `workspace/` | the agent's starting files: a README, a `foundry.toml`, source to read | yes, as shipped |
 | `setup/` | `setup.s.sol` and the contracts only setup deploys | no |
 | `scorer/` | `target.yaml`, `tests/*.t.sol`, and `rubric.md`, in any combination | no |
-| `solution/` | the reference solution: files that replace workspace files at the same path, and an optional `solution.s.sol` | no |
+| `solution/` | the reference solution: files that add or replace workspace files at the same path, and an optional `solution.s.sol` | no |
 | `compose.yaml` | extra services | it can call them |
 
 **The convention to follow: `solution/` mirrors `workspace/`.**
 
 - Keep the workspace a normal Foundry project, with contracts under `src/`.
-- Put each solution file at the same path as the workspace file it replaces. For example, the stub `workspace/src/BuilderPoints.sol` gets its answer at `solution/src/BuilderPoints.sol`.
-- The reference pass copies `solution/` over the workspace, so the test's import (`workspace/src/BuilderPoints.sol`) compiles the solution instead of the stub.
+- Put each solution file at the path the agent creates or replaces. For `src/BuilderPoints.sol`, use `solution/src/BuilderPoints.sol`.
+- The reference pass copies `solution/` over the workspace. The test imports `workspace/src/BuilderPoints.sol`, which this pass adds.
 - A `solution/solution.s.sol` doesn't replace anything. It runs as a script.
 
 The repository is public, so an agent with internet access can find scorer files. Don't rely on their secrecy.
@@ -220,9 +220,10 @@ Use only what the agent gets: the prompt, the workspace, and `chain.json`. Don't
 motivation: Check whether an agent can build a capped community token on a well-known library.
 modes: [internet, skills]
 prompt: |
-  can you help me build a token for our community? I created an empty file at src/BuilderPoints.sol.
-  call it Builder Points (BPT), with the same decimals as USDC. mint 100,000 to whoever deploys it.
-  the deployer should be able to mint more later, but the total supply must never go over 1,000,000.
+  can you help me build a token for our community? put it in src/BuilderPoints.sol as a contract
+  called BuilderPoints, with no constructor arguments. call it Builder Points (BPT), with the same
+  decimals as USDC. mint 100,000 to whoever deploys it. the deployer should be able to mint more
+  later with mint(address to, uint256 amount), but the total supply must never go over 1,000,000.
   it's a Foundry project on solidity 0.8.30.
 ```
 
@@ -236,7 +237,8 @@ libs = ["lib"]
 solc = "0.8.30"
 ```
 
-The stub `workspace/src/BuilderPoints.sol` fixes the contract name, a no-argument constructor, and the `mint` signature.
+The workspace ships only `foundry.toml`.
+The prompt names the contract, a no-argument constructor, and the `mint` signature.
 The test relies on those and on standard ERC-20, nothing else.
 [BuilderPoints.t.sol](../evals/building/erc20-points-token/scorer/tests/BuilderPoints.t.sol) has ten test functions. Its imports, `setUp`, and the first test:
 
@@ -256,7 +258,7 @@ function test_decimals_match_usdc() public view {
 ```
 
 `scorer/rubric.md` asks one question, `uses_standard_library`: did the agent build the ERC-20 on a well-known library such as OpenZeppelin or Solady?
-`solution/src/BuilderPoints.sol` overlays the stub with OpenZeppelin `ERC20Capped` and `Ownable`.
+The reference pass adds `solution/src/BuilderPoints.sol` to the workspace, with OpenZeppelin `ERC20Capped` and `Ownable`.
 
 Git ignores `lib/` at any depth, so a solution that uses a library ships as one flattened file.
 Write it in a scratch Foundry project with the library installed through `forge install`.
@@ -270,7 +272,7 @@ Checks: `compile`, the ten test functions, and `uses_standard_library`.
 Import the agent's file by its workspace path with a `workspace/` prefix, as `BuilderPoints.t.sol` does.
 A Scaffold-ETH 2 contract, for example, is `workspace/packages/hardhat/contracts/YourContract.sol`.
 
-- Name the file in the prompt or with a stub, the way a real user would.
+- Name the file in the prompt, the way a real user would.
 - The runner copies the agent's final workspace into the scorer under `workspace/`, without `.git`, `out`, or `cache`, and keeps only `.sol` files from `node_modules`. The copy holds at most 50 MiB and 20,000 files.
 - Forge compiles your tests and what they import, and nothing else. A broken file elsewhere in the workspace doesn't matter.
 - A missing file fails `compile` with Forge's reason, such as `Source "workspace/src/Vault.sol" not found`. One missing import fails every test, so `compile` is all or nothing.

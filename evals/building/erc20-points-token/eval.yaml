@@ -1,7 +1,8 @@
 motivation: Check whether an agent can build a capped community token on a well-known library.
 modes: [internet, skills]
 prompt: |
-  can you help me build a token for our community? I created an empty file at src/BuilderPoints.sol.
-  call it Builder Points (BPT), with the same decimals as USDC. mint 100,000 to whoever deploys it.
-  the deployer should be able to mint more later, but the total supply must never go over 1,000,000.
+  can you help me build a token for our community? put it in src/BuilderPoints.sol as a contract
+  called BuilderPoints, with no constructor arguments. call it Builder Points (BPT), with the same
+  decimals as USDC. mint 100,000 to whoever deploys it. the deployer should be able to mint more
+  later with mint(address to, uint256 amount), but the total supply must never go over 1,000,000.
   it's a Foundry project on solidity 0.8.30.
