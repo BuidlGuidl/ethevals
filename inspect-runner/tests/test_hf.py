@@ -48,6 +48,10 @@ def test_hf_cli_exports_fixture_rows_card_and_benchmark(tmp_path, config_path):
     rubric = fixture_quiz(tmp_path, "rubric")
     (rubric.folder / "scorer/rubric.md").write_text("## explained\nDid the answer explain the unit?\n")
     evals.append(load_eval(rubric.folder, fixture_config()))
+    missing = fixture_quiz(tmp_path, "no-target")
+    (missing.folder / "scorer/target.yaml").unlink()
+    (missing.folder / "scorer/rubric.md").write_text("## explained\nDid the answer explain the unit?\n")
+    evals.append(load_eval(missing.folder, fixture_config()))
     output = tmp_path / "hf"
     result = subprocess.run([sys.executable, "-m", "ethevals.cli", "export-hf", "--output", str(output),
                              "--hf-repo", "example/ethereum", "--license", "cc-by-4.0",
@@ -56,6 +60,7 @@ def test_hf_cli_exports_fixture_rows_card_and_benchmark(tmp_path, config_path):
     assert json.loads(result.stdout)["rows"] == 2
     assert json.loads(result.stdout)["skipped"] == [
         {"eval_id": "concepts/agent-only", "reason": "vanilla mode is not declared"},
+        {"eval_id": "concepts/no-target", "reason": "target.yaml is absent"},
         {"eval_id": "concepts/rubric", "reason": "rubric cannot be exported"}]
     samples = [sample for path in output.glob("data/*/test.jsonl") for sample in json_dataset(str(path))]
     assert sorted((sample.id, sample.input, sample.target, sample.choices) for sample in samples) == [

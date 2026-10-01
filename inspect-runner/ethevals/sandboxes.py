@@ -16,11 +16,6 @@ SOLC_VERSIONS = (json.loads((IMAGES / "solc.json").read_bytes())["version"],)
 MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
 
 
-def compose_file(chain=None) -> Path:
-    path = IMAGES / ("chain.compose.yaml" if chain else "stock.compose.yaml")
-    return path
-
-
 def validate_compose(path: Path, *, data: bytes | None = None) -> bytes:
     data = read_yaml(path, data)
 
@@ -83,7 +78,7 @@ def memory_bytes(value):
 
 
 def merged_compose(evaluation):
-    document = read_yaml(compose_file(evaluation.declaration.chain))
+    document = read_yaml(IMAGES / ("chain.compose.yaml" if evaluation.declaration.chain else "stock.compose.yaml"))
     for name, service in document["services"].items():
         service["image"] = image_tag(IMAGES, "chain" if name == "chain" else "runner")
     if "compose.yaml" in evaluation.files:

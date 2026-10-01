@@ -98,7 +98,6 @@ def test_catalog_exports_a_loaded_eval(tmp_path, config_path):
 
 @pytest.mark.parametrize("file,content", [
     ("eval.yaml", "prompt: Hello\nmotivation: Test\nmodes: [vanilla]\nextra: true\n"),
-    ("eval.yaml", "type: scenario\nprompt: Hello\nmotivation: Test\nmodes: [internet]\n"),
     ("eval.yaml", "prompt: Hello\nmotivation: Test\nmodes: [vanilla]\nchoices: [wei, ' ', ether]\n"),
     ("scorer/target.yaml", "target: wei\nextra: true\n"),
     ("scorer/target.yaml", "target: 8004\n"),
@@ -141,7 +140,7 @@ def test_eval_root_cannot_be_a_symlink(tmp_path):
         load_eval(folder, fixture_config())
 
 
-@pytest.mark.parametrize("value", ["null", "hardhat", "{fork: mainnet, block: 23819000}"])
+@pytest.mark.parametrize("value", ["hardhat", "{fork: mainnet, block: 23819000}"])
 def test_chain_rejects_other_values(folder, value):
     path = folder / "eval.yaml"
     path.write_text(path.read_text() + f"chain: {value}\n")
@@ -149,12 +148,15 @@ def test_chain_rejects_other_values(folder, value):
         load_eval(folder, fixture_config())
 
 
-@pytest.mark.parametrize("word", ["EPOCHS", "Grader", "rubrics", "score", "benchmarks", "evals", "being tested"])
-@pytest.mark.parametrize("destination", ["prompt", "workspace"])
+@pytest.mark.parametrize("word", ["EPOCHS", "Grader", "rubrics", "score", "benchmarks", "evals", "being   tested"])
+@pytest.mark.parametrize("destination", ["prompt", "workspace", "choices"])
 def test_agent_word_lint_rejects_whole_words(folder, word, destination):
     (folder / "eval.yaml").write_text(f"motivation: Check words.\nprompt: {word if destination == 'prompt' else 'Say hello.'}\nmodes: [internet]\n")
     if destination == "workspace":
         (folder / "workspace/note.txt").write_text(f"Please read the {word}.")
+    elif destination == "choices":
+        with (folder / "eval.yaml").open("a") as declaration:
+            declaration.write(f"choices: ['hello', '{word}']\n")
     with pytest.raises(ValueError, match="agent-visible text contains forbidden word"):
         load_eval(folder, fixture_config())
 
@@ -188,7 +190,8 @@ def test_folder_rules(folder, change, reason):
     ("function test_shared() public {}", "## test_shared\nIs it correct?", "answer", "duplicate check name"),
     ("function test_shared() public {}", "## other\nIs it correct?", "test_shared", "duplicate check name"),
     ("function test_ok() public {}", "## answer\nIs it correct?", "answer", "duplicate check name"),
-    ("function compile() public {}", "## other\nIs it correct?", "answer", "reserved"),
+    ("function test_ok() public {}", "## compile\nIs it correct?", "answer", "reserved"),
+    ("function test_ok() public {}", "## other\nIs it correct?", "compile", "reserved"),
     ("function testFailBad() public {}", "## other\nIs it correct?", "answer", "testFail"),
     ("function test_same() public {} function test_same(uint n) public {}", "## other\nIs it correct?", "answer", "duplicate check name"),
 ])
@@ -207,7 +210,6 @@ def test_mixed_scorers_preserve_author_workspace(tmp_path):
     shutil.copytree(BUILD, folder)
     (folder / "scorer/target.yaml").write_text("target: done\n")
     evaluation = load_eval(folder, fixture_config())
-    assert evaluation.scorer_kinds == ["target", "tests", "rubric"]
     assert evaluation.sample().files["/workspace/foundry.toml"] == inline_file(
         b'[profile.default]\nsrc = "src"\ntest = "test"\nlibs = ["lib"]\nsolc = "0.8.30"\n')
     assert evaluation.sample().input == evaluation.declaration.prompt

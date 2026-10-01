@@ -87,8 +87,6 @@ def select_actors(config, *, models=None, agents=None, modes=None, answer=None, 
         grade = check_grader()
 
         def agents_for(evaluation):
-            if set(evaluation.scorer_kinds) == {"rubric"}:
-                return []
             declared = evaluation.declaration.modes
             default = check_mode(evaluation)
             selected = modes or [default if default in declared else declared[0]]

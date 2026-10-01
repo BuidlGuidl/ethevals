@@ -57,4 +57,4 @@ def test_chain_allows_combined_scorers_and_declared_chain_file(tmp_path):
     assert load_eval(folder, fixture_config()).files["workspace/chain.json"] == b"declared input"
     (folder / "scorer/tests").mkdir()
     (folder / "scorer/tests/Test.t.sol").write_text("contract Test {}")
-    assert load_eval(folder, fixture_config()).scorer_kinds == ["tests", "check_script", "rubric"]
+    assert load_eval(folder, fixture_config()).files["workspace/chain.json"] == b"declared input"

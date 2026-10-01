@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from .loader import Eval, validate_hf_export
+from .loader import Eval, validate_hf_export, hf_skip_reason
 from .actors import quiz_solver_spec
 from .scorers import target_scorer_spec
 
@@ -45,14 +45,10 @@ def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
     groups = {}
     skipped = []
     for evaluation in sorted(evals, key=lambda item: item.id):
-        if evaluation.target is None or "vanilla" not in evaluation.declaration.modes:
-            skipped.append({"eval_id": evaluation.id, "reason": "target.yaml is absent" if evaluation.target is None
-                            else "vanilla mode is not declared"})
+        if reason := hf_skip_reason(evaluation.declaration, evaluation.files):
+            skipped.append({"eval_id": evaluation.id, "reason": reason})
             continue
-        if "rubric" in evaluation.scorer_kinds:
-            skipped.append({"eval_id": evaluation.id, "reason": "rubric cannot be exported"})
-            continue
-        validate_hf_export(evaluation.declaration, evaluation.target, evaluation.id)
+        validate_hf_export(evaluation.target, evaluation.id)
         config = evaluation.target
         target = config.target
         if isinstance(target, list):

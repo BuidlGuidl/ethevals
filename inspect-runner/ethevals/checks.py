@@ -9,6 +9,7 @@ from .config import uses_sandbox
 from .actors import Actor, Grader, quiz_solver
 from .scorers import target_reference
 from .check_script import run_solution
+from .files import has_solution
 
 
 @dataclass
@@ -35,15 +36,13 @@ def solution(evaluation, answer):
 
 
 def check_mode(evaluation):
-    return "internet" if (evaluation.declaration.chain or "tests" in evaluation.scorer_kinds or
-                          any(name.startswith("solution/") for name in evaluation.files)) else "vanilla"
+    return "internet" if has_solution(evaluation.files) else "vanilla"
 
 
 def check_agent(evaluation, answer, mode=None):
     set_model_info("mockllm/model", ModelInfo(cost=ModelCost(input=0, output=0, input_cache_read=0, input_cache_write=0)))
     check = quiz_check_solver(evaluation, answer) if evaluation.target else CheckRun(quiz_solver(evaluation))
-    has_solution = any(name.startswith("solution/") for name in evaluation.files)
-    if has_solution:
+    if has_solution(evaluation.files):
         check.solver = solution(evaluation, answer)
 
     def reply(messages, tools, tool_choice, config):
@@ -53,7 +52,7 @@ def check_agent(evaluation, answer, mode=None):
         "model": "mockllm/model", "harness": None, "harness_version": None,
         "effort": None, "prices": {}, "cost_source": "mock",
     }, lambda evaluation: check.solver,
-       lambda evaluation: has_solution or uses_sandbox(mode or check_mode(evaluation)), True)
+       lambda evaluation: uses_sandbox(mode or check_mode(evaluation)), True)
 
 
 def check_grader():

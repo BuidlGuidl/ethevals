@@ -278,7 +278,6 @@ def test_operator_stop_is_an_error_and_skips_scoring(quiz_scoring_case):
 
 
 def test_time_limit_grades_the_work_left(quiz_scoring_case):
-    from support import mock_delay
     quiz_scoring_case["task"].solver = mock_delay(2)
     quiz_scoring_case["task"].time_limit = 1
     row = quiz_scoring_case["run"](['{"passed": false, "reason": "Owner can seize tokens."}'])

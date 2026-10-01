@@ -270,7 +270,7 @@ export default function Board({ data }: { data: BoardData }) {
       <section id="scoring" className="scoring"><h2>How scoring works</h2>
         <p>An epoch passes when every named check passes. Each eval score is the share of scored epochs that passed.</p>
         <p>A pillar score is the mean of its eval scores. Evals without scored epochs do not enter the mean.</p>
-        <p>Errors stay in the details but do not count toward scores. Time and cost limits count as failures.</p>
+        <p>Errors stay in the details but do not count toward scores. Cost limits count as failures. An epoch that runs out of time is graded on the work it left.</p>
         <p>Counts show how much evidence sits behind each score. No confidence interval is shown.</p>
         <div className="legend"><span><b>No evals yet</b> · the pillar has no evals for this mode</span><span><b>Not applicable</b> · the eval does not declare this mode</span><span><b>No epochs yet</b> · no scored epochs for this cell</span></div>
         <p className="subline">Only results for current eval hashes appear. Reference answers, empty answers, and other mock checks never enter the board.</p>

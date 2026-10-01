@@ -5,13 +5,13 @@ from typing import Literal
 
 from inspect_ai.dataset import Sample
 from inspect_ai.tool import Skill
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from .config import Config, Declaration, Mode, parse_file
 from .scorers import TargetScorer, rubric_questions
 from .check_script import script_path, validate_script
 from .sandboxes import validate_compose
-from .files import manifest, content_hash, inline_file
+from .files import manifest, content_hash, inline_file, has_solution
 from .skills import pack_skills
 
 PILLARS = {"concepts", "transactions", "building", "security"}
@@ -23,12 +23,6 @@ class EvalDeclaration(Declaration):
     chain: Literal["anvil"] | None = None
     modes: list[Mode] = Field(min_length=1)
     choices: list[str] | None = Field(default=None, min_length=2, max_length=26)
-
-    @model_validator(mode="after")
-    def check_chain(self):
-        if "chain" in self.model_fields_set and self.chain is None:
-            raise ValueError("chain must be anvil or absent")
-        return self
 
 
 @dataclass(frozen=True)
@@ -86,7 +80,8 @@ def load_eval(folder: Path, config: Config) -> Eval:
     if "vanilla" in declaration.modes and (declaration.chain or "tests" in kinds or
             any(name.startswith("workspace/") for name in files)):
         raise ValueError(f"{folder}: vanilla requires no chain, workspace files, or tests")
-    lint_agent_text(declaration.prompt, str(folder / "eval.yaml"))
+    for text in [declaration.prompt, *(declaration.choices or [])]:
+        lint_agent_text(text, str(folder / "eval.yaml"))
     for name, data in files.items():
         if name.startswith("workspace/"):
             try:
@@ -103,17 +98,15 @@ def load_eval(folder: Path, config: Config) -> Eval:
             valid = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:len(declaration.choices)])
             if any(value not in valid for value in targets):
                 raise ValueError(f"{path}: target must name an available choice letter")
-        if "rubric" not in kinds:
-            validate_hf_export(declaration, target, str(path))
+        if hf_skip_reason(declaration, files) is None:
+            validate_hf_export(target, str(path))
     if "tests" in kinds:
         if not any(name.startswith("scorer/tests/") and name.endswith(".t.sol") for name in files):
             raise ValueError(f"{folder}: scorer/tests must contain a .t.sol file")
-    if "rubric" in kinds:
-        rubric_questions(files)
     if "check_script" in kinds:
         validate_script(declaration, files)
     validate_check_names(files, target, folder)
-    if ("tests" in kinds or declaration.chain) and not (folder / "solution").is_dir():
+    if ("tests" in kinds or declaration.chain) and not has_solution(files):
         raise ValueError(f"{folder}: solution is required for tests or a chain")
     if (folder / "compose.yaml").is_dir():
         raise ValueError(f"{folder / 'compose.yaml'}: must be a regular file")
@@ -123,14 +116,21 @@ def load_eval(folder: Path, config: Config) -> Eval:
                 folder.parent.name, declaration, kinds, target, files, skills)
 
 
-def validate_hf_export(declaration: EvalDeclaration, target: TargetScorer, source: str) -> None:
-    if "vanilla" not in declaration.modes:
-        return
+def validate_hf_export(target: TargetScorer, source: str) -> None:
     if isinstance(target.target, list) and len(target.target) != 1:
         raise ValueError(f"{source}: Inspect's HF loader cannot preserve alternative targets")
 
 
-AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being tested(?:s)?)\b", re.IGNORECASE)
+def hf_skip_reason(declaration, files):
+    if "scorer/target.yaml" not in files:
+        return "target.yaml is absent"
+    if "vanilla" not in declaration.modes:
+        return "vanilla mode is not declared"
+    if "scorer/rubric.md" in files:
+        return "rubric cannot be exported"
+
+
+AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)
 
 
 def lint_agent_text(value: str, source: str) -> None:
@@ -145,8 +145,7 @@ def validate_check_names(files, target, folder):
     for path, data in files.items():
         if path.startswith("scorer/tests/") and path.endswith(".t.sol"):
             source = data.decode("utf-8")
-            source = re.sub(r"/\*.*?\*/|//[^\n]*", "", source, flags=re.DOTALL)
-            names.extend(re.findall(r"\bfunction\s+(test\w*|compile)\s*\(", source))
+            names.extend(re.findall(r"\bfunction\s+(test\w*)\s*\(", source))
     seen = set()
     for name in names:
         if name == "compile":

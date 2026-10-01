@@ -19,6 +19,30 @@ pytestmark = pytest.mark.docker
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_agent_and_scorer_network_isolation(tmp_path):
+    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
+    observed = {}
+
+    @solver
+    def probe():
+        async def solve(state, generate):
+            for name in ("scorer", "chain"):
+                result = await runner_exec(sandbox(), ["getent", "hosts", name])
+                observed[name] = result.returncode
+            result = await runner_exec(sandbox("scorer"), ["cast", "rpc", "--rpc-url", "http://chain:8545", "eth_chainId"])
+            observed["rpc"] = (result.returncode, result.stdout.strip())
+            return state
+        return solve
+
+    build_images()
+    agent = replace(check_agent(evaluation, "empty"), solver_for=lambda _: probe())
+    task = build_task(evaluation, fixture_config(), agent, check_grader(), "internet", 1, prepare_compose(evaluation, tmp_path))
+    log = eval(task, log_dir=str(tmp_path / "logs"), display="none", retry_on_error=0)[0]
+    assert observed == {"scorer": 2, "chain": 0, "rpc": (0, '"0x7a69"')}
+    assert results_rows(log)[0]["status"] == "failed"
+    print(f"Network probe: {observed}")
+
+
 @solver
 def slow_agent():
     async def solve(state, generate):
