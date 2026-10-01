@@ -10,6 +10,21 @@ import pytest
 from support import catalog_quiz, fixture_config
 
 
+@pytest.mark.parametrize("fallback_models", [None, ["claude-opus-4-8"]])
+def test_fallback_models_apply_only_to_the_grader(fallback_models):
+    data = fixture_config().model_dump()
+    data["grader"].pop("fallback_models", None)
+    if fallback_models is not None:
+        data["grader"]["fallback_models"] = fallback_models
+    config = Config.model_validate(data)
+    actors_for, grade = select_actors(config, models=["opus-5.5"], agents=["claude-code-opus-5.5"],
+                                     modes=["vanilla", "internet"])
+    actors = actors_for(catalog_quiz()[1])
+    assert grade.model.config.fallback_models == fallback_models
+    assert [(mode, actor.model.config.fallback_models) for mode, actor in actors] == [
+        ("vanilla", None), ("internet", None)]
+
+
 def test_codex_home_is_outside_the_workspace(monkeypatch):
     from ethevals import agents
 

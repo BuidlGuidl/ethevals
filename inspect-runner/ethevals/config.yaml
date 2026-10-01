@@ -9,6 +9,7 @@ max_attempts: 2
 concurrency: 1
 grader:
   model: anthropic/claude-opus-5-5
+  fallback_models: [claude-opus-4-8]
   effort: low
   max_tokens: 32768 # Includes adaptive thinking and the JSON verdict.
 search: true
