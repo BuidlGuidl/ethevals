@@ -127,7 +127,13 @@ The share of scored epochs that passed. Errors do not enter the denominator. The
 _Avoid_: partial score
 
 **Eval hash**:
-A fingerprint of captured file paths and bytes in an eval folder, excluding local artifacts. Evals that declare skills also include the skills pack. Results under an older hash do not describe the current eval.
+A fingerprint of captured file paths and bytes in an eval folder, excluding local artifacts.
+An eval file change reruns every mode for that eval.
+
+**Skills hash**:
+A fingerprint of the captured files in the skills pack.
+Only skills-mode epochs include it in their identity.
+A skills change reruns only skills-mode epochs.
 
 **Results row**:
 The latest record of one epoch: its eval, agent, mode, checks, and cost. It names the local log and links to published logs.

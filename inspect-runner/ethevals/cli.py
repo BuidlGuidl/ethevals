@@ -14,6 +14,7 @@ from .publish import publish_logs
 from .planning import plan, budget_check
 from .rows import previous_rows
 from .checks import available_checks
+from .skills import pack_skills
 
 
 def positive(value: str) -> int:
@@ -74,7 +75,8 @@ def main(argv=None) -> int:
         paths = [Path(value) for value in args.evals] if args.evals else sorted(Path("evals").glob("*/*"))
         if not paths:
             raise ValueError("No eval folders found. Use --evals or start from the repository root.")
-        evals = [load_eval(path, config) for path in paths]
+        skills_pack = pack_skills()
+        evals = [load_eval(path, config, skills_pack) for path in paths]
         if args.command == "check":
             evals = available_checks(evals)
             if not evals:
@@ -83,7 +85,7 @@ def main(argv=None) -> int:
             print(json.dumps(write_hf(evals, args.output, args.hf_repo, args.license), indent=2))
             return 0
         if args.command == "catalog":
-            write_catalog(evals, args.output)
+            write_catalog(evals, args.output, skills_pack.hash)
             return 0
         if args.command == "validate":
             for evaluation in evals:

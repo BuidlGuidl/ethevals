@@ -11,7 +11,7 @@ from .config import Config, Declaration, Mode, parse_file
 from .scorers import RUNNERS, TargetScorer, rubric_questions, runner_files, runners_for
 from .sandboxes import validate_compose
 from .files import manifest, content_hash, inline_file, has_solution
-from .skills import pack_skills
+from .skills import SkillsPack, pack_skills
 
 PILLARS = {"concepts", "transactions", "building", "security"}
 
@@ -44,6 +44,7 @@ class Eval:
     target: TargetScorer | None
     files: dict[str, bytes]
     skills: list[Skill]
+    skills_hash: str | None
 
     @property
     def fork(self):
@@ -63,7 +64,7 @@ class Eval:
         )
 
 
-def load_eval(folder: Path, config: Config) -> Eval:
+def load_eval(folder: Path, config: Config, skills_pack: SkillsPack | None = None) -> Eval:
     if folder.is_symlink():
         raise ValueError(f"{folder}: symlinks are not allowed in an eval folder")
     folder = folder.resolve()
@@ -71,10 +72,13 @@ def load_eval(folder: Path, config: Config) -> Eval:
     if "eval.yaml" not in files:
         raise ValueError(f"{folder / 'eval.yaml'}: required regular file is missing")
     declaration = parse_file(EvalDeclaration, folder / "eval.yaml", files["eval.yaml"])
+    eval_hash = content_hash(files)
     skills = []
+    skills_hash = None
     if "skills" in declaration.modes:
-        pack, skills = pack_skills()
-        files.update(pack)
+        pack = skills_pack if skills_pack is not None else pack_skills()
+        skills, skills_hash = pack.skills, pack.hash
+        files.update(pack.files)
     if any(not choice.strip() for choice in declaration.choices or []):
         raise ValueError(f"{folder / 'eval.yaml'}: choices must not contain blank entries")
     if folder.parent.name not in PILLARS:
@@ -126,8 +130,8 @@ def load_eval(folder: Path, config: Config) -> Eval:
         raise ValueError(f"{folder / 'compose.yaml'}: must be a regular file")
     if "compose.yaml" in files:
         validate_compose(folder / "compose.yaml", data=files["compose.yaml"])
-    return Eval(folder, f"{folder.parent.name}/{folder.name}", content_hash(files),
-                folder.parent.name, declaration, kinds, target, files, skills)
+    return Eval(folder, f"{folder.parent.name}/{folder.name}", eval_hash,
+                folder.parent.name, declaration, kinds, target, files, skills, skills_hash)
 
 
 def validate_hf_export(target: TargetScorer, source: str) -> None:

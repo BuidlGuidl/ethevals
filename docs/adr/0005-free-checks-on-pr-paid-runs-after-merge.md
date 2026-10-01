@@ -13,6 +13,8 @@ A pull request runs only checks that cost nothing:
 A reviewer reads `rubric.md` in the pull request. No grader runs.
 
 After merge, CI runs every combination of eval hash, agent, and mode that has no results yet, and opens a pull request with the new results rows.
+Skills-mode identities also include the pack hash, as [ADR 0009](0009-skills-hash-per-mode.md) records.
+A skills change reruns only skills-mode epochs.
 
 Two things force this split. GitHub Actions gives no secrets to workflows triggered from forks, and outside teams open pull requests from forks. Paid runs on every push would also pay again for each fix.
 

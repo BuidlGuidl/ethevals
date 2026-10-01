@@ -11,7 +11,7 @@ from ethevals.loader import load_eval
 from support import fixture_config
 
 
-def test_pack_edits_change_only_opted_in_hashes_and_preserve_captured_bytes(folder, tmp_path, monkeypatch):
+def test_pack_edits_keep_eval_hashes_and_preserve_captured_bytes(folder, tmp_path, monkeypatch):
     pack = tmp_path / "skills"
     skill = pack / "units"
     (skill / "references").mkdir(parents=True)
@@ -31,13 +31,15 @@ def test_pack_edits_change_only_opted_in_hashes_and_preserve_captured_bytes(fold
     (pack / "notes.txt").write_text("Top-level notes.")
     unchanged = load_eval(folder, config)
     assert unchanged.hash == before.hash
+    assert unchanged.skills_hash == before.skills_hash
     assert sorted(name for name in unchanged.files if name.startswith("/skills/")) == [
         "/skills/units/SKILL.md", "/skills/units/references/units.txt"]
     reference.write_text("One gwei is 10^9 wei.")
     after = load_eval(folder, config)
     assert after.skills[0].references == {"units.txt": b"One gwei is 10^9 wei."}
     assert before.skills[0].references == {"units.txt": b"One ether is 10^18 wei."}
-    assert before.hash != after.hash
+    assert before.hash == after.hash
+    assert before.skills_hash != after.skills_hash
     assert after.files["/skills/units/references/units.txt"] == b"One gwei is 10^9 wei."
     declaration["modes"].remove("skills")
     path.write_text(yaml.safe_dump(declaration, default_flow_style=None))
@@ -105,5 +107,8 @@ def test_skill_index_preserves_workspace_instructions(folder, monkeypatch):
     monkeypatch.setattr("ethevals.agents.sandbox", Workspace)
     monkeypatch.setitem(HARNESSES, "claude_code", replace(HARNESSES["claude_code"], factory=factory))
     solve = internet_solver(config, config.agents["claude-code-opus-5.5"], evaluation.skills)
-    assert asyncio.run(solve(SimpleNamespace(choices=[]), None)) == ["standards"]
+    assert asyncio.run(solve(SimpleNamespace(choices=[]), None)) == [
+        "addresses", "building-blocks", "security", "standards"]
     assert instructions.read_text().startswith("Keep the author's instructions.\n\n# Ethereum skills\n")
+    for name in ["addresses", "building-blocks", "security", "standards"]:
+        assert f"- {name}: " in instructions.read_text()

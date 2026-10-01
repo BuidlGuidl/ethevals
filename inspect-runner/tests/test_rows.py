@@ -303,7 +303,7 @@ def test_time_limit_can_pass_finished_work(quiz_scoring_case):
     task = quiz_scoring_case["task"]
     task.solver, task.time_limit = answer_then_wait(), 1
     row = quiz_scoring_case["run"]([YES])
-    assert (row["schema_version"], row["status"], row["limit"]["type"]) == (5, "passed", "time")
+    assert (row["schema_version"], row["status"], row["limit"]["type"]) == (6, "passed", "time")
     assert row["checks"] == {
         "answer": {"passed": True, "reason": "Answer matches the target."},
         "explained": {"passed": True, "reason": "Uses standard transfers."},

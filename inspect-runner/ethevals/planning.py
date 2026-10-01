@@ -40,7 +40,8 @@ def epoch_selection(evals, config, agents_for, previous, epochs=None, fresh=Fals
             combinations += 1
             for number in [epoch] if epoch is not None else range(1, (epochs or config.epochs) + 1):
                 identity = epoch_identity({"eval_id": evaluation.id, "eval_hash": evaluation.hash,
-                                           **actor.metadata, "mode": mode}, number)
+                                           **actor.metadata, "mode": mode,
+                                           "skills_hash": evaluation.skills_hash if mode == "skills" else None}, number)
                 selected.add(identity)
                 row = prior.get(identity, {})
                 attempt = row.get("attempt", 0)
@@ -65,6 +66,7 @@ def plan(evals, config, agents_for, previous, *, epochs=None, retry_errors=False
         remaining = max(1, config.max_attempts - attempt + 1)
         per_attempt = config.cost_limit + rubric_budget(evaluation, config)
         row = {"eval_id": evaluation.id, "eval_hash": evaluation.hash,
+               "skills_hash": evaluation.skills_hash if mode == "skills" else None,
                **actor.metadata, "actor_key": actor.key, "mode": mode, "epoch": epoch, "attempt": attempt,
                "remaining_attempts": remaining,
                "per_attempt_usd": per_attempt, "worst_case_usd": per_attempt * remaining}
