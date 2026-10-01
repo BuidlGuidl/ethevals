@@ -14,6 +14,11 @@
     "stderr": "Error: Compilation failed\n",
     "returncode": 1
   },
+  "version": {
+    "stdout": "",
+    "stderr": "Error: Encountered invalid solc version in src/A.sol: No solc version exists that matches the version requirement: ^0.9.0\n",
+    "returncode": 1
+  },
   "missing_method": {
     "stdout": "Compiler run failed:\nError (9582): Member \"value\" not found or not visible after argument-dependent lookup in contract Token.\n --> test/Token.t.sol:5:48:\n  |\n5 |     function testToken() public view { require(token.value() == 1); }\n  |                                                ^^^^^^^^^^^\n\n",
     "stderr": "Error: Compilation failed\n",

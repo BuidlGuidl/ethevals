@@ -11,6 +11,7 @@ from ethevals.config import Config
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.runner import build_task as actor_task, run
+from inspect_ai.model import ModelInfo, set_model_info
 from inspect_ai.solver import solver
 import anyio
 import yaml
@@ -21,12 +22,14 @@ INPUTS = TemporaryDirectory()
 
 
 def fixture_config():
+    for name in ("mockllm/grader", "mockllm/model"):
+        set_model_info(name, ModelInfo(context_length=200000))
     models = {key: {"model": f"mockllm/{key}", "effort": "low"}
               for key in ("opus-5.5", "gpt-5.5", "kimi-k3", "glm-5.3")}
     prices = dict(input=5.0, output=25.0, input_cache_read=0.5, input_cache_write=6.25)
     return Config(epochs=3, time_limit=1200, cost_limit=5,
                   max_attempts=2, concurrency=1, search=True, search_limit=20,
-                  grader={"model": "mockllm/grader", "effort": "low", "max_tokens": 4096, "context_window": 200000}, models=models,
+                  grader={"model": "mockllm/grader", "effort": "low", "max_tokens": 4096}, models=models,
                   agents={
                       "claude-code-opus-5.5": dict(harness="claude_code", model="opus-5.5", cli_model="claude-opus-5-5", search="exa"),
                       "codex-cli-gpt-5.5": dict(harness="codex_cli", model="gpt-5.5", cli_model="gpt-5.5", search="exa"),
@@ -37,11 +40,12 @@ def fixture_config():
 
 
 def small_config():
+    set_model_info("mockllm/test", ModelInfo(context_length=200000))
     prices = dict(input=1, output=1, input_cache_read=1, input_cache_write=1)
     model = dict(model="mockllm/test", effort="high")
     return Config(epochs=3, time_limit=10, cost_limit=2, max_attempts=2,
                   concurrency=1, search=False, search_limit=20, prices={"mockllm/test": prices},
-                  grader={**model, "max_tokens": 10, "context_window": 200000},
+                  grader={**model, "max_tokens": 10},
                   models={"test": model},
                   agents={"test-agent": {"model": "test", "harness": "claude_code", "cli_model": "test", "search": "exa"}})
 

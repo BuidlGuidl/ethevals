@@ -79,11 +79,12 @@ The config disables FFI and automatic remappings.
 It declares the `chain` RPC endpoint at `http://chain:8545` and permits reads of `chain.json` and `private.json`.
 
 Every folder with `foundry.toml` or `package.json` is a project.
-Foundry projects use `forge remappings`, with a fallback to declared remappings if that command fails.
+Foundry projects use only remappings that `forge remappings` accepts.
+If that command fails, the project keeps only generated aliases.
 Each npm package under a project's `node_modules` gets a remapping.
 Every agent remapping has a context under its project folder, with deeper contexts first.
 The runner rebases any declared context under that folder too.
-Root-relative source imports resolve within the project.
+Every project's `src/` imports resolve under its own `src/` folder.
 The runner drops agent remappings for `forge-std` and `ds-test`.
 The chain image ships forge-std at `/opt/solidity/lib/forge-std`; the agent image ships no Solidity libraries.
 `hardhat/console.sol` maps to forge-std's console.
@@ -111,10 +112,11 @@ That source includes imported agent libraries and excludes private tests and unu
 If compilation failed, the rubric still receives the transcript.
 Transcript evidence includes non-system message text, tool-call IDs, functions, arguments, results, and errors.
 Transcript evidence drops reasoning, signatures, metadata, and tool views.
-Evidence uses JSON with ASCII escapes and has no fixed byte cap.
+Evidence uses labeled source and transcript JSON with ASCII escapes and has no fixed byte cap.
 The runner trims evidence only when Inspect's local token estimate exceeds the available context window.
 The estimate counts the question, schema, message framing, and output allowance.
-A cut retains the source prefix and transcript suffix, including the final reply.
+A single proportional cut retains the source prefix and transcript suffix, including the final reply.
+The cut leaves a 20% margin on the available token estimate.
 The cut can leave partial JSON. The grader must state uncertainty when evidence is incomplete.
 Rubric checks take their `##` headings without a prefix.
 The grader has no tools and returns one JSON object with `passed` and `reason`.
@@ -164,8 +166,8 @@ A time limit still grades the agent's work. It does not cause an error or a retr
 The grader reserve covers the context window and configured output cap.
 It covers two calls per question and three provider attempts per call.
 `rubric_budget()` uses the largest configured input price without a cache discount.
-Inspect's model info supplies the context window when it knows the grader.
-For an unknown grader, set `grader.context_window` in `config.yaml`.
+Inspect's model info supplies the grader's context window.
+An unknown context window stops planning with an error.
 The configured Opus 5.5 grader has a 1,000,000-token window and reserves $32.94912 per question.
 The direct Anthropic grader uses low effort and `max_tokens: 32768`, which includes thinking and the JSON verdict.
 Each grader call has a total deadline that includes provider retry backoff.
@@ -181,7 +183,7 @@ The constants live beside the scorer implementation.
 | Docker failure, memory failure, or setup failure | Error. |
 | Grader provider failure or exhausted grader allowance | Error with any completed scorer results. |
 | Script crash or malformed verdict | Error. |
-| Scoring exec timeout | Failed check. |
+| Check-script timeout | Failed check. |
 | Forge output without results or a compiler diagnostic | Error. |
 | Compiler download failure or unexplained Forge timeout | Error. |
 

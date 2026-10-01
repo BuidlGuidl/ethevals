@@ -261,9 +261,9 @@ def test_compile_failure_grades_the_transcript_without_source(scoring_case):
     assert row["checks"] == {
         "compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},
         "uses_standard_library": {"passed": False, "reason": "Owner can seize tokens."}}
-    evidence = json.loads(scoring_case["requests"][0][1].text)
-    assert evidence["sources"] == {}
-    assert evidence["transcript"][0]["role"] == "user"
+    source_text, transcript_text = scoring_case["requests"][0][1].text.split("\nTranscript:\n")
+    assert json.loads(source_text.split("\n", 1)[1]) == {}
+    assert json.loads(transcript_text)[0]["role"] == "user"
 
 
 def test_operator_stop_is_an_error_and_skips_scoring(quiz_scoring_case):

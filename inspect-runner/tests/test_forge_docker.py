@@ -251,7 +251,7 @@ def write_workspace(files):
     return write()
 
 
-@pytest.mark.parametrize("layout", ["foundry", "hardhat", "fake_test", "unused_broken", "wrong_import"])
+@pytest.mark.parametrize("layout", ["foundry", "hardhat", "fake_test", "unused_broken", "wrong_import", "rejected_config"])
 def test_real_scorer_uses_workspace_imports_and_scoped_libraries(tmp_path, layout):
     config = fixture_config()
     original = load_eval(ROOT / "evals/building/erc20-points-token", config)
@@ -276,6 +276,10 @@ def test_real_scorer_uses_workspace_imports_and_scoped_libraries(tmp_path, layou
         submitted["src/Broken.sol"] = b"not Solidity"
         submitted["lib/unrelated/Broken.sol"] = b"not Solidity"
         submitted["src/Binary.sol"] = b"\xff"
+        submitted["packages/unused/foundry.toml"] = b"[invalid TOML"
+        submitted["packages/rejected/foundry.toml"] = b'[profile.default]\nremappings = ["=lib/x/"]\n'
+    elif layout == "rejected_config":
+        submitted["foundry.toml"] = b'[profile.default]\nremappings = ["=lib/x/"]\n'
     elif layout == "wrong_import":
         files["scorer/tests/BuilderPoints.t.sol"] = files["scorer/tests/BuilderPoints.t.sol"].replace(
             b"workspace/src/BuilderPoints.sol", b"workspace/src/Missing.sol")
@@ -285,11 +289,12 @@ def test_real_scorer_uses_workspace_imports_and_scoped_libraries(tmp_path, layou
     task.solver = write_workspace(submitted)
     log = eval(task, log_dir=str(tmp_path / "logs"), display="none", retry_on_error=0)[0]
     row = results_rows(log)[0]
-    if layout == "wrong_import":
+    if layout in {"wrong_import", "rejected_config"}:
         assert row["status"] == "failed", row
         assert set(row["checks"]) == {"compile"}
         assert row["checks"]["compile"]["passed"] is False
-        assert 'Source "workspace/src/Missing.sol" not found' in row["checks"]["compile"]["reason"]
+        assert 'Source "' in row["checks"]["compile"]["reason"]
+        assert "not found" in row["checks"]["compile"]["reason"]
     elif layout == "fake_test":
         assert row["checks"]["compile"]["passed"] is True, row
         assert row["checks"]["test_deployer_holds_initial_supply"]["passed"] is False
@@ -303,6 +308,9 @@ def test_context_remappings_keep_each_projects_library_private(tmp_path):
     config = fixture_config()
     original = load_eval(ROOT / "evals/building/erc20-points-token", config)
     submitted = {
+        "foundry.toml": original.files["workspace/foundry.toml"],
+        "remappings.txt": b"../scorer/:scorer/helpers/=lib/evil/\n",
+        "lib/evil/AuthorHelper.sol": b'pragma solidity 0.8.30; library AuthorHelper { function value() internal pure returns (uint256) { return 999; } }',
         "packages/first/foundry.toml": b'[profile.default]\nsrc = "src"\nremappings = ["helper/=lib/helper/"]\n',
         "packages/first/src/First.sol": b'pragma solidity 0.8.30; import {Helper} from "helper/Helper.sol"; contract First { function value() external pure returns (uint256) { return Helper.value(); } }',
         "packages/first/lib/helper/Helper.sol": b'pragma solidity 0.8.30; library Helper { function value() internal pure returns (uint256) { return 7; } }',

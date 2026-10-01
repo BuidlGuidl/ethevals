@@ -71,15 +71,9 @@ def load_eval(folder: Path, config: Config) -> Eval:
         raise ValueError(f"{folder / 'scorer'}: required directory is missing")
     if (folder / "scorer/tests").is_dir() and not runners_for(files):
         raise ValueError(f"{folder}: no runner claims a file in scorer/tests/")
-    claimed = set()
-    for runner in runners_for(files):
-        for name in runner_files(runner, files):
-            if name in claimed:
-                raise ValueError(f"{folder}: more than one runner claims {name}")
-            claimed.add(name)
     kinds = [kind for kind, present in (
         ("target", "scorer/target.yaml" in files),
-        ("tests", bool(claimed)),
+        ("tests", bool(runners_for(files))),
         ("check_script", script_path(files, "check") is not None),
         ("rubric", "scorer/rubric.md" in files),
     ) if present]

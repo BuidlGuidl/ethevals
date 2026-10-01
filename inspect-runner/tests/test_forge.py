@@ -25,10 +25,15 @@ def test_compiler_error_is_a_failed_check(captured):
     assert forge_checks(**captured)[0] is False
 
 
-def test_captured_constructor_failure_keeps_forge_check_name():
+def test_captured_constructor_failure_names_the_contract():
     assert forge_checks(**CAPTURES["constructor"]) == (True, "Compilation passed.", {
         "Tests.constructor": {"passed": False, "reason": "bad submission"},
     })
+
+
+def test_unsatisfiable_pragma_is_a_failed_compile():
+    assert forge_checks(**CAPTURES["version"]) == (False,
+        "Error: Encountered invalid solc version in src/A.sol: No solc version exists that matches the version requirement: ^0.9.0", {})
 
 
 def test_setup_failure_names_the_contract():
