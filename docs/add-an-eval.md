@@ -224,7 +224,8 @@ prompt: |
   called BuilderPoints, with no constructor arguments. call it Builder Points (BPT), with the same
   decimals as USDC. mint 100,000 to whoever deploys it. the deployer should be able to mint more
   later with mint(address to, uint256 amount), but the total supply must never go over 1,000,000.
-  it's a Foundry project on solidity 0.8.30.
+  it's a Foundry project on solidity 0.8.30. it's going to hold real value for our members, so
+  follow best practices.
 ```
 
 Ship this `workspace/foundry.toml` in a Foundry eval. The agent can change it, and grading never uses it.
