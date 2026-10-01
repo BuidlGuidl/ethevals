@@ -45,8 +45,8 @@ class Chain:
         requests = payload if batch else [payload]
         if not requests or len(requests) > 100:
             return error(None, -32600, "Batch must contain 1 to 100 requests.")
-        refused = []
-        for request in requests:
+        refused = {}
+        for index, request in enumerate(requests):
             valid = (isinstance(request, dict) and request.get("jsonrpc") == "2.0" and
                      isinstance(request.get("method"), str) and
                      type(request.get("id")) in {str, int, type(None)} and
@@ -54,15 +54,13 @@ class Chain:
             if not valid or request["method"] not in ALLOWED:
                 method = request.get("method") if isinstance(request, dict) else None
                 refusal(repr(method))
-                refused.append(error(request, -32601 if valid else -32600,
-                                     (SIGNING_REFUSAL if method in NODE_SIGNING else "Method is not allowed.")
-                                     if valid else "Invalid JSON-RPC request."))
+                refused[index] = error(request, -32601 if valid else -32600,
+                                       (SIGNING_REFUSAL if method in NODE_SIGNING else "Method is not allowed.")
+                                       if valid else "Invalid JSON-RPC request.")
         # Reject the whole batch before forwarding any member.
         if refused:
-            return [error(request, -32601, SIGNING_REFUSAL if isinstance(request, dict) and
-                          isinstance(request.get("method"), str) and
-                          request.get("method") in NODE_SIGNING else "Batch contains a refused method.")
-                    for request in requests] if batch else refused[0]
+            return [refused.get(index) or error(request, -32601, "Batch contains a refused method.")
+                    for index, request in enumerate(requests)] if batch else refused[0]
         data = json.dumps(payload).encode()
         request = urllib.request.Request("http://127.0.0.1:8546", data, {"Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=15) as response:

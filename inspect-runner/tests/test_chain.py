@@ -100,11 +100,11 @@ def test_filter_passes_signed_sends_and_wallet_reads(proxy, method):
     assert writes == [payload]
 
 
-@pytest.mark.parametrize("method,message", [
-    ("eth_sign", "Sign locally and use eth_sendRawTransaction."),
-    ([], "Batch contains a refused method."),
+@pytest.mark.parametrize("method,code,message", [
+    ("eth_sign", -32601, "Sign locally and use eth_sendRawTransaction."),
+    ([], -32600, "Invalid JSON-RPC request."),
 ])
-def test_filter_rejects_signing_and_malformed_batches(proxy, method, message):
+def test_filter_rejects_signing_and_malformed_batches(proxy, method, code, message):
     request, writes = proxy
     status, body = request([
         {"jsonrpc": "2.0", "id": 1, "method": "eth_sendRawTransaction", "params": ["0x123"]},
@@ -112,7 +112,7 @@ def test_filter_rejects_signing_and_malformed_batches(proxy, method, message):
     ])
     assert (status, json.loads(body)) == (200, [
         {"jsonrpc": "2.0", "id": 1, "error": {"code": -32601, "message": "Batch contains a refused method."}},
-        {"jsonrpc": "2.0", "id": 2, "error": {"code": -32601, "message": message}},
+        {"jsonrpc": "2.0", "id": 2, "error": {"code": code, "message": message}},
     ])
     _, allowed = request({"jsonrpc": "2.0", "id": 3, "method": "eth_chainId"})
     assert json.loads(allowed)["result"] == "0xabc"

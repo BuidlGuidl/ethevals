@@ -147,7 +147,7 @@ It allows wallet reads, polling filters, access lists, block receipts, simulatio
 It refuses `debug_*`, `trace_*`, `ots_*`, `txpool_*`, chain controls, and node signing.
 Node-signing refusals say: "Sign locally and use eth_sendRawTransaction."
 A batch with any refused method fails as a whole.
-The filter rejects WebSockets and unsigned sends; refusal messages enter the Inspect log.
+The filter rejects WebSockets; refusal messages enter the Inspect log.
 The network guard in `tests/test_rpc_methods.py` fetches Foundry source at the tag in `images/Chain.Dockerfile`.
 It fails on missing or stale classifications and runs with `uv run pytest -q` in the free PR check.
 

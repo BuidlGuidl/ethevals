@@ -9,7 +9,7 @@ from ethevals.images import rpc_filter
 
 def test_rpc_methods_match_pinned_anvil():
     images = Path(rpc_filter.__file__).parent
-    pin = re.search(r"^FROM ghcr\.io/foundry-rs/foundry:([^@\s]+)@", (images / "Chain.Dockerfile").read_text())
+    pin = re.search(r"^FROM ghcr\.io/foundry-rs/foundry:([^@\s]+)@", (images / "Chain.Dockerfile").read_text(), re.MULTILINE)
     assert pin is not None, "Chain.Dockerfile must pin a Foundry tag and digest."
     url = f"https://raw.githubusercontent.com/foundry-rs/foundry/{pin[1]}/crates/anvil/core/src/eth/mod.rs"
     with urllib.request.urlopen(url, timeout=30) as response:
