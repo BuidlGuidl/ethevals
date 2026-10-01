@@ -37,6 +37,13 @@ An eval with a `chain` needs `setup/setup.s.sol`, and `validate` rejects `setup/
 | `solution/` | the reference solution: files that replace workspace files at the same path, and an optional `solution.s.sol` | no |
 | `compose.yaml` | extra services | it can call them |
 
+**The convention to follow: `solution/` mirrors `workspace/`.**
+
+- Keep the workspace a normal Foundry project, with contracts under `src/`.
+- Put each solution file at the same path as the workspace file it replaces. For example, the stub `workspace/src/BuilderPoints.sol` gets its answer at `solution/src/BuilderPoints.sol`.
+- The reference pass copies `solution/` over the workspace, so the test's import (`workspace/src/BuilderPoints.sol`) compiles the solution instead of the stub.
+- A `solution/solution.s.sol` doesn't replace anything. It runs as a script.
+
 The repository is public, so an agent with internet access can find scorer files. Don't rely on their secrecy.
 
 `eval.yaml` takes these keys. Any other key fails validation.
@@ -250,7 +257,6 @@ function test_decimals_match_usdc() public view {
 
 `scorer/rubric.md` asks one question, `uses_standard_library`: did the agent build the ERC-20 on a well-known library such as OpenZeppelin or Solady?
 `solution/src/BuilderPoints.sol` overlays the stub with OpenZeppelin `ERC20Capped` and `Ownable`.
-A file in `solution/` replaces the workspace file at the same path. So the solution lives at `solution/src/BuilderPoints.sol`, matching the stub at `workspace/src/BuilderPoints.sol` that the test imports. Keep the workspace a normal Foundry project, with contracts under `src/`.
 
 Git ignores `lib/` at any depth, so a solution that uses a library ships as one flattened file.
 Write it in a scratch Foundry project with the library installed through `forge install`.
