@@ -13,6 +13,7 @@ from .hf import DEFAULT_REPO, write_hf
 from .publish import publish_logs
 from .planning import plan, budget_check
 from .rows import previous_rows
+from .checks import available_checks
 
 
 def positive(value: str) -> int:
@@ -75,7 +76,7 @@ def main(argv=None) -> int:
             raise ValueError("No eval folders found. Use --evals or start from the repository root.")
         evals = [load_eval(path, config) for path in paths]
         if args.command == "check":
-            evals = [evaluation for evaluation in evals if set(evaluation.scorer_kinds) != {"rubric"}]
+            evals = available_checks(evals)
             if not evals:
                 return 0
         if args.command == "export-hf":

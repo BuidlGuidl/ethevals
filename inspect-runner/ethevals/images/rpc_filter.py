@@ -1,5 +1,6 @@
 """Forward allowed JSON-RPC requests to the loopback-only chain."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -17,6 +18,7 @@ NODE_SIGNING = frozenset({
 SIGNING_REFUSAL = "Sign locally and use eth_sendRawTransaction."
 MAX_BODY = 2 * 1024 * 1024
 REFUSALS = "/tmp/rpc-refusals.log"
+UPSTREAM_TIMEOUT = 60 if os.environ.get("FORK_BLOCK_NUMBER") else 15
 
 
 def refusal(message):
@@ -27,7 +29,7 @@ def refusal(message):
 def rpc(method, params=None):
     data = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}).encode()
     request = urllib.request.Request("http://127.0.0.1:8546", data, {"Content-Type": "application/json"})
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with urllib.request.urlopen(request, timeout=UPSTREAM_TIMEOUT) as response:
         result = json.load(response)
     if "error" in result:
         raise RuntimeError(result["error"])
@@ -63,7 +65,7 @@ class Chain:
                     for index, request in enumerate(requests)] if batch else refused[0]
         data = json.dumps(payload).encode()
         request = urllib.request.Request("http://127.0.0.1:8546", data, {"Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=15) as response:
+        with urllib.request.urlopen(request, timeout=UPSTREAM_TIMEOUT) as response:
             body = response.read(MAX_BODY + 1)
             if len(body) > MAX_BODY:
                 return error(None, -32000, "Chain response too large.")
@@ -122,7 +124,11 @@ class Server(ThreadingHTTPServer):
 
 
 def main():
-    process = subprocess.Popen(["anvil", "--host", "127.0.0.1", "--port", "8546", "--accounts", "0", "--silent"])
+    command = ["anvil", "--host", "127.0.0.1", "--port", "8546", "--accounts", "0", "--silent"]
+    fork_url = os.environ.pop("FORK_RPC_URL", None)
+    if fork_url:
+        command.extend(["--fork-url", fork_url, "--fork-block-number", os.environ["FORK_BLOCK_NUMBER"]])
+    process = subprocess.Popen(command)
     open(REFUSALS, "w").close()
     for attempt in range(100):
         try:

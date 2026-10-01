@@ -82,6 +82,13 @@ def merged_compose(evaluation):
         if name == "scorer":
             service["entrypoint"] = ["sleep", "infinity"]
             service["working_dir"] = "/workspace"
+    if evaluation.fork:
+        chain = document["services"]["chain"]
+        chain["mem_limit"] = "1g"
+        chain["environment"] = {
+            "FORK_RPC_URL": "${" + evaluation.fork.rpc_variable + "}",
+            "FORK_BLOCK_NUMBER": str(evaluation.fork.block),
+        }
     if "compose.yaml" in evaluation.files:
         extra = yaml.safe_load(validate_compose(evaluation.folder / "compose.yaml", data=evaluation.files["compose.yaml"]))
         document["services"].update(extra.get("services", {}))

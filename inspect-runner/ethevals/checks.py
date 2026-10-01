@@ -1,5 +1,6 @@
 """Key-free agents use the production task and scoring path."""
 from dataclasses import dataclass
+import os
 
 from inspect_ai.model import ModelOutput, ModelInfo, ModelCost, get_model, set_model_info
 from inspect_ai.solver import solver
@@ -10,6 +11,16 @@ from .actors import Actor, Grader, quiz_solver
 from .scorers import target_reference
 from .chain_setup import run_solution
 from .files import has_solution
+
+
+def available_checks(evaluations):
+    available = []
+    for evaluation in evaluations:
+        if evaluation.fork and not os.environ.get(evaluation.fork.rpc_variable):
+            print(f"{evaluation.id}: validated; skipped reference and untouched passes because {evaluation.fork.rpc_variable} is unset.")
+        elif set(evaluation.scorer_kinds) != {"rubric"}:
+            available.append(evaluation)
+    return available
 
 
 @dataclass

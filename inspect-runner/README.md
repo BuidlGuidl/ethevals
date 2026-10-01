@@ -7,7 +7,8 @@ The root `pyproject.toml` installs `ethevals` from this directory.
 ## Eval folders
 
 `eval.yaml` declares `prompt`, `motivation`, `modes`, and optional `choices` and `chain`.
-The loader rejects unknown keys. `chain` accepts only `anvil`; omission means no chain.
+The loader rejects unknown keys.
+`chain` accepts `anvil` or a pinned fork; omission means no chain.
 
 `scorer/` is required. `workspace/`, `setup/`, and top-level `solution/` are optional.
 Tests or a chain require `solution/`.
@@ -204,7 +205,7 @@ The runner serializes the merged document to `inputs/<hash>/compose.yaml`.
 Stock image tags come from [images/tag.py](ethevals/images/tag.py), independent of eval hashes.
 Tags identify build inputs, not reproducible image bytes.
 
-`chain: anvil` selects `chain.compose.yaml`; an absent chain selects `stock.compose.yaml`.
+A declared chain selects `chain.compose.yaml`; an absent chain selects `stock.compose.yaml`.
 The agent and chain share the internal `work` network.
 The scorer and chain share the internal `grading` network.
 Each service has its own internet network. The agent cannot resolve `scorer`.
@@ -291,7 +292,7 @@ Setup runs when `setup/setup.s.sol` exists, before the agent's time allowance st
 The runner copies `setup/` and `workspace/` into the chain container's `/eval`.
 Its Foundry config maps `forge-std/` and `ethevals/` and permits reads and writes of `chain.json` and `private.json`.
 Forge installs the compiler each pragma requires.
-The setup command has a 120-second timeout:
+The setup command has a 120-second timeout, or 600 seconds on a fork:
 
 ```sh
 forge script setup/setup.s.sol --broadcast --slow --rpc-url http://127.0.0.1:8546
@@ -330,11 +331,55 @@ After freezing the agent, the runner mines one block and captures the RPC refusa
 Forge tests read the finished chain with `vm.createSelectFork("chain")`.
 Changes in the test's fork stay in Forge.
 
+## Forks
+
+Declare a network and a positive block number:
+
+```yaml
+chain: {fork: mainnet, block: 23819000}
+```
+
+The runner accepts `mainnet` and `base`.
+It reads `MAINNET_RPC_URL` or `BASE_RPC_URL` from its environment.
+A missing variable stops `run` before planning, providers, or containers start.
+Use an archive RPC that serves the pinned block.
+
+The saved compose file contains `${MAINNET_RPC_URL}` or `${BASE_RPC_URL}`, never its value.
+Docker Compose resolves that value from the runner's environment when it starts the chain service.
+Only that service receives the URL, and the filter passes it to Anvil.
+Setup and reference commands start with an empty environment and reach only the local chain.
+The agent's `chain.json` still names `http://chain:8545`.
+
+Anvil starts with `--fork-url`, `--fork-block-number`, and `--accounts 0`.
+It keeps the real network's chain ID and has no prefunded accounts.
+Setup funds the agent and prepares the chain before work starts.
+Fork setup can impersonate a token holder with `vm.rpc("anvil_impersonateAccount", ...)`.
+It sends the token transfer immediately through `vm.rpc("eth_sendTransaction", ...)` on the unfiltered Anvil.
+It stops impersonation with `vm.rpc("anvil_stopImpersonatingAccount", ...)` before setup exits.
+Generated wallets use signed Forge broadcasts for deployment.
+The filter refuses `eth_sendTransaction` and node signing, so the agent cannot send from an impersonated holder.
+The chain container gets 1 GiB on forks, compared with 256 MiB on fresh chains.
+Setup and Forge tests each get 600 seconds, compared with 120 and 180 seconds on fresh chains.
+The filter allows 60 seconds per upstream request on forks, compared with 15 seconds on fresh chains.
+This gives Anvil time to fetch archive state on its first read.
+Forge tests use `--no-storage-caching` to prevent state from an earlier fork from affecting checks.
+
+`ethevals check` validates a fork eval even when its RPC variable is absent.
+It then prints one reason and skips both the reference and untouched passes.
+`scripts/ci.py checks` uses the same command and skip rule.
+With the variable set, both passes run without model calls.
+
+After reading a PR, dispatch [fork-check.yml](../.github/workflows/fork-check.yml) with its PR number.
+It checks out that PR's head without saved credentials and checks every fork eval with the RPC secrets.
+It posts a `fork check` commit status on the checked SHA.
+The workflow has only content-read and status-write permissions.
+
 ## CI and publication
 
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
 [results.yml](../.github/workflows/results.yml) queues paid runs after `main` changes, excluding results-only changes.
 It uses `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, optional `EXA_API_KEY`, and the `ETHEVALS_BUDGET_USD` repository variable.
+The matrix also receives `MAINNET_RPC_URL` and `BASE_RPC_URL` for fork evals.
 A manual dispatch budget overrides that variable; the fallback budget is zero.
 The job graph is `plan → matrix → publish`.
 The plan job calls `ethevals plan` without provider keys and refuses work above the budget.

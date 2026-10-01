@@ -242,9 +242,10 @@ async def prepare_forge(root):
     await root.box.write_file("/workspace/foundry.toml", config)
 
 
-async def run_runner(runner, root):
+async def run_runner(runner, root, *, fork=False):
     try:
-        return await runner_exec(root.box, list(runner.command), cwd="/workspace", timeout=runner.timeout)
+        return await runner_exec(root.box, list(runner.command), cwd="/workspace",
+                                 timeout=runner.fork_timeout if fork and runner.fork_timeout else runner.timeout)
     except TimeoutError as error:
         raise RuntimeError(f"Test command {runner.command[0]} timed out, including any compiler download.") from error
 
@@ -275,6 +276,7 @@ class TestRunner:
     command: tuple[str, ...]
     timeout: int
     results: Callable
+    fork_timeout: int | None = None
     evidence: Callable | None = None
 
 
@@ -282,7 +284,7 @@ FORGE = TestRunner(
     pattern="*.t.sol", names=forge_names, prepare=prepare_forge,
     command=("/usr/local/bin/forge", "test", "--root", ".", "--match-path", "scorer/tests/**",
              "--json", "--no-storage-caching", "--build-info"),
-    timeout=180, results=forge_checks, evidence=compiled_sources,
+    timeout=180, fork_timeout=600, results=forge_checks, evidence=compiled_sources,
 )
 RUNNERS = [FORGE]
 
@@ -306,7 +308,7 @@ def tests_scorer(eval_id, eval_hash):
         checks, origins, failures = {}, {}, []
         for runner in runners_for(evaluation.files):
             await runner.prepare(root)
-            result = await run_runner(runner, root)
+            result = await run_runner(runner, root, fork=bool(evaluation.fork))
             built, reason, results = runner.results(result.stdout, result.stderr, result.returncode)
             if not built:
                 failures.append(reason)

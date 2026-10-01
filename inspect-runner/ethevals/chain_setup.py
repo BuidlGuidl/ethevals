@@ -5,6 +5,7 @@ from inspect_ai.log import transcript
 from .sandboxes import IMAGES, runner_exec, workspace_files
 
 SETUP_TIMEOUT = 120
+FORK_SETUP_TIMEOUT = 600
 
 
 async def setup_script(evaluation, environments):
@@ -14,7 +15,8 @@ async def setup_script(evaluation, environments):
             await box.write_file("/eval/" + name, data)
     await box.write_file("/eval/foundry.toml", (IMAGES / "setup-foundry.toml").read_bytes())
     result = await runner_exec(box, ["forge", "script", "setup/setup.s.sol", "--broadcast", "--slow",
-                                   "--rpc-url", "http://127.0.0.1:8546"], cwd="/eval", timeout=SETUP_TIMEOUT)
+                                   "--rpc-url", "http://127.0.0.1:8546"], cwd="/eval",
+                               timeout=FORK_SETUP_TIMEOUT if evaluation.fork else SETUP_TIMEOUT)
     if not result.success:
         raise RuntimeError(f"Chain setup exited {result.returncode}: {(result.stderr or result.stdout)[-4096:]}")
     chain = await box.read_file("/eval/chain.json", text=False)
