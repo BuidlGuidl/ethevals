@@ -343,7 +343,7 @@
     if (dr.run) crumbs.push(`<span>Run ${dr.run}</span>`);
     const back = dr.run ? `<button class="dback" data-dgo="eval">← All runs</button>` : ev && dr.scope ? `<button class="dback" data-dgo="list">← ${scopeName(dr.scope)} evals</button>` : "";
     const body = dr.run ? paintRun(a, ev) : ev ? paintEval(a, ev) : paintList(a);
-    document.getElementById("detail-content").innerHTML = `<header class="drawer-header"><div class="drawer-heading"><nav class="dcrumbs" aria-label="Where you are">${crumbs.join('<span class="dsep">›</span>')}</nav>${body.head}</div><button id="close-detail" class="close-button" aria-label="Close details">Close ×</button></header><div class="drawer-content">${back}${body.main}</div>`;
+    document.getElementById("detail-content").innerHTML = `<header class="drawer-header"><div class="drawer-heading">${crumbs.length > 1 ? `<nav class="dcrumbs" aria-label="Where you are">${crumbs.join('<span class="dsep">›</span>')}</nav>` : ""}${body.head}</div><button id="close-detail" class="close-button" aria-label="Close details">Close ×</button></header><div class="drawer-content">${back}${body.main}</div>`;
   }
 
   // The panel's mode switch, laid out like the tables': the two agent modes together, Model only apart.
@@ -362,7 +362,7 @@
     return {
       head: `<h2 id="detail-title">${esc(a.name)}</h2><p class="dsub">${harnessFor(a, dr.mode)} · ${modeName(dr.mode)} · ${scopeName(dr.scope)}</p><p class="dsum"><b>${pct(s.p)}</b> average pass rate over ${s.ran < s.evals ? `${s.ran} of ${s.evals} evals` : plural(s.ran, "eval")} · ${s.k} of ${s.n} runs passed</p>`,
       main: `${dmodeSel(m => E.evals.some(ev => f(ev) && ev.modes.includes(m)))}
-        ${s.n ? `<div class="tiles">${tile("$ / pass", usd(s.costPerPass))}${tile("Cost / run", usd(s.costPerRun))}${tile("Tokens / run", tok(s.tokMed))}${tile("Time / run", s.timeMed + "s")}${dr.mode === "skills" ? tile("Skill read", pct(s.read)) : ""}</div><p class="fine">A rerun of the same evals would likely land between ${pct(s.lo)} and ${pct(s.hi)}. Cost per run is an average; tokens and time are medians.</p>` : ""}
+        ${s.n ? `<div class="tiles">${tile("$ / pass", usd(s.costPerPass))}${tile("Cost / run", usd(s.costPerRun))}${tile("Tokens / run", tok(s.tokMed))}${tile("Time / run", s.timeMed + "s")}${dr.mode === "skills" ? tile("Skill read", pct(s.read)) : ""}</div><p class="fine">Cost per run is an average; tokens and time are medians.</p>` : ""}
         <div class="dlist">${evs.map(ev => { const rs = runsOf(ev, dr.agent, dr.mode), ok = rs.filter(r => !r.invalid), k = ok.filter(r => r.pass).length;
         return `<button class="drow2" data-dl="${ev.id}"><span class="dt"><b>${esc(ev.title)}</b><span class="dmeta">${ev.type} · ${GRADER_FILE[ev.grader] || ev.grader}${ev.released <= a.cutoff ? ' · <em>released before model cutoff</em>' : ""}</span></span>${rs.length ? dotsOnly(rs) : ""}${heatCell(k, ok.length)}<span class="dgo">›</span></button>`; }).join("") || '<p class="muted">No evals here in this mode.</p>'}</div>`,
     };
