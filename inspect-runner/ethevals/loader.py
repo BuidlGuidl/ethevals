@@ -47,7 +47,7 @@ class Eval:
             files["/workspace/foundry.toml"] = inline_file((IMAGES / "foundry.toml").read_bytes())
             notes.append(
                 f"Available solc versions: {', '.join(SOLC_VERSIONS)}. "
-                "Grading uses the supplied foundry.toml. Changes to compiler settings or remappings do not affect grading. "
+                "Use the supplied foundry.toml without changing compiler settings or remappings. "
                 "OpenZeppelin and forge-std come from the image. Other Solidity dependencies must use relative imports under src/ or lib/."
             )
         return Sample(
