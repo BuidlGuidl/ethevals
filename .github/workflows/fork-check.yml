@@ -1,0 +1,72 @@
+name: Fork check
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number for the reviewed commit
+        required: true
+        type: number
+      sha:
+        description: Full commit SHA reviewed by the maintainer
+        required: true
+        type: string
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: refs/pull/${{ inputs.pr }}/head
+          persist-credentials: false
+      - name: Check the reviewed commit
+        env:
+          SHA: ${{ inputs.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SHA"
+      - name: Mark the check pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ inputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api "repos/$REPO/statuses/$SHA" -f state=pending -f context='fork check' -f target_url="$RUN_URL" > /dev/null
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: false
+      - run: uv sync --frozen
+      - name: Run the fork references and untouched passes
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+        run: |
+          uv run python - <<'PY'
+          import os
+          from pathlib import Path
+          from ethevals.cli import main
+          from ethevals.config import load_config
+          from ethevals.loader import load_eval
+          forks = [evaluation for path in sorted(Path("evals").glob("*/*"))
+                   if (evaluation := load_eval(path, load_config())).fork]
+          if not forks:
+              raise SystemExit("No fork evals found.")
+          for evaluation in forks:
+              if not os.environ.get(evaluation.fork.rpc_variable):
+                  raise SystemExit(f"Missing {evaluation.fork.rpc_variable}")
+          raise SystemExit(main(["check", "--evals", *[str(e.folder) for e in forks],
+                                 "--output", "results/fork-check"]))
+          PY
+      - name: Post the commit status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ inputs.sha }}
+          RESULT: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          state=failure
+          if [ "$RESULT" = success ]; then state=success; fi
+          gh api "repos/$REPO/statuses/$SHA" -f state="$state" -f context='fork check' -f target_url="$RUN_URL" > /dev/null

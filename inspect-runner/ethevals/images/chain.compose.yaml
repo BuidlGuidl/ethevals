@@ -1,0 +1,30 @@
+services:
+  default:
+    mem_limit: 3g
+    init: true
+    networks: [work, agent_internet]
+  scorer:
+    mem_limit: 2g
+    init: true
+    networks: [grading, scorer_internet]
+  chain:
+    mem_limit: 256m
+    init: true
+    networks: [work, grading, chain_internet]
+    healthcheck:
+      test: [CMD, cast, chain-id, --rpc-url, http://127.0.0.1:8545]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+networks:
+  work:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.inhibit_ipv4: "true"
+  grading:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.inhibit_ipv4: "true"
+  agent_internet: {}
+  scorer_internet: {}
+  chain_internet: {}

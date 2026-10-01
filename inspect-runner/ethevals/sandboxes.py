@@ -1,7 +1,8 @@
 import io
-import json
 import tarfile
 import re
+import os
+from functools import wraps
 import yaml
 from pathlib import Path, PurePosixPath
 
@@ -9,16 +10,11 @@ from inspect_ai.util import sandbox
 
 from .config import read_yaml
 from .images.tag import image_tag
+from .images.rpc_filter import redact
 from .scoring_base import SubmissionFailed
 
 IMAGES = Path(__file__).with_name("images")
-SOLC_VERSIONS = (json.loads((IMAGES / "solc.json").read_bytes())["version"],)
 MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
-
-
-def compose_file(eval_type=None) -> Path:
-    path = IMAGES / ("act.compose.yaml" if eval_type == "act" else "stock.compose.yaml")
-    return path
 
 
 def validate_compose(path: Path, *, data: bytes | None = None) -> bytes:
@@ -62,9 +58,9 @@ def validate_compose(path: Path, *, data: bytes | None = None) -> bytes:
             reject(f"service {name}: forbidden options {sorted(extra)}; privileged containers and host mounts are forbidden")
         if memory_bytes(service.get("mem_limit", 0)) <= 0:
             reject(f"service {name}: requires a positive mem_limit")
-        if service.get("networks", ["private"]) != ["private"]:
-            reject(f"service {name}: only the private network is allowed")
-        service["networks"] = ["private"]
+        if service.get("networks", ["work"]) != ["work"]:
+            reject(f"service {name}: only the work network is allowed")
+        service["networks"] = ["work"]
         for volume in service.get("volumes", []):
             if not isinstance(volume, dict) or volume.get("type") != "volume" or volume.get("source") not in volumes:
                 reject(f"service {name}: host mounts are forbidden; use a declared named volume")
@@ -83,9 +79,19 @@ def memory_bytes(value):
 
 
 def merged_compose(evaluation):
-    document = read_yaml(compose_file(evaluation.declaration.type))
+    document = read_yaml(IMAGES / ("chain.compose.yaml" if evaluation.declaration.chain else "stock.compose.yaml"))
     for name, service in document["services"].items():
-        service["image"] = image_tag(IMAGES, "chain" if name == "chain" else "runner")
+        service["image"] = image_tag(IMAGES, "runner" if name == "default" else "chain")
+        if name == "scorer":
+            service["entrypoint"] = ["sleep", "infinity"]
+            service["working_dir"] = "/workspace"
+    if evaluation.fork:
+        chain = document["services"]["chain"]
+        chain["mem_limit"] = "1g"
+        chain["environment"] = {
+            "FORK_RPC_URL": "${" + evaluation.fork.rpc_variable + "}",
+            "FORK_BLOCK_NUMBER": str(evaluation.fork.block),
+        }
     if "compose.yaml" in evaluation.files:
         extra = yaml.safe_load(validate_compose(evaluation.folder / "compose.yaml", data=evaluation.files["compose.yaml"]))
         document["services"].update(extra.get("services", {}))
@@ -93,19 +99,23 @@ def merged_compose(evaluation):
     return document
 
 
+def redact_exec(exec):
+    @wraps(exec)
+    async def redacted(*args, **kwargs):
+        result = await exec(*args, **kwargs)
+        urls = [os.environ.get(name) for name in ("MAINNET_RPC_URL", "BASE_RPC_URL")]
+        result.stdout = redact(result.stdout, urls)
+        result.stderr = redact(result.stderr, urls)
+        return result
+    return redacted
+
+
 async def runner_exec(box, command, **kwargs):
     """Every privileged or scorer command starts with this owned environment."""
-    return await box.exec([
+    return await redact_exec(box.exec)([
         "/usr/bin/env", "-i", "HOME=/home/agent", "PATH=/usr/local/bin:/usr/bin:/bin",
         "LANG=C.UTF-8", *command,
     ], **kwargs)
-
-
-async def scoring_exec(box, command, **kwargs):
-    try:
-        return await runner_exec(box, command, **kwargs)
-    except TimeoutError as error:
-        raise SubmissionFailed("Submission exceeded the scoring time limit.") from error
 
 
 def unpack_workspace(data: bytes) -> dict[str, bytes]:
@@ -149,18 +159,15 @@ exit 42
 
 async def workspace_files() -> dict[str, bytes]:
     agent = sandbox("default")
-    temporary = await runner_exec(agent, ["/usr/bin/mktemp", "-d", "/tmp/ethevals.XXXXXXXXXX"], user="root", cwd="/")
+    temporary = await runner_exec(agent, ["/usr/bin/mktemp", "-d", "/tmp/workspace.XXXXXXXXXX"], user="root", cwd="/")
     if not temporary.success:
         raise RuntimeError(f"Cannot allocate snapshot: {temporary.stderr}")
     path = temporary.stdout.strip() + "/workspace.tar.gz"
-    result = await runner_exec(agent, ["/bin/sh", "-c", """
+    result = await runner_exec(agent, ["/bin/bash", "-o", "pipefail", "-c", """
 archive=$1
-set --
-for tree in src lib; do
-    if [ -e "$tree" ] || [ -L "$tree" ]; then set -- "$@" "$tree"; fi
-done
-/usr/bin/tar --anchored --exclude=lib/openzeppelin-contracts --exclude=lib/forge-std \
-    -czf "$archive" --files-from /dev/null "$@"
+/usr/bin/find . \\( -name .git -o -name out -o -name cache \\) -prune -o -type f \\
+    \\( ! -path '*/node_modules/*' -o -name '*.sol' \\) -print0 | \\
+    /usr/bin/tar --null --no-recursion -T - -czf "$archive"
 """, "snapshot", path], user="root", cwd="/workspace", timeout=60)
     if not result.success:
         raise RuntimeError(f"Cannot collect workspace: {result.stderr}")

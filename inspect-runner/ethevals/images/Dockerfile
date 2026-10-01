@@ -19,19 +19,4 @@ RUN case "$TARGETARCH" in \
 RUN useradd --create-home agent && mkdir /workspace && chown agent:agent /workspace
 USER agent
 WORKDIR /workspace
-COPY solc.json /tmp/solc.json
-RUN node --input-type=module -e 'import fs from "node:fs"; import crypto from "node:crypto"; \
-    const {version, sources} = JSON.parse(fs.readFileSync("/tmp/solc.json")); \
-    const {url, sha256} = sources[process.env.TARGETARCH]; \
-    const response = await fetch(url); if (!response.ok) throw Error(`solc download: ${response.status}`); \
-    const data = Buffer.from(await response.arrayBuffer()); \
-    if (crypto.createHash("sha256").update(data).digest("hex") !== sha256) throw Error("solc checksum mismatch"); \
-    const dir = `${process.env.HOME}/.svm/${version}`; fs.mkdirSync(dir, {recursive: true}); \
-    fs.writeFileSync(`${dir}/solc-${version}`, data, {mode: 0o755});'
-RUN forge install OpenZeppelin/openzeppelin-contracts@v5.4.0 --no-git
-RUN forge install foundry-rs/forge-std@77041d2ce690e692d6e03cc812b57d1ddaa4d505 --no-git
-USER root
-RUN mkdir -p /opt/ethevals && cp -a /workspace/lib /opt/ethevals/lib && \
-    chown -R root:root /opt/ethevals && chmod -R a-w /opt/ethevals
-USER agent
 CMD ["sleep", "infinity"]

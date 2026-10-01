@@ -15,7 +15,7 @@ test("the board reads the merged runner's catalog and reference and empty rows",
   const folder = path.join(root, "evals/concepts/unit");
   mkdirSync(path.join(folder, "scorer"), { recursive: true });
   mkdirSync(path.join(folder, "workspace"));
-  writeFileSync(path.join(folder, "eval.yaml"), "type: quiz\nmotivation: Check units.\nprompt: Name the unit.\nmodes: [vanilla]\n");
+  writeFileSync(path.join(folder, "eval.yaml"), "motivation: Check units.\nprompt: Name the unit.\nmodes: [vanilla]\n");
   writeFileSync(path.join(folder, "scorer/target.yaml"), 'target: "wei"\n');
   const env = { ...process.env };
   for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"]) delete env[key];
@@ -35,7 +35,7 @@ test("the board reads the merged runner's catalog and reference and empty rows",
     const filename = path.join(root, "results", answer, "rows.jsonl");
     const rows = parseRows(readFileSync(filename, "utf8"), filename, evaluations);
     assert.deepEqual(rows.map((row) => [row.eval_id, row.schema_version, row.status]),
-      [["concepts/unit", 4, answer === "reference" ? "passed" : "failed"]]);
+      [["concepts/unit", 5, answer === "reference" ? "passed" : "failed"]]);
     assert.equal(rows[0].eval_hash, evaluations.find((evaluation) => evaluation.id === rows[0].eval_id)!.hash);
     assert.equal(rows[0].log_url, null);
   }

@@ -4,7 +4,7 @@ import json
 import shutil
 
 from ethevals.actors import select_actors
-from ethevals.checks import CHECK_SOLVERS, CheckRun
+from ethevals.checks import CheckRun
 from ethevals.loader import load_eval
 from ethevals.planning import plan
 from ethevals.rows import fold_rows, previous_rows, read_rows, results_rows, write_rows
@@ -64,7 +64,7 @@ def test_rows_split_grader_usage_for_the_same_model(folder, tmp_path):
 
 
 def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_path, monkeypatch):
-    from ethevals.checks import CHECK_SOLVERS, CheckRun
+    from ethevals.checks import CheckRun
     attempts = 0
 
     @solver
@@ -77,7 +77,7 @@ def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_
             return await generate(state)
         return solve
 
-    monkeypatch.setitem(CHECK_SOLVERS, "quiz", lambda evaluation, answer: CheckRun(crash_once(), "8004"))
+    monkeypatch.setattr("ethevals.checks.quiz_check_solver", lambda evaluation, answer: CheckRun(crash_once(), "8004"))
     config = fixture_config()
     config.concurrency = 1
     evaluation = load_eval(folder, config)
@@ -100,7 +100,7 @@ def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch):
     def limited(*args, **kwargs):
         task = original(*args, **kwargs)
         task.solver = mock_delay(2)
-        task.working_limit = 1
+        task.time_limit = 1
         return task
 
     monkeypatch.setattr(runner, "build_task", limited)
@@ -110,7 +110,8 @@ def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch):
     success, first = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
     assert (first[0]["status"], (None if first[0]["status"] == "error" else first[0]["status"] == "passed")) == ("failed", False)
-    assert "working limit" in first[0]["checks"]["erc_number"]["reason"]
+    assert first[0]["checks"]["erc_number"] == {"passed": False, "reason": "The answer is empty."}
+    assert first[0]["limit"]["type"] == "time"
     success, second = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
     assert second == first
@@ -151,7 +152,7 @@ def test_prices_grader_and_model_selection_do_not_repeat_epochs(folder, tmp_path
     assert success is True
     config.prices[config.models["opus-5.5"].model].input = 99.0
     config.grader.model = "mockllm/gpt-5.5"
-    config.time_limits["quiz"] = 400
+    config.time_limit = 400
     success, second = run([evaluation], config, output, models=["opus-5.5"], modes=["vanilla"], epochs=1, budget=100)
     assert success is True
     assert second == first
@@ -190,7 +191,7 @@ def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
             raise RuntimeError("Container transport failed.")
         return solve
 
-    monkeypatch.setitem(CHECK_SOLVERS, "quiz", lambda evaluation, answer: CheckRun(crash()))
+    monkeypatch.setattr("ethevals.checks.quiz_check_solver", lambda evaluation, answer: CheckRun(crash()))
     config = fixture_config()
     evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
     output = tmp_path / "results"
@@ -253,12 +254,16 @@ def test_grader_budget_error_retains_primary_score(quiz_scoring_case):
 
 
 @pytest.mark.docker
-def test_compile_failure_records_one_check_and_skips_grader(scoring_case):
+def test_compile_failure_grades_the_transcript_without_source(scoring_case):
     scoring_case["task"].solver = submit_source("pragma solidity ^0.8.30; contract Token { uint value = ; }")
-    row = scoring_case["run"]([RuntimeError("The grader must not run")])
-    assert (row["status"], (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0)) == ("failed", 0)
+    row = scoring_case["run"](['{"passed": false, "reason": "Owner can seize tokens."}'])
+    assert row["status"] == "failed"
     assert row["checks"] == {
-        "forge:compile": {"passed": False, "reason": "Error (6933): Expected primary expression."}}
+        "compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},
+        "uses_standard_library": {"passed": False, "reason": "Owner can seize tokens."}}
+    source_text, transcript_text = scoring_case["requests"][0][1].text.split("\nTranscript:\n")
+    assert json.loads(source_text.split("\n", 1)[1]) == {}
+    assert json.loads(transcript_text)[0]["role"] == "user"
 
 
 def test_operator_stop_is_an_error_and_skips_scoring(quiz_scoring_case):
@@ -276,13 +281,33 @@ def test_operator_stop_is_an_error_and_skips_scoring(quiz_scoring_case):
     assert "Stopped by operator" in row["error_reason"]
 
 
-def test_wall_backstop_is_an_error(quiz_scoring_case):
-    from support import mock_delay
+def test_time_limit_grades_the_work_left(quiz_scoring_case):
     quiz_scoring_case["task"].solver = mock_delay(2)
     quiz_scoring_case["task"].time_limit = 1
-    row = quiz_scoring_case["run"]([])
-    assert (row["status"], row["limit"]["type"]) == ("error", "time")
-    assert row["working_seconds"] < quiz_scoring_case["log"].eval.metadata["working_limit_seconds"]
+    row = quiz_scoring_case["run"](['{"passed": false, "reason": "Owner can seize tokens."}'])
+    assert (row["status"], row["limit"]["type"]) == ("failed", "time")
+    assert row["checks"] == {
+        "answer": {"passed": False, "reason": "The answer is empty."},
+        "explained": {"passed": False, "reason": "Owner can seize tokens."},
+    }
+
+
+def test_time_limit_can_pass_finished_work(quiz_scoring_case):
+    @solver
+    def answer_then_wait():
+        async def solve(state, generate):
+            state = await generate(state)
+            return await mock_delay(2)(state, generate)
+        return solve
+
+    task = quiz_scoring_case["task"]
+    task.solver, task.time_limit = answer_then_wait(), 1
+    row = quiz_scoring_case["run"]([YES])
+    assert (row["schema_version"], row["status"], row["limit"]["type"]) == (5, "passed", "time")
+    assert row["checks"] == {
+        "answer": {"passed": True, "reason": "Answer matches the target."},
+        "explained": {"passed": True, "reason": "Uses standard transfers."},
+    }
 
 
 def test_fold_is_order_independent_and_sorts_epochs_as_numbers():

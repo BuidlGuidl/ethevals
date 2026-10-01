@@ -13,23 +13,9 @@ from .config import Config, read_yaml, uses_sandbox
 from .loader import Eval
 from .rows import epoch_identity, export_rows, previous_rows
 from .planning import plan, budget_check
-from .scorers import EVALUATIONS, SCORERS, rubric_budget, rubric_questions, GRADER_CALLS, GRADER_CONFIG, FORGE_SECONDS
-from .check_script import CHECK_SECONDS
+from .scorers import EVALUATIONS, SCORERS, rubric_budget
 from .preparation import build_images, prepare_compose, check_capacity
-from .images.tag import image_inputs, image_tag
-
-SCORING_OVERHEAD_SECONDS = 120
-
-
-def task_limits(evaluation, config):
-    working_limit = config.time_limits[evaluation.declaration.type]
-    questions = len(rubric_questions(evaluation.files)) if "rubric" in evaluation.scorer_kinds else 0
-    scoring_seconds = ((FORGE_SECONDS if "tests" in evaluation.scorer_kinds else 0)
-                       + (CHECK_SECONDS if "check_script" in evaluation.scorer_kinds else 0)
-                       + questions * GRADER_CALLS * GRADER_CONFIG.timeout)
-    scoring_limit = scoring_seconds + SCORING_OVERHEAD_SECONDS
-    time_limit = max(3 * working_limit, 2 * scoring_limit)
-    return working_limit, time_limit, scoring_limit
+from .images.tag import image_inputs
 
 
 def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
@@ -42,21 +28,17 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
         services = read_yaml(compose)["services"]
         sample.sandbox = SandboxEnvironmentSpec(type="ethevals_docker", config=str(compose))
         images = {name: service["image"] for name, service in services.items()}
-        limit = services["default"]["mem_limit"]
-        sample.input += f"\nYour container has a {limit} memory limit, shared by the CLI and its tools. Exceeding it can end the epoch with an error.\n"
     else:
         sample.files = None
-    working_limit, time_limit, scoring_limit = task_limits(evaluation, config)
     metadata = {**sample.metadata, **agent.metadata, **grader.metadata,
                 "created_at": datetime.now(timezone.utc).isoformat(), "mode": mode,
                 "images": images,
                 "runner_inputs": image_inputs() if images else {},
-                "chain_inputs": image_inputs(image="chain") if images.get("chain") == image_tag(image="chain") else {},
+                "chain_inputs": image_inputs(image="chain") if images else {},
                 "cost_limit_usd": config.cost_limit,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
                 "search_limit": config.search_limit if uses_sandbox(mode) and config.search else 0,
-                "working_limit_seconds": working_limit, "time_limit_seconds": time_limit,
-                "scoring_limit_seconds": scoring_limit}
+                "time_limit_seconds": config.time_limit}
     sample.metadata = dict(metadata)
     EVALUATIONS[(evaluation.id, evaluation.hash)] = evaluation
     identity = hashlib.sha256(json.dumps(epoch_identity(metadata, 0)).encode()).hexdigest()[:16]
@@ -66,18 +48,22 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
         scorer=[SCORERS[kind](evaluation.id, evaluation.hash)
                 for kind in evaluation.scorer_kinds if not (agent.free_check and kind == "rubric")],
         model=agent.model, epochs=epochs,
-        working_limit=working_limit, time_limit=time_limit,
+        time_limit=config.time_limit,
         cost_limit=config.cost_limit, metadata=metadata,
     )
 
 
 def run(evals: list[Eval], config: Config, output: Path, *,
-        epochs: int | None = None, fresh: bool = False, retry_errors: bool = False,
+        epochs: int | None = None, epoch: int | None = None, fresh: bool = False, retry_errors: bool = False,
         rows_file: Path | None = None, agents=None, models=None, modes=None, answer=None,
         budget=None) -> tuple[bool, list[dict]]:
+    missing_forks = sorted({evaluation.fork.rpc_variable for evaluation in evals
+                            if evaluation.fork and not os.environ.get(evaluation.fork.rpc_variable)})
+    if missing_forks:
+        raise ValueError(f"Missing fork RPC variables: {', '.join(missing_forks)}")
     previous = previous_rows(output, rows_file)
     agents_for, _ = select_actors(config, agents=agents, modes=modes, answer=answer, models=models, planning=True)
-    initial = plan(evals, config, agents_for, previous, epochs=epochs, fresh=fresh, retry_errors=retry_errors)
+    initial = plan(evals, config, agents_for, previous, epochs=epochs, epoch=epoch, fresh=fresh, retry_errors=retry_errors)
     report = budget_check(initial.report, budget, required=not answer)
     output.mkdir(parents=True, exist_ok=True)
     (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")

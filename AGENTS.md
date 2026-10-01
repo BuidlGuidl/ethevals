@@ -35,7 +35,7 @@ uv run python scripts/ci.py checks --output results/ci
 ```
 
 On shared Docker, wait for other sessions' ETH Evals containers to finish before starting containers.
-Give Docker at least 7 GiB for one stock act epoch. The default concurrency is one.
+Give Docker at least 7 GiB for one epoch of an eval with a chain. The default concurrency is one.
 
 ## Control spending and publication
 
@@ -57,3 +57,4 @@ Record architecture decisions as new ADRs in `docs/adr/` before changing scoring
 Keep ADR status honest. ADR 0002 remains proposed until its paid test passes.
 Change `CONTEXT.md` only for an agreed vocabulary change.
 List a new stock image input in `BUILD_INPUTS` in `inspect-runner/ethevals/images/tag.py`.
+To add a test tool, read [Scorer kinds](inspect-runner/README.md#scorer-kinds).

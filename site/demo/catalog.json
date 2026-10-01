@@ -1,6 +1,5 @@
 [
   {
-    "type": "build",
     "motivation": "Check whether an agent builds a token with the requested supply and transfer rules.",
     "prompt": "Implement the token described in the workspace. Run the tests and explain your changes.",
     "modes": [
@@ -12,7 +11,6 @@
     "choices": null
   },
   {
-    "type": "quiz",
     "motivation": "Check whether a model knows the ERC for agent discovery and trust.",
     "prompt": "Which ERC defines onchain identity, reputation, and validation registries for AI agents? Reply with just the number.",
     "modes": [
@@ -26,7 +24,6 @@
     "choices": null
   },
   {
-    "type": "quiz",
     "motivation": "Check whether a model knows Ethereum's base unit conversion.",
     "prompt": "How many wei equal one ether?",
     "choices": [
@@ -44,7 +41,6 @@
     "hash": "2bdcae837b7d32f59e379c1d051c269ebb0cde5dc9e0a9187d7baf538c92564a"
   },
   {
-    "type": "quiz",
     "motivation": "Check whether a bare model understands token allowances.",
     "prompt": "Does an ERC-20 approval give the spender permission to transfer native ether? Reply yes or no.",
     "modes": [
@@ -56,7 +52,6 @@
     "choices": null
   },
   {
-    "type": "act",
     "motivation": "Check whether an agent sends the requested value to the right recipient.",
     "prompt": "Send 0.01 ether to the recipient in the workspace on the local chain. Record the transaction hash.",
     "modes": [

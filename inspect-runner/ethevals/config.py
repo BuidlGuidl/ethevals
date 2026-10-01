@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -65,7 +65,7 @@ def uses_sandbox(mode: Mode) -> bool:
 
 class Config(Declaration):
     epochs: int = Field(gt=0)
-    time_limits: dict[Literal["quiz", "build", "act"], Annotated[int, Field(gt=0)]]
+    time_limit: int = Field(gt=0)
     cost_limit: float = Field(gt=0)
     max_attempts: int = Field(gt=0)
     concurrency: int = Field(gt=0)
@@ -79,8 +79,6 @@ class Config(Declaration):
     @model_validator(mode="after")
     def check_grader(self):
         from .agents import HARNESSES
-        if self.time_limits.keys() != {"quiz", "build", "act"}:
-            raise ValueError("time_limits requires quiz, build, and act")
         for key, agent in self.agents.items():
             if agent.harness not in HARNESSES:
                 raise ValueError(f"agents.{key}.harness: unknown harness {agent.harness!r}")

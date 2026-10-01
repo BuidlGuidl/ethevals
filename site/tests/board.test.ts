@@ -7,13 +7,13 @@ import { buildBoard, epochCost, agentKey, type Eval, type Row, type Agent } from
 import { loadBoard, parseRows } from "../src/load";
 
 const evaluation: Eval = {
-  id: "concepts/units", hash: "current", title: "Units", pillar: "concepts", type: "quiz",
+  id: "concepts/units", hash: "current", title: "Units", pillar: "concepts",
   motivation: "Check units.", prompt: "How many wei equal one ether?", choices: [], modes: ["internet", "vanilla"],
 };
 const agent = { model: "model-a", harness: "harness-a", effort: "high" };
 function row(overrides: Partial<Row> = {}): Row {
   return {
-    schema_version: 4, eval_id: "concepts/units", eval_hash: "current", type: "quiz",
+    schema_version: 5, eval_id: "concepts/units", eval_hash: "current",
     ...agent, mode: "internet", epoch: 1, status: "passed",
     checks: { answer: { passed: true, reason: "The answer matches." } }, error_kind: null, error_reason: null,
     total_tokens: 100, model_cost_usd: 0.2, grader_cost_usd: 0.05,
@@ -82,8 +82,8 @@ test("mode, harness, model, and effort keep different agents apart", () => {
   assert.deepEqual(buildBoard([evaluation], rows).tables.vanilla.agents, [{ model: "model-a", harness: null, effort: "high" }]);
 });
 
-test("the knowledge table and its panel data include only quiz evals", () => {
-  const board = buildBoard([evaluation, { ...evaluation, id: "building/token", pillar: "building", type: "build", modes: ["internet"] }],
+test("the knowledge table and its panel data include only declared vanilla evals", () => {
+  const board = buildBoard([evaluation, { ...evaluation, id: "building/token", pillar: "building", modes: ["internet"] }],
     [row({ mode: "vanilla", harness: null })]);
   assert.deepEqual(board.tables.vanilla.pillars.concepts.evals.map((entry) => entry.id), ["concepts/units"]);
   assert.deepEqual(board.tables.vanilla.pillars.building.cells['["model-a",null,"high"]'],

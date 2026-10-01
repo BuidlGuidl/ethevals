@@ -3,8 +3,8 @@
 # Set grader effort to medium.
 # TODO: Use 3 epochs for real runs; 3 epochs can exceed CI's 6-hour job; split the run first.
 epochs: 1
-time_limits: {quiz: 120, build: 1200, act: 600}
-cost_limit: 5.0
+time_limit: 7200
+cost_limit: 20.0
 max_attempts: 2
 concurrency: 1
 grader:

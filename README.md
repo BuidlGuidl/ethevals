@@ -1,7 +1,7 @@
 # ETH Evals
 
 ETH Evals measures what bare models know about Ethereum and how well agents do Ethereum work.
-The runner uses Inspect for quizzes, Solidity builds, and chain transactions.
+The runner uses Inspect and grades each eval with a target, Forge tests, a rubric, or several of these.
 Claude Code, Codex CLI, and OpenCode run in Docker.
 
 The board separates agent results from bare-model knowledge.
@@ -16,7 +16,7 @@ From the repository root, run:
 uv sync --frozen
 ```
 
-Docker is required for builds, acts, and internet epochs.
+Docker is required for internet and skills epochs.
 Vanilla quizzes need no containers.
 The runner builds its images before the first sandbox epoch in each run.
 
@@ -61,7 +61,7 @@ uv run ethevals run --evals evals/concepts/agent-registries evals/transactions/s
 
 ## Open the board
 
-The agent table shows internet results by harness, model, and effort.
+The agent table shows internet and skills results by harness, model, and effort.
 The knowledge table shows vanilla quiz results for bare models.
 Open a cell to read its prompt, epoch checks, costs, and published log links.
 

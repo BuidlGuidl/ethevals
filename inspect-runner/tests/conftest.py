@@ -13,7 +13,7 @@ from support import build_task, fixture_config, fixture_quiz
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
+BUILD = ROOT / "evals/building/erc20-points-token"
 
 
 def pytest_addoption(parser):
@@ -38,6 +38,7 @@ def folder(tmp_path):
     declaration = yaml.safe_load((target / "eval.yaml").read_text())
     declaration["modes"] = ["vanilla", "internet"]
     (target / "eval.yaml").write_text(yaml.safe_dump(declaration, default_flow_style=None))
+    (target / "workspace").mkdir(exist_ok=True)
     return target
 
 

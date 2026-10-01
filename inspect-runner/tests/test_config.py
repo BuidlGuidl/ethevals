@@ -9,7 +9,7 @@ from support import build_task, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
+BUILD = ROOT / "evals/building/erc20-points-token"
 
 
 @pytest.mark.parametrize("harness,provider,accepted", [
@@ -31,21 +31,18 @@ def test_native_search_requires_its_provider(tmp_path, harness, provider, accept
             load_config(path)
 
 
-def test_total_limit_leaves_room_for_build_grading():
+def test_task_uses_configured_limits():
     config = fixture_config()
-    evaluation = load_eval(BUILD, config)
-    config.time_limits["build"] = 300
-    task = build_task(evaluation, config, None, "internet", "reference", 1)
-    assert task.working_limit == 300
-    assert task.time_limit >= 3 * task.working_limit
-    assert task.time_limit / 2 >= task.metadata["scoring_limit_seconds"]
+    config.time_limit, config.cost_limit = 37, 1.25
+    task = build_task(load_eval(BUILD, config), config, None, "internet", "reference", 1)
+    assert (task.time_limit, task.cost_limit, task.working_limit) == (37, 1.25, None)
 
 
 @pytest.mark.parametrize("keys,value", [
     (["models", "opus-5.5", "effort"], "hihg"),
     (["agents", "claude-code-opus-5.5", "model"], "missing"),
     (["agents", "claude-code-opus-5.5", "harness"], "absent"),
-    (["time_limits", "quiz"], 0), (["prices"], {}), (["search"], "yes"),
+    (["time_limit"], 0), (["prices"], {}), (["search"], "yes"),
 ])
 def test_config_rejects_invalid_settings(tmp_path, keys, value):
     data = fixture_config().model_dump()

@@ -3,8 +3,8 @@ import hashlib
 from pathlib import Path
 
 BUILD_INPUTS = {
-    "runner": ("Dockerfile", "solc.json"),
-    "chain": ("Chain.Dockerfile", "solc.json", "rpc_filter.py"),
+    "runner": ("Dockerfile",),
+    "chain": ("Chain.Dockerfile", "rpc_filter.py", "rpc_methods.json", "ChainSetup.sol"),
 }
 
 
@@ -23,4 +23,4 @@ def image_tag(directory=Path(__file__).parent, image="runner"):
 
 if __name__ == "__main__":
     for image in BUILD_INPUTS:
-        print(image + ": " + image_tag(image=image))
+        print(image + "=" + image_tag(image=image))

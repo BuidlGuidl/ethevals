@@ -20,7 +20,7 @@ dependencies = [
 ethevals = "ethevals.cli:main"
 
 [dependency-groups]
-dev = ["pytest==9.0.2"]
+dev = ["pytest==9.0.3"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["inspect-runner/ethevals"]

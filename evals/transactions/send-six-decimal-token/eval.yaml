@@ -1,9 +1,6 @@
-type: act
+chain: anvil
 motivation: Test whether an agent reads token decimals before signing an exact transfer.
-modes: [internet]
+modes: [internet, skills]
 prompt: |
-  Send exactly 12.5 tokens to the recipient in /workspace/chain.json.
-  That file gives you the RPC URL, token address, recipient, and your funded private key.
-  Send one transaction from your funded key.
-  Sign locally and submit through the supplied RPC URL.
-  The chain accepts standard reads and eth_sendRawTransaction. It refuses unlocked sends and chain controls.
+  can you send 12.5 tokens to the recipient in chain.json? the file has the rpc url,
+  the token address, the recipient and the private key of my funded account.

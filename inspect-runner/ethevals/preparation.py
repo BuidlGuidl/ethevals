@@ -7,8 +7,8 @@ from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
 import yaml
 
 from .scorers import EVALUATIONS
-from .check_script import setup_script
-from .sandboxes import IMAGES, merged_compose, memory_bytes
+from .chain_setup import setup_script
+from .sandboxes import IMAGES, merged_compose, memory_bytes, redact_exec
 from .images.tag import image_tag
 
 
@@ -19,9 +19,12 @@ class EvalDocker(DockerSandboxEnvironment):
     @classmethod
     async def sample_init(cls, task_name, config, metadata):
         environments = await super().sample_init(task_name, config, metadata)
+        # Redact before Inspect records sandbox output in its transcript.
+        for environment in environments.values():
+            environment.exec = redact_exec(environment.exec)
         try:
             evaluation = EVALUATIONS[(metadata["eval_id"], metadata["eval_hash"])]
-            if "check_script" in evaluation.scorer_kinds:
+            if "setup/setup.s.sol" in evaluation.files:
                 await setup_script(evaluation, environments)
         except BaseException:
             with anyio.CancelScope(shield=True):
@@ -39,6 +42,9 @@ def docker_command(command):
 
 def build_images():
     for image, dockerfile in (("runner", "Dockerfile"), ("chain", "Chain.Dockerfile")):
+        if subprocess.run(["docker", "image", "inspect", image_tag(IMAGES, image)],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            continue
         docker_command(["docker", "build", "-f", str(IMAGES / dockerfile), "-t", image_tag(IMAGES, image), str(IMAGES)])
 
 

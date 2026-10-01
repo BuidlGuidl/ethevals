@@ -2,9 +2,10 @@ from pathlib import Path
 import json
 
 from ethevals.actors import select_actors
+from ethevals.cli import main
 from ethevals.loader import load_eval
 from ethevals.planning import budget_check, plan
-from ethevals.rows import epoch_identity, write_rows
+from ethevals.rows import epoch_identity, read_rows, write_rows
 import pytest
 
 from support import catalog_quiz, cli, eval_cli, fixture_config, run, small_config
@@ -36,6 +37,26 @@ def test_plan_derives_modes_from_selectors(tmp_path, selectors, expected):
                       "--epochs", 1, "--output", tmp_path, *selectors)
     assert result.returncode == 0, result.stderr
     assert list(Counter(row["mode"] for row in json.loads(result.stdout)["missing"]).items()) == expected
+
+
+def test_cli_runs_only_the_selected_epoch(tmp_path):
+    config = small_config()
+    path = tmp_path / "config.json"
+    path.write_text(config.model_dump_json())
+    output = tmp_path / "results"
+    assert main(["run", "--config", str(path), "--evals", str(ROOT / "evals/concepts/agent-registries"),
+                 "--models", "test", "--modes", "vanilla", "--epoch", "2", "--budget", "4",
+                 "--rows", str(tmp_path / "rows.jsonl"), "--output", str(output)]) == 0
+    assert [(row["epoch"], row["attempt"], row["status"], row["effort"]) for row in read_rows(output / "rows.jsonl")] == [
+        (2, 1, "failed", "high")]
+    assert len(list((output / "logs").glob("*.eval"))) == 1
+
+
+def test_single_epoch_rejects_multiple_actors_before_providers(tmp_path):
+    result = eval_cli("run", "--evals", ROOT / "evals/concepts/agent-registries", "--modes", "vanilla",
+                      "--epoch", "2", "--budget", "100", "--output", tmp_path)
+    assert result.returncode == 2
+    assert "--epoch requires exactly one eval, actor, and mode" in result.stderr
 
 
 def test_declared_modes_skip_ineligible_evals(folder, tmp_path):
@@ -107,7 +128,7 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(config.model_dump_json())
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    base = {"eval_id": quiz.id, "eval_hash": quiz.hash, "type": "quiz", "harness": None,
+    base = {"eval_id": quiz.id, "eval_hash": quiz.hash, "harness": None,
             "model": "mockllm/test", "effort": "high", "mode": "vanilla"}
     rows = [{**base, "epoch": 1, "status": "failed", "attempt": 1},
             {**base, "epoch": 2, "status": "error", "attempt": 1},
@@ -123,13 +144,13 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
     assert (report["worst_case_usd"], report["within_budget"]) == (2, False)
 
 
-def test_build_plan_reserves_capped_grader_requests():
+def test_build_plan_reserves_the_grader_context_window():
     config = fixture_config()
-    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", config)
+    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
     agents_for, _ = select_actors(config, agents=["claude-code-opus-5.5"], modes=["internet"], planning=True)
     report = budget_check(plan([evaluation], config, agents_for, [], epochs=1).report, 27.6)
-    assert report["missing"][0]["per_attempt_usd"] == 13.75835
-    assert (report["worst_case_usd"], report["within_budget"]) == (27.5167, True)
+    assert report["missing"][0]["per_attempt_usd"] == pytest.approx(12.9608)
+    assert (report["worst_case_usd"], report["within_budget"]) == (25.9216, True)
 
 
 @pytest.mark.parametrize("present,missing", [

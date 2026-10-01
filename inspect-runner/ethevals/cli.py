@@ -13,6 +13,7 @@ from .hf import DEFAULT_REPO, write_hf
 from .publish import publish_logs
 from .planning import plan, budget_check
 from .rows import previous_rows
+from .checks import available_checks
 
 
 def positive(value: str) -> int:
@@ -40,7 +41,10 @@ def parse_args(argv=None):
     for name in ("run", "plan", "check"):
         command = parsers[name]
         command.add_argument("--modes", nargs="+", help="Select vanilla, internet, or skills.")
-        command.add_argument("--epochs", type=positive)
+        repeats = command.add_mutually_exclusive_group()
+        repeats.add_argument("--epochs", type=positive)
+        if name != "check":
+            repeats.add_argument("--epoch", type=positive, help="Run exactly one numbered epoch with one eval, actor, and mode.")
         command.add_argument("--retry-errors", action="store_true", help="Grant one further attempt to each selected error epoch.")
     for name in ("run", "plan"):
         parsers[name].add_argument("--agents", nargs="+", help="Agent names from config.yaml.")
@@ -71,6 +75,10 @@ def main(argv=None) -> int:
         if not paths:
             raise ValueError("No eval folders found. Use --evals or start from the repository root.")
         evals = [load_eval(path, config) for path in paths]
+        if args.command == "check":
+            evals = available_checks(evals)
+            if not evals:
+                return 0
         if args.command == "export-hf":
             print(json.dumps(write_hf(evals, args.output, args.hf_repo, args.license), indent=2))
             return 0
@@ -84,7 +92,7 @@ def main(argv=None) -> int:
         if args.command == "plan":
             agents_for, _ = select_actors(config, agents=args.agents, modes=args.modes, models=args.models, planning=True)
             report = budget_check(plan(evals, config, agents_for, previous_rows(args.output, args.rows),
-                          epochs=args.epochs, retry_errors=args.retry_errors).report, args.budget)
+                          epochs=args.epochs, epoch=args.epoch, retry_errors=args.retry_errors).report, args.budget)
             print(json.dumps(report, indent=2))
             return 0 if report["within_budget"] else 1
         answers = ["reference", "empty"] if args.command == "check" else [None]
@@ -93,6 +101,7 @@ def main(argv=None) -> int:
             output = args.output / answer if args.command == "check" else args.output
             success, rows = run(evals, config, output, agents=args.agents, models=args.models, modes=args.modes, answer=answer,
                                 epochs=args.epochs, fresh=args.command == "check", retry_errors=args.retry_errors,
+                                epoch=args.epoch if args.command == "run" else None,
                                 rows_file=args.rows if args.command == "run" else None,
                                 budget=args.budget if args.command == "run" else None)
             if args.command == "check":

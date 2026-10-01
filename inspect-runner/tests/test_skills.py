@@ -87,7 +87,7 @@ def test_free_checks_include_agent_only_quizzes(folder, tmp_path, answer, modes,
 def test_skill_index_preserves_workspace_instructions(folder, monkeypatch):
     from ethevals.agents import HARNESSES, internet_solver
     declaration = yaml.safe_load((folder / "eval.yaml").read_text())
-    declaration["modes"].append("skills")
+    declaration["modes"] = ["internet", "skills"]
     (folder / "eval.yaml").write_text(yaml.safe_dump(declaration))
     instructions = folder / "workspace/CLAUDE.md"
     instructions.write_text("Keep the author's instructions.")
