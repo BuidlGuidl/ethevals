@@ -158,7 +158,8 @@ def submit(evaluation, variant):
         await run_solution(evaluation, sandbox())
         source = evaluation.files["solution/src/BuilderPoints.sol"]
         if variant == "setup":
-            source = source.replace(b"_mint(", b'require(false, "constructor failed"); _mint(')
+            source = source.replace(b"_mint(msg.sender, 100_000 * 10 ** 6);",
+                                    b'require(false, "constructor failed"); _mint(msg.sender, 100_000 * 10 ** 6);')
         elif variant == "snapshot":
             result = await sandbox().exec(["bash", "-c", """
 mkdir /tmp/ethevals-workspace.tar.gz
@@ -231,6 +232,7 @@ contract ConstructorTest is Test {
             if event.event == "sandbox" and event.action == "read_file" and "/out/build-info/" in event.file:
                 assert event.output.startswith("binary ("), "Private compiler sources entered the public log."
         if variant == "setup":
+            assert row["checks"]["compile"] == {"passed": True, "reason": "Compilation passed."}
             assert row["checks"]["ConstructorTest.constructor"] == {
                 "passed": False, "reason": "constructor failed"}
 
@@ -254,24 +256,42 @@ def write_workspace(files):
 @pytest.mark.parametrize("layout", ["foundry", "hardhat", "fake_test", "unused_broken", "wrong_import", "rejected_config"])
 def test_real_scorer_uses_workspace_imports_and_scoped_libraries(tmp_path, layout):
     config = fixture_config()
-    original = load_eval(ROOT / "evals/building/erc20-points-token", config)
-    submitted = {name.removeprefix("solution/"): data for name, data in original.files.items()
-                 if name.startswith("solution/")}
-    submitted["foundry.toml"] = original.files["workspace/foundry.toml"]
+    submitted = {
+        "foundry.toml": b'[profile.default]\nsrc = "src"\nlibs = ["lib"]\nsolc = "0.8.30"\n',
+        "remappings.txt": b"helper/=lib/custom/\n",
+        "src/Counter.sol": b'pragma solidity 0.8.30; import {Helper} from "helper/Helper.sol"; contract Counter { function value() external pure returns (uint256) { return Helper.value(); } }',
+        "lib/custom/Helper.sol": b'pragma solidity 0.8.30; library Helper { function value() internal pure returns (uint256) { return 7; } }',
+    }
+    files = {
+        "eval.yaml": b"motivation: Check library imports.\nmodes: [internet]\nprompt: Write a Counter contract whose value is seven.\n",
+        "workspace/foundry.toml": submitted["foundry.toml"],
+        "scorer/tests/Counter.t.sol": b'''pragma solidity 0.8.30;
+import {Test} from "forge-std/Test.sol";
+import {Counter} from "workspace/src/Counter.sol";
+contract CounterTest is Test {
+    function test_library_value() public { assertEq(new Counter().value(), 7, "library value"); }
+}
+''',
+        **{"solution/" + name: data for name, data in submitted.items()},
+    }
+    folder = tmp_path / "building" / "library-imports"
+    for name, data in files.items():
+        path = folder / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    original = load_eval(folder, config)
     files = dict(original.files)
     if layout == "hardhat":
-        submitted = {"packages/hardhat/contracts/BuilderPoints.sol": submitted["src/BuilderPoints.sol"],
-                     "packages/hardhat/package.json": b"{}", **{
-            "packages/hardhat/node_modules/@openzeppelin/contracts/" + name.removeprefix("lib/openzeppelin-contracts/contracts/"): data
-            for name, data in submitted.items() if name.startswith("lib/openzeppelin-contracts/contracts/")}}
-        files["scorer/tests/BuilderPoints.t.sol"] = files["scorer/tests/BuilderPoints.t.sol"].replace(
-            b"workspace/src/BuilderPoints.sol", b"workspace/packages/hardhat/contracts/BuilderPoints.sol")
+        submitted = {"packages/hardhat/contracts/Counter.sol": submitted["src/Counter.sol"],
+                     "packages/hardhat/package.json": b"{}",
+                     "packages/hardhat/node_modules/helper/Helper.sol": submitted["lib/custom/Helper.sol"]}
+        files["scorer/tests/Counter.t.sol"] = files["scorer/tests/Counter.t.sol"].replace(
+            b"workspace/src/Counter.sol", b"workspace/packages/hardhat/contracts/Counter.sol")
         files.pop("workspace/foundry.toml")
-        files.pop("workspace/src/BuilderPoints.sol")
     elif layout == "fake_test":
         submitted["lib/evil/Test.sol"] = b"contract Test { function assertEq(uint256, uint256, string memory) internal pure {} }"
         submitted["remappings.txt"] += b"forge-std/=lib/evil/\nforge-std/Test.sol=lib/evil/Test.sol\nscorer/tests/:forge-std/=lib/evil/\n"
-        submitted["src/BuilderPoints.sol"] = submitted["src/BuilderPoints.sol"].replace(b"_mint(msg.sender, 100_000", b"_mint(msg.sender, 99_999")
+        submitted["lib/custom/Helper.sol"] = submitted["lib/custom/Helper.sol"].replace(b"return 7;", b"return 6;")
     elif layout == "unused_broken":
         submitted["src/Broken.sol"] = b"not Solidity"
         submitted["lib/unrelated/Broken.sol"] = b"not Solidity"
@@ -281,8 +301,8 @@ def test_real_scorer_uses_workspace_imports_and_scoped_libraries(tmp_path, layou
     elif layout == "rejected_config":
         submitted["foundry.toml"] = b'[profile.default]\nremappings = ["=lib/x/"]\n'
     elif layout == "wrong_import":
-        files["scorer/tests/BuilderPoints.t.sol"] = files["scorer/tests/BuilderPoints.t.sol"].replace(
-            b"workspace/src/BuilderPoints.sol", b"workspace/src/Missing.sol")
+        files["scorer/tests/Counter.t.sol"] = files["scorer/tests/Counter.t.sol"].replace(
+            b"workspace/src/Counter.sol", b"workspace/src/Missing.sol")
     evaluation = replace(original, files=files, hash=content_hash(files))
     task = build_task(evaluation, config, None, "internet", "reference", 1,
                       prepare_compose(evaluation, tmp_path))
@@ -297,11 +317,13 @@ def test_real_scorer_uses_workspace_imports_and_scoped_libraries(tmp_path, layou
         assert "not found" in row["checks"]["compile"]["reason"]
     elif layout == "fake_test":
         assert row["checks"]["compile"]["passed"] is True, row
-        assert row["checks"]["test_deployer_holds_initial_supply"]["passed"] is False
-        assert "total supply" in row["checks"]["test_deployer_holds_initial_supply"]["reason"]
+        assert row["checks"]["test_library_value"] == {"passed": False, "reason": "library value: 6 != 7"}
     else:
-        assert (row["status"], len(row["checks"])) == ("passed", 11), row
-        assert all(check["passed"] is True for check in row["checks"].values())
+        assert row["status"] == "passed", row
+        assert row["checks"] == {
+            "compile": {"passed": True, "reason": "Compilation passed."},
+            "test_library_value": {"passed": True, "reason": "Test passed."},
+        }
 
 
 def test_context_remappings_keep_each_projects_library_private(tmp_path):
