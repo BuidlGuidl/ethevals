@@ -39,7 +39,7 @@ def test_truncated_log_keeps_completed_epoch(tmp_path, monkeypatch, caplog, oper
         recorded = []
         monkeypatch.setattr(ci, "commit_results", lambda rows, *args: recorded.extend(rows))
         monkeypatch.setattr(ci, "publish_logs", lambda *args, **kwargs: {"rows_file": str(output / "rows.jsonl")})
-        assert ci.publish_artifacts(argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True)) == 0
+        assert ci.publish_artifacts(argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True, run_id="12", commit="b" * 40)) == 0
         assert any((r["eval_hash"], r["epoch"], r["status"]) == (evaluation.hash, 1, "passed") for r in recorded)
     assert any(record.levelname == "WARNING" and str(output / "logs/unfinished.eval") in record.message
                for record in caplog.records)
@@ -64,7 +64,7 @@ def test_timeout_artifact_rebuilds_attempts_and_failed_publication_keeps_record(
         raise RuntimeError("Release upload failed")
 
     monkeypatch.setattr(ci, "publish_logs", failed)
-    args = argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True)
+    args = argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True, run_id="12", commit="b" * 40)
     assert ci.publish_artifacts(args) == 1
     assert sorted((r["status"], r["attempt"]) for r in persisted[0]) == [("error", 2), ("passed", 1)]
     agents_for, _ = select_actors(config, answer="reference", planning=True)
@@ -144,24 +144,24 @@ def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path
 
 
 @pytest.mark.parametrize("budget", ["0", "nan"])
-def test_after_merge_gate_stops_before_a_model_or_secret(tmp_path, budget):
+def test_plan_epochs_gate_stops_before_a_model_or_secret(tmp_path, budget):
     from support import small_config
     config_path = tmp_path / "config.yaml"
     config_path.write_text(small_config().model_dump_json())
     output = tmp_path / "eval-run-1"
-    result = cli("scripts/ci.py", "after-merge", "--budget", budget, "--output", output,
+    result = cli("scripts/ci.py", "plan-epochs", "--budget", budget, "--output", output,
                  "--config", config_path,
                  "--rows", tmp_path / "rows.jsonl", "--evals", ROOT / "evals/concepts/agent-registries",
                  "--models", "test", "--modes", "vanilla")
-    assert result.returncode == 2
+    assert result.returncode == (1 if budget == "0" else 2)
     assert not (output / "logs").exists()
     if budget == "0":
         report = json.loads((output / "plan.json").read_text())
         assert (report["missing_epochs"], report["within_budget"]) == (3, False)
-        assert "No agent or grader ran" in result.stderr
+        assert json.loads(result.stdout)["within_budget"] is False
     else:
         assert "finite, nonnegative" in result.stderr
-    published = cli("scripts/ci.py", "publish-results", "--output", tmp_path, "--repo", "owner/repo")
+    published = cli("scripts/ci.py", "publish-results", "--output", tmp_path, "--repo", "owner/repo", "--run-id", "12", "--commit", "b" * 40)
     assert (published.returncode, published.stdout) == (0, ""), published.stderr
 
 
@@ -178,21 +178,21 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path):
     write_rows(rows, [row])
     before = rows.read_bytes(), rows.stat().st_mtime_ns
     output = tmp_path / "eval-run-1"
-    result = cli("scripts/ci.py", "after-merge", "--output", output, "--rows", rows, "--config", config_path,
+    result = cli("scripts/ci.py", "plan-epochs", "--output", output, "--rows", rows, "--config", config_path,
                  "--evals", quiz.folder, "--models", "test", "--modes", "vanilla", "--epochs", "1", "--budget", "0")
     assert result.returncode == 0, result.stderr
-    assert "1 results rows:" in result.stdout
+    assert json.loads(result.stdout)["missing_epochs"] == 0
     report = json.loads((output / "plan.json").read_text())
     assert (report["missing_epochs"], report["worst_case_usd"], report["within_budget"]) == (0, 0, True)
     assert report["exhausted_errors"] == [row]
     assert read_rows(output / "rows.jsonl") == [row]
     assert (rows.read_bytes(), rows.stat().st_mtime_ns) == before
     assert not (output / "logs").exists()
-    published = cli("scripts/ci.py", "publish-results", "--output", tmp_path, "--repo", "owner/repo")
+    published = cli("scripts/ci.py", "publish-results", "--output", tmp_path, "--repo", "owner/repo", "--run-id", "12", "--commit", "b" * 40)
     assert (published.returncode, published.stdout) == (0, ""), published.stderr
 
 
-def test_after_merge_restores_completed_epochs_without_eval(tmp_path, monkeypatch):
+def test_plan_epochs_restores_completed_epochs_without_eval(tmp_path, monkeypatch):
     from support import small_config
     monkeypatch.chdir(tmp_path)
     config = small_config()
@@ -214,12 +214,54 @@ def test_after_merge_restores_completed_epochs_without_eval(tmp_path, monkeypatc
     ci.command("git", "checkout", "--detach", "origin/main", capture_output=True)
     monkeypatch.setattr("ethevals.runner.eval", lambda *args, **kwargs: pytest.fail("Completed epochs called eval"))
     output = tmp_path / "eval-run-1"
-    monkeypatch.setattr(sys, "argv", ["ci.py", "after-merge", "--restore-results", "--output", str(output),
+    monkeypatch.setattr(sys, "argv", ["ci.py", "plan-epochs", "--restore-results", "--output", str(output),
         "--config", str(config_path), "--evals", str(quiz.folder), "--models", "test",
         "--modes", "vanilla", "--epochs", "2", "--budget", "0"])
     assert ci.main() == 0
     assert json.loads((output / "plan.json").read_text())["missing_epochs"] == 0
     assert read_rows(output / "rows.jsonl") == rows
+
+
+def test_plan_emits_two_evals_and_saves_the_admitted_config(tmp_path):
+    from support import small_config
+    config_path = tmp_path / "config.json"
+    config_path.write_text(small_config().model_dump_json())
+    output, github_output = tmp_path / "plan", tmp_path / "github-output"
+    args = argparse.Namespace(output=output, restore_results=False, github_output=github_output)
+    assert ci.plan_epochs(args, ["--config", str(config_path), "--rows", str(tmp_path / "rows.jsonl"),
+                                "--evals", "evals/concepts/agent-registries", "evals/transactions/send-six-decimal-token",
+                                "--agents", "test-agent", "--modes", "internet", "--epochs", "1", "--budget", "100"]) == 0
+    values = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
+    matrix = json.loads(values["matrix"])
+    assert values["missing_epochs"] == "2"
+    assert [(row["index"], row["eval_id"], row["actor_key"], row["mode"], row["epoch"], row["attempt"])
+            for row in matrix["include"]] == [
+        (0, "concepts/agent-registries", "test-agent", "internet", 1, 1),
+        (1, "transactions/send-six-decimal-token", "test-agent", "internet", 1, 1)]
+    assert json.loads((output / "config.json").read_text())["models"]["test"] == {
+        "model": "mockllm/test", "effort": "high"}
+
+
+def test_matrix_runs_one_saved_plan_row_with_its_attempt(tmp_path):
+    from support import small_config
+    config = small_config()
+    config_path = tmp_path / "config.json"
+    config_path.write_text(config.model_dump_json())
+    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    row = {"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test", "harness": None,
+           "effort": "high", "mode": "vanilla", "epoch": 2, "status": "error", "attempt": 1}
+    previous = tmp_path / "previous.jsonl"
+    write_rows(previous, [row])
+    plan_dir = tmp_path / "plan"
+    assert ci.plan_epochs(argparse.Namespace(output=plan_dir, restore_results=False, github_output=None),
+                          ["--config", str(config_path), "--rows", str(previous), "--evals", str(quiz.folder),
+                           "--models", "test", "--modes", "vanilla", "--epochs", "3", "--budget", "10"]) == 0
+    output = tmp_path / "epoch"
+    assert ci.run_epoch(argparse.Namespace(plan=plan_dir, index=1, output=output)) == 0
+    assert [(item["epoch"], item["attempt"], item["status"], item["effort"])
+            for item in read_rows(output / "rows.jsonl")] == [(2, 2, "failed", "high")]
+    assert len(list((output / "logs").glob("*.eval"))) == 1
+    assert read_rows(plan_dir / "rows.jsonl") == [row]
 
 
 def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows(tmp_path, monkeypatch):
@@ -243,7 +285,7 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     records = []
     monkeypatch.setattr(ci, "stored_file", lambda ref, path: json.dumps(previous) + "\n" if str(path).endswith("rows.jsonl") else "{}")
     monkeypatch.setattr(ci, "commit_results", lambda rows, *args: records.append(rows))
-    args = argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True)
+    args = argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True, run_id="12", commit="b" * 40)
 
     real_subprocess = subprocess.run
     def fail(command, **kwargs):
@@ -265,8 +307,8 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     assert sorted((r["status"], r["log_file"]) for r in records[-1]) == [
         ("error", "logs/new.eval"), ("passed", "logs/new.eval"), ("passed", "results-old/old.eval")]
     assert [(r["status"], r.get("log_url")) for r in records[-1]] == [
-        ("passed", "https://github.com/owner/repo/releases/download/results-1/new.eval"), ("error", None), ("passed", None)]
-    assert commands[-1][:8] == ["gh", "release", "create", "results-1", "--repo", "owner/repo", "--target", "b" * 40]
+        ("passed", "https://github.com/owner/repo/releases/download/results-12/new.eval"), ("error", None), ("passed", None)]
+    assert commands[-1][:8] == ["gh", "release", "create", "results-12", "--repo", "owner/repo", "--target", "b" * 40]
 
 
 def test_failed_preparation_stays_missing_without_using_attempts(tmp_path, monkeypatch):
@@ -331,29 +373,37 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
     assert "--force" not in remote[0]
 
 
-def test_all_artifact_rows_precede_any_upload(tmp_path, monkeypatch):
-    monkeypatch.delenv("PYTEST_CURRENT_TEST")
-    config = fixture_config()
-    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    first, second = tmp_path / "eval-run-12-1", tmp_path / "eval-run-12-2"
-    run([evaluation], config, first, answer="reference", epochs=1)
-    run([evaluation], config, second, answer="reference", epochs=2, rows_file=first / "rows.jsonl")
-    stored = []
-    def record(rows, *args):
-        stored[:] = rows
-    monkeypatch.setattr(ci, "commit_results", record)
-    monkeypatch.setattr(ci, "result_record", lambda rows=(): ci.fold_rows(stored, rows))
-    uploads = []
-    def upload(output, repo, run_id, commit, **kwargs):
-        assert [(r["epoch"], r["status"]) for r in stored] == [(1, "passed"), (2, "passed")]
-        uploads.append((run_id, [row["epoch"] for row in kwargs["rows"]]))
-        if run_id == "12-1":
-            raise RuntimeError("Old artifact upload failed")
-        return {"rows_file": str(output / "rows.jsonl")}
-    monkeypatch.setattr(ci, "publish_logs", upload)
-    assert ci.publish_artifacts(argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True)) == 1
-    assert uploads == [("12-1", [1]), ("12-2", [2])]
-    assert [(r["epoch"], r["status"]) for r in stored] == [(1, "passed"), (2, "passed")]
+def test_two_artifacts_publish_one_release_and_one_results_commit(tmp_path, monkeypatch):
+    config, evaluation = catalog_quiz()
+    first, second = tmp_path / "eval-run-12-1-0", tmp_path / "eval-run-12-1-1"
+    run([evaluation], config, first, answer="reference", epoch=1, modes=["vanilla"])
+    run([evaluation], config, second, answer="reference", epoch=2, modes=["vanilla"])
+    stored, releases = [], []
+    monkeypatch.setattr(ci, "result_record", lambda rows=(): list(rows))
+    monkeypatch.setattr(ci, "commit_results", lambda rows, *args: stored.append(rows))
+    real_subprocess = subprocess.run
+
+    def upload(command, **kwargs):
+        if command[0] != "gh":
+            return real_subprocess(command, **kwargs)
+        if command[2] == "view":
+            return subprocess.CompletedProcess(command, 1)
+        releases.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("ethevals.publish.subprocess.run", upload)
+    args = argparse.Namespace(output=tmp_path, repo="owner/repo", publish=True, run_id="12", commit="b" * 40)
+    assert ci.publish_artifacts(args) == 0
+    assert len(releases) == len(stored) == 1
+    assert releases[0][:8] == ["gh", "release", "create", "results-12", "--repo", "owner/repo", "--target", "b" * 40]
+    assert len([value for value in releases[0] if value.endswith(".eval")]) == 2
+    assert [(row["epoch"], row["status"], row["log_url"].split("/")[-2]) for row in stored[0]] == [
+        (1, "passed", "results-12"), (2, "passed", "results-12")]
+
+    # A retry uses the same release and keeps one commit for the combined store.
+    assert ci.publish_artifacts(args) == 0
+    assert len(releases) == 1
+    assert stored[1] == stored[0]
 
 
 def test_retry_opens_pr_after_successful_push(tmp_path, monkeypatch):

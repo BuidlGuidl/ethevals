@@ -1,15 +1,16 @@
 """Local entry points for the workflows. Remote writes require --publish."""
 import argparse
 import base64
+from contextlib import redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 from urllib.request import Request, urlopen
-
-from inspect_ai.log import read_eval_log
 
 from ethevals.cli import main as ethevals, parse_args
 from ethevals.config import load_config
@@ -46,14 +47,56 @@ def restore_results(rows):
     write_rows(rows, result_record())
 
 
-def after_merge(args, run_args):
-    argv = ["run", *run_args, "--output", str(args.output)]
-    _, run_args = parse_args(argv)
+def plan_epochs(args, run_args):
+    argv = ["plan", *run_args, "--output", str(args.output)]
+    _, options = parse_args(argv)
     if args.output.exists():
         raise ValueError("Use a fresh output directory for each CI run")
     args.output.mkdir(parents=True)
+    rows = args.output / "rows.jsonl"
     if args.restore_results:
-        restore_results(run_args.rows)
+        restore_results(rows)
+    else:
+        write_rows(rows, read_rows(options.rows))
+    config = load_config(options.config, effort=options.effort)
+    (args.output / "config.json").write_text(config.model_dump_json() + "\n")
+    captured = io.StringIO()
+    with redirect_stdout(captured):
+        status = ethevals([*argv, "--rows", str(rows)])
+    print(captured.getvalue(), end="")
+    report = json.loads(captured.getvalue())
+    report["retry_errors"] = options.retry_errors
+    (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
+    if status:
+        return status
+    if len(report["missing"]) > 256:
+        raise ValueError("The epoch plan exceeds GitHub's 256-job matrix limit")
+    matrix = {"include": [{"index": index, **row} for index, row in enumerate(report["missing"])]}
+    if args.github_output:
+        with args.github_output.open("a") as output:
+            output.write(f"matrix={json.dumps(matrix, separators=(',', ':'))}\n")
+            output.write(f"missing_epochs={report['missing_epochs']}\n")
+    return 0
+
+
+def run_epoch(args):
+    report = json.loads((args.plan / "plan.json").read_text())
+    if not report["within_budget"]:
+        raise ValueError("The epoch plan exceeds its budget")
+    if args.index < 0 or args.index >= len(report["missing"]):
+        raise ValueError("Epoch index is outside the plan")
+    if args.output.exists():
+        raise ValueError("Use a fresh output directory for each CI epoch")
+    row = report["missing"][args.index]
+    selector = "--models" if row["mode"] == "vanilla" else "--agents"
+    argv = ["run", "--config", str(args.plan / "config.json"), "--rows", str(args.plan / "rows.jsonl"),
+            "--output", str(args.output), "--evals", f"evals/{row['eval_id']}",
+            selector, row["actor_key"], "--modes", row["mode"], "--epoch", str(row["epoch"]),
+            "--budget", str(row["worst_case_usd"])]
+    if row["effort"] is not None:
+        argv += ["--effort", row["effort"]]
+    if report["retry_errors"]:
+        argv.append("--retry-errors")
     return ethevals(argv)
 
 
@@ -104,30 +147,36 @@ def commit_results(rows, repo, publish):
 
 def publish_artifacts(args):
     # Rebuild each attempt from its own logs, even if the run timed out.
-    records, rows = [], []
+    rows = []
+    combined = args.output / "combined"
+    logs = combined / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    status = 0
     for output in sorted(args.output.glob("eval-run-*")):
         own_rows = store_rows(output)
         rows = fold_rows(rows, own_rows)
-        records.append((output, own_rows))
-    if rows:
-        commit_results(result_record(rows), args.repo, args.publish)
-    status = 0
-    for output, own_rows in records:
-        try:
-            logs = sorted((output / "logs").glob("*.eval"))
-            if not logs:
+        for source in sorted((output / "logs").glob("*.eval")):
+            destination = logs / source.name
+            if destination.exists() and destination.read_bytes() != source.read_bytes():
+                print(f"{source}: duplicate log filename", file=sys.stderr)
+                status = 1
                 continue
-            commit = read_eval_log(str(logs[0]), header_only=True).eval.revision.commit
-            commit = command("git", "rev-parse", commit, capture_output=True).stdout.strip()
-            report = publish_logs(output, args.repo, output.name.removeprefix("eval-run-"), commit,
-                                  publish=args.publish, rows=own_rows, resume=True)
-            print(json.dumps(report, indent=2))
-            if own_rows:
-                commit_results(result_record(fold_rows(own_rows, read_rows(Path(report["rows_file"])))),
-                               args.repo, args.publish)
-        except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
-            print(f"{output}: publication failed: {error}", file=sys.stderr)
-            status = 1
+            shutil.copyfile(source, destination)
+    if not rows:
+        return status
+    try:
+        if status:
+            raise ValueError("Release logs have duplicate filenames")
+        for receipt in sorted((combined / "published").glob("results-*.jsonl")):
+            rows = fold_rows(rows, read_rows(receipt))
+        report = publish_logs(combined, args.repo, args.run_id, args.commit,
+                              publish=args.publish, rows=rows, resume=True)
+        print(json.dumps(report, indent=2))
+        rows = fold_rows(rows, read_rows(Path(report["rows_file"])))
+    except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        print(f"{combined}: publication failed: {error}", file=sys.stderr)
+        status = 1
+    commit_results(result_record(rows), args.repo, args.publish)
     return status
 
 
@@ -179,13 +228,20 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     checks_parser = commands.add_parser("checks")
     checks_parser.add_argument("--output", type=Path, required=True)
-    run_parser = commands.add_parser("after-merge")
-    run_parser.add_argument("--output", type=Path, required=True)
-    run_parser.add_argument("--restore-results", action="store_true")
+    planner = commands.add_parser("plan-epochs")
+    planner.add_argument("--output", type=Path, required=True)
+    planner.add_argument("--restore-results", action="store_true")
+    planner.add_argument("--github-output", type=Path)
+    epoch_parser = commands.add_parser("run-epoch")
+    epoch_parser.add_argument("--output", type=Path, required=True)
+    epoch_parser.add_argument("--plan", type=Path, required=True)
+    epoch_parser.add_argument("--index", type=int, required=True)
     publisher = commands.add_parser("publish-results")
     publisher.add_argument("--output", type=Path, required=True)
     publisher.add_argument("--repo", required=True)
     publisher.add_argument("--publish", action="store_true")
+    publisher.add_argument("--run-id", required=True)
+    publisher.add_argument("--commit", required=True)
     release_parser = commands.add_parser("release")
     release_parser.add_argument("--output", type=Path, required=True)
     release_parser.add_argument("--hf-repo", default=DEFAULT_REPO)
@@ -193,9 +249,11 @@ def main():
     release_parser.add_argument("--publish", action="store_true")
     args, run_args = parser.parse_known_args()
     try:
-        if args.command == "after-merge":
-            return after_merge(args, run_args)
+        if args.command == "plan-epochs":
+            return plan_epochs(args, run_args)
         args = parser.parse_args()
+        if args.command == "run-epoch":
+            return run_epoch(args)
         if args.command == "publish-results":
             return publish_artifacts(args)
         config = load_config()
