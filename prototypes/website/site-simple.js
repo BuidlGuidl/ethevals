@@ -183,7 +183,7 @@
     };
     const band = groups.map((g, i) => `<th class="mxp mxp-${i % 2} gstart" colspan="${g.evs.length}">${g.p.name}</th>`).join("");
     const names = evs.map(ev => `<th class="rot${first.has(ev.id) ? " gstart" : ""}"><a href="#/eval/${ev.id}" title="${esc(ev.title)}"><span>${esc(ev.id)}</span></a></th>`).join("");
-    return `<div class="table-shell"><div class="mx-title">Eval matrix · ${modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix grouped ${evs.length > 18 ? "compact" : ""}"><thead><tr><th class="row-label mxh" rowspan="2"></th>${band}</tr><tr>${names}</tr></thead><tbody>${rows.map(({ a }) => `<tr><th class="row-label"><span class="cfg-name">${esc(a.name)}</span><span class="cfg-sub">${harnessFor(a, mode)}</span></th>${evs.map(ev => cell(a, ev)).join("")}</tr>`).join("")}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval name for its page, or a cell for its runs.</span><span>Stronger tint = more runs passed</span></div></div>`;
+    return `<div class="table-shell"><div class="mx-title">Eval matrix · ${modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix grouped ${evs.length > 18 ? "compact" : ""}"><thead><tr><th class="row-label mxh" rowspan="2"></th>${band}</tr><tr>${names}</tr></thead><tbody>${rows.map(({ a }) => `<tr><th class="row-label"><span class="cfg-name">${esc(a.name)}</span><span class="cfg-sub">${harnessFor(a, mode)}</span></th>${evs.map(ev => cell(a, ev)).join("")}</tr>`).join("")}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval name for its page, or a cell for its runs.</span></div></div>`;
   }
   // Evals: one matrix. Agents (or models) are the columns, evals the rows grouped by pillar, named by title.
   // The agent views list every eval, with "–" where an eval does not run in that mode, so none disappears.
@@ -203,7 +203,7 @@
     const head = `<thead><tr><th class="row-label mxh"></th>${agents.map(a => `<th class="agh"><span class="cfg-name">${esc(a.name)}</span><span class="cfg-sub">${vanilla ? orgOf[a.id] : harnessFor(a, mode)}</span></th>`).join("")}</tr></thead>`;
     const meta = ev => `${ev.type} · ${((SCORER[ev.grader] || [ev.grader])[0]).toLowerCase()}`;
     const body = groups.map((g, i) => `<tr class="mxgrp"><th class="mxp mxp-${i % 2}" colspan="${agents.length + 1}">${g.p.name}</th></tr>${g.evs.map(ev => `<tr><th class="row-label evl"><a href="#/eval/${ev.id}">${esc(ev.title)}</a><span class="cid">${meta(ev)}</span></th>${agents.map(a => cell(a, ev)).join("")}</tr>`).join("")}`).join("");
-    return `<div class="table-shell"><div class="mx-title">Eval matrix · ${vanilla ? "Model only" : modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix t2">${head}<tbody>${body}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval for its page, or a cell for its runs.</span><span>Stronger tint = more runs passed</span></div></div>`;
+    return `<div class="table-shell"><div class="mx-title">Eval matrix · ${vanilla ? "Model only" : modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix t2">${head}<tbody>${body}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval for its page, or a cell for its runs.</span></div></div>`;
   }
 
 
