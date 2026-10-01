@@ -4,9 +4,10 @@ const mode = z.enum(["vanilla", "internet", "skills"]);
 const count = z.number().int().nonnegative();
 const measure = z.number().nonnegative().nullable();
 export const rowSchema = z.object({
-  schema_version: z.literal(5),
+  schema_version: z.literal(6),
   eval_id: z.string().min(1),
   eval_hash: z.string().min(1),
+  skills_hash: z.string().min(1).nullable(),
   mode,
   harness: z.string().min(1).nullable(),
   model: z.string().min(1),
@@ -24,7 +25,8 @@ export const rowSchema = z.object({
   working_seconds: measure,
   cost_source: z.string(),
   log_url: z.string().regex(/^(https?:\/\/|\/(?!\/))/).nullable(),
-});
+}).refine((row) => row.mode === "skills" ? row.skills_hash !== null : row.skills_hash === null,
+  { message: "Skills rows require a pack hash; other modes require null." });
 
 
 export type Row = z.infer<typeof rowSchema>;

@@ -5,13 +5,44 @@ from ethevals.actors import select_actors
 from ethevals.cli import main
 from ethevals.loader import load_eval
 from ethevals.planning import budget_check, plan
-from ethevals.rows import epoch_identity, read_rows, write_rows
+from ethevals.rows import epoch_identity, fold_rows, read_rows, write_rows
 import pytest
 
-from support import catalog_quiz, cli, eval_cli, fixture_config, run, small_config
+from support import build_task, catalog_quiz, cli, eval_cli, fixture_config, run, small_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_pack_changes_repeat_only_skills_epochs_and_eval_changes_repeat_both(folder, tmp_path, monkeypatch):
+    pack = tmp_path / "skills"
+    skill = pack / "units/SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: units\ndescription: Ethereum units.\n---\nOne ether is 10^18 wei.\n")
+    monkeypatch.setattr("ethevals.skills.PACK", pack)
+    declaration = folder / "eval.yaml"
+    declaration.write_text(declaration.read_text().replace("[vanilla, internet]", "[internet, skills]"))
+    config = fixture_config()
+    agents_for, _ = select_actors(config, agents=["claude-code-opus-5.5"], planning=True)
+    evaluation = load_eval(folder, config)
+    recorded = [{**row, "status": "passed"}
+                for row in plan([evaluation], config, agents_for, [], epochs=2).report["missing"]]
+    assert plan([evaluation], config, agents_for, recorded, epochs=2).report["missing_epochs"] == 0
+
+    skill.write_text(skill.read_text().replace("One ether is 10^18 wei.", "One gwei is 10^9 wei."))
+    changed_pack = load_eval(folder, config)
+    missing = plan([changed_pack], config, agents_for, recorded, epochs=2).report["missing"]
+    assert [(row["mode"], row["epoch"]) for row in missing] == [("skills", 1), ("skills", 2)]
+    completed = fold_rows(recorded, [{**row, "status": "passed"} for row in missing])
+    assert sorted(row["mode"] for row in completed) == [
+        "internet", "internet", "skills", "skills", "skills", "skills"]
+    assert plan([changed_pack], config, agents_for, completed, epochs=2).report["missing_epochs"] == 0
+
+    declaration.write_text(declaration.read_text() + "\n# Changed eval file\n")
+    changed_eval = load_eval(folder, config)
+    missing = plan([changed_eval], config, agents_for, recorded, epochs=2).report["missing"]
+    assert [(row["mode"], row["epoch"]) for row in missing] == [
+        ("internet", 1), ("internet", 2), ("skills", 1), ("skills", 2)]
 
 
 @pytest.mark.parametrize("command", ["plan", "run"])
@@ -104,12 +135,16 @@ def test_planned_identity_matches_every_configured_provider(mode):
         actual, _ = select_actors(config, **selection)
         harness = settings.harness if mode != "vanilla" else None
         model = config.models[settings.model] if harness else settings
-        expected = (evaluation.id, evaluation.hash, harness,
+        expected = (evaluation.id, evaluation.hash, evaluation.skills_hash if mode == "skills" else None, harness,
                     model.model, model.effort, mode, 1)
         for actors_for in (planned, actual):
             actor = actors_for(evaluation)[0][1]
             assert epoch_identity({"eval_id": evaluation.id, "eval_hash": evaluation.hash, "mode": mode,
+                                   "skills_hash": evaluation.skills_hash if mode == "skills" else None,
                                    **actor.metadata}, 1) == expected
+        task = build_task(evaluation, config, key, mode, None, 1)
+        assert epoch_identity(task.metadata, 1) == expected
+        assert task.dataset[0].metadata["skills_hash"] == expected[2]
 
 
 def test_budget_stops_before_preparation(tmp_path, monkeypatch):

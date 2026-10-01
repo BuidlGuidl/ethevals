@@ -58,7 +58,7 @@ The repository is public, so an agent with internet access can find scorer files
 
 - `vanilla` sends the prompt to a bare model with no tools. Use it only when the eval has no `chain`, no `workspace/`, and no `scorer/tests/`, because a bare model has nowhere to put work.
 - `internet` runs an agent with the web, a shell, the workspace, and the chain.
-- `skills` is `internet` with the whole [skills pack](../skills/README.md). Evals don't ship skills. Send helpful notes to the pack upstream. Pack changes update the hash of every eval that declares `skills`.
+- `skills` is `internet` with the whole [skills pack](../skills/README.md). Evals don't ship skills. Send helpful notes to the pack upstream. A skills change reruns only skills-mode epochs.
 
 ### Pick the scorers
 
@@ -422,4 +422,5 @@ A reviewer checks the prompt's facts and any rubric.
 Paid runs start after merge, once a maintainer sets `ETHEVALS_BUDGET_USD` above its default of zero.
 CI runs each missing epoch as its own job, with a 2-hour time limit and a $20 cost limit. An epoch that reaches the time limit is scored on what the agent left.
 CI opens a results PR, and merging it puts the results on the board. Changing an eval file changes its hash and makes earlier results stale.
+A skills change reruns only skills-mode epochs and preserves internet and vanilla results.
 See [CI and publication](../inspect-runner/README.md#ci-and-publication) for operator steps.

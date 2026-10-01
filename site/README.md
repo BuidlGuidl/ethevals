@@ -10,6 +10,7 @@ Use Node.js 22 or later, pnpm 9.14.2, and uv with Python 3.13.
 From `site/`, run `pnpm install --frozen-lockfile`, then `pnpm build`.
 The build writes `out/` for any static file host; no runtime server or database is required.
 A normal build runs `ethevals catalog` to refresh `.catalog/catalog.json`.
+The catalog has an `evals` list and one `skills_hash` for the current pack.
 
 ## Demo data and settings
 
@@ -27,7 +28,9 @@ All data paths resolve from `site/`.
 Demo mode and an explicit rows path cannot be combined.
 A missing default rows file produces the empty state; a missing explicit file fails the build.
 Malformed rows and duplicate epochs fail with their file and line.
-The loader accepts schema version 5, skips older rows, and displays only current eval hashes.
+The loader accepts schema version 6 and skips older rows.
+It displays only current eval hashes and, for skills-mode rows, the current skills hash.
+A skills change reruns only skills-mode epochs and preserves internet and vanilla results.
 The agent table switches between internet and skills rows.
 The build reports loaded, current, and stale row counts.
 

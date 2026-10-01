@@ -55,7 +55,8 @@ The free check skips rubric-only evals.
 ## Captured files and build scoring
 
 `files.py` supplies one captured manifest for hashing, workspace files, and scorer inputs.
-The eval hash covers file paths and bytes, including uncommitted author files.
+The eval hash covers only the eval folder's file paths and bytes, including uncommitted author files.
+The skills pack has a separate hash, computed from the captured pack files.
 It excludes timestamps, permissions, and local artifacts under the manifest's exclusion rules.
 The loader rejects symlinks and hard links before it applies exclusions.
 Later disk edits cannot alter an already loaded eval.
@@ -127,7 +128,7 @@ Two invalid replies produce an error; an empty reason produces a failed check.
 
 ## Results rows
 
-`rows.jsonl` contains one JSON object per epoch, using schema version 5.
+`rows.jsonl` contains one JSON object per epoch, using schema version 6.
 The board skips older rows.
 The exporter writes atomically and skips unchanged content.
 
@@ -135,6 +136,7 @@ The exporter writes atomically and skips unchanged content.
 | --- | --- |
 | `schema_version` | Row format version. |
 | `eval_id`, `eval_hash` | Eval identity. |
+| `skills_hash` | The captured pack hash for skills-mode epochs; null for internet and vanilla. |
 | `mode`, `harness`, `model`, `effort`, `epoch` | Mode, agent identity, and epoch number. |
 | `attempt`, `completed_at` | Execution count and observation time. |
 | `status`, `checks` | `passed`, `failed`, or `error`, with named checks and reasons. |
@@ -144,7 +146,9 @@ The exporter writes atomically and skips unchanged content.
 | `working_seconds`, `total_seconds` | Inspect working and elapsed time. |
 | `log_file`, `log_url` | Local log path and published URL. |
 
-Epoch identity includes eval ID, eval hash, harness, model, effort, mode, and epoch number.
+Epoch identity includes eval ID, eval hash, skills hash, harness, model, effort, mode, and epoch number.
+A skills change reruns only skills-mode epochs.
+An eval file change reruns every mode for that eval.
 Prices, grader settings, and limits do not change that identity.
 The fold selects the higher attempt, then the later completion time.
 A release URL enriches the same observation without replacing a later attempt.
@@ -280,11 +284,13 @@ Use `--evals` to select folders and `--output` to choose a results directory.
 An explicit `--modes` must match each selector.
 Each eval runs only in modes it declares.
 The skills mode adds the repo's Ethereum skills pack to the internet mode.
+Each CLI command captures the pack once and shares its bytes and hash across the selected evals.
 
 `run` succeeds when execution succeeds, even when an agent fails its checks.
 Repeat the command to resume missing epochs.
 A log that can't be read, such as one cut off by a killed run, is skipped with a warning, and its epoch runs again.
 Completed passes and failures remain final.
+They remain current until an eval file changes, or the skills pack changes for a skills-mode epoch.
 Errors can run again within `max_attempts`; `--retry-errors` grants one further execution per selected error epoch.
 The runner reads committed results from `results/rows.jsonl` by default.
 Use `--rows` to select a different resume file.

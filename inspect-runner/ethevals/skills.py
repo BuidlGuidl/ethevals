@@ -1,17 +1,24 @@
-"""Read installed skills from the same captured bytes as the eval hash."""
+"""Read installed skills and hash their captured bytes."""
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import NamedTuple
 
 from inspect_ai.tool import Skill, read_skills
 from inspect_ai.tool._tools._skill.read import SkillParsingError
 
-from .files import manifest
+from .files import content_hash, manifest
 
 PACK = Path(__file__).resolve().parents[2] / "skills"
 PREFIX = "/skills/"
 
 
-def pack_skills() -> tuple[dict[str, bytes], list[Skill]]:
+class SkillsPack(NamedTuple):
+    files: dict[str, bytes]
+    skills: list[Skill]
+    hash: str
+
+
+def pack_skills() -> SkillsPack:
     files = {name: data for name, data in manifest(PACK).items() if "/" in name}
     with TemporaryDirectory() as directory:
         root = Path(directory)
@@ -29,7 +36,8 @@ def pack_skills() -> tuple[dict[str, bytes], list[Skill]]:
             for kind in (skill.scripts, skill.references, skill.assets):
                 for name, path in kind.items():
                     kind[name] = path.read_bytes()
-        return {PREFIX + name: data for name, data in files.items()}, skills
+        captured = {PREFIX + name: data for name, data in files.items()}
+        return SkillsPack(captured, skills, content_hash(captured))
 
 
 def skill_index(skills: list[Skill]) -> str:

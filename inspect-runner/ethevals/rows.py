@@ -8,7 +8,7 @@ from inspect_ai.log import EvalLog, EvalSample, EvalError, list_eval_logs, read_
 
 def epoch_identity(metadata: dict, epoch: int) -> tuple:
     return tuple(metadata.get(key) for key in (
-        "eval_id", "eval_hash", "harness", "model", "effort", "mode",
+        "eval_id", "eval_hash", "skills_hash", "harness", "model", "effort", "mode",
     )) + (epoch,)
 
 
@@ -49,9 +49,9 @@ def results_rows(log: EvalLog) -> list[dict]:
             cost_source = "unavailable"
         passed = None if error else all(check["passed"] for check in checks.values())
         rows.append({
-            "schema_version": 5,
+            "schema_version": 6,
             **{key: metadata.get(key) for key in (
-                "eval_id", "eval_hash", "mode", "harness", "model", "effort",
+                "eval_id", "eval_hash", "skills_hash", "mode", "harness", "model", "effort",
             )},
             "epoch": metadata.get("epoch", sample.epoch),
             "attempt": metadata.get("attempt", 1),

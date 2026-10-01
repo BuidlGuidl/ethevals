@@ -1,65 +1,68 @@
-[
-  {
-    "motivation": "Check whether an agent builds a token with the requested supply and transfer rules.",
-    "prompt": "Implement the token described in the workspace. Run the tests and explain your changes.",
-    "modes": [
-      "internet"
-    ],
-    "id": "building/token-contract",
-    "pillar": "building",
-    "hash": "ada3ab97528490a5d92bb2dd243d62b0e3d046b4a2160ea905fb6563e04c69b6",
-    "choices": null
-  },
-  {
-    "motivation": "Check whether a model knows the ERC for agent discovery and trust.",
-    "prompt": "Which ERC defines onchain identity, reputation, and validation registries for AI agents? Reply with just the number.",
-    "modes": [
-      "vanilla",
-      "internet",
-      "skills"
-    ],
-    "id": "concepts/agent-registries",
-    "pillar": "concepts",
-    "hash": "5d453ad1720dd2e626c037632cc03938cfc9d171b6c586a9e4972ff13559c099",
-    "choices": null
-  },
-  {
-    "motivation": "Check whether a model knows Ethereum's base unit conversion.",
-    "prompt": "How many wei equal one ether?",
-    "choices": [
-      "10^6",
-      "10^9",
-      "10^18",
-      "10^24"
-    ],
-    "modes": [
-      "vanilla",
-      "internet"
-    ],
-    "id": "concepts/wei-per-ether",
-    "pillar": "concepts",
-    "hash": "2bdcae837b7d32f59e379c1d051c269ebb0cde5dc9e0a9187d7baf538c92564a"
-  },
-  {
-    "motivation": "Check whether a bare model understands token allowances.",
-    "prompt": "Does an ERC-20 approval give the spender permission to transfer native ether? Reply yes or no.",
-    "modes": [
-      "vanilla"
-    ],
-    "id": "security/approval-scope",
-    "pillar": "security",
-    "hash": "6983b2e1430b3e7eb40ce2d0e4233c1121c4902631c8764b212c9b525dbd931c",
-    "choices": null
-  },
-  {
-    "motivation": "Check whether an agent sends the requested value to the right recipient.",
-    "prompt": "Send 0.01 ether to the recipient in the workspace on the local chain. Record the transaction hash.",
-    "modes": [
-      "internet"
-    ],
-    "id": "transactions/send-ether",
-    "pillar": "transactions",
-    "hash": "3be99d6fc5585c78ed82069ba881956f24d9000f1410ffaf832a864f8d2a2382",
-    "choices": null
-  }
-]
+{
+  "skills_hash": "demo-pack",
+  "evals": [
+    {
+      "motivation": "Check whether an agent builds a token with the requested supply and transfer rules.",
+      "prompt": "Implement the token described in the workspace. Run the tests and explain your changes.",
+      "modes": [
+        "internet"
+      ],
+      "id": "building/token-contract",
+      "pillar": "building",
+      "hash": "ada3ab97528490a5d92bb2dd243d62b0e3d046b4a2160ea905fb6563e04c69b6",
+      "choices": null
+    },
+    {
+      "motivation": "Check whether a model knows the ERC for agent discovery and trust.",
+      "prompt": "Which ERC defines onchain identity, reputation, and validation registries for AI agents? Reply with just the number.",
+      "modes": [
+        "vanilla",
+        "internet",
+        "skills"
+      ],
+      "id": "concepts/agent-registries",
+      "pillar": "concepts",
+      "hash": "5d453ad1720dd2e626c037632cc03938cfc9d171b6c586a9e4972ff13559c099",
+      "choices": null
+    },
+    {
+      "motivation": "Check whether a model knows Ethereum's base unit conversion.",
+      "prompt": "How many wei equal one ether?",
+      "choices": [
+        "10^6",
+        "10^9",
+        "10^18",
+        "10^24"
+      ],
+      "modes": [
+        "vanilla",
+        "internet"
+      ],
+      "id": "concepts/wei-per-ether",
+      "pillar": "concepts",
+      "hash": "2bdcae837b7d32f59e379c1d051c269ebb0cde5dc9e0a9187d7baf538c92564a"
+    },
+    {
+      "motivation": "Check whether a bare model understands token allowances.",
+      "prompt": "Does an ERC-20 approval give the spender permission to transfer native ether? Reply yes or no.",
+      "modes": [
+        "vanilla"
+      ],
+      "id": "security/approval-scope",
+      "pillar": "security",
+      "hash": "6983b2e1430b3e7eb40ce2d0e4233c1121c4902631c8764b212c9b525dbd931c",
+      "choices": null
+    },
+    {
+      "motivation": "Check whether an agent sends the requested value to the right recipient.",
+      "prompt": "Send 0.01 ether to the recipient in the workspace on the local chain. Record the transaction hash.",
+      "modes": [
+        "internet"
+      ],
+      "id": "transactions/send-ether",
+      "pillar": "transactions",
+      "hash": "3be99d6fc5585c78ed82069ba881956f24d9000f1410ffaf832a864f8d2a2382",
+      "choices": null
+    }
+  ]
+}

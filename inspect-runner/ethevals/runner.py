@@ -31,6 +31,7 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
     else:
         sample.files = None
     metadata = {**sample.metadata, **agent.metadata, **grader.metadata,
+                "skills_hash": evaluation.skills_hash if mode == "skills" else None,
                 "created_at": datetime.now(timezone.utc).isoformat(), "mode": mode,
                 "images": images,
                 "runner_inputs": image_inputs() if images else {},

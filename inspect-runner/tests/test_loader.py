@@ -88,12 +88,15 @@ def test_catalog_exports_a_loaded_eval(tmp_path, config_path):
         capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads((output / "catalog.json").read_text()) == [{
+    catalog = json.loads((output / "catalog.json").read_text())
+    assert catalog["evals"] == [{
         "id": "concepts/units",
         "hash": "cc49e54adbee0419687e4cac9914259b3d0c0798bd774cc2d1d51f82965b0090",
         "pillar": "concepts", "chain": None, "motivation": "Check units.",
         "prompt": "How many wei?", "modes": ["vanilla", "internet"], "choices": None,
     }]
+    from ethevals.skills import pack_skills
+    assert catalog["skills_hash"] == pack_skills().hash
 
 
 @pytest.mark.parametrize("file,content", [

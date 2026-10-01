@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { loadEvals, parseRows } from "../src/load";
+import { loadCatalog, parseRows } from "../src/load";
 import { siteRoot } from "../src/paths";
 
 test("the board reads the merged runner's catalog and reference and empty rows", (t) => {
@@ -18,7 +18,7 @@ test("the board reads the merged runner's catalog and reference and empty rows",
   writeFileSync(path.join(folder, "eval.yaml"), "motivation: Check units.\nprompt: Name the unit.\nmodes: [vanilla]\n");
   writeFileSync(path.join(folder, "scorer/target.yaml"), 'target: "wei"\n');
   const env = { ...process.env };
-  for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"]) delete env[key];
+  for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY"]) delete env[key];
   function run(args: string[]) {
     const result = spawnSync("uv", ["run", "ethevals", ...args, "--evals", folder], {
       cwd: path.dirname(siteRoot), env, encoding: "utf8", timeout: 60_000,
@@ -28,14 +28,15 @@ test("the board reads the merged runner's catalog and reference and empty rows",
   }
   run(["catalog", "--output", path.join(site, ".catalog")]);
   run(["check", "--epochs", "1", "--output", path.join(root, "results")]);
-  const evaluations = loadEvals(path.join(site, ".catalog/catalog.json"));
+  const { evals: evaluations } = loadCatalog(path.join(site, ".catalog/catalog.json"));
   assert.deepEqual(evaluations.map((evaluation) => evaluation.id),
     ["concepts/unit"]);
   for (const answer of ["reference", "empty"]) {
     const filename = path.join(root, "results", answer, "rows.jsonl");
     const rows = parseRows(readFileSync(filename, "utf8"), filename, evaluations);
     assert.deepEqual(rows.map((row) => [row.eval_id, row.schema_version, row.status]),
-      [["concepts/unit", 5, answer === "reference" ? "passed" : "failed"]]);
+      [["concepts/unit", 6, answer === "reference" ? "passed" : "failed"]]);
+    assert.equal(rows[0].skills_hash, null);
     assert.equal(rows[0].eval_hash, evaluations.find((evaluation) => evaluation.id === rows[0].eval_id)!.hash);
     assert.equal(rows[0].log_url, null);
   }

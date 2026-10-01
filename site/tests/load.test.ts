@@ -11,7 +11,7 @@ const evaluation = {
   prompt: "How many wei?", motivation: "Check units.", modes: ["internet", "vanilla", "skills"], choices: null,
 };
 const paid: Row = {
-  schema_version: 5, eval_id: "concepts/units", eval_hash: "current",
+  schema_version: 6, eval_id: "concepts/units", eval_hash: "current", skills_hash: null,
   model: "model-a", harness: "harness-a", effort: "high", mode: "internet",
   epoch: 1, status: "passed", checks: { answer: { passed: true, reason: "Matches." } },
   error_kind: null, error_reason: null, total_tokens: 100,
@@ -28,10 +28,11 @@ function fixture(t: TestContext) {
   mkdirSync(path.join(site, ".catalog"), { recursive: true });
   mkdirSync(path.join(root, "evals"));
   mkdirSync(path.join(root, "results"));
-  writeFileSync(path.join(site, ".catalog/catalog.json"), JSON.stringify([evaluation]));
+  writeFileSync(path.join(site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", evals: [evaluation] }));
   const rows = path.join(root, "results/rows.jsonl");
   return { root, site, rows, write: (values: Partial<Row>[]) => {
-    writeFileSync(rows, "\n" + values.map((value) => JSON.stringify({ ...paid, ...value })).join("\n"));
+    writeFileSync(rows, "\n" + values.map((value) => JSON.stringify({ ...paid,
+      skills_hash: value.mode === "skills" ? "current-pack" : null, ...value })).join("\n"));
   } };
 }
 
@@ -39,10 +40,13 @@ for (const [name, change, message] of [
   ["undeclared mode", { mode: "vanilla", harness: null }, "does not declare this mode"],
   ["internet without harness", { harness: null }, "require a harness"],
   ["vanilla with harness", { mode: "vanilla" }, "cannot have a harness"],
+  ["skills without pack hash", { mode: "skills", skills_hash: null }, "require a pack hash"],
+  ["internet with pack hash", { skills_hash: "current-pack" }, "other modes require null"],
 ] as const) {
   test(`loader rejects ${name} with the file and physical line`, (t) => {
     const f = fixture(t);
-    writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify([{ ...evaluation, modes: ["internet"] }]));
+    writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack",
+      evals: [{ ...evaluation, modes: ["internet"] }] }));
     f.write([change]);
     assert.throws(() => loadBoard({}, f.site), (error: Error) =>
       error.message.startsWith(`${f.rows}:2:`) && error.message.includes(message));
@@ -60,7 +64,7 @@ test("loader reports duplicate identities even among excluded rows", (t) => {
   }
 });
 
-test("loader accepts v5 rows, ignores unused metadata, and skips older rows", (t) => {
+test("loader accepts v6 rows, ignores unused metadata, and skips older rows", (t) => {
   const f = fixture(t);
   writeFileSync(f.rows, JSON.stringify({ ...paid, attempt: 2, max_attempts: 2,
     model_metered_usd: 9, grader_metered_usd: 8, harness_version: "1.0", images: { default: "image:1" } }));
@@ -68,10 +72,10 @@ test("loader accepts v5 rows, ignores unused metadata, and skips older rows", (t
   assert.deepEqual([cell.score, cell.total, cell.epochs[0].cost], [1, 1, 0.25]);
   assert.equal("attempt" in cell.epochs[0], false);
   assert.equal("model_metered_usd" in cell.epochs[0], false);
-  assert.deepEqual(parseRows(JSON.stringify({ ...paid, schema_version: 4 }) + "\n" + JSON.stringify(paid), "rows.jsonl", []), [paid]);
+  assert.deepEqual(parseRows(JSON.stringify({ ...paid, schema_version: 5 }) + "\n" + JSON.stringify(paid), "rows.jsonl", []), [paid]);
 });
 
-test("v5 cost limits retain runner reasons and count as failed epochs", (t) => {
+test("v6 cost limits retain runner reasons and count as failed epochs", (t) => {
   const f = fixture(t);
   f.write([{ status: "failed", limit: { type: "cost", limit: 5, reason: "Budget spent." },
     checks: { answer: { passed: false, reason: "Epoch reached cost limit 5.0. Budget spent." } } }]);
@@ -82,7 +86,8 @@ test("v5 cost limits retain runner reasons and count as failed epochs", (t) => {
 
 test("loader excludes stale rows and keeps skills in a separate agent table", (t) => {
   const f = fixture(t);
-  f.write([{}, { epoch: 2, eval_hash: "old" }, { epoch: 3, mode: "skills" }]);
+  f.write([{}, { epoch: 2, eval_hash: "old" }, { epoch: 3, mode: "skills" },
+    { epoch: 3, mode: "skills", skills_hash: "old-pack" }]);
   const board = loadBoard({}, f.site);
   const cell = board.tables.internet.pillars.concepts.evals[0].cells['["model-a","harness-a","high"]'];
   assert.deepEqual([cell.passed, cell.total, cell.score], [1, 1, 1]);
