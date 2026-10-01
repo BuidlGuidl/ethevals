@@ -34,7 +34,7 @@
   const median = xs => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
   // A score is the mean of the per-eval pass rates, so every eval weighs the same.
   // se is how far that mean moves on a rerun of the same evals; each eval's rate is smoothed so 0/4 and 4/4
-  // don't count as certain. lo and hi (95%) go in tooltips and the panel, not in the cells.
+  // don't count as certain. lo and hi (95%) are for the range bars, not the cells.
   function stats(agent, mode, evFilter) {
     const evs = E.evals.filter(ev => ev.modes.includes(mode) && (!evFilter || evFilter(ev)));
     const all = evs.flatMap(ev => runsOf(ev, agent, mode));
@@ -68,10 +68,13 @@
   const pillarName = () => st.pillar === "all" ? "All pillars" : E.pillars.find(p => p.id === st.pillar).name;
 
   // ---------- cells ----------
-  // One number per cell: the tint carries the level; runs, evals and the rerun range are in the tooltip.
+  // One number per cell: the tint carries the level; runs and evals are in the tooltip, one short fact per line.
   // open is "agent~mode~scope" for the panel.
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  const rangeTip = s => `${s.k} of ${s.n} runs passed on ${plural(s.ran, "eval")} · a rerun would likely land between ${pct(s.lo)} and ${pct(s.hi)}${s.ran < s.evals ? ` · ${plural(s.evals - s.ran, "eval")} not run yet, left out` : ""}${s.invalid ? ` · ${plural(s.invalid, "invalid run")} left out` : ""}`;
+  const TIP_NL = "&#10;";
+  const rangeTip = s => [`${s.k} of ${s.n} runs passed · ${plural(s.ran, "eval")}`,
+    s.ran < s.evals ? `${plural(s.evals - s.ran, "eval")} not run yet, left out` : "",
+    s.invalid ? `${plural(s.invalid, "invalid run")} left out` : ""].filter(Boolean).join(TIP_NL);
   // Marked only when over a tenth of the evals have no runs; smaller gaps stay in the tooltip and the panel.
   const gappy = s => s.n > 0 && s.ran < .9 * s.evals;
   function cell(s, open) {
@@ -128,7 +131,7 @@
       const clear = liftClear(x);
       lift = `<span class="lft ${!clear ? "faint" : x.lift >= 0 ? "pos" : "neg"}">${Math.round(x.lift * 100) === 0 ? "0pp" : pp(x.lift)}</span>`;
     }
-    const liftTip = m === "skills" && isFinite(x.lift) ? ` · vs Internet on the ${plural(x.ps.ran, "eval")} both modes ran: ${pct(x.pi.p)} → ${pct(x.ps.p)}, a rerun could move the difference by about ${Math.round(1.96 * x.liftSe * 100)} points` : "";
+    const liftTip = m === "skills" && isFinite(x.lift) ? `${TIP_NL}${TIP_NL}Skills vs Internet: ${pct(x.pi.p)} → ${pct(x.ps.p)}${x.ps.ran < s8.ran ? ` (on the ${plural(x.ps.ran, "eval")} both ran)` : ""}${liftClear(x) ? "" : `${TIP_NL}Too small to rule out noise`}` : "";
     return `<button class="pr" data-open="${open}" style="--p:${s8.p.toFixed(3)}" title="${rangeTip(s8)}${liftTip}"><span class="v">${pct(s8.p)}${gappy(s8) ? `<sup class="few">*</sup>` : ""}</span>${lift}</button>`;
   }
   function resultsTable(rows) {
@@ -180,7 +183,7 @@
     };
     const band = groups.map((g, i) => `<th class="mxp mxp-${i % 2} gstart" colspan="${g.evs.length}">${g.p.name}</th>`).join("");
     const names = evs.map(ev => `<th class="rot${first.has(ev.id) ? " gstart" : ""}"><a href="#/eval/${ev.id}" title="${esc(ev.title)}"><span>${esc(ev.id)}</span></a></th>`).join("");
-    return `<div class="table-shell"><div class="mx-title">Task matrix · ${modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix grouped ${evs.length > 18 ? "compact" : ""}"><thead><tr><th class="row-label mxh" rowspan="2"></th>${band}</tr><tr>${names}</tr></thead><tbody>${rows.map(({ a }) => `<tr><th class="row-label"><span class="cfg-name">${esc(a.name)}</span><span class="cfg-sub">${harnessFor(a, mode)}</span></th>${evs.map(ev => cell(a, ev)).join("")}</tr>`).join("")}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval name for its page, or a cell for its runs.</span><span>Stronger tint = more runs passed</span></div></div>`;
+    return `<div class="table-shell"><div class="mx-title">Eval matrix · ${modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix grouped ${evs.length > 18 ? "compact" : ""}"><thead><tr><th class="row-label mxh" rowspan="2"></th>${band}</tr><tr>${names}</tr></thead><tbody>${rows.map(({ a }) => `<tr><th class="row-label"><span class="cfg-name">${esc(a.name)}</span><span class="cfg-sub">${harnessFor(a, mode)}</span></th>${evs.map(ev => cell(a, ev)).join("")}</tr>`).join("")}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval name for its page, or a cell for its runs.</span><span>Stronger tint = more runs passed</span></div></div>`;
   }
   // Evals: one matrix. Agents (or models) are the columns, evals the rows grouped by pillar, named by title.
   // The agent views list every eval, with "–" where an eval does not run in that mode, so none disappears.
@@ -200,7 +203,7 @@
     const head = `<thead><tr><th class="row-label mxh"></th>${agents.map(a => `<th class="agh"><span class="cfg-name">${esc(a.name)}</span><span class="cfg-sub">${vanilla ? orgOf[a.id] : harnessFor(a, mode)}</span></th>`).join("")}</tr></thead>`;
     const meta = ev => `${ev.type} · ${((SCORER[ev.grader] || [ev.grader])[0]).toLowerCase()}`;
     const body = groups.map((g, i) => `<tr class="mxgrp"><th class="mxp mxp-${i % 2}" colspan="${agents.length + 1}">${g.p.name}</th></tr>${g.evs.map(ev => `<tr><th class="row-label evl"><a href="#/eval/${ev.id}">${esc(ev.title)}</a><span class="cid">${meta(ev)}</span></th>${agents.map(a => cell(a, ev)).join("")}</tr>`).join("")}`).join("");
-    return `<div class="table-shell"><div class="mx-title">Task matrix · ${vanilla ? "Model only" : modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix t2">${head}<tbody>${body}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval for its page, or a cell for its runs.</span><span>Stronger tint = more runs passed</span></div></div>`;
+    return `<div class="table-shell"><div class="mx-title">Eval matrix · ${vanilla ? "Model only" : modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix t2">${head}<tbody>${body}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval for its page, or a cell for its runs.</span><span>Stronger tint = more runs passed</span></div></div>`;
   }
 
 
@@ -343,7 +346,7 @@
     if (dr.run) crumbs.push(`<span>Run ${dr.run}</span>`);
     const back = dr.run ? `<button class="dback" data-dgo="eval">← All runs</button>` : ev && dr.scope ? `<button class="dback" data-dgo="list">← ${scopeName(dr.scope)} evals</button>` : "";
     const body = dr.run ? paintRun(a, ev) : ev ? paintEval(a, ev) : paintList(a);
-    document.getElementById("detail-content").innerHTML = `<header class="drawer-header"><div class="drawer-heading">${crumbs.length > 1 ? `<nav class="dcrumbs" aria-label="Where you are">${crumbs.join('<span class="dsep">›</span>')}</nav>` : ""}${body.head}</div><button id="close-detail" class="close-button" aria-label="Close details">Close ×</button></header><div class="drawer-content">${back}${body.main}</div>`;
+    document.getElementById("detail-content").innerHTML = `<header class="drawer-header"><div class="drawer-heading">${crumbs.some(c => c.includes("dcrumb")) ? `<nav class="dcrumbs" aria-label="Where you are">${crumbs.join('<span class="dsep">›</span>')}</nav>` : ""}${body.head}</div><button id="close-detail" class="close-button" aria-label="Close details">Close ×</button></header><div class="drawer-content">${back}${body.main}</div>`;
   }
 
   // The panel's mode switch, laid out like the tables': the two agent modes together, Model only apart.
