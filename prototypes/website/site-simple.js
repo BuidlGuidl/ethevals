@@ -342,14 +342,9 @@
 
   function paintD() {
     const a = agentById(dr.agent), ev = dr.ev ? evalById(dr.ev) : null;
-    const crumbs = [];
-    if (dr.scope) crumbs.push(dr.ev ? `<button class="dcrumb" data-dgo="list">${esc(a.name)} · ${scopeName(dr.scope)}</button>` : `<span>${esc(a.name)} · ${scopeName(dr.scope)}</span>`);
-    else crumbs.push(`<span>${esc(a.name)}</span>`);
-    if (ev) crumbs.push(dr.run ? `<button class="dcrumb" data-dgo="eval">${esc(ev.title)}</button>` : `<span>${esc(ev.title)}</span>`);
-    if (dr.run) crumbs.push(`<span>Run ${dr.run}</span>`);
     const back = dr.run ? `<button class="dback" data-dgo="eval">← All runs</button>` : ev && dr.scope ? `<button class="dback" data-dgo="list">← ${scopeName(dr.scope)} evals</button>` : "";
     const body = dr.run ? paintRun(a, ev) : ev ? paintEval(a, ev) : paintList(a);
-    document.getElementById("detail-content").innerHTML = `<header class="drawer-header"><div class="drawer-heading">${crumbs.some(c => c.includes("dcrumb")) ? `<nav class="dcrumbs" aria-label="Where you are">${crumbs.join('<span class="dsep">›</span>')}</nav>` : ""}${body.head}</div><button id="close-detail" class="close-button" aria-label="Close details">Close ×</button></header><div class="drawer-content">${back}${body.main}</div>`;
+    document.getElementById("detail-content").innerHTML = `<header class="drawer-header"><div class="drawer-heading">${body.head}</div><button id="close-detail" class="close-button" aria-label="Close details">Close ×</button></header><div class="drawer-content">${back}${body.main}</div>`;
   }
 
   // The panel's mode switch, laid out like the tables': the two agent modes together, Model only apart.
