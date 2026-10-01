@@ -10,6 +10,21 @@ import pytest
 from support import catalog_quiz, fixture_config
 
 
+def test_codex_home_is_outside_the_workspace(monkeypatch):
+    from ethevals import agents
+
+    observed = {}
+    original = agents.codex_cli
+
+    def construct(**settings):
+        observed.update(settings)
+        return original(**settings)
+
+    monkeypatch.setattr(agents, "codex_cli", construct)
+    agents.codex("gpt-5.5", native_search=False, search_limit=8)
+    assert (observed["cwd"], observed.get("home_dir")) == ("/workspace", "/home/agent/.codex")
+
+
 @pytest.mark.parametrize("mode,key", [("vanilla", "opus-5.5"), ("internet", "claude-code-opus-5.5")])
 @pytest.mark.parametrize("effort", [None, "medium"])
 def test_optional_effort_reaches_model_call(monkeypatch, mode, key, effort):

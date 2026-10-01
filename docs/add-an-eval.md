@@ -319,25 +319,24 @@ chain: {fork: mainnet, block: 23819000}
 - On a fork, the chain container gets 1 GiB, and setup and `forge test` each get 600 seconds.
 - To check a fork eval locally, set `MAINNET_RPC_URL` or `BASE_RPC_URL` to an archive RPC URL.
 
-[vesting-claim](../evals/transactions/vesting-claim) is the example.
-A vesting contract holds 50,000 USDC, and its beneficiary says the funds are stuck. The owner asks the agent to get the USDC to the beneficiary.
-Setup deploys `workspace/src/Vesting.sol` from the agent's account, with a schedule that ended a year before the fork block.
+[supply-usdc-to-aave](../evals/transactions/supply-usdc-to-aave) is the example.
+The agent must supply 10,000 USDC to Aave v3's main market and keep 15,000 USDC in the wallet.
+Setup creates the agent's wallet `me` and funds it with 10 ETH for gas.
 Three `vm.rpc` calls move the USDC from a holder that has enough at the pinned block:
 
 ```solidity
 vm.rpc("anvil_impersonateAccount", string.concat('["', vm.toString(HOLDER), '"]'));
-// ERC-20 balances can be funded at the future CREATE address before deployment.
 vm.rpc("eth_sendTransaction", string.concat('[{"from":"', vm.toString(HOLDER), '","to":"', vm.toString(USDC),
-    '","data":"', vm.toString(abi.encodeCall(IERC20.transfer, (address(vesting), 50_000e6))), '"}]'));
+    '","data":"', vm.toString(abi.encodeCall(IERC20.transfer, (me.addr, 25_000e6))), '"}]'));
 vm.rpc("anvil_stopImpersonatingAccount", string.concat('["', vm.toString(HOLDER), '"]'));
 ```
 
-- A `vm.rpc` call runs on the chain at once, during Forge's simulation. The USDC lands at the contract's address before the broadcast deploys the contract.
+- A `vm.rpc` call runs on the chain at once, during Forge's simulation. The USDC lands in `me`'s wallet.
 - Send from the holder with `vm.rpc`, not a broadcast. A broadcast needs the sender's key, and setup has none for the holder.
 - Stop impersonating before `run()` returns.
 
-Checks: `compile`, `test_beneficiary_holds_the_usdc`, `test_vesting_contract_is_empty`, and the rubric's `explained_the_release`.
-The reference solution calls the contract's own `release(usdc)` from the agent's key.
+Checks: `compile`, `test_supplied_10000_usdc`, and `test_kept_15000_usdc`.
+The reference solution approves the Pool for 10,000 USDC and calls `supply(USDC, 10_000e6, me, 0)` from the agent's key.
 
 The free check on a PR has no secrets, so for a fork eval it validates the folder and skips both passes.
 A maintainer reads the PR, then dispatches the `fork-check.yml` workflow with the PR number and the full SHA of the commit they read.
