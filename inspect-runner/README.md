@@ -141,9 +141,15 @@ Tags identify build inputs, not reproducible image bytes.
 The agent, scorer, and chain have internet access.
 Anvil's unfiltered RPC listens only on loopback inside the chain container.
 The agent uses the filter at `http://chain:8545`.
-[rpc_filter.py](ethevals/images/rpc_filter.py) lists allowed wallet reads and signed transaction calls.
+[rpc_methods.json](ethevals/images/rpc_methods.json) classifies every RPC name and alias in pinned Anvil as `allow` or `deny`.
+[rpc_filter.py](ethevals/images/rpc_filter.py) reads its allow list from that file and refuses every other method.
+It allows wallet reads, polling filters, access lists, block receipts, simulations, and signed transaction calls.
+It refuses `debug_*`, `trace_*`, `ots_*`, `txpool_*`, chain controls, and node signing.
+Node-signing refusals say: "Sign locally and use eth_sendRawTransaction."
 A batch with any refused method fails as a whole.
-The filter rejects WebSockets and unsigned sends; refusal messages enter the Inspect log.
+The filter rejects WebSockets; refusal messages enter the Inspect log.
+The network guard in `tests/test_rpc_methods.py` fetches Foundry source at the tag in `images/Chain.Dockerfile`.
+It fails on missing or stale classifications and runs with `uv run pytest -q` in the free PR check.
 
 `agents.py` defines harness factories and pins their versions.
 `config.yaml` lists `models` with provider slugs and optional effort, and `agents` with harnesses and model keys.
