@@ -223,9 +223,8 @@ prompt: |
   can you help me build a token for our community? put it in src/BuilderPoints.sol as a contract
   called BuilderPoints, with no constructor arguments. call it Builder Points (BPT), with the same
   decimals as USDC. mint 100,000 to whoever deploys it. the deployer should be able to mint more
-  later with mint(address to, uint256 amount), but the total supply must never go over 1,000,000.
-  it's a Foundry project on solidity 0.8.30. it's going to hold real value for our members, so
-  follow best practices.
+  later, but the total supply must never go over 1,000,000. it's a Foundry project on solidity
+  0.8.30. it's going to hold real value for our members, so follow best practices.
 ```
 
 Ship this `workspace/foundry.toml` in a Foundry eval. The agent can change it, and grading never uses it.
@@ -239,7 +238,7 @@ solc = "0.8.30"
 ```
 
 The workspace ships only `foundry.toml`.
-The prompt names the contract, a no-argument constructor, and the `mint` signature.
+The prompt names the contract and a no-argument constructor. The test calls `mint(address, uint256)`, the usual signature for minting to an address.
 The test relies on those and on standard ERC-20, nothing else.
 [BuilderPoints.t.sol](../evals/building/erc20-points-token/scorer/tests/BuilderPoints.t.sol) has ten test functions. Its imports, `setUp`, and the first test:
 
