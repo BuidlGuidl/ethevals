@@ -57,6 +57,10 @@ def run(evals: list[Eval], config: Config, output: Path, *,
         epochs: int | None = None, epoch: int | None = None, fresh: bool = False, retry_errors: bool = False,
         rows_file: Path | None = None, agents=None, models=None, modes=None, answer=None,
         budget=None) -> tuple[bool, list[dict]]:
+    missing_forks = sorted({evaluation.fork.rpc_variable for evaluation in evals
+                            if evaluation.fork and not os.environ.get(evaluation.fork.rpc_variable)})
+    if missing_forks:
+        raise ValueError(f"Missing fork RPC variables: {', '.join(missing_forks)}")
     previous = previous_rows(output, rows_file)
     agents_for, _ = select_actors(config, agents=agents, modes=modes, answer=answer, models=models, planning=True)
     initial = plan(evals, config, agents_for, previous, epochs=epochs, epoch=epoch, fresh=fresh, retry_errors=retry_errors)

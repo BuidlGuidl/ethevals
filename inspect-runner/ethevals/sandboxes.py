@@ -1,6 +1,8 @@
 import io
 import tarfile
 import re
+import os
+from functools import wraps
 import yaml
 from pathlib import Path, PurePosixPath
 
@@ -8,6 +10,7 @@ from inspect_ai.util import sandbox
 
 from .config import read_yaml
 from .images.tag import image_tag
+from .images.rpc_filter import redact
 from .scoring_base import SubmissionFailed
 
 IMAGES = Path(__file__).with_name("images")
@@ -82,6 +85,13 @@ def merged_compose(evaluation):
         if name == "scorer":
             service["entrypoint"] = ["sleep", "infinity"]
             service["working_dir"] = "/workspace"
+    if evaluation.fork:
+        chain = document["services"]["chain"]
+        chain["mem_limit"] = "1g"
+        chain["environment"] = {
+            "FORK_RPC_URL": "${" + evaluation.fork.rpc_variable + "}",
+            "FORK_BLOCK_NUMBER": str(evaluation.fork.block),
+        }
     if "compose.yaml" in evaluation.files:
         extra = yaml.safe_load(validate_compose(evaluation.folder / "compose.yaml", data=evaluation.files["compose.yaml"]))
         document["services"].update(extra.get("services", {}))
@@ -89,9 +99,20 @@ def merged_compose(evaluation):
     return document
 
 
+def redact_exec(exec):
+    @wraps(exec)
+    async def redacted(*args, **kwargs):
+        result = await exec(*args, **kwargs)
+        urls = [os.environ.get(name) for name in ("MAINNET_RPC_URL", "BASE_RPC_URL")]
+        result.stdout = redact(result.stdout, urls)
+        result.stderr = redact(result.stderr, urls)
+        return result
+    return redacted
+
+
 async def runner_exec(box, command, **kwargs):
     """Every privileged or scorer command starts with this owned environment."""
-    return await box.exec([
+    return await redact_exec(box.exec)([
         "/usr/bin/env", "-i", "HOME=/home/agent", "PATH=/usr/local/bin:/usr/bin:/bin",
         "LANG=C.UTF-8", *command,
     ], **kwargs)

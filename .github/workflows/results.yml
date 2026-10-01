@@ -106,6 +106,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
         run: >-
           uv run ethevals run --config results/ci-plan/config.json --rows results/ci-plan/rows.jsonl
           --output results/ci-run --evals "evals/$EVAL_ID" "$SELECTOR" "$ACTOR"

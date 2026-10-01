@@ -16,10 +16,19 @@ from .skills import pack_skills
 PILLARS = {"concepts", "transactions", "building", "security"}
 
 
+class ForkChain(Declaration):
+    fork: Literal["mainnet", "base"]
+    block: int = Field(gt=0)
+
+    @property
+    def rpc_variable(self):
+        return f"{self.fork.upper()}_RPC_URL"
+
+
 class EvalDeclaration(Declaration):
     prompt: str = Field(min_length=1)
     motivation: str = Field(min_length=1)
-    chain: Literal["anvil"] | None = None
+    chain: Literal["anvil"] | ForkChain | None = None
     modes: list[Mode] = Field(min_length=1)
     choices: list[str] | None = Field(default=None, min_length=2, max_length=26)
 
@@ -35,6 +44,10 @@ class Eval:
     target: TargetScorer | None
     files: dict[str, bytes]
     skills: list[Skill]
+
+    @property
+    def fork(self):
+        return self.declaration.chain if isinstance(self.declaration.chain, ForkChain) else None
 
     def sample(self) -> Sample:
         # Only workspace files are eligible for copying into a future sandbox.

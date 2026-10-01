@@ -128,3 +128,33 @@ def test_filter_rejects_websocket_beacon_and_non_json(proxy):
     assert request({}, path="/admin")[0] == 400
     request({"jsonrpc": "2.0", "id": 1, "method": "eth_chainId"})
     assert writes == [{"jsonrpc": "2.0", "id": 1, "method": "eth_chainId"}]
+
+
+def test_filter_redacts_fork_urls_in_single_and_batch_responses(proxy, monkeypatch):
+    request, _ = proxy
+    request.chain.fork_url = "https://archive.example?key=SENTINEL"
+
+    class Backend:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def read(self, size):
+            response = {"jsonrpc": "2.0", "id": 1, "error": {"code": -32603, "message":
+                "request https://archive.example?key=SENTINEL or https://archive.example/?key=SENTINEL failed"}}
+            return json.dumps([response] if isinstance(self.payload, list) else response).encode()
+
+    monkeypatch.setattr(rpc_filter.urllib.request, "urlopen",
+                        lambda upstream, timeout: Backend(json.loads(upstream.data)))
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "eth_chainId"}
+    expected = {"jsonrpc": "2.0", "id": 1, "error": {
+        "code": -32603, "message": "request <fork rpc> or <fork rpc> failed"}}
+    for batch in (False, True):
+        status, body = request([payload] if batch else payload)
+        assert status == 200
+        assert json.loads(body) == ([expected] if batch else expected)
