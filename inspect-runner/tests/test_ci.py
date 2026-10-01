@@ -333,13 +333,15 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
 
 def test_failed_preparation_stays_missing_without_using_attempts(tmp_path, monkeypatch):
     config = fixture_config()
-    build = load_eval(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", config)
+    build = load_eval(ROOT / "evals/building/erc20-points-token", config)
     agents_for, grade = select_actors(config, answer="reference")
 
     def failed(*args):
         raise RuntimeError("Docker build failed")
 
     monkeypatch.setattr("ethevals.runner.prepare_compose", failed)
+    monkeypatch.setattr("ethevals.runner.build_images", lambda: None)
+    monkeypatch.setattr("ethevals.runner.check_capacity", lambda *args: None)
     success, rows = run([build], config, tmp_path, answer="reference", epochs=1)
     assert (success, rows) == (False, [])
     assert json.loads((tmp_path / "preparation-errors.json").read_text())[0]["error"] == "Docker build failed"

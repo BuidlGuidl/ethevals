@@ -36,7 +36,7 @@ async def script_result(path, box=None):
     setup = PurePosixPath(path).name.split(".")[0] == "setup"
     execute = runner_exec if setup else scoring_exec
     result = await execute(box, ["/usr/bin/env", "RPC_URL=http://127.0.0.1:8546", "PUBLIC_RPC_URL=http://chain:8545",
-        "SOLC=/opt/solc", "FOUNDRY_OFFLINE=true", "/eval/" + path], cwd="/eval",
+        "SOLC=0.8.30", "/eval/" + path], cwd="/eval",
         timeout=SETUP_TIMEOUT if setup else CHECK_SECONDS)
     if not result.success:
         raise RuntimeError(f"{path} exited {result.returncode}: {result.stderr[-4096:]}")

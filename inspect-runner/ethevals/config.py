@@ -54,6 +54,7 @@ class AgentConfig(Declaration):
 
 class GraderConfig(ModelSettings):
     max_tokens: int = Field(gt=0)
+    context_window: int | None = Field(default=None, gt=0)
 
 
 Mode = Literal["vanilla", "internet", "skills"]

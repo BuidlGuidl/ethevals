@@ -144,13 +144,13 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
     assert (report["worst_case_usd"], report["within_budget"]) == (2, False)
 
 
-def test_build_plan_reserves_capped_grader_requests():
+def test_build_plan_reserves_the_grader_context_window():
     config = fixture_config()
-    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token", config)
+    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
     agents_for, _ = select_actors(config, agents=["claude-code-opus-5.5"], modes=["internet"], planning=True)
     report = budget_check(plan([evaluation], config, agents_for, [], epochs=1).report, 27.6)
-    assert report["missing"][0]["per_attempt_usd"] == 13.75835
-    assert (report["worst_case_usd"], report["within_budget"]) == (27.5167, True)
+    assert report["missing"][0]["per_attempt_usd"] == pytest.approx(12.9608)
+    assert (report["worst_case_usd"], report["within_budget"]) == (25.9216, True)
 
 
 @pytest.mark.parametrize("present,missing", [

@@ -13,7 +13,7 @@ from support import build_task, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
+BUILD = ROOT / "evals/building/erc20-points-token"
 
 
 def test_loader_preserves_target_and_prompt(folder):
@@ -213,3 +213,22 @@ def test_mixed_scorers_preserve_author_workspace(tmp_path):
     assert evaluation.sample().files["/workspace/foundry.toml"] == inline_file(
         b'[profile.default]\nsrc = "src"\ntest = "test"\nlibs = ["lib"]\nsolc = "0.8.30"\n')
     assert evaluation.sample().input == evaluation.declaration.prompt
+
+
+def test_validate_rejects_tests_with_only_a_helper(tmp_path):
+    from support import eval_cli
+    folder = tmp_path / "building" / "helpers"
+    shutil.copytree(BUILD, folder)
+    (folder / "scorer/tests/BuilderPoints.t.sol").unlink()
+    (folder / "scorer/tests/Helper.sol").write_text("contract Helper {}")
+    result = eval_cli("validate", "--evals", folder)
+    assert result.returncode == 2
+    assert "no runner claims a file in scorer/tests/" in result.stderr
+
+
+def test_unclaimed_helper_functions_are_not_checks(tmp_path):
+    folder = tmp_path / "building" / "helpers"
+    shutil.copytree(BUILD, folder)
+    (folder / "scorer/tests/Helper.sol").write_text("contract Helper { function test_name_and_symbol() public {} }")
+    evaluation = load_eval(folder, fixture_config())
+    assert evaluation.scorer_kinds == ["tests", "rubric"]

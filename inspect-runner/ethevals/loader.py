@@ -8,7 +8,7 @@ from inspect_ai.tool import Skill
 from pydantic import Field
 
 from .config import Config, Declaration, Mode, parse_file
-from .scorers import TargetScorer, rubric_questions
+from .scorers import RUNNERS, TargetScorer, rubric_questions, runner_files, runners_for
 from .check_script import script_path, validate_script
 from .sandboxes import validate_compose
 from .files import manifest, content_hash, inline_file, has_solution
@@ -69,9 +69,17 @@ def load_eval(folder: Path, config: Config) -> Eval:
         raise ValueError(f"{folder / 'eval.yaml'}: pillar must be one of {sorted(PILLARS)}")
     if not (folder / "scorer").is_dir():
         raise ValueError(f"{folder / 'scorer'}: required directory is missing")
+    if (folder / "scorer/tests").is_dir() and not runners_for(files):
+        raise ValueError(f"{folder}: no runner claims a file in scorer/tests/")
+    claimed = set()
+    for runner in runners_for(files):
+        for name in runner_files(runner, files):
+            if name in claimed:
+                raise ValueError(f"{folder}: more than one runner claims {name}")
+            claimed.add(name)
     kinds = [kind for kind, present in (
         ("target", "scorer/target.yaml" in files),
-        ("tests", (folder / "scorer/tests").is_dir()),
+        ("tests", bool(claimed)),
         ("check_script", script_path(files, "check") is not None),
         ("rubric", "scorer/rubric.md" in files),
     ) if present]
@@ -100,9 +108,6 @@ def load_eval(folder: Path, config: Config) -> Eval:
                 raise ValueError(f"{path}: target must name an available choice letter")
         if hf_skip_reason(declaration, files) is None:
             validate_hf_export(target, str(path))
-    if "tests" in kinds:
-        if not any(name.startswith("scorer/tests/") and name.endswith(".t.sol") for name in files):
-            raise ValueError(f"{folder}: scorer/tests must contain a .t.sol file")
     if "check_script" in kinds:
         validate_script(declaration, files)
     validate_check_names(files, target, folder)
@@ -142,10 +147,9 @@ def validate_check_names(files, target, folder):
     names = [target.name] if target else []
     if "scorer/rubric.md" in files:
         names.extend(rubric_questions(files))
-    for path, data in files.items():
-        if path.startswith("scorer/tests/") and path.endswith(".t.sol"):
-            source = data.decode("utf-8")
-            names.extend(re.findall(r"\bfunction\s+(test\w*)\s*\(", source))
+    for runner in RUNNERS:
+        for path, data in runner_files(runner, files).items():
+            names.extend(runner.names(data.decode("utf-8")))
     seen = set()
     for name in names:
         if name == "compile":

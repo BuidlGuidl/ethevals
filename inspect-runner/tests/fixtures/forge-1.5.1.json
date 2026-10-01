@@ -18,10 +18,5 @@
     "stdout": "Compiler run failed:\nError (9582): Member \"value\" not found or not visible after argument-dependent lookup in contract Token.\n --> test/Token.t.sol:5:48:\n  |\n5 |     function testToken() public view { require(token.value() == 1); }\n  |                                                ^^^^^^^^^^^\n\n",
     "stderr": "Error: Compilation failed\n",
     "returncode": 1
-  },
-  "version": {
-    "stdout": "",
-    "stderr": "Error: Encountered invalid solc version in src/Token.sol: No solc version installed that matches the version requirement: =0.8.29\nEncountered invalid solc version in src/Token.sol: No solc version installed that matches the version requirement: =0.8.29\n",
-    "returncode": 1
   }
 }

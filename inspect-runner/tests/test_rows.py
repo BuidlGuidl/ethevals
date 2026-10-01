@@ -254,12 +254,16 @@ def test_grader_budget_error_retains_primary_score(quiz_scoring_case):
 
 
 @pytest.mark.docker
-def test_compile_failure_records_one_check_and_skips_grader(scoring_case):
+def test_compile_failure_grades_the_transcript_without_source(scoring_case):
     scoring_case["task"].solver = submit_source("pragma solidity ^0.8.30; contract Token { uint value = ; }")
-    row = scoring_case["run"]([RuntimeError("The grader must not run")])
-    assert (row["status"], (scoring_case["log"].samples[0].role_usage["grader"].total_tokens if "grader" in scoring_case["log"].samples[0].role_usage else 0)) == ("failed", 0)
+    row = scoring_case["run"]([NO])
+    assert row["status"] == "failed"
     assert row["checks"] == {
-        "forge:compile": {"passed": False, "reason": "Error (6933): Expected primary expression."}}
+        "compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},
+        "uses_standard_library": {"passed": False, "reason": "Owner can seize tokens."}}
+    evidence = json.loads(scoring_case["requests"][0][1].text)
+    assert evidence["sources"] == {}
+    assert evidence["transcript"][0]["role"] == "user"
 
 
 def test_operator_stop_is_an_error_and_skips_scoring(quiz_scoring_case):
@@ -284,7 +288,7 @@ def test_time_limit_grades_the_work_left(quiz_scoring_case):
     assert (row["status"], row["limit"]["type"]) == ("failed", "time")
     assert row["checks"] == {
         "answer": {"passed": False, "reason": "The answer is empty."},
-        "rubric:explained": {"passed": False, "reason": "Owner can seize tokens."},
+        "explained": {"passed": False, "reason": "Owner can seize tokens."},
     }
 
 
@@ -302,7 +306,7 @@ def test_time_limit_can_pass_finished_work(quiz_scoring_case):
     assert (row["schema_version"], row["status"], row["limit"]["type"]) == (5, "passed", "time")
     assert row["checks"] == {
         "answer": {"passed": True, "reason": "Answer matches the target."},
-        "rubric:explained": {"passed": True, "reason": "Uses standard transfers."},
+        "explained": {"passed": True, "reason": "Uses standard transfers."},
     }
 
 
