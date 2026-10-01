@@ -31,12 +31,10 @@ Files no runner claims are helpers. A tests folder with only helpers fails valid
 | --- | --- | --- |
 | Target | `target.yaml` | A reply check through Inspect's `match`, `pattern`, or `choice`. |
 | Tests | `tests/` | Checks from Forge, including `compile`. |
-| Check script | `check` or `check.<ext>` | Chain checks from the script's JSON output. |
 | Rubric | `rubric.md` | One model verdict per named question, after the eval's other scorers. |
 
 An eval can combine targets, tests, and a rubric. At least one scorer must exist.
-Check scripts remain supported for the current chain eval until its Forge migration.
-Scorers run in target, tests, check script, and rubric order.
+Scorers run in target, tests, and rubric order.
 Each returns check names mapped to `C` or `I` in `Score.value`.
 `Score.metadata["reasons"]` holds the reasons.
 `Score.explanation` shows the same reasons in Inspect's score panel.
@@ -47,7 +45,7 @@ Target settings also drive the Hugging Face export.
 `actors.quiz_solver_spec()` selects `generate` or `multiple_choice` for vanilla quizzes.
 `checks.py` supplies scripted reference and empty solvers for the free check.
 The reference pass applies the target's `reference` and overlays top-level `solution/` on the workspace.
-An optional `solution/run.sh` then runs inside the agent container.
+An optional `solution/solution.s.sol` runs in the scorer container against the filtered chain RPC.
 The free check skips rubric-only evals.
 
 ## Captured files and build scoring
@@ -182,13 +180,11 @@ The constants live beside the scorer implementation.
 | Operator stop | Error. |
 | Docker failure, memory failure, or setup failure | Error. |
 | Grader provider failure or exhausted grader allowance | Error with any completed scorer results. |
-| Script crash or malformed verdict | Error. |
-| Check-script timeout | Failed check. |
 | Forge output without results or a compiler diagnostic | Error. |
 | Compiler download failure or unexplained Forge timeout | Error. |
 
 Inspect retains the last 10 MiB of each exec stream.
-Truncated script output can become malformed JSON; truncated Forge output can lack required results.
+Truncated Forge output can lack required results.
 A Compose preparation failure records `preparation-errors.json` without consuming an epoch attempt.
 A stock image-build failure stops the run with Docker's diagnostic.
 
@@ -289,37 +285,50 @@ Use `--rows` to select a different resume file.
 The full transcript stays in the Inspect log.
 To browse a local run, use `uv run inspect view --log-dir results/logs`.
 
-## Script contract
+## Setup and solution contract
 
-Setup scripts live under `setup/`; check scripts live under `scorer/`.
-Their shebangs select installed interpreters.
-Their names are `setup` or `setup.<ext>`, and `check` or `check.<ext>`.
-They run in `/eval` inside the chain container with internet access.
-`cast`, `forge`, and `jq` are available.
+Setup runs when `setup/setup.s.sol` exists, before the agent's time allowance starts.
+The runner copies `setup/` and `workspace/` into the chain container's `/eval`.
+Its Foundry config maps `forge-std/` and `ethevals/` and permits reads and writes of `chain.json` and `private.json`.
+Forge installs the compiler each pragma requires.
+The setup command has a 120-second timeout:
 
-| Variable | Value |
-| --- | --- |
-| `RPC_URL` | Private, unfiltered chain RPC. |
-| `PUBLIC_RPC_URL` | The agent's filtered RPC. |
-| `SOLC` | Installed compiler path. |
-
-Setup prints `{"files": {"chain.json": "file contents"}}`.
-Paths must be relative and cannot replace declared workspace files.
-Only these selected files reach the agent; other setup state stays in `/eval`.
-Setup runs before the agent's time allowance starts.
-
-Check output maps names matching `[a-z][a-z0-9_]*` to boolean `passed` and nonempty string `reason` values.
-For example:
-
-```json
-{"balance": {"passed": true, "reason": "Recipient has the required balance."}}
+```sh
+forge script setup/setup.s.sol --broadcast --slow --rpc-url http://127.0.0.1:8546
 ```
 
-The runner prefixes names with `script:` and normalizes reasons to one line.
-Scripts must report verdicts for failed agent work, rather than crash.
-Both scripts have a 120-second timeout; failures include the last 4 KiB of stderr.
-Before checking chain state, the runner stops agent processes and awaits a manual mine.
-The checker can send further transactions while automining remains active.
+Setup inherits `ChainSetup` through `import {ChainSetup} from "ethevals/ChainSetup.sol";`.
+Its constructor creates `chain.json` with `rpcUrl: "http://chain:8545"` and the chain ID, and an empty `private.json`.
+The helper adds these functions:
+
+| Function | Effect |
+| --- | --- |
+| `fund(addr, amount)` | Calls `anvil_setBalance` through `vm.rpc` to fund the real chain. |
+| `chainRecord(name, value)` | Writes an address, uint, bytes32, or string field into `chain.json`. |
+| `privateRecord(name, value)` | Writes the same value types into `private.json`. |
+
+Each record call rewrites its file, so `run()` needs no lifecycle hooks.
+`vm.deal` changes only Forge's simulation. `fund` changes the real chain.
+Wallet creation and broadcasts use Foundry's `vm.createWallet`, `vm.randomUint`, and `vm.startBroadcast`.
+Setup contracts can import contracts from `workspace/`, using only libraries shipped in `setup/` or `workspace/`.
+
+The runner delivers `chain.json` to the agent's `/workspace/chain.json`.
+The scorer receives an untouched copy of `chain.json` and the private file at its root, `/workspace`.
+Validation reserves `chain.json` and `private.json` for setup and requires setup whenever a chain is declared.
+The free check applies the prompt-word lint to the delivered chain file.
+
+Reference files under `solution/` overlay the agent's workspace at the same paths.
+The script `solution/solution.s.sol` stays in the scorer container and reads `chain.json` from the scorer root.
+It uses the agent's signing key and the same filtered RPC as the agent:
+
+```sh
+forge script solution/solution.s.sol --broadcast --rpc-url http://chain:8545
+```
+
+The solution command has a 120-second timeout.
+After freezing the agent, the runner mines one block and captures the RPC refusal log before grading.
+Forge tests read the finished chain with `vm.createSelectFork("chain")`.
+Changes in the test's fork stay in Forge.
 
 ## CI and publication
 

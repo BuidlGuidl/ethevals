@@ -20,9 +20,8 @@ from inspect_ai.scorer._scorer import ScorerSpec
 from pydantic import Field, model_validator
 
 from .config import Declaration
-from .sandboxes import workspace_files, runner_exec, stop_agent
+from .sandboxes import workspace_files, runner_exec
 from .scoring_base import checks_score, scoring_boundary
-from .check_script import check_script_scorer
 
 class TargetScorer(Declaration):
     name: str = Field(default="answer", pattern=r"^[a-z][a-z0-9_]*$")
@@ -80,7 +79,7 @@ def target_scorer(eval_id, eval_hash) -> Scorer:
         return checks_score({config.name: {"passed": passed, "reason": reason}},
                             answer=next((result.answer for result in results if result.value == "C"), results[0].answer))
 
-    return scoring_boundary(config.name, score)
+    return scoring_boundary(config.name, score, evaluation=evaluation, freeze=evaluation.scorer_kinds[0] == "target")
 
 
 def target_reference(config, declaration):
@@ -302,7 +301,6 @@ def tests_scorer(eval_id, eval_hash):
     evaluation = EVALUATIONS[(eval_id, eval_hash)]
 
     async def score(state, target):
-        await stop_agent()
         box = sandbox("scorer")
         root = await prepare_workspace(box, await workspace_files(), evaluation.files)
         checks, origins, failures = {}, {}, []
@@ -319,7 +317,7 @@ def tests_scorer(eval_id, eval_hash):
                 checks[name], origins[name] = check, source
         return checks_score({"compile": {"passed": not failures,
                             "reason": "Compilation passed." if not failures else " ".join(failures)}, **checks})
-    return scoring_boundary("compile", score)
+    return scoring_boundary("compile", score, evaluation=evaluation, freeze=evaluation.scorer_kinds[0] == "tests")
 
 
 def rubric_reply(text: str) -> dict:
@@ -424,9 +422,8 @@ def rubric_scorer(eval_id, eval_hash):
         except LimitExceededError as error:
             raise RuntimeError("Grader cost limit reached.") from error
         return checks_score(checks)
-    return scoring_boundary(None, score)
+    return scoring_boundary(None, score, evaluation=evaluation, freeze=evaluation.scorer_kinds[0] == "rubric")
 
 
-SCORERS = {"target": target_scorer, "tests": tests_scorer,
-           "rubric": rubric_scorer, "check_script": check_script_scorer}
+SCORERS = {"target": target_scorer, "tests": tests_scorer, "rubric": rubric_scorer}
 EVALUATIONS = {}

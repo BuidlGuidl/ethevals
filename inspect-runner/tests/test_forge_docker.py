@@ -10,7 +10,7 @@ from ethevals.files import content_hash
 from ethevals.loader import load_eval
 from ethevals.preparation import build_images, prepare_compose
 from ethevals.rows import export_rows, results_rows
-from ethevals.check_script import run_solution
+from ethevals.chain_setup import run_solution
 from ethevals.sandboxes import runner_exec, validate_compose, workspace_files
 from ethevals.scorers import FORGE, compiled_sources, prepare_forge, prepare_workspace, run_runner
 from inspect_ai import eval, task_with
