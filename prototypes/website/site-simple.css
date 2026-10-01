@@ -128,7 +128,6 @@ table.matrix.t2 th.evl { min-width: 280px; }
 #evals .toolbar.tvbar { justify-content: space-between; }
 .evcount { font: 11px var(--mono); color: var(--dim); margin: 0; }
 table.matrix.t2 td.mx.na { color: var(--dim); font-size: 12px; }
-table.matrix.t2 tr.mxtot > * { border-top: 2px solid var(--ink); }
 table.matrix.t2 tr.mxtot th.evl { font: 600 13.5px var(--sans); color: var(--ink); }
 table.matrix.t2 tr.mxtot .mxc { height: 52px; display: grid; place-content: center; gap: 2px; }
 table.matrix.t2 tr.mxtot .mxc b { font: 600 15px var(--mono); }
