@@ -11,7 +11,7 @@
 .sortb { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; padding: 3px 6px; margin: -3px -6px; }
 .sortb:hover { color: var(--ink); background: transparent; text-decoration: underline; text-underline-offset: 3px; }
 .board.lean th[aria-sort="ascending"], .board.lean th[aria-sort="descending"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
-.sarr { margin-left: 5px; font-size: 8px; vertical-align: 1px; }
+.sarr { margin-left: 6px; font-size: 11px; vertical-align: -1px; }
 .pr .few { font-size: 11px; color: var(--amber); margin-left: 1px; }
 .liftc { display: grid; gap: 7px; padding: 10px 14px; text-align: left; }
 .liftc b { font: 500 13px var(--mono); }
