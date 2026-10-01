@@ -1,3 +1,7 @@
+---
+status: amended by ADR-0008
+---
+
 # Free checks on pull requests, paid runs after merge
 
 A pull request runs only checks that cost nothing:

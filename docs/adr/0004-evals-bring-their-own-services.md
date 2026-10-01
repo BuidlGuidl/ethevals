@@ -1,3 +1,7 @@
+---
+status: amended by ADR-0008
+---
+
 # Evals bring their own services
 
 An eval's optional `compose.yaml` lists only its extra services and named volumes.

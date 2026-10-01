@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0008
+---
+
 # An eval folder declares what it needs; the runner provides it
 
 An eval is a folder of data. `eval.yaml` holds the prompt and metadata, `workspace/` holds the agent's files, `scorer/` holds everything that grades, and an optional `compose.yaml` names the services. Only the prompt and `workspace/` reach the agent.

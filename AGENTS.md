@@ -35,7 +35,7 @@ uv run python scripts/ci.py checks --output results/ci
 ```
 
 On shared Docker, wait for other sessions' ETH Evals containers to finish before starting containers.
-Give Docker at least 7 GiB for one stock act epoch. The default concurrency is one.
+Give Docker at least 7 GiB for one epoch of an eval with a chain. The default concurrency is one.
 
 ## Control spending and publication
 
