@@ -44,8 +44,11 @@ def actor_metadata(item, config, prefix=""):
 def model_actor(item, config, prefix=""):
     info = get_model_info(item.model) or ModelInfo()
     set_model_info(item.model, info.model_copy(update={"cost": ModelCost(**config.prices[item.model].model_dump())}))
-    model = get_model(item.model, config=GenerateConfig(reasoning_effort=item.effort,
-                                                       max_tokens=item.max_tokens if isinstance(item, GraderConfig) else None))
+    generation = GenerateConfig(reasoning_effort=item.effort)
+    if isinstance(item, GraderConfig):
+        generation.max_tokens = item.max_tokens
+        generation.fallback_models = item.fallback_models
+    model = get_model(item.model, config=generation)
     return model, actor_metadata(item, config, prefix)
 
 

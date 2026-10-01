@@ -10,6 +10,36 @@ import pytest
 from support import catalog_quiz, fixture_config
 
 
+@pytest.mark.parametrize("fallback_models", [None, ["claude-opus-4-8"]])
+def test_fallback_models_apply_only_to_the_grader(fallback_models):
+    data = fixture_config().model_dump()
+    data["grader"].pop("fallback_models", None)
+    if fallback_models is not None:
+        data["grader"]["fallback_models"] = fallback_models
+    config = Config.model_validate(data)
+    actors_for, grade = select_actors(config, models=["opus-5.5"], agents=["claude-code-opus-5.5"],
+                                     modes=["vanilla", "internet"])
+    actors = actors_for(catalog_quiz()[1])
+    assert grade.model.config.fallback_models == fallback_models
+    assert [(mode, actor.model.config.fallback_models) for mode, actor in actors] == [
+        ("vanilla", None), ("internet", None)]
+
+
+def test_codex_home_is_outside_the_workspace(monkeypatch):
+    from ethevals import agents
+
+    observed = {}
+    original = agents.codex_cli
+
+    def construct(**settings):
+        observed.update(settings)
+        return original(**settings)
+
+    monkeypatch.setattr(agents, "codex_cli", construct)
+    agents.codex("gpt-5.5", native_search=False, search_limit=8)
+    assert (observed["cwd"], observed.get("home_dir")) == ("/workspace", "/home/agent/.codex")
+
+
 @pytest.mark.parametrize("mode,key", [("vanilla", "opus-5.5"), ("internet", "claude-code-opus-5.5")])
 @pytest.mark.parametrize("effort", [None, "medium"])
 def test_optional_effort_reaches_model_call(monkeypatch, mode, key, effort):

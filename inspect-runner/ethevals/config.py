@@ -54,6 +54,7 @@ class AgentConfig(Declaration):
 
 class GraderConfig(ModelSettings):
     max_tokens: int = Field(gt=0)
+    fallback_models: list[str] | None = None
 
 
 Mode = Literal["vanilla", "internet", "skills"]

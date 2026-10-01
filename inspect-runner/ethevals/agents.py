@@ -41,7 +41,7 @@ def claude(cli_model: str, *, native_search, search_limit, **settings):
 def codex(cli_model: str, *, native_search, search_limit, **settings):
     # The active agent is a CodexModel, so every bridge fallback uses it.
     return as_solver(codex_cli(
-        cwd="/workspace", model_config=cli_model,
+        cwd="/workspace", home_dir="/home/agent/.codex", model_config=cli_model,
         web_search="live" if native_search else "disabled", retry_refusals=0,
         **settings,
     ))

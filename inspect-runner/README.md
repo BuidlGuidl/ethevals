@@ -173,6 +173,7 @@ Inspect's model info supplies the grader's context window.
 An unknown context window stops planning with an error.
 The configured Opus 5.5 grader has a 1,000,000-token window and reserves $32.94912 per question.
 The direct Anthropic grader uses low effort and `max_tokens: 32768`, which includes thinking and the JSON verdict.
+If Anthropic's safety classifier refuses a grader call, Anthropic uses `grader.fallback_models`. Costs use the primary grader's prices.
 Each grader call has a total deadline that includes provider retry backoff.
 The constants live beside the scorer implementation.
 

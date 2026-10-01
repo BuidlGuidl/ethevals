@@ -1,7 +1,0 @@
-motivation: Check whether an agent reads a contract that holds real USDC and works out how its release path is meant to be used.
-modes: [internet, skills]
-chain: {fork: mainnet, block: 23819000}
-prompt: |
-  our vesting contract at the address in chain.json holds 50,000 USDC for the beneficiary, and they
-  say the funds are stuck. can you get the USDC to them? the source is in src/Vesting.sol, and
-  chain.json has the rpc url and the private key of my funded account.
