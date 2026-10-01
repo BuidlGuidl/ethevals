@@ -347,7 +347,7 @@ Use an archive RPC that serves the pinned block.
 The saved compose file contains `${MAINNET_RPC_URL}` or `${BASE_RPC_URL}`, never its value.
 Docker Compose resolves that value from the runner's environment when it starts the chain service.
 Only that service receives the URL, and the filter passes it to Anvil.
-Setup and reference commands start with an empty environment and reach only the local chain.
+The agent and scorer never receive the archive URL.
 The agent's `chain.json` still names `http://chain:8545`.
 
 Anvil starts with `--fork-url`, `--fork-block-number`, and `--accounts 0`.
@@ -369,9 +369,10 @@ It then prints one reason and skips both the reference and untouched passes.
 `scripts/ci.py checks` uses the same command and skip rule.
 With the variable set, both passes run without model calls.
 
-After reading a PR, dispatch [fork-check.yml](../.github/workflows/fork-check.yml) with its PR number.
-It checks out that PR's head without saved credentials and checks every fork eval with the RPC secrets.
-It posts a `fork check` commit status on the checked SHA.
+After reading a PR, dispatch [fork-check.yml](../.github/workflows/fork-check.yml) with its PR number and reviewed commit SHA.
+It checks out that PR's head without saved credentials.
+If the head differs from the reviewed SHA, the workflow fails before running PR code.
+It checks every fork eval with the RPC secrets and posts a `fork check` status on the reviewed SHA.
 The workflow has only content-read and status-write permissions.
 
 ## CI and publication

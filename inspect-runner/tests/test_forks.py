@@ -3,11 +3,14 @@ import shutil
 
 import pytest
 import yaml
+import anyio
+from inspect_ai.util import ExecResult
 
 from ethevals.checks import available_checks
 from ethevals.loader import load_eval
 from ethevals.preparation import prepare_compose
 from ethevals.runner import run
+from ethevals.sandboxes import runner_exec
 from support import eval_cli, fixture_config
 
 
@@ -79,3 +82,18 @@ def test_fork_run_fails_before_creating_output_without_its_rpc_variable(tmp_path
     with pytest.raises(ValueError, match="Missing fork RPC variables: MAINNET_RPC_URL"):
         run([evaluation], config, output, answer="reference", epochs=1)
     assert not output.exists()
+
+
+def test_runner_exec_redacts_both_rpc_urls_from_stdout_and_stderr(monkeypatch):
+    monkeypatch.setenv("MAINNET_RPC_URL", "https://mainnet.example?key=MAINNET_SENTINEL")
+    monkeypatch.setenv("BASE_RPC_URL", "https://base.example/?key=BASE_SENTINEL")
+
+    class Box:
+        async def exec(self, command, **kwargs):
+            return ExecResult(success=False, returncode=1,
+                stdout="mainnet https://mainnet.example?key=MAINNET_SENTINEL; base https://base.example?key=BASE_SENTINEL",
+                stderr="mainnet https://mainnet.example/?key=MAINNET_SENTINEL; base https://base.example/?key=BASE_SENTINEL; http://chain:8545")
+
+    result = anyio.run(runner_exec, Box(), ["cast", "rpc"])
+    assert (result.success, result.returncode, result.stdout, result.stderr) == (
+        False, 1, "mainnet <fork rpc>; base <fork rpc>", "mainnet <fork rpc>; base <fork rpc>; http://chain:8545")

@@ -245,7 +245,7 @@ async def prepare_forge(root):
 async def run_runner(runner, root, *, fork=False):
     try:
         return await runner_exec(root.box, list(runner.command), cwd="/workspace",
-                                 timeout=runner.fork_timeout if fork and runner.fork_timeout else runner.timeout)
+                                 timeout=runner.fork_timeout if fork else runner.timeout)
     except TimeoutError as error:
         raise RuntimeError(f"Test command {runner.command[0]} timed out, including any compiler download.") from error
 
@@ -276,7 +276,7 @@ class TestRunner:
     command: tuple[str, ...]
     timeout: int
     results: Callable
-    fork_timeout: int | None = None
+    fork_timeout: int
     evidence: Callable | None = None
 
 

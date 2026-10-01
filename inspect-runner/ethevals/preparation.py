@@ -8,7 +8,7 @@ import yaml
 
 from .scorers import EVALUATIONS
 from .chain_setup import setup_script
-from .sandboxes import IMAGES, merged_compose, memory_bytes
+from .sandboxes import IMAGES, merged_compose, memory_bytes, redact_exec
 from .images.tag import image_tag
 
 
@@ -19,6 +19,9 @@ class EvalDocker(DockerSandboxEnvironment):
     @classmethod
     async def sample_init(cls, task_name, config, metadata):
         environments = await super().sample_init(task_name, config, metadata)
+        # Redact before Inspect records sandbox output in its transcript.
+        for environment in environments.values():
+            environment.exec = redact_exec(environment.exec)
         try:
             evaluation = EVALUATIONS[(metadata["eval_id"], metadata["eval_hash"])]
             if "setup/setup.s.sol" in evaluation.files:

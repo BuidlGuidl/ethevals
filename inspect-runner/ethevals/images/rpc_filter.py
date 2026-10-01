@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import time
 import urllib.request
+from urllib.parse import urlsplit, urlunsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ALLOWED = frozenset(method for method, decision in
@@ -19,6 +20,18 @@ SIGNING_REFUSAL = "Sign locally and use eth_sendRawTransaction."
 MAX_BODY = 2 * 1024 * 1024
 REFUSALS = "/tmp/rpc-refusals.log"
 UPSTREAM_TIMEOUT = 60 if os.environ.get("FORK_BLOCK_NUMBER") else 15
+
+
+def redact(text, urls):
+    for url in filter(None, urls):
+        parts = urlsplit(url)
+        path = parts.path[:-1] if parts.path.endswith("/") else parts.path + "/"
+        for value in (url, urlunsplit(parts._replace(path=path))):
+            if isinstance(text, bytes):
+                text = text.replace(value.encode(), b"<fork rpc>")
+            else:
+                text = text.replace(value, "<fork rpc>")
+    return text
 
 
 def refusal(message):
@@ -42,6 +55,9 @@ def error(request, code, message):
 
 
 class Chain:
+    def __init__(self, fork_url=None):
+        self.fork_url = fork_url
+
     def forward(self, payload):
         batch = isinstance(payload, list)
         requests = payload if batch else [payload]
@@ -69,7 +85,7 @@ class Chain:
             body = response.read(MAX_BODY + 1)
             if len(body) > MAX_BODY:
                 return error(None, -32000, "Chain response too large.")
-            return json.loads(body)
+            return json.loads(redact(body, [self.fork_url]))
 
 class Handler(BaseHTTPRequestHandler):
     def setup(self):
@@ -130,7 +146,7 @@ def main():
         command.extend(["--fork-url", fork_url, "--fork-block-number", os.environ["FORK_BLOCK_NUMBER"]])
     process = subprocess.Popen(command)
     open(REFUSALS, "w").close()
-    for attempt in range(100):
+    for attempt in range(250):
         try:
             rpc("eth_chainId")
             break
@@ -140,7 +156,7 @@ def main():
             time.sleep(0.1)
     else:
         raise RuntimeError("Anvil did not start.")
-    Server(("0.0.0.0", 8545), Chain()).serve_forever()
+    Server(("0.0.0.0", 8545), Chain(fork_url)).serve_forever()
 
 
 if __name__ == "__main__":
