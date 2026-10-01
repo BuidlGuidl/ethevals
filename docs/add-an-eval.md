@@ -205,7 +205,7 @@ Use only what the agent gets: the prompt, the workspace, and `chain.json`. Don't
 [erc20-points-token](../evals/building/erc20-points-token) asks the agent to write a contract:
 
 ```yaml
-motivation: Check whether an agent can build a capped community token on a standard library without powers that harm holders.
+motivation: Check whether an agent can build a capped community token on a well-known library.
 modes: [internet, skills]
 prompt: |
   can you help me build a token for our community? I created an empty file at src/BuilderPoints.sol.
