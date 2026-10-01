@@ -595,7 +595,7 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
     // Key findings are hidden until the results are real; set to true to bring them back.
     const SHOW_FINDINGS = false;
     const finding = n => `<li><span class="kfn">${n}</span><div><b>Key finding ${n}</b><p>One or two sentences on a result worth highlighting, with the number behind it.</p></div></li>`;
-    return `<header class="land"><div class="land-l"><p class="eyebrow">The open benchmark for AI on Ethereum</p><h1>How well do AI agents handle Ethereum?</h1>
+    return `<header class="land"><div class="land-l"><p class="eyebrow land-tag">The open benchmark for AI on Ethereum</p><h1>How well do AI agents handle Ethereum?</h1>
         <p class="lead">We test AI agents, and the models behind them, on real Ethereum work: understanding the protocol, making transactions, building contracts and apps, and keeping them secure. Every task, scorer, run and transcript is public, and anyone can run the same evals.</p>
         <p class="prov6">suite ${S.version} · ${S.hash} · data ${S.date} · ${E.evals.length} evals · ${E.agents.length} agents · ${totalRuns.toLocaleString("en")} runs</p></div>
         <nav class="pstrip" aria-label="What we measure">${pillarsList}</nav></header>
@@ -618,7 +618,7 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
 
   // ---------- shell ----------
   const NAV = [["results", "Results"], ["how", "How it works"]];
-  root.innerHTML = `<nav class="topnav sitenav" aria-label="Site"><a class="brand" href="#/">ETH Evals</a><span class="navlinks">${NAV.map(([id, t]) => `<a href="#/${id === "results" ? "" : id}" data-nav="${id}">${t}</a>`).join("")}<a class="gh" href="${REPO}" target="_blank" rel="noopener">GitHub ↗</a></span></nav>
+  root.innerHTML = `<nav class="topnav sitenav" aria-label="Site"><a class="brand" href="#/">ETH Evals</a><span class="navtag">The open benchmark for AI on Ethereum</span><span class="navlinks">${NAV.map(([id, t]) => `<a href="#/${id === "results" ? "" : id}" data-nav="${id}">${t}</a>`).join("")}<a class="gh" href="${REPO}" target="_blank" rel="noopener">GitHub ↗</a></span></nav>
     <main id="page"></main>
     <footer class="sitefoot"><div><b>ETH Evals</b><span>Open evaluations of AI on Ethereum · <a href="${REPO}" target="_blank" rel="noopener">BuidlGuidl/ethevals</a></span></div><div><span class="canary">${S.canary}</span></div></footer>
     <dialog id="detail" aria-labelledby="detail-title"><div id="detail-content"></div></dialog>`;

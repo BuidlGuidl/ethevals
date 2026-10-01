@@ -132,6 +132,13 @@ table.matrix.t2 td.mx.na { color: var(--dim); font-size: 12px; }
 /* ---------- landing = results: question, what we measure + key findings, leaderboard ---------- */
 .land { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 48px; align-items: center; padding: 48px 0 8px; }
 .land-l { display: grid; gap: 14px; align-content: start; }
+.land .land-tag { font: 500 13.5px var(--mono); letter-spacing: .08em; color: var(--ink); }
+/* The tagline sits next to the brand where the menu has room, and above the Results h1 elsewhere. */
+.sitenav .navtag { display: none; }
+@media (min-width: 1100px) {
+  .sitenav .navtag { display: inline-flex; align-items: center; height: 18px; margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--border-2); font: 12px var(--mono); letter-spacing: .03em; color: var(--muted); }
+  .land .land-tag { display: none; }
+}
 .land h1 { font: 600 clamp(40px, 4.6vw, 64px)/.96 var(--sans); font-stretch: 75%; letter-spacing: -.025em; max-width: 18ch; text-wrap: balance; }
 .land .lead { max-width: 70ch; }
 .lsec { display: grid; gap: 14px; }
