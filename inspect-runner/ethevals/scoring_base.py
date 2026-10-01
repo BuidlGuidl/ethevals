@@ -19,7 +19,7 @@ def epoch_limit():
     return next((event for event in reversed(transcript().events) if isinstance(event, SampleLimitEvent)), None)
 
 
-def scoring_boundary(name, score):
+def scoring_boundary(name, score, *, chain=False):
     async def checked(state, target):
         limit = epoch_limit()
         try:
@@ -29,6 +29,11 @@ def scoring_boundary(name, score):
                 if name is None:
                     return None
                 raise SubmissionFailed(f"Epoch reached {limit.type} limit {limit.limit}. {limit.message}")
+            if chain:
+                from .sandboxes import stop_agent
+                from .chain_setup import capture_chain
+                await stop_agent()
+                await capture_chain()
             return await score(state, target)
         except SubmissionFailed as error:
             reason = str(error)

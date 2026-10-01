@@ -1,2 +1,2 @@
-Setup writes `chain.json` here before the agent starts.
+`chain.json` holds the RPC URL, token address, recipient, and funded private key.
 Use `cast` to read the token and sign the transfer.

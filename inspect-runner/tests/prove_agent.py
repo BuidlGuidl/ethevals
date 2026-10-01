@@ -184,9 +184,16 @@ console.log(JSON.stringify({matches, files, environments}));
             return ModelOutput.from_content("mockllm/model", "ANSWER: C" if evaluation.declaration.choices else "8004")
         if calls == work_call and args.answer == "reference":
             if evaluation.declaration.chain:
-                solution = evaluation.files["solution/run.sh"]
-                encoded = base64.b64encode(solution).decode()
-                command = f"printf '%s' '{encoded}' | base64 -d > /workspace/run.sh && bash /workspace/run.sh"
+                command = '''set -eu
+read_value() { node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('chain.json', 'utf8'))[process.argv[1]])" "$1"; }
+token=$(read_value token)
+recipient=$(read_value recipient)
+key=$(read_value privateKey)
+rpc=$(read_value rpcUrl)
+decimals=$(cast call "$token" 'decimals()(uint8)' --rpc-url "$rpc")
+amount=$((125 * 10 ** decimals / 10))
+cast send "$token" 'transfer(address,uint256)' "$recipient" "$amount" --private-key "$key" --rpc-url "$rpc"
+'''
                 return ModelOutput.for_tool_call("mockllm/model", "Bash", {"command": command, "description": "Read decimals and sign the transfer"})
             solution = (evaluation.folder / "solution/src/BuilderPoints.sol").read_bytes()
             encoded = base64.b64encode(solution).decode()
@@ -200,7 +207,7 @@ console.log(JSON.stringify({matches, files, environments}));
                 arguments = {"command": command, "description": "Write the requested token"}
             return ModelOutput.for_tool_call("mockllm/model", name, arguments)
         if evaluation.declaration.chain and args.answer == "reference" and calls == work_call + 1:
-            command = r'''read_value() { sed -n 's/.*"'"$1"'": "\([^"]*\)".*/\1/p' chain.json; }; cast call "$(read_value token)" "balanceOf(address)(uint256)" "$(read_value recipient)" --rpc-url "$(read_value rpc_url)"'''
+            command = r'''read_value() { node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('chain.json', 'utf8'))[process.argv[1]])" "$1"; }; cast call "$(read_value token)" "balanceOf(address)(uint256)" "$(read_value recipient)" --rpc-url "$(read_value rpcUrl)"'''
             return ModelOutput.for_tool_call("mockllm/model", "Bash", {
                 "command": command, "description": "Confirm the recipient balance before reporting success"})
         return ModelOutput.from_content("mockllm/model", "Done.")

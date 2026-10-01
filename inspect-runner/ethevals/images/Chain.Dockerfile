@@ -7,10 +7,12 @@ RUN mkdir -p /opt/solidity/lib && \
     git -C /opt/solidity/lib/forge-std fetch --depth 1 https://github.com/foundry-rs/forge-std.git 77041d2ce690e692d6e03cc812b57d1ddaa4d505 && \
     git -C /opt/solidity/lib/forge-std checkout FETCH_HEAD && \
     rm -rf /opt/solidity/lib/forge-std/.git && chmod -R a-w /opt/solidity
+COPY ChainSetup.sol /opt/solidity/lib/ChainSetup.sol
+COPY setup-foundry.toml /eval/foundry.toml
 COPY rpc_filter.py /opt/rpc_filter.py
 COPY rpc_methods.json /opt/rpc_methods.json
 RUN ln -s /usr/local/bin/python3 /usr/bin/python3 && \
-    useradd --create-home agent && mkdir /eval /workspace && chown agent:agent /eval /workspace
+    useradd --create-home agent && mkdir -p /eval /workspace && chown -R agent:agent /eval /workspace
 USER agent
 WORKDIR /eval
 ENTRYPOINT ["python3", "/opt/rpc_filter.py"]

@@ -7,7 +7,7 @@ from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
 import yaml
 
 from .scorers import EVALUATIONS
-from .check_script import setup_script
+from .chain_setup import setup_script
 from .sandboxes import IMAGES, merged_compose, memory_bytes
 from .images.tag import image_tag
 
@@ -21,7 +21,7 @@ class EvalDocker(DockerSandboxEnvironment):
         environments = await super().sample_init(task_name, config, metadata)
         try:
             evaluation = EVALUATIONS[(metadata["eval_id"], metadata["eval_hash"])]
-            if evaluation.declaration.chain:
+            if "setup/setup.s.sol" in evaluation.files:
                 await setup_script(evaluation, environments)
         except BaseException:
             with anyio.CancelScope(shield=True):

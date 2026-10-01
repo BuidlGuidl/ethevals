@@ -8,7 +8,7 @@ from inspect_ai.util import sandbox
 from .config import uses_sandbox
 from .actors import Actor, Grader, quiz_solver
 from .scorers import target_reference
-from .check_script import run_solution
+from .chain_setup import run_solution
 from .files import has_solution
 
 
@@ -29,6 +29,10 @@ def quiz_check_solver(evaluation, answer):
 @solver
 def solution(evaluation, answer):
     async def solve(state, generate):
+        if evaluation.declaration.chain and "setup/setup.s.sol" in evaluation.files:
+            from .loader import lint_agent_text
+            chain = await sandbox().read_file("/workspace/chain.json", text=False)
+            lint_agent_text(chain.decode("utf-8"), "chain.json")
         if answer == "reference":
             await run_solution(evaluation, sandbox())
         return await generate(state)

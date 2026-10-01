@@ -9,7 +9,6 @@ from pydantic import Field
 
 from .config import Config, Declaration, Mode, parse_file
 from .scorers import RUNNERS, TargetScorer, rubric_questions, runner_files, runners_for
-from .check_script import script_path, validate_script
 from .sandboxes import validate_compose
 from .files import manifest, content_hash, inline_file, has_solution
 from .skills import pack_skills
@@ -74,7 +73,6 @@ def load_eval(folder: Path, config: Config) -> Eval:
     kinds = [kind for kind, present in (
         ("target", "scorer/target.yaml" in files),
         ("tests", bool(runners_for(files))),
-        ("check_script", script_path(files, "check") is not None),
         ("rubric", "scorer/rubric.md" in files),
     ) if present]
     if not kinds:
@@ -102,8 +100,6 @@ def load_eval(folder: Path, config: Config) -> Eval:
                 raise ValueError(f"{path}: target must name an available choice letter")
         if hf_skip_reason(declaration, files) is None:
             validate_hf_export(target, str(path))
-    if "check_script" in kinds:
-        validate_script(declaration, files)
     validate_check_names(files, target, folder)
     if ("tests" in kinds or declaration.chain) and not has_solution(files):
         raise ValueError(f"{folder}: solution is required for tests or a chain")

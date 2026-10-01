@@ -97,13 +97,6 @@ async def runner_exec(box, command, **kwargs):
     ], **kwargs)
 
 
-async def scoring_exec(box, command, **kwargs):
-    try:
-        return await runner_exec(box, command, **kwargs)
-    except TimeoutError as error:
-        raise SubmissionFailed("Submission exceeded the scoring time limit.") from error
-
-
 def unpack_workspace(data: bytes) -> dict[str, bytes]:
     files, total = {}, 0
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
