@@ -270,9 +270,9 @@ def rubric_scorer(eval_id, eval_hash):
     questions = rubric_questions(evaluation.files)
 
     async def score(state, target):
-        if epoch_limit():
+        if (limit := epoch_limit()) and limit.type != "time":
             return None
-        build = evaluation.declaration.type == "build"
+        build = "tests" in evaluation.scorer_kinds
         if build and state.scores["tests_scorer"].value.get("forge:compile") != "C":
             return None
         evidence = await compiled_sources(sandbox("scorer")) if build else state.messages

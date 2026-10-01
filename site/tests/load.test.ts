@@ -7,11 +7,11 @@ import { siteRoot } from "../src/paths";
 import type { Row } from "../src/rows";
 
 const evaluation = {
-  id: "concepts/units", hash: "current", pillar: "concepts", type: "quiz",
+  id: "concepts/units", hash: "current", pillar: "concepts",
   prompt: "How many wei?", motivation: "Check units.", modes: ["internet", "vanilla", "skills"], choices: null,
 };
 const paid: Row = {
-  schema_version: 4, eval_id: "concepts/units", eval_hash: "current", type: "quiz",
+  schema_version: 5, eval_id: "concepts/units", eval_hash: "current",
   model: "model-a", harness: "harness-a", effort: "high", mode: "internet",
   epoch: 1, status: "passed", checks: { answer: { passed: true, reason: "Matches." } },
   error_kind: null, error_reason: null, total_tokens: 100,
@@ -37,10 +37,8 @@ function fixture(t: TestContext) {
 
 for (const [name, change, message] of [
   ["undeclared mode", { mode: "vanilla", harness: null }, "does not declare this mode"],
-  ["wrong type", { type: "act" }, "type differs"],
   ["internet without harness", { harness: null }, "require a harness"],
   ["vanilla with harness", { mode: "vanilla" }, "cannot have a harness"],
-  ["vanilla non-quiz", { mode: "vanilla", harness: null, type: "build" }, "require a quiz"],
 ] as const) {
   test(`loader rejects ${name} with the file and physical line`, (t) => {
     const f = fixture(t);
@@ -62,7 +60,7 @@ test("loader reports duplicate identities even among excluded rows", (t) => {
   }
 });
 
-test("loader accepts v4 rows, ignores unused metadata, and rejects v3 with the file and line", (t) => {
+test("loader accepts v5 rows, ignores unused metadata, and skips older rows", (t) => {
   const f = fixture(t);
   writeFileSync(f.rows, JSON.stringify({ ...paid, attempt: 2, max_attempts: 2,
     model_metered_usd: 9, grader_metered_usd: 8, harness_version: "1.0", images: { default: "image:1" } }));
@@ -70,11 +68,10 @@ test("loader accepts v4 rows, ignores unused metadata, and rejects v3 with the f
   assert.deepEqual([cell.score, cell.total, cell.epochs[0].cost], [1, 1, 0.25]);
   assert.equal("attempt" in cell.epochs[0], false);
   assert.equal("model_metered_usd" in cell.epochs[0], false);
-  assert.throws(() => parseRows(`\n${JSON.stringify({ ...paid, schema_version: 3 })}`, "v2.jsonl", []),
-    (error: Error) => error.message.startsWith("v2.jsonl:2:") && error.message.includes("schema_version"));
+  assert.deepEqual(parseRows(JSON.stringify({ ...paid, schema_version: 4 }) + "\n" + JSON.stringify(paid), "rows.jsonl", []), [paid]);
 });
 
-test("v4 cost limits retain runner reasons and count as failed epochs", (t) => {
+test("v5 cost limits retain runner reasons and count as failed epochs", (t) => {
   const f = fixture(t);
   f.write([{ status: "failed", limit: { type: "cost", limit: 5, reason: "Budget spent." },
     checks: { answer: { passed: false, reason: "Epoch reached cost limit 5.0. Budget spent." } } }]);

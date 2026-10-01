@@ -16,11 +16,6 @@ SOLC_VERSIONS = (json.loads((IMAGES / "solc.json").read_bytes())["version"],)
 MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
 
 
-def compose_file(eval_type=None) -> Path:
-    path = IMAGES / ("act.compose.yaml" if eval_type == "act" else "stock.compose.yaml")
-    return path
-
-
 def validate_compose(path: Path, *, data: bytes | None = None) -> bytes:
     data = read_yaml(path, data)
 
@@ -62,9 +57,9 @@ def validate_compose(path: Path, *, data: bytes | None = None) -> bytes:
             reject(f"service {name}: forbidden options {sorted(extra)}; privileged containers and host mounts are forbidden")
         if memory_bytes(service.get("mem_limit", 0)) <= 0:
             reject(f"service {name}: requires a positive mem_limit")
-        if service.get("networks", ["private"]) != ["private"]:
-            reject(f"service {name}: only the private network is allowed")
-        service["networks"] = ["private"]
+        if service.get("networks", ["work"]) != ["work"]:
+            reject(f"service {name}: only the work network is allowed")
+        service["networks"] = ["work"]
         for volume in service.get("volumes", []):
             if not isinstance(volume, dict) or volume.get("type") != "volume" or volume.get("source") not in volumes:
                 reject(f"service {name}: host mounts are forbidden; use a declared named volume")
@@ -83,7 +78,7 @@ def memory_bytes(value):
 
 
 def merged_compose(evaluation):
-    document = read_yaml(compose_file(evaluation.declaration.type))
+    document = read_yaml(IMAGES / ("chain.compose.yaml" if evaluation.declaration.chain else "stock.compose.yaml"))
     for name, service in document["services"].items():
         service["image"] = image_tag(IMAGES, "chain" if name == "chain" else "runner")
     if "compose.yaml" in evaluation.files:
@@ -149,7 +144,7 @@ exit 42
 
 async def workspace_files() -> dict[str, bytes]:
     agent = sandbox("default")
-    temporary = await runner_exec(agent, ["/usr/bin/mktemp", "-d", "/tmp/ethevals.XXXXXXXXXX"], user="root", cwd="/")
+    temporary = await runner_exec(agent, ["/usr/bin/mktemp", "-d", "/tmp/workspace.XXXXXXXXXX"], user="root", cwd="/")
     if not temporary.success:
         raise RuntimeError(f"Cannot allocate snapshot: {temporary.stderr}")
     path = temporary.stdout.strip() + "/workspace.tar.gz"

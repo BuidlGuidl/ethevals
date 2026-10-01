@@ -38,6 +38,7 @@ def folder(tmp_path):
     declaration = yaml.safe_load((target / "eval.yaml").read_text())
     declaration["modes"] = ["vanilla", "internet"]
     (target / "eval.yaml").write_text(yaml.safe_dump(declaration, default_flow_style=None))
+    (target / "workspace").mkdir(exist_ok=True)
     return target
 
 

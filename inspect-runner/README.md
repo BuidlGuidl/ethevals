@@ -4,6 +4,20 @@ The root `pyproject.toml` installs `ethevals` from this directory.
 [The root guide](../README.md) covers installation and runs.
 [Add an eval](../docs/add-an-eval.md) covers author files and examples.
 
+## Eval folders
+
+`eval.yaml` declares `prompt`, `motivation`, `modes`, and optional `choices` and `chain`.
+The loader rejects unknown keys. `chain` accepts only `anvil`; omission means no chain.
+
+`scorer/` is required. `workspace/`, `setup/`, and top-level `solution/` are optional.
+Tests or a chain require `solution/`.
+Vanilla requires no chain, no workspace files, and no tests.
+
+Validation rejects duplicate check names across targets, test functions, and rubric headings.
+The name `compile` is reserved, and `testFail*` functions are forbidden.
+The prompt and workspace text reject whole words, without regard to case:
+`epoch`, `grader`, `rubric`, `score`, `benchmark`, `eval`, and `being tested`, including plurals.
+
 ## Scorer kinds
 
 The loader selects scorers from files under `scorer/`.
@@ -11,12 +25,14 @@ The loader selects scorers from files under `scorer/`.
 
 | Kind | Files | Result |
 | --- | --- | --- |
-| Target | `target.yaml` | A quiz check through Inspect's `match`, `pattern`, or `choice`. |
-| Tests | `tests/` | Build checks from Forge, including `forge:compile`. |
-| Check script | `check` or `check.<ext>` | Act checks from the script's JSON output. |
-| Rubric | `rubric.md` | One model verdict per named question, after the eval's other scorer. |
+| Target | `target.yaml` | A reply check through Inspect's `match`, `pattern`, or `choice`. |
+| Tests | `tests/` | Checks from Forge, including `forge:compile`. |
+| Check script | `check` or `check.<ext>` | Chain checks from the script's JSON output. |
+| Rubric | `rubric.md` | One model verdict per named question, after the eval's other scorers. |
 
-Scorers run in the table's order.
+An eval can combine targets, tests, and a rubric. At least one scorer must exist.
+Check scripts remain supported for the current chain eval until its Forge migration.
+Scorers run in target, tests, check script, and rubric order.
 Each returns check names mapped to `C` or `I` in `Score.value`.
 `Score.metadata["reasons"]` holds the reasons.
 The row exporter retains completed scores if a later scorer raises an error.
@@ -24,7 +40,9 @@ The row exporter retains completed scores if a later scorer raises an error.
 Target settings also drive the Hugging Face export.
 `actors.quiz_solver_spec()` selects `generate` or `multiple_choice` for vanilla quizzes.
 `checks.py` supplies scripted reference and empty solvers for the free check.
-Build and act references overlay `scorer/solution/` on the workspace, then run optional `run.sh`.
+The reference pass applies the target's `reference` and overlays top-level `solution/` on the workspace.
+An optional `solution/run.sh` then runs inside the agent container.
+The free check skips rubric-only evals.
 
 ## Captured files and build scoring
 
@@ -36,7 +54,9 @@ Later disk edits cannot alter an already loaded eval.
 
 Build scoring stops the agent's processes before it captures `src/` and `lib/`.
 Forge and the rubric share that snapshot.
-The scorer uses the image's libraries and runner-owned `foundry.toml`.
+The agent receives only the author's workspace files, including any `foundry.toml`.
+The runner adds no compiler settings or library advice to the prompt.
+The scorer still uses the image's libraries and its own `foundry.toml`.
 Agent tests, cached output, compiler settings, and remappings do not replace them.
 The archive permits at most 50 MiB of contents and 20,000 files.
 Only Solidity files enter the scorer workspace.
@@ -61,13 +81,14 @@ Two invalid replies produce an error; an empty reason produces a failed check.
 
 ## Results rows
 
-`rows.jsonl` contains one JSON object per epoch, using schema version 4.
+`rows.jsonl` contains one JSON object per epoch, using schema version 5.
+The board skips older rows.
 The exporter writes atomically and skips unchanged content.
 
 | Fields | Meaning |
 | --- | --- |
 | `schema_version` | Row format version. |
-| `eval_id`, `eval_hash`, `type` | Eval identity and type. |
+| `eval_id`, `eval_hash` | Eval identity. |
 | `mode`, `harness`, `model`, `effort`, `epoch` | Mode, agent identity, and epoch number. |
 | `attempt`, `completed_at` | Execution count and observation time. |
 | `status`, `checks` | `passed`, `failed`, or `error`, with named checks and reasons. |
@@ -93,10 +114,11 @@ The Python `run()` return value covers the selection; its rows file covers the w
 
 ## Limits and errors
 
-`config.yaml` supplies working limits by eval type, cost limits, attempt counts, and concurrency.
-`task_limits()` sets the total limit to the larger of three working limits or two scoring reserves.
-Its scoring reserve adds Forge, script, and grader deadlines plus snapshot overhead.
-After the solver stops, Inspect gives scoring its own window of half the total limit.
+`config.yaml` supplies one `time_limit` and one `cost_limit` for every epoch.
+Their defaults are 7200 seconds and $20.00.
+The runner passes both limits directly to Inspect, without a working limit.
+After the solver stops, Inspect gives scoring its own window of half the time limit.
+A time limit still grades the agent's work. It does not cause an error or a retry.
 
 The grader reserve uses capped evidence, prompt, question size, and the configured output cap.
 It covers two calls per question and three provider attempts per call.
@@ -108,9 +130,10 @@ The constants live beside the scorer implementation.
 | Event | Row result |
 | --- | --- |
 | Incorrect answer, failed test, or negative rubric verdict | Failed check. |
-| Agent working or cost limit | Failed check; further scoring work stops. |
+| Agent cost limit | Failed check; further scoring work stops. |
+| Agent time limit | Checks grade the work left by the agent. |
 | Invalid submission or unsafe captured archive | Failed `forge:compile` check. |
-| Operator stop or wall stop before the working limit | Error. |
+| Operator stop | Error. |
 | Docker failure, memory failure, or setup failure | Error. |
 | Grader provider failure or exhausted grader allowance | Error with any completed scorer results. |
 | Script crash or malformed verdict | Error. |
@@ -128,7 +151,7 @@ Plans reserve a budget for every missing epoch.
 
 An eval's optional `compose.yaml` declares extra services and named volumes.
 The runner owns `default`, `scorer`, `chain`, and the networks.
-Every extra service needs an image and a positive `mem_limit`; it joins only `private`.
+Every extra service needs an image and a positive `mem_limit`; it joins only `work`.
 Authors must pin extra-service images by digest; the runner does not enforce that rule.
 The merged memory limits at configured concurrency must leave 1 GiB for the host.
 
@@ -138,7 +161,11 @@ The runner serializes the merged document to `inputs/<hash>/compose.yaml`.
 Stock image tags come from [images/tag.py](ethevals/images/tag.py), independent of eval hashes.
 Tags identify build inputs, not reproducible image bytes.
 
-The agent, scorer, and chain have internet access.
+`chain: anvil` selects `chain.compose.yaml`; an absent chain selects `stock.compose.yaml`.
+The agent and chain share the internal `work` network.
+The scorer and chain share the internal `grading` network.
+Each service has its own internet network. The agent cannot resolve `scorer`.
+Without a chain, the agent and scorer share no network.
 Anvil's unfiltered RPC listens only on loopback inside the chain container.
 The agent uses the filter at `http://chain:8545`.
 [rpc_methods.json](ethevals/images/rpc_methods.json) classifies every RPC name and alias in pinned Anvil as `allow` or `deny`.
@@ -217,7 +244,8 @@ To browse a local run, use `uv run inspect view --log-dir results/logs`.
 
 ## Script contract
 
-Setup and check scripts are runnable files under `scorer/`; their shebangs select installed interpreters.
+Setup scripts live under `setup/`; check scripts live under `scorer/`.
+Their shebangs select installed interpreters.
 Their names are `setup` or `setup.<ext>`, and `check` or `check.<ext>`.
 They run in `/eval` inside the chain container with internet access.
 `cast`, `forge`, and `jq` are available.
@@ -283,7 +311,8 @@ It skips linked logs and non-final errors. The preview writes nothing.
 CI tags the release at the workflow's source commit.
 
 `ethevals export-hf --output DIR` writes vanilla quizzes to an empty directory.
-It skips quizzes with rubrics and prints the reason.
+It selects evals with `target.yaml`, vanilla mode, and no rubric.
+It prints a reason for every skipped eval.
 `--hf-repo` and `--license` set dataset card values.
 `scripts/ci.py release` previews the HF upload; `--publish` performs it.
 [release.yml](../.github/workflows/release.yml) publishes to `buidlguidl/ethevals-test` on every push to `main` with `HF_TOKEN`.

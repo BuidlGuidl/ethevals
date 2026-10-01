@@ -4,14 +4,12 @@ export type { Row } from "./rows";
 export const pillars = ["concepts", "transactions", "building", "security"] as const;
 export type Pillar = (typeof pillars)[number];
 export type Mode = "vanilla" | "internet" | "skills";
-export type EvalType = "quiz" | "build" | "act";
 
 export interface Eval {
   id: string;
   hash: string;
   title: string;
   pillar: Pillar;
-  type: EvalType;
   motivation: string;
   prompt: string;
   choices: string[];
@@ -114,8 +112,8 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
   for (const mode of ["internet", "skills", "vanilla"] as const) {
     const columns = [...agents[mode].values()].sort((a, b) => agentKey(a).localeCompare(agentKey(b), "en"));
     const table = { agents: columns, pillars: {} as Table["pillars"] };
-    // The knowledge table shows quizzes only. Both table and panel use these rows.
-    const eligible = evaluations.filter((evaluation) => mode !== "vanilla" || evaluation.type === "quiz");
+    // The knowledge table shows declared vanilla evals. Both table and panel use these rows.
+    const eligible = evaluations.filter((evaluation) => mode !== "vanilla" || evaluation.modes.includes("vanilla"));
     for (const pillar of pillars) {
       const evals = eligible.filter((evaluation) => evaluation.pillar === pillar).map((evaluation) => ({
         id: evaluation.id,
@@ -137,7 +135,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
   return {
     demo, tables,
     evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {
-      id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar, type: evaluation.type,
+      id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar,
       motivation: evaluation.motivation, prompt: evaluation.prompt, choices: evaluation.choices, modes: evaluation.modes,
     }])),
   };

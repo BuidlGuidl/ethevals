@@ -1,4 +1,3 @@
-type: quiz
 motivation: Check whether a model knows Ethereum's base unit conversion.
 prompt: How many wei equal one ether?
 choices:

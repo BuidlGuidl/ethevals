@@ -5,7 +5,7 @@ from ethevals.rows import results_rows
 from inspect_ai import eval
 from inspect_ai.model import ChatMessageAssistant, ChatMessageSystem, ChatMessageTool, ChatMessageUser, ContentReasoning, ContentText
 from inspect_ai.tool import ToolCall, ToolCallContent, ToolCallError
-from support import build_task, mock_delay
+from support import build_task
 import pytest
 
 
@@ -13,26 +13,15 @@ YES = '{"passed": true, "reason": "Uses standard transfers."}'
 NO = '{"passed": false, "reason": "Owner can seize tokens."}'
 
 
-@pytest.mark.parametrize("limited", [False, True])
-def test_quiz_rubric_grades_transcript_unless_limited_and_free_check_skips_it(tmp_path, quiz_scoring_case, limited):
-    task = quiz_scoring_case["task"]
-    if limited:
-        task.solver = mock_delay(2)
-        task.working_limit = 1
+def test_quiz_rubric_grades_transcript_and_free_check_skips_it(tmp_path, quiz_scoring_case):
     row = quiz_scoring_case["run"]([NO])
     requests = quiz_scoring_case["requests"]
-    if limited:
-        assert (row["status"], row["limit"]["type"]) == ("failed", "working")
-        assert list(row["checks"]) == ["answer"]
-        assert row["checks"]["answer"]["passed"] is False
-        assert requests == []
-    else:
-        assert (row["status"], row["checks"]) == ("failed", {
-            "answer": {"passed": True, "reason": "Answer matches the target."},
-            "rubric:explained": {"passed": False, "reason": "Owner can seize tokens."},
-        })
-        assert [(item["role"], item["content"]) for item in json.loads(requests[0][1].text)] == [
-            ("user", "Give the unit."), ("assistant", "wei")]
+    assert (row["status"], row["checks"]) == ("failed", {
+        "answer": {"passed": True, "reason": "Answer matches the target."},
+        "rubric:explained": {"passed": False, "reason": "Owner can seize tokens."},
+    })
+    assert [(item["role"], item["content"]) for item in json.loads(requests[0][1].text)] == [
+        ("user", "Give the unit."), ("assistant", "wei")]
     free = build_task(quiz_scoring_case["evaluation"], quiz_scoring_case["config"], None, "vanilla", "reference", 1)
     log = eval(free, log_dir=str(tmp_path / "free"), display="none")[0]
     assert results_rows(log)[0]["checks"] == {"answer": {"passed": True, "reason": "Answer matches the target."}}

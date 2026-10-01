@@ -15,7 +15,7 @@ for address in "$sender" "$deployer"; do
     cast rpc --rpc-url "$RPC_URL" anvil_setBalance "$address" 0x8ac7230489e80000 >/dev/null
 done
 # Deploy a six-decimal token with its supply held by the agent's fresh sender key.
-token=$(forge create scorer/Token.sol:Token --use "$SOLC" --broadcast --json \
+token=$(forge create setup/Token.sol:Token --use "$SOLC" --broadcast --json \
     --rpc-url "$RPC_URL" --private-key "$deployer_key" --constructor-args "$sender" | jq -r .deployedTo)
 
 # chain.json gives the agent its signing key and the filtered RPC for reads and signed sends.

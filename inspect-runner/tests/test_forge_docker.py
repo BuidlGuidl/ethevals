@@ -195,7 +195,7 @@ contract ConstructorTest is Test {
         task = build_task(evaluation, config, None, "internet", "reference", 1, compose)
         task.metadata["epoch"] = epoch
         task = task_with(task, name=task.name + "-" + variant)
-        task.solver = submit(files["scorer/solution/src/BuilderPoints.sol"], variant)
+        task.solver = submit(files["solution/src/BuilderPoints.sol"], variant)
         if variant == "snapshot":
             task.scorer = [frozen_writer(task.scorer[0])]
         tasks.append(task)

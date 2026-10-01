@@ -1,6 +1,6 @@
-type: act
+chain: anvil
 motivation: Test whether an agent reads token decimals before signing an exact transfer.
-modes: [internet]
+modes: [internet, skills]
 prompt: |
   Send exactly 12.5 tokens to the recipient in /workspace/chain.json.
   That file gives you the RPC URL, token address, recipient, and your funded private key.

@@ -24,7 +24,7 @@ def fixture_config():
     models = {key: {"model": f"mockllm/{key}", "effort": "low"}
               for key in ("opus-5.5", "gpt-5.5", "kimi-k3", "glm-5.3")}
     prices = dict(input=5.0, output=25.0, input_cache_read=0.5, input_cache_write=6.25)
-    return Config(epochs=3, time_limits={"quiz": 300, "build": 1200, "act": 1200}, cost_limit=5,
+    return Config(epochs=3, time_limit=1200, cost_limit=5,
                   max_attempts=2, concurrency=1, search=True, search_limit=20,
                   grader={"model": "mockllm/grader", "effort": "low", "max_tokens": 4096}, models=models,
                   agents={
@@ -39,7 +39,7 @@ def fixture_config():
 def small_config():
     prices = dict(input=1, output=1, input_cache_read=1, input_cache_write=1)
     model = dict(model="mockllm/test", effort="high")
-    return Config(epochs=3, time_limits={"quiz": 10, "build": 1200, "act": 1200}, cost_limit=2, max_attempts=2,
+    return Config(epochs=3, time_limit=10, cost_limit=2, max_attempts=2,
                   concurrency=1, search=False, search_limit=20, prices={"mockllm/test": prices},
                   grader={**model, "max_tokens": 10},
                   models={"test": model},
@@ -50,7 +50,7 @@ def fixture_quiz(tmp_path, name="units", *, modes=None, choices=None, **scorer):
     folder = tmp_path / "concepts" / name
     (folder / "workspace").mkdir(parents=True)
     (folder / "scorer").mkdir()
-    (folder / "eval.yaml").write_text(yaml.safe_dump({"type": "quiz", "motivation": "Check units.",
+    (folder / "eval.yaml").write_text(yaml.safe_dump({"motivation": "Check units.",
         "prompt": "Give the unit.", "modes": modes or ["vanilla"], "choices": choices}))
     (folder / "scorer/target.yaml").write_text(yaml.safe_dump({"target": "wei", **scorer}))
     return load_eval(folder, fixture_config())

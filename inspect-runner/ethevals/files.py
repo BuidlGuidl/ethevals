@@ -7,6 +7,10 @@ JUNK_NAMES = {".DS_Store", "__pycache__", ".pytest_cache"}
 RESERVED_NAMES = {"out", "cache", "lib"}
 
 
+def has_solution(files):
+    return any(name.startswith("solution/") for name in files)
+
+
 def eval_files(folder: Path):
     for path in sorted(folder.rglob("*")):
         if path.is_symlink():
