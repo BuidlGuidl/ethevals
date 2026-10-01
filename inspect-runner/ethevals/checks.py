@@ -29,7 +29,7 @@ def quiz_check_solver(evaluation, answer):
 @solver
 def solution(evaluation, answer):
     async def solve(state, generate):
-        if evaluation.declaration.chain and "setup/setup.s.sol" in evaluation.files:
+        if evaluation.declaration.chain:
             from .loader import lint_agent_text
             chain = await sandbox().read_file("/workspace/chain.json", text=False)
             lint_agent_text(chain.decode("utf-8"), "chain.json")

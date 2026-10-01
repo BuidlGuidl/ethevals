@@ -140,11 +140,24 @@ def test_eval_root_cannot_be_a_symlink(tmp_path):
         load_eval(folder, fixture_config())
 
 
-@pytest.mark.parametrize("value", ["hardhat", "{fork: mainnet, block: 23819000}"])
-def test_chain_rejects_other_values(folder, value):
+@pytest.mark.parametrize("value", ["hardhat", "{fork: mainnet, block: 23819000}", "anvil"])
+def test_chain_rejects_invalid_declarations(folder, value):
     path = folder / "eval.yaml"
-    path.write_text(path.read_text() + f"chain: {value}\n")
-    with pytest.raises(ValueError, match="chain"):
+    path.write_text(f"motivation: Check files.\nprompt: Say hello.\nmodes: [internet]\nchain: {value}\n")
+    with pytest.raises(ValueError, match="chain requires setup/setup.s.sol" if value == "anvil" else "chain"):
+        load_eval(folder, fixture_config())
+
+
+def test_setup_requires_chain(folder):
+    (folder / "setup").mkdir()
+    with pytest.raises(ValueError, match="setup/ requires chain"):
+        load_eval(folder, fixture_config())
+
+
+@pytest.mark.parametrize("name", ["chain.json", "private.json"])
+def test_setup_files_cannot_be_declared_in_workspace(folder, name):
+    (folder / "workspace" / name).write_text("{}")
+    with pytest.raises(ValueError, match="chain.json and private.json belong to setup"):
         load_eval(folder, fixture_config())
 
 

@@ -314,7 +314,7 @@ Setup contracts can import contracts from `workspace/`, using only libraries shi
 
 The runner delivers `chain.json` to the agent's `/workspace/chain.json`.
 The scorer receives an untouched copy of `chain.json` and the private file at its root, `/workspace`.
-Setup cannot replace a declared `workspace/chain.json`.
+Validation reserves `chain.json` and `private.json` for setup and requires setup whenever a chain is declared.
 The free check applies the prompt-word lint to the delivered chain file.
 
 Reference files under `solution/` overlay the agent's workspace at the same paths.

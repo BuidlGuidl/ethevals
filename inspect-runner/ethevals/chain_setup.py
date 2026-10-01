@@ -9,8 +9,6 @@ SETUP_TIMEOUT = 120
 
 async def setup_script(evaluation, environments):
     box = environments["chain"]
-    if "workspace/chain.json" in evaluation.files:
-        raise ValueError("Setup cannot replace workspace/chain.json.")
     for name, data in evaluation.files.items():
         if name.startswith(("setup/", "workspace/")):
             await box.write_file("/eval/" + name, data)

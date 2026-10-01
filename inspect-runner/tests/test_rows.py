@@ -256,7 +256,7 @@ def test_grader_budget_error_retains_primary_score(quiz_scoring_case):
 @pytest.mark.docker
 def test_compile_failure_grades_the_transcript_without_source(scoring_case):
     scoring_case["task"].solver = submit_source("pragma solidity ^0.8.30; contract Token { uint value = ; }")
-    row = scoring_case["run"]([NO])
+    row = scoring_case["run"](['{"passed": false, "reason": "Owner can seize tokens."}'])
     assert row["status"] == "failed"
     assert row["checks"] == {
         "compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},

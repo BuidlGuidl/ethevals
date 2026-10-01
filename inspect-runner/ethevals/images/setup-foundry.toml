@@ -1,9 +1,4 @@
 [profile.default]
 src = "setup"
-script = "setup"
-libs = []
-ffi = false
-auto_detect_remappings = false
-auto_detect_solc = true
 remappings = ["forge-std/=/opt/solidity/lib/forge-std/src/", "ethevals/=/opt/solidity/lib/"]
 fs_permissions = [{ access = "read-write", path = "chain.json" }, { access = "read-write", path = "private.json" }]

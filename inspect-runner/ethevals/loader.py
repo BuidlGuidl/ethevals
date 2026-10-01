@@ -77,9 +77,15 @@ def load_eval(folder: Path, config: Config) -> Eval:
     ) if present]
     if not kinds:
         raise ValueError(f"{folder / 'scorer'}: at least one scorer is required")
+    if any(name in files for name in ("workspace/chain.json", "workspace/private.json")):
+        raise ValueError(f"{folder}: chain.json and private.json belong to setup, not workspace/")
     if "vanilla" in declaration.modes and (declaration.chain or "tests" in kinds or
             any(name.startswith("workspace/") for name in files)):
         raise ValueError(f"{folder}: vanilla requires no chain, workspace files, or tests")
+    if declaration.chain and "setup/setup.s.sol" not in files:
+        raise ValueError(f"{folder}: chain requires setup/setup.s.sol")
+    if not declaration.chain and (folder / "setup").is_dir():
+        raise ValueError(f"{folder}: setup/ requires chain")
     for text in [declaration.prompt, *(declaration.choices or [])]:
         lint_agent_text(text, str(folder / "eval.yaml"))
     for name, data in files.items():
