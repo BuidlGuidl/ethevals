@@ -1,0 +1,160 @@
+/* ETH Evals · website prototype, simplified Results. Loaded after site.css.
+   Adds the lean tables (grouped header, sortable columns, lift cell), the reading note,
+   and the home list without rank numbers. */
+
+/* ---------- lean tables: agents and models ---------- */
+.board.lean .c-name { width: 256px; }
+.board.lean .c-lift { width: 190px; }
+.board.lean.models { min-width: 760px; }
+.board.lean thead tr.grp th { padding: 9px 8px 8px; color: var(--dim); }
+.board.lean thead tr.grp + tr th { padding-top: 11px; }
+.sortb { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; padding: 3px 6px; margin: -3px -6px; }
+.sortb:hover { color: var(--ink); background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+.board.lean th[aria-sort="ascending"], .board.lean th[aria-sort="descending"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.sarr { margin-left: 5px; font-size: 8px; vertical-align: 1px; }
+.pr .few { font-size: 11px; color: var(--amber); margin-left: 1px; }
+.liftc { display: grid; gap: 7px; padding: 10px 14px; text-align: left; }
+.liftc b { font: 500 13px var(--mono); }
+.liftc b.pos { color: var(--ink); }
+.liftc b.faint { color: var(--dim); font-weight: 400; }
+
+/* ---------- results: header without KPI cards, closing note ---------- */
+.hero6.rep { grid-template-columns: minmax(0, 1fr); }
+.readnote { border-top: 1px solid var(--grid); padding-top: 18px; color: var(--muted); font-size: 13.5px; line-height: 1.65; max-width: 110ch; }
+.readnote b { color: var(--ink); font-weight: 600; }
+.readnote a { color: var(--ink); white-space: nowrap; }
+
+/* ---------- home: header without KPI cards, top agents without rank numbers ---------- */
+.hero6.home { grid-template-columns: minmax(0, 1fr); }
+.mrow { grid-template-columns: 260px minmax(0, 1fr) 110px; }
+@media (max-width: 760px) { .mrow { grid-template-columns: minmax(0, 1fr) 76px; } }
+
+/* ---------- phones: a narrow sticky name column, so Without and With fit beside it ---------- */
+@media (max-width: 760px) {
+  .board.lean .c-name { width: 118px; }
+  .board.configs.lean .row-label { width: 118px; padding: 10px 10px; }
+  .board.lean .cfg-name { font-size: 13px; }
+  .board.lean .cfg-sub, .board.lean thead .row-label .subline { display: none; }
+  .board.lean .c-lift { width: 150px; }
+}
+
+/* ---------- results: one table, three views ---------- */
+/* Without | With skills are joined (same agents, same evals); Model only sits apart, past a thin rule. */
+.tvsel { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tvsep { width: 1px; height: 26px; background: var(--border-2); }
+.segmented.tv-alt { border-style: dashed; }
+.segmented.tv-alt button[aria-pressed="true"] { border-style: solid; }
+.tvintro { color: var(--muted); font-size: 14px; line-height: 1.6; max-width: 92ch; }
+.tvnote { display: grid; gap: 8px; max-width: 96ch; padding: 14px 18px; background: var(--tint); border-left: 2px solid var(--ink); color: var(--muted); font-size: 13.5px; line-height: 1.65; }
+.tvnote b { color: var(--ink); font-weight: 600; }
+/* the paired change sits beside the score, smaller */
+.pr .v .lft { font: 500 10.5px var(--mono); margin-left: 6px; letter-spacing: 0; vertical-align: 2px; color: var(--green); }
+.pr .v .lft.faint { color: rgb(20 20 19 / 45%); font-weight: 400; }
+.pr .v .lft.neg { color: var(--red); }
+#agents .toolbar { justify-content: flex-start; }
+
+/* fixed column widths, and a table box that hugs them: no column moves between Internet and Internet + Skills */
+.table-shell.fit { width: fit-content; max-width: 100%; }
+.board.lean { table-layout: fixed; width: auto; min-width: 0; }
+.board.lean .c-name { width: 256px; }
+.board.lean .c-score { width: 150px; }
+.board.lean .c-num { width: 112px; }
+@media (max-width: 760px) {
+  .board.lean .c-name { width: 118px; }
+  .board.lean .c-score { width: 104px; }
+  .board.lean .c-num { width: 88px; }
+}
+/* the note under the table wraps to the table width instead of widening the box */
+.table-shell.fit .table-note { width: 0; min-width: 100%; box-sizing: border-box; }
+
+/* selector on the left, the note on the right: the selector sits right above the table */
+.toolbar.tvbar { align-items: flex-end; justify-content: space-between; gap: 16px 32px; flex-wrap: nowrap; }
+.tvbar .tvsel { flex: none; }
+.tvbar .tvintro, .tvbar .tvnote { max-width: 62ch; margin: 0; font-size: 13px; line-height: 1.55; }
+.tvbar .tvnote { padding: 10px 14px; }
+@media (max-width: 1000px) { .toolbar.tvbar { flex-wrap: wrap; } .tvbar .tvintro, .tvbar .tvnote { max-width: none; } }
+/* the change from skills: small, in the corner, in the skills colour */
+.board.lean .pr { position: relative; }
+.pr .lft { position: absolute; right: 7px; bottom: 5px; font: 500 10.5px var(--mono); letter-spacing: 0; color: var(--accent); }
+.pr .lft.faint { color: var(--accent); opacity: .5; font-weight: 400; }
+.pr .lft.neg { color: var(--red); }
+@media (max-width: 760px) { .pr .lft { right: 4px; bottom: 3px; font-size: 9.5px; } }
+#agents .toolbar.tvbar { justify-content: space-between; }
+/* every change from skills in the same blue */
+.pr .lft.faint { opacity: 1; font-weight: 500; }
+
+/* ---------- evals list: scorer kind, modes as tags ---------- */
+.csb { white-space: nowrap; }
+.csb b { display: block; font-weight: 600; font-size: 13px; }
+.csb span { display: block; font: 10.5px var(--mono); color: var(--dim); margin-top: 2px; }
+.cmodes { white-space: nowrap; }
+.mtag { display: inline-block; font: 10.5px var(--mono); padding: 1px 6px; margin: 0 4px 3px 0; border: 1px solid var(--border-2); color: var(--muted); background: var(--sheet); }
+.mtag.m-skills { border-color: var(--accent); color: var(--accent); }
+.mtag.m-vanilla { border-style: dashed; }
+
+/* ---------- results by agent: a pillar band above the evals ---------- */
+table.matrix.grouped th.mxp { font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); text-align: left; padding: 7px 10px; }
+table.matrix.grouped th.mxp-0 { background: #e9e8e2; }
+table.matrix.grouped th.mxp-1 { background: #d9d8d1; }
+table.matrix.grouped .gstart { border-left: 2px solid var(--ink); }
+table.matrix.grouped th.rot.gstart { border-left-color: transparent; box-shadow: inset 2px 0 0 var(--ink); }
+table.matrix.grouped td.gstart { padding-left: 0; }
+/* the corner cell spans both header rows: it must stay a table cell (row labels elsewhere are grids) */
+table.matrix.grouped thead th.row-label { display: table-cell; vertical-align: bottom; }
+.simple th .subline { display: block; margin-top: 3px; text-transform: none; letter-spacing: 0; }
+
+/* ---------- results by agent v2: agents as columns, evals as rows grouped by pillar ---------- */
+table.matrix.t2 { border-spacing: 1px; }
+table.matrix.t2 th.agh { text-align: center; vertical-align: bottom; padding: 10px 6px; min-width: 110px; background: var(--tint); }
+table.matrix.t2 th.agh .cfg-name { display: block; font-size: 13.5px; }
+table.matrix.t2 th.agh .cfg-sub { display: block; white-space: nowrap; }
+table.matrix.t2 thead th.row-label { display: table-cell; background: var(--tint); }
+table.matrix.t2 tr.mxgrp th.mxp { font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); text-align: left; padding: 8px 14px; position: static; }
+table.matrix.t2 tr.mxgrp th.mxp-0 { background: #e9e8e2; }
+table.matrix.t2 tr.mxgrp th.mxp-1 { background: #d9d8d1; }
+table.matrix.t2 th.evl { min-width: 300px; max-width: 360px; padding: 8px 14px; }
+table.matrix.t2 th.evl a { font: 600 13.5px var(--sans); text-decoration: none; color: var(--ink); }
+table.matrix.t2 th.evl a:hover { text-decoration: underline; }
+table.matrix.t2 td.mx, table.matrix.t2 .mxc { width: auto; min-width: 110px; height: 40px; }
+table.matrix.t2 .mxc { width: 100%; }
+@media (max-width: 760px) { table.matrix.t2 th.evl { min-width: 180px; } table.matrix.t2 th.agh, table.matrix.t2 td.mx, table.matrix.t2 .mxc { min-width: 72px; } }
+/* v2: harness wraps under the name, so seven agent columns fit beside the eval names */
+table.matrix.t2 th.agh { min-width: 0; width: 132px; }
+table.matrix.t2 th.agh .cfg-sub { white-space: normal; line-height: 1.4; }
+table.matrix.t2 td.mx, table.matrix.t2 .mxc { min-width: 0; }
+table.matrix.t2 th.evl { min-width: 280px; }
+
+/* ---------- evals: one matrix, same selector as Results ---------- */
+#evals .toolbar.tvbar { justify-content: space-between; }
+.evcount { font: 11px var(--mono); color: var(--dim); margin: 0; }
+table.matrix.t2 td.mx.na { color: var(--dim); font-size: 12px; }
+
+/* ---------- landing = results: question, what we measure + key findings, leaderboard ---------- */
+.land { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 48px; align-items: center; padding: 48px 0 8px; }
+.land-l { display: grid; gap: 14px; align-content: start; }
+.land h1 { font: 600 clamp(40px, 4.6vw, 64px)/.96 var(--sans); font-stretch: 75%; letter-spacing: -.025em; max-width: 18ch; text-wrap: balance; }
+.land .lead { max-width: 70ch; }
+.lsec { display: grid; gap: 14px; }
+.lsec h2 { font: 600 24px/1.05 var(--sans); font-stretch: 80%; letter-spacing: -.015em; border-bottom: 1px solid var(--grid); padding-bottom: 10px; }
+/* What we measure: the four pillars, stacked to the right of the header */
+.pstrip { display: grid; grid-template-columns: 1fr; border: 1px solid var(--grid); background: var(--sheet); }
+.ps { display: grid; gap: 6px; align-content: start; padding: 14px 18px; text-decoration: none; color: inherit; }
+.ps + .ps { border-top: 1px solid var(--grid); }
+.ps:hover { background: var(--tint); color: inherit; }
+.ps-h { font: 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.ps-h b { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.ps-a { font: 12.5px/1.6 var(--mono); color: var(--muted); }
+.kf { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--grid); }
+.kf li { display: grid; grid-template-columns: 30px 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--grid); }
+.kfn { font: 500 20px/1 var(--sans); font-stretch: 75%; color: var(--accent); }
+.kf b { font: 600 15px var(--sans); }
+.kf p { color: var(--dim); font-size: 13px; line-height: 1.5; margin-top: 3px; }
+@media (max-width: 1000px) { .land { grid-template-columns: 1fr; gap: 20px; } .pstrip { grid-template-columns: 1fr 1fr; } .ps + .ps { border-top: 0; } .ps:nth-child(even) { border-left: 1px solid var(--grid); } .ps:nth-child(n+3) { border-top: 1px solid var(--grid); } }
+@media (max-width: 560px) { .pstrip { grid-template-columns: 1fr; } .ps:nth-child(even) { border-left: 0; } .ps + .ps { border-top: 1px solid var(--grid); } }
+
+/* panel mode switch: same layout as the tables' */
+.tvsel.dmodes { justify-self: start; }
+.dmodes button:disabled { opacity: .4; cursor: not-allowed; }
+
+.rsub { color: var(--muted); font-size: 14px; line-height: 1.5; margin-top: 6px; max-width: 80ch; }
+.lft-key { color: var(--accent); font-weight: 500; }
