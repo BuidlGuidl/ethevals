@@ -322,7 +322,7 @@ chain: {fork: mainnet, block: 23819000}
 [supply-usdc-to-aave](../evals/transactions/supply-usdc-to-aave) is the example.
 The agent must supply 10,000 USDC to Aave v3's main market and keep 15,000 USDC in the wallet.
 Setup creates the agent's wallet `me` and funds it with 10 ETH for gas.
-Three `vm.rpc` calls move the USDC from a holder that has enough at the pinned block:
+Three `vm.rpc` calls move 25,000 USDC from a holder that has enough at the pinned block:
 
 ```solidity
 vm.rpc("anvil_impersonateAccount", string.concat('["', vm.toString(HOLDER), '"]'));
