@@ -12,6 +12,7 @@ The loader rejects unknown keys.
 
 `scorer/` is required. `workspace/`, `setup/`, and top-level `solution/` are optional.
 Tests or a chain require `solution/`.
+A chain requires `setup/setup.s.sol`, and `setup/` requires a chain.
 Vanilla requires no chain, no workspace files, and no tests.
 
 Validation rejects duplicate check names across targets, test functions, and rubric headings.
@@ -23,10 +24,12 @@ The prompt and workspace text reject whole words, without regard to case:
 
 The loader selects scorers from files under `scorer/`.
 `SCORERS` in `scorers.py` maps each kind to an Inspect scorer factory.
-The tests scorer uses the plain `RUNNERS` table, which contains Forge in v0.2.
-Each runner declares its file pattern, name parser, preparation, command, timeout, result parser, and optional source evidence.
+The tests scorer picks test tools from file names in `scorer/tests/`, through the `RUNNERS` table in `scorers.py`.
+Its one entry is Forge, which claims `*.t.sol`.
+Each runner declares its file pattern, name parser, preparation, command, timeout, fork timeout, result parser, and optional source evidence.
 Validation and scoring use the same runner patterns.
 Files no runner claims are helpers. A tests folder with only helpers fails validation.
+Adding a test tool takes three changes: the tool in the scorer's image, one `RUNNERS` entry, and a section in [Add an eval](../docs/add-an-eval.md).
 
 | Kind | Files | Result |
 | --- | --- | --- |
@@ -92,6 +95,7 @@ Other libraries come from the agent's workspace.
 Neither image ships a Solidity compiler.
 Forge detects and downloads the version required by each pragma, using the service's internet network.
 A compiler download failure is an error that permits a retry, rather than a failed `compile` check.
+A pragma that no released compiler satisfies fails `compile` with Forge's diagnostic.
 An unexplained Forge timeout is also an error because the compiler download can consume that time.
 Forge runs at the scorer root with `--root . --match-path 'scorer/tests/**' --json --no-storage-caching --build-info`.
 
@@ -158,7 +162,7 @@ The Python `run()` return value covers the selection; its rows file covers the w
 
 `config.yaml` supplies one `time_limit` and one `cost_limit` for every epoch.
 Their defaults are 7200 seconds and $20.00.
-The runner passes both limits directly to Inspect, without a working limit.
+The runner passes both limits directly to Inspect.
 After the solver stops, Inspect gives scoring its own window of half the time limit.
 A time limit still grades the agent's work. It does not cause an error or a retry.
 
@@ -315,7 +319,7 @@ Setup contracts can import contracts from `workspace/`, using only libraries shi
 
 The runner delivers `chain.json` to the agent's `/workspace/chain.json`.
 The scorer receives an untouched copy of `chain.json` and the private file at its root, `/workspace`.
-Validation reserves `chain.json` and `private.json` for setup and requires setup whenever a chain is declared.
+Validation rejects `workspace/chain.json` and `workspace/private.json`, because setup writes those files.
 The free check applies the prompt-word lint to the delivered chain file.
 
 Reference files under `solution/` overlay the agent's workspace at the same paths.
@@ -349,6 +353,8 @@ Docker Compose resolves that value from the runner's environment when it starts 
 Only that service receives the URL, and the filter passes it to Anvil.
 The agent and scorer never receive the archive URL.
 The agent's `chain.json` still names `http://chain:8545`.
+The filter replaces the URL with `<fork rpc>` in RPC replies.
+The runner does the same in the output of every container command before Inspect records it.
 
 Anvil starts with `--fork-url`, `--fork-block-number`, and `--accounts 0`.
 It keeps the real network's chain ID and has no prefunded accounts.
@@ -369,10 +375,16 @@ It then prints one reason and skips both the reference and untouched passes.
 `scripts/ci.py checks` uses the same command and skip rule.
 With the variable set, both passes run without model calls.
 
-After reading a PR, dispatch [fork-check.yml](../.github/workflows/fork-check.yml) with its PR number and reviewed commit SHA.
-It checks out that PR's head without saved credentials.
+After reading a PR, dispatch [fork-check.yml](../.github/workflows/fork-check.yml) with its PR number and reviewed commit SHA:
+
+```sh
+gh workflow run fork-check.yml -f pr=<number> -f sha=<full commit SHA>
+```
+
+GitHub dispatches a workflow only when it is on the default branch, so `fork-check.yml` must be on `main`.
+The workflow checks out that PR's head without saved credentials.
 If the head differs from the reviewed SHA, the workflow fails before running PR code.
-It checks every fork eval with the RPC secrets and posts a `fork check` status on the reviewed SHA.
+It checks every fork eval with the `MAINNET_RPC_URL` and `BASE_RPC_URL` secrets and posts a `fork check` status on the reviewed SHA.
 The workflow has only content-read and status-write permissions.
 
 ## CI and publication
@@ -390,7 +402,7 @@ CI runs the first 256 missing epochs; a later run picks up the rest.
 Each matrix job selects one epoch and uses a read-only token.
 Each job builds both stock images with the GitHub Actions cache and loads them locally, without a registry.
 The runner reuses local stock images whose tags match their build inputs.
-Each job allows 240 minutes, including 120 for the agent, 60 for scoring, and 60 for builds and uploads.
+Each job allows 240 minutes, including 120 for the agent, 60 for scoring, and 60 for builds, setup, and uploads.
 The run step stops after 190 minutes and uploads available results even after failure.
 A separate publisher holds no model keys and runs after failed or timed-out steps on `main`.
 It downloads artifacts from every attempt of the workflow run. The next run resumes missing epochs.

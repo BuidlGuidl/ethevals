@@ -57,3 +57,4 @@ Record architecture decisions as new ADRs in `docs/adr/` before changing scoring
 Keep ADR status honest. ADR 0002 remains proposed until its paid test passes.
 Change `CONTEXT.md` only for an agreed vocabulary change.
 List a new stock image input in `BUILD_INPUTS` in `inspect-runner/ethevals/images/tag.py`.
+To add a test tool, read [Scorer kinds](inspect-runner/README.md#scorer-kinds).

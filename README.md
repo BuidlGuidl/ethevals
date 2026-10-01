@@ -61,7 +61,7 @@ uv run ethevals run --evals evals/concepts/agent-registries evals/transactions/s
 
 ## Open the board
 
-The agent table shows internet results by harness, model, and effort.
+The agent table shows internet and skills results by harness, model, and effort.
 The knowledge table shows vanilla quiz results for bare models.
 Open a cell to read its prompt, epoch checks, costs, and published log links.
 

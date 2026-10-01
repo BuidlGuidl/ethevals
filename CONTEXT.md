@@ -52,7 +52,7 @@ _Avoid_: node
 A chain that starts from a named network, `mainnet` or `base`, at a pinned block.
 
 **Setup**:
-The forge script in `setup/` that prepares the chain before the agent starts. It never reaches the agent.
+The forge script in `setup/` that prepares the chain before the agent starts. An eval has setup exactly when it has a chain. Setup never reaches the agent.
 
 **ChainSetup**:
 The Solidity helper that a setup script inherits. It funds addresses and writes the chain file and the private file.
@@ -72,7 +72,7 @@ The expected final reply: one accepted answer, or a list where any one counts.
 _Avoid_: answer key, flag
 
 **Tests**:
-Forge test files in `scorer/tests/` that check the agent's code, the chain, or both.
+Test files in `scorer/tests/` that check the agent's code, the chain, or both. The scorer picks the test tool from the file names. Forge runs `*.t.sol` files, and any other file is a helper.
 
 **Rubric**:
 A list of yes-or-no questions a grader answers about the agent's work.
@@ -120,7 +120,7 @@ The model spend one epoch can reach, the same for every eval.
 One named pass-or-fail result about an epoch, with a one-line reason. A target check takes the target's name, a test check takes the test function's name, and a rubric check takes the question's heading.
 
 **Compile**:
-The check that the tests and the agent code they import compile. If it fails, every test fails with it.
+The check that the tests and the agent code they import compile. An eval has one, shared by every test tool. If it fails, every test fails with it.
 
 **Score**:
 The share of scored epochs that passed. Errors do not enter the denominator. The board shows counts, without error bars.
@@ -162,14 +162,3 @@ Its current board tab label is "Pre-training (Vanilla)", a working label that ca
 
 **Dataset**:
 The vanilla evals graded by a target alone, published to Hugging Face as JSONL, one line per eval with its prompt and target.
-
-## Retired words
-
-Don't use these words for ETH Evals concepts.
-
-| Word | Say instead |
-| --- | --- |
-| type, and quiz, build, act, or scenario as a type | what the folder holds: tests, a chain, a target. "Quiz" stays as a description |
-| check script | tests |
-| working limit, total limit | time limit |
-| private network | work network |

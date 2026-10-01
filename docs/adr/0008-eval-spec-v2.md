@@ -20,10 +20,10 @@ The folder stays data. Authors write no runner code, and tools read every eval w
 | `scorer/` | one or more of `target.yaml`, `tests/*.t.sol`, and `rubric.md` | no |
 | `solution/` | the reference solution | no |
 
-- Only `scorer/` is required. `vanilla` needs an eval with no `chain`, no `workspace/`, and no `tests/`, because a bare model has nowhere to put work.
+- Only `scorer/` is required. A `chain` requires `setup/setup.s.sol`, and `setup/` requires a `chain`. `vanilla` needs an eval with no `chain`, no `workspace/`, and no `tests/`, because a bare model has nowhere to put work.
 - The agent sees the prompt, `workspace/`, and the eval's services. With a chain, it also sees `chain.json` and the filtered RPC. In the skills mode, it has the skills pack. The runner adds nothing else.
 - The agent must not know it is tested. `ethevals validate` rejects eval words in the prompt and workspace files, and `ethevals check` rejects them in `chain.json`.
-- A target's check takes its `name`. A test's check is its function name, and tests add one `compile` check. A rubric's check is its `##` heading. Names are unique across the eval and carry no prefix.
+- A target's check takes its `name`. A test's check is its function name, and tests add one `compile` check. A rubric's check is its `##` heading. Names are unique across the eval and carry no prefix. A reverting `setUp` or constructor gives one check named `<Contract>.setUp` or `<Contract>.constructor`.
 - `target.yaml` keeps Inspect's sample fields, so the Hugging Face dataset loads into Inspect with no mapping. The dataset holds the evals that declare `vanilla` and are graded by a target alone.
 
 ## Foundry for setup, tests, and solutions
@@ -31,11 +31,12 @@ The folder stays data. Authors write no runner code, and tools read every eval w
 - `chain` is absent, `anvil`, or `{fork: <network>, block: <number>}`, where the network is `mainnet` or `base`.
 - Setup is a forge script that inherits `ChainSetup`, which adds `fund`, `chainRecord`, and `privateRecord`. It runs in the chain container on the unfiltered RPC. The agent gets `chain.json`. The tests get `chain.json` and `private.json`.
 - Tests are Forge tests. They import the agent's code by its workspace path and read the finished chain with `vm.createSelectFork`. Before grading, the runner stops the agent and mines one block. Forge compiles only the tests and what they import.
-- The reference solution overlays `solution/` on the workspace, and `solution/solution.s.sol` runs in the scorer container against the filtered RPC. Every eval with tests or a chain ships one.
+- The scorer picks the test tool from the file names in `scorer/tests/`, through the `RUNNERS` table in `scorers.py`. Forge claims `*.t.sol`, and a file no test tool claims is a helper. `compile` is one check per eval, shared by every test tool. Adding a test tool takes three changes: the tool in the scorer's image, one `RUNNERS` entry, and a docs section.
+- The reference solution overlays `solution/` on the workspace, and `solution/solution.s.sol` runs in the scorer container against the filtered RPC. Every eval with tests or a chain ships one. A solution that uses a library ships as one file made with `forge flatten`.
 - The agent image ships no Solidity libraries. The agent's `foundry.toml` and libraries are its own. The scorer uses its own config and maps each agent project's libraries only for files in that project.
-- The scorer runs on the chain image, which ships forge, forge-std, and `ChainSetup`. No image ships a Solidity compiler: every container has internet, and Forge installs the version each pragma asks for. A failed compiler download is an error that retries, never a failed `compile` check.
+- The scorer runs on the chain image, which ships forge, forge-std, and `ChainSetup`. No image ships a Solidity compiler: every container has internet, and Forge installs the version each pragma asks for. A failed compiler download is an error that retries, never a failed `compile` check. A pragma that no released compiler satisfies fails `compile`.
 
-We picked Forge tests because every Solidity developer writes them, Hardhat 3 runs the same dialect, and `forge test --json` gives one result per test. One runner grades a build, a transaction, and a fix.
+We picked Forge tests because every Solidity developer writes them, Hardhat 3 runs the same dialect, and `forge test --json` gives one result per test. One test tool grades a build, a transaction, and a fix.
 
 ## Containers
 
@@ -44,10 +45,11 @@ We picked Forge tests because every Solidity developer writes them, Hardhat 3 ru
 
 ## Forks
 
-- The fork's RPC URL is a repository secret, one per network, passed only to anvil in the chain container.
+- The fork's RPC URL is a repository secret per network, `MAINNET_RPC_URL` or `BASE_RPC_URL`, passed only to anvil in the chain container. The filter and the runner replace the URL with `<fork rpc>` in RPC replies and command output.
+- Setup moves tokens from a holder with three `vm.rpc` calls on the unfiltered anvil: `anvil_impersonateAccount`, `eth_sendTransaction` from the holder, and `anvil_stopImpersonatingAccount`. Nothing broadcasts from the holder. The filter refuses `eth_sendTransaction`, so the agent can't send as the holder.
 - Grading runs `forge test --no-storage-caching`, so Forge's fork cache can't carry chain state from one epoch to the next.
 - The free check on a pull request has no secrets. For a fork eval it validates the folder and skips the reference and untouched passes.
-- A maintainer reads the PR, then dispatches the fork check workflow with the PR number. It runs both passes with the secret and no model, and the eval merges only after it passes. The trigger is manual because the secret reaches setup code that the PR wrote.
+- A maintainer reads the PR, then dispatches the fork check workflow with the PR number and the SHA of the commit they read. If the PR head has moved, the run fails. Otherwise it runs both passes with the secret and no model and posts a `fork check` status on that commit. The eval merges only after that status passes. The trigger is manual because the secret reaches setup code that the PR wrote.
 
 ## Rubrics, limits, and paid runs
 

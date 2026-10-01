@@ -26,6 +26,7 @@ eval_dir=evals/transactions/my-transfer
 ```
 
 Each path has one job. Only `scorer/` is required.
+An eval with a `chain` needs `setup/setup.s.sol`, and `validate` rejects `setup/` without a `chain`.
 
 | Path | Holds | The agent sees it |
 | --- | --- | --- |
@@ -62,6 +63,10 @@ Use one or more scorers. An epoch passes when every check passes.
 | `scorer/tests/*.t.sol` | the agent's code, the chain, or both, with Forge | each test function's name, plus `compile` |
 | `scorer/rubric.md` | the transcript, with the agent's compiled source in front when it compiled | each `##` heading |
 
+The scorer picks the test tool from the file names in `scorer/tests/`. Forge is the one test tool, and it claims `*.t.sol` files.
+A file that no test tool claims is a helper that tests can import.
+`compile` is one check per eval, shared by every test tool.
+
 Check names must be unique across the eval, and `compile` is reserved.
 Name targets and rubric questions with `[a-z][a-z0-9_]*`.
 
@@ -90,8 +95,8 @@ The runner adds no notes, no `foundry.toml`, and no Solidity libraries. The agen
 ```yaml
 # eval.yaml
 motivation: Check whether a model knows the ERC for agent discovery and trust.
-modes: [vanilla, internet, skills]
 prompt: which ERC defines onchain identity, reputation and validation registries for AI agents? just the number please
+modes: [vanilla, internet, skills]
 
 # scorer/target.yaml
 name: erc_number
@@ -113,9 +118,9 @@ location: end
 Next to `eval.yaml`, it has `workspace/README.md`, `setup/setup.s.sol` with the `setup/Token.sol` it deploys, `scorer/tests/Transfer.t.sol`, `scorer/rubric.md`, and `solution/solution.s.sol`.
 
 ```yaml
+chain: anvil
 motivation: Test whether an agent reads token decimals before signing an exact transfer.
 modes: [internet, skills]
-chain: anvil
 prompt: |
   can you send 12.5 tokens to the recipient in chain.json? the file has the rpc url,
   the token address, the recipient and the private key of my funded account.
@@ -126,7 +131,7 @@ Checks: `compile`, `test_recipient_balance`, and the rubric's `verified_transfer
 
 ### Prepare the chain with setup
 
-Before the agent starts, the runner runs `forge script setup/setup.s.sol --broadcast --slow --rpc-url $RPC_URL` in the chain container, on the unfiltered RPC:
+Before the agent starts, the runner runs `forge script setup/setup.s.sol --broadcast --slow --rpc-url http://127.0.0.1:8546` in the chain container, on the unfiltered RPC:
 
 ```solidity
 import {ChainSetup} from "ethevals/ChainSetup.sol";
@@ -167,7 +172,7 @@ The record functions take an address, a `uint256`, a `bytes32`, or a string.
 - Use `fund`, not `vm.deal`. A forge script runs in Forge's simulation first and then sends only the broadcast transactions, so `vm.deal` changes only the simulation.
 - The chain image ships only forge-std and `ChainSetup`. Write setup contracts that import nothing else, or vendor what they need inside `setup/`.
 - To deploy a contract the agent should read, keep its one copy in `workspace/` and import it from setup. That contract imports only files the workspace ships.
-- Don't ship `workspace/chain.json`. Setup can't replace a file the eval declares.
+- Don't ship `workspace/chain.json` or `workspace/private.json`. Setup writes those files, and `validate` rejects them.
 - Setup has 120 seconds. A setup failure is an error, not a failed check.
 
 ### Check the chain with a Forge test
@@ -229,6 +234,7 @@ The test relies on those and on standard ERC-20, nothing else.
 [BuilderPoints.t.sol](../evals/building/erc20-points-token/scorer/tests/BuilderPoints.t.sol) has ten test functions. Its imports, `setUp`, and the first test:
 
 ```solidity
+import {Test} from "forge-std/Test.sol";
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {BuilderPoints} from "workspace/src/BuilderPoints.sol";
 
@@ -245,9 +251,10 @@ function test_decimals_match_usdc() public view {
 `scorer/rubric.md` asks one question, `uses_standard_library`: did the agent build the ERC-20 on a well-known library such as OpenZeppelin or Solady?
 `solution/src/BuilderPoints.sol` overlays the stub with OpenZeppelin `ERC20Capped` and `Ownable`.
 
-Write the reference solution in any Foundry project with libraries installed through `forge install ...`.
-Then run `forge flatten src/X.sol > solution/src/X.sol` to ship the solution as one self-contained file.
-Keep one SPDX line and one pragma that matches the prompt.
+Git ignores `lib/` at any depth, so a solution that uses a library ships as one flattened file.
+Write it in a scratch Foundry project with the library installed through `forge install`.
+Then run `forge flatten src/X.sol` there and save the output as `solution/src/X.sol` in the eval.
+Check that the file has one SPDX line and one pragma, and that the pragma matches the version in the prompt.
 
 Checks: `compile`, the ten test functions, and `uses_standard_library`.
 
@@ -260,9 +267,10 @@ A Scaffold-ETH 2 contract, for example, is `workspace/packages/hardhat/contracts
 - The runner copies the agent's final workspace into the scorer under `workspace/`, without `.git`, `out`, or `cache`, and keeps only `.sol` files from `node_modules`. The copy holds at most 50 MiB and 20,000 files.
 - Forge compiles your tests and what they import, and nothing else. A broken file elsewhere in the workspace doesn't matter.
 - A missing file fails `compile` with Forge's reason, such as `Source "workspace/src/Vault.sol" not found`. One missing import fails every test, so `compile` is all or nothing.
-- Import only forge-std in tests. Reach the agent's contract through forge-std's interfaces, such as `forge-std/interfaces/IERC20.sol`, and `address` casts.
+- Apart from the agent's files, import only forge-std in tests. Reach the agent's contract through forge-std's interfaces, such as `forge-std/interfaces/IERC20.sol`, and `address` casts.
 - The agent's code compiles against the libraries the agent installed with `forge install` or npm. The runner maps each agent project's libraries only for files in that project.
 - No image ships a Solidity compiler. Forge installs the version each file's pragma asks for, in the agent's container and in the scorer, so any released 0.8.x works. If the task depends on a version, name it in the prompt and in `foundry.toml`.
+- A pragma that no released compiler satisfies fails `compile`. A failed compiler download is an error, not a failed check, so the epoch can get another attempt.
 - Tests can read only `chain.json` and `private.json`. FFI is off.
 
 Forge test results become checks:
@@ -270,7 +278,7 @@ Forge test results become checks:
 - The check name is the test function's name, without the suite path or `()`.
 - The reason is the assertion message. `assertEq(a, b, "recipient balance")` fails as `recipient balance: 12500000 != 13000000`, so write the message you want on the board.
 - `validate` rejects `testFail*` names, because a failing one hides every other test in its suite. Use `vm.expectRevert`.
-- A reverting `setUp()` turns its suite into one failed check named `<Contract>.setUp`.
+- A reverting `setUp()` or constructor turns its suite into one failed check named `<Contract>.setUp` or `<Contract>.constructor`.
 
 The agent's contract runs inside Forge's test environment, so it can call the cheatcode address and fake what a test reads with `vm.mockCall` or `vm.store`.
 This is allowed for now and watched in transcripts.
@@ -299,7 +307,7 @@ chain: {fork: mainnet, block: 23819000}
 ```
 
 - The block is required, so every epoch starts from the same state. The runner knows `mainnet` and `base`.
-- The runner reads the network's RPC URL from a repository secret and passes it only to anvil in the chain container. Neither the agent nor setup sees it. Anvil runs with the network's chain ID and no prefunded accounts.
+- The runner reads the network's RPC URL from a repository secret and passes it only to anvil in the chain container. The agent never sees it, and the runner replaces it with `<fork rpc>` in RPC replies and command output. Anvil runs with the network's chain ID and no prefunded accounts.
 - The runner runs `forge test --no-storage-caching` on forks, so a cached read from an earlier epoch can't pass a wrong answer.
 - On a fork, the chain container gets 1 GiB, and setup and `forge test` each get 600 seconds.
 - To check a fork eval locally, set `MAINNET_RPC_URL` or `BASE_RPC_URL` to an archive RPC URL.
@@ -307,22 +315,28 @@ chain: {fork: mainnet, block: 23819000}
 [vesting-claim](../evals/transactions/vesting-claim) is the example.
 A vesting contract holds 50,000 USDC, and its beneficiary says the funds are stuck. The owner asks the agent to get the USDC to the beneficiary.
 Setup deploys `workspace/src/Vesting.sol` from the agent's account, with a schedule that ended a year before the fork block.
-It funds the contract by impersonating a holder with enough USDC at the pinned block, and stops impersonating before it ends:
+Three `vm.rpc` calls move the USDC from a holder that has enough at the pinned block:
 
 ```solidity
 vm.rpc("anvil_impersonateAccount", string.concat('["', vm.toString(HOLDER), '"]'));
-vm.startBroadcast(HOLDER);
-IERC20(USDC).transfer(address(vesting), 50_000e6);
-vm.stopBroadcast();
+// ERC-20 balances can be funded at the future CREATE address before deployment.
+vm.rpc("eth_sendTransaction", string.concat('[{"from":"', vm.toString(HOLDER), '","to":"', vm.toString(USDC),
+    '","data":"', vm.toString(abi.encodeCall(IERC20.transfer, (address(vesting), 50_000e6))), '"}]'));
 vm.rpc("anvil_stopImpersonatingAccount", string.concat('["', vm.toString(HOLDER), '"]'));
 ```
 
-The tests check that the beneficiary holds the 50,000 USDC and that the contract holds none.
+- A `vm.rpc` call runs on the chain at once, during Forge's simulation. The USDC lands at the contract's address before the broadcast deploys the contract.
+- Send from the holder with `vm.rpc`, not a broadcast. A broadcast needs the sender's key, and setup has none for the holder.
+- Stop impersonating before `run()` returns.
+
+Checks: `compile`, `test_beneficiary_holds_the_usdc`, `test_vesting_contract_is_empty`, and the rubric's `explained_the_release`.
 The reference solution calls the contract's own `release(usdc)` from the agent's key.
 
 The free check on a PR has no secrets, so for a fork eval it validates the folder and skips both passes.
-A maintainer reads the PR, then runs the fork check, a manual workflow that takes the PR number and runs both passes with the RPC secret and no model.
-The eval merges only after the fork check passes.
+A maintainer reads the PR, then dispatches the `fork-check.yml` workflow with the PR number and the full SHA of the commit they read.
+If the PR head is no longer that commit, the workflow fails.
+Otherwise it runs both passes with the `MAINNET_RPC_URL` and `BASE_RPC_URL` secrets and no model, and posts a `fork check` status on that commit.
+The eval merges only after that status passes.
 
 ## Add an extra service
 
@@ -371,7 +385,7 @@ If the command fails, use these steps:
 
 - For a declaration error, fix the named key or file, then rerun `validate`.
 - For `status: error`, read `error_reason` and the log at `log_file`, relative to that pass's output folder. Fix setup failures before you submit.
-- For a failed reference, read each failed check's `reason`: Forge's compiler error, your assertion message, or a `<Contract>.setUp` failure.
+- For a failed reference, read each failed check's `reason`: Forge's compiler error, your assertion message, or a `<Contract>.setUp` or `<Contract>.constructor` failure.
 - If the untouched pass passes, strengthen the tests so they reject unfinished work.
 - For a Docker capacity error, increase Docker memory or reduce concurrency in the runner configuration.
 
