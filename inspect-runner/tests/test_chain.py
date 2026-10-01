@@ -46,12 +46,31 @@ def proxy(monkeypatch):
     thread.join()
 
 
-@pytest.mark.parametrize("method", ["eth_sendUnsignedTransaction", "hardhat_setBalance"])
-def test_filter_refuses_keyless_sends_and_controls(proxy, method):
+@pytest.mark.parametrize("method", [
+    "hardhat_setBalance", "anvil_setBalance", "evm_setAccountNonce", "tenderly_setBalance",
+    "debug_traceTransaction", "trace_transaction", "ots_getApiLevel", "txpool_content",
+    "net_peerCount", "eth_unknownMethod",
+])
+def test_filter_refuses_controls_and_unknown_methods(proxy, method):
     request, writes = proxy
     status, body = request({"jsonrpc": "2.0", "id": 7, "method": method, "params": []})
     assert status == 200
     assert json.loads(body) == {"jsonrpc": "2.0", "id": 7, "error": {"code": -32601, "message": "Method is not allowed."}}
+    _, allowed = request({"jsonrpc": "2.0", "id": 1, "method": "eth_chainId"})
+    assert json.loads(allowed)["result"] == "0xabc"
+    assert writes == [{"jsonrpc": "2.0", "id": 1, "method": "eth_chainId"}]
+
+
+@pytest.mark.parametrize("method", [
+    "eth_sendTransaction", "eth_sendTransactionSync", "eth_sendUnsignedTransaction",
+    "eth_sign", "eth_signTransaction", "eth_signTypedData", "eth_signTypedData_v3",
+    "eth_signTypedData_v4", "personal_sign",
+])
+def test_filter_refuses_node_signing_with_local_signing_advice(proxy, method):
+    request, writes = proxy
+    status, body = request({"jsonrpc": "2.0", "id": 7, "method": method, "params": []})
+    assert (status, json.loads(body)) == (200, {"jsonrpc": "2.0", "id": 7, "error": {
+        "code": -32601, "message": "Sign locally and use eth_sendRawTransaction."}})
     _, allowed = request({"jsonrpc": "2.0", "id": 1, "method": "eth_chainId"})
     assert json.loads(allowed)["result"] == "0xabc"
     assert writes == [{"jsonrpc": "2.0", "id": 1, "method": "eth_chainId"}]
@@ -67,13 +86,37 @@ def test_filter_rejects_entire_mixed_batch(proxy):
     assert writes == [{"jsonrpc": "2.0", "id": 3, "method": "eth_getBalance", "params": ["0x123", "latest"]}]
 
 
-@pytest.mark.parametrize("method", ["eth_sendRawTransaction", "eth_getBalance"])
+@pytest.mark.parametrize("method", [
+    "eth_sendRawTransaction", "eth_getBalance", "eth_newFilter", "eth_newBlockFilter",
+    "eth_newPendingTransactionFilter", "eth_getFilterChanges", "eth_getFilterLogs",
+    "eth_uninstallFilter", "eth_blobBaseFee", "eth_createAccessList", "eth_getBlockReceipts",
+    "eth_simulateV1", "eth_sendRawTransactionSync", "eth_config",
+])
 def test_filter_passes_signed_sends_and_wallet_reads(proxy, method):
     request, writes = proxy
     payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": ["0x123"]}
     status, body = request(payload)
     assert (status, json.loads(body)["result"]) == (200, "0xabc")
     assert writes == [payload]
+
+
+@pytest.mark.parametrize("method,message", [
+    ("eth_sign", "Sign locally and use eth_sendRawTransaction."),
+    ([], "Batch contains a refused method."),
+])
+def test_filter_rejects_signing_and_malformed_batches(proxy, method, message):
+    request, writes = proxy
+    status, body = request([
+        {"jsonrpc": "2.0", "id": 1, "method": "eth_sendRawTransaction", "params": ["0x123"]},
+        {"jsonrpc": "2.0", "id": 2, "method": method},
+    ])
+    assert (status, json.loads(body)) == (200, [
+        {"jsonrpc": "2.0", "id": 1, "error": {"code": -32601, "message": "Batch contains a refused method."}},
+        {"jsonrpc": "2.0", "id": 2, "error": {"code": -32601, "message": message}},
+    ])
+    _, allowed = request({"jsonrpc": "2.0", "id": 3, "method": "eth_chainId"})
+    assert json.loads(allowed)["result"] == "0xabc"
+    assert writes == [{"jsonrpc": "2.0", "id": 3, "method": "eth_chainId"}]
 
 
 def test_filter_rejects_websocket_beacon_and_non_json(proxy):

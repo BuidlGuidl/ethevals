@@ -10,6 +10,7 @@ RUN python3 -c 'import hashlib, json, os, pathlib, urllib.request; \
     assert hashlib.sha256(data).hexdigest() == source["sha256"], "solc checksum mismatch"; \
     path = pathlib.Path("/opt/solc"); path.write_bytes(data); path.chmod(0o755)'
 COPY rpc_filter.py /opt/rpc_filter.py
+COPY rpc_methods.json /opt/rpc_methods.json
 RUN ln -s /usr/local/bin/python3 /usr/bin/python3 && \
     useradd --create-home foundry && mkdir /eval && chown foundry:foundry /eval
 USER foundry

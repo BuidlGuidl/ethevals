@@ -1,21 +1,20 @@
 """Forward allowed JSON-RPC requests to the loopback-only chain."""
 import json
+from pathlib import Path
 import subprocess
 import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-READS = frozenset({
-    "web3_clientVersion", "web3_sha3", "net_version", "net_listening", "net_peerCount",
-    "eth_chainId", "eth_blockNumber", "eth_syncing", "eth_gasPrice", "eth_maxPriorityFeePerGas",
-    "eth_feeHistory", "eth_getBalance", "eth_getTransactionCount", "eth_getCode", "eth_getStorageAt",
-    "eth_call", "eth_estimateGas", "eth_getBlockByHash", "eth_getBlockByNumber",
-    "eth_getBlockTransactionCountByHash", "eth_getBlockTransactionCountByNumber",
-    "eth_getTransactionByHash", "eth_getTransactionByBlockHashAndIndex",
-    "eth_getTransactionByBlockNumberAndIndex", "eth_getTransactionReceipt", "eth_getLogs", "eth_getProof",
-    "eth_accounts", "eth_getAccountInfo",
+ALLOWED = frozenset(method for method, decision in
+                    json.loads(Path(__file__).with_name("rpc_methods.json").read_text()).items()
+                    if decision == "allow")
+NODE_SIGNING = frozenset({
+    "eth_sendTransaction", "eth_sendTransactionSync", "eth_sendUnsignedTransaction",
+    "eth_sign", "eth_signTransaction", "eth_signTypedData", "eth_signTypedData_v3",
+    "eth_signTypedData_v4", "personal_sign",
 })
-ALLOWED = READS | {"eth_sendRawTransaction"}
+SIGNING_REFUSAL = "Sign locally and use eth_sendRawTransaction."
 MAX_BODY = 2 * 1024 * 1024
 REFUSALS = "/tmp/rpc-refusals.log"
 
@@ -56,10 +55,14 @@ class Chain:
                 method = request.get("method") if isinstance(request, dict) else None
                 refusal(repr(method))
                 refused.append(error(request, -32601 if valid else -32600,
-                                     "Method is not allowed." if valid else "Invalid JSON-RPC request."))
+                                     (SIGNING_REFUSAL if method in NODE_SIGNING else "Method is not allowed.")
+                                     if valid else "Invalid JSON-RPC request."))
         # Reject the whole batch before forwarding any member.
         if refused:
-            return [error(request, -32601, "Batch contains a refused method.") for request in requests] if batch else refused[0]
+            return [error(request, -32601, SIGNING_REFUSAL if isinstance(request, dict) and
+                          isinstance(request.get("method"), str) and
+                          request.get("method") in NODE_SIGNING else "Batch contains a refused method.")
+                    for request in requests] if batch else refused[0]
         data = json.dumps(payload).encode()
         request = urllib.request.Request("http://127.0.0.1:8546", data, {"Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=15) as response:
