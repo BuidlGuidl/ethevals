@@ -49,9 +49,9 @@ def results_rows(log: EvalLog) -> list[dict]:
             cost_source = "unavailable"
         passed = None if error else all(check["passed"] for check in checks.values())
         rows.append({
-            "schema_version": 4,
+            "schema_version": 5,
             **{key: metadata.get(key) for key in (
-                "eval_id", "eval_hash", "type", "mode", "harness", "model", "effort",
+                "eval_id", "eval_hash", "mode", "harness", "model", "effort",
             )},
             "epoch": metadata.get("epoch", sample.epoch),
             "attempt": metadata.get("attempt", 1),

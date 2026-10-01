@@ -1,15 +1,16 @@
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Literal
 
 from inspect_ai.dataset import Sample
 from inspect_ai.tool import Skill
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .config import Config, Declaration, Mode, parse_file
 from .scorers import TargetScorer, rubric_questions
 from .check_script import script_path, validate_script
-from .sandboxes import IMAGES, SOLC_VERSIONS, validate_compose
+from .sandboxes import validate_compose
 from .files import manifest, content_hash, inline_file
 from .skills import pack_skills
 
@@ -19,9 +20,15 @@ PILLARS = {"concepts", "transactions", "building", "security"}
 class EvalDeclaration(Declaration):
     prompt: str = Field(min_length=1)
     motivation: str = Field(min_length=1)
-    type: Literal["quiz", "scenario", "build", "act"]
+    chain: Literal["anvil"] | None = None
     modes: list[Mode] = Field(min_length=1)
     choices: list[str] | None = Field(default=None, min_length=2, max_length=26)
+
+    @model_validator(mode="after")
+    def check_chain(self):
+        if "chain" in self.model_fields_set and self.chain is None:
+            raise ValueError("chain must be anvil or absent")
+        return self
 
 
 @dataclass(frozen=True)
@@ -42,19 +49,11 @@ class Eval:
             f"/workspace/{name.removeprefix('workspace/')}": inline_file(data)
             for name, data in self.files.items() if name.startswith("workspace/")
         }
-        notes = []
-        if "tests" in self.scorer_kinds:
-            files["/workspace/foundry.toml"] = inline_file((IMAGES / "foundry.toml").read_bytes())
-            notes.append(
-                f"Available solc versions: {', '.join(SOLC_VERSIONS)}. "
-                "Use the supplied foundry.toml without changing compiler settings or remappings. "
-                "OpenZeppelin and forge-std come from the image. Other Solidity dependencies must use relative imports under src/ or lib/."
-            )
         return Sample(
-            id=self.id, input="\n".join([self.declaration.prompt, *notes]),
+            id=self.id, input=self.declaration.prompt,
             target=self.target.target if self.target else "", choices=self.declaration.choices,
             files=files, metadata={"eval_id": self.id, "eval_hash": self.hash,
-                                   "pillar": self.pillar, "type": self.declaration.type},
+                                   "pillar": self.pillar},
         )
 
 
@@ -70,24 +69,31 @@ def load_eval(folder: Path, config: Config) -> Eval:
     if "skills" in declaration.modes:
         pack, skills = pack_skills()
         files.update(pack)
-    if declaration.type == "scenario":
-        raise ValueError(f"{folder / 'eval.yaml'}: type: scenario is not supported yet")
     if any(not choice.strip() for choice in declaration.choices or []):
         raise ValueError(f"{folder / 'eval.yaml'}: choices must not contain blank entries")
     if folder.parent.name not in PILLARS:
         raise ValueError(f"{folder / 'eval.yaml'}: pillar must be one of {sorted(PILLARS)}")
-    for name in ("workspace", "scorer"):
-        if not (folder / name).is_dir():
-            raise ValueError(f"{folder / name}: {name}: required directory is missing")
+    if not (folder / "scorer").is_dir():
+        raise ValueError(f"{folder / 'scorer'}: required directory is missing")
     kinds = [kind for kind, present in (
         ("target", "scorer/target.yaml" in files),
         ("tests", (folder / "scorer/tests").is_dir()),
         ("check_script", script_path(files, "check") is not None),
         ("rubric", "scorer/rubric.md" in files),
     ) if present]
-    primary = {"quiz": "target", "build": "tests", "act": "check_script"}.get(declaration.type)
-    if primary not in kinds or set(kinds) - {primary, "rubric"}:
-        raise ValueError(f"{folder / 'scorer'}: scorer files do not match type {declaration.type}")
+    if not kinds:
+        raise ValueError(f"{folder / 'scorer'}: at least one scorer is required")
+    if "vanilla" in declaration.modes and (declaration.chain or "tests" in kinds or
+            any(name.startswith("workspace/") for name in files)):
+        raise ValueError(f"{folder}: vanilla requires no chain, workspace files, or tests")
+    lint_agent_text(declaration.prompt, str(folder / "eval.yaml"))
+    for name, data in files.items():
+        if name.startswith("workspace/"):
+            try:
+                value = data.decode("utf-8")
+            except UnicodeDecodeError:
+                continue
+            lint_agent_text(value, str(folder / name))
     target = None
     if "target" in kinds:
         path = folder / "scorer/target.yaml"
@@ -97,18 +103,18 @@ def load_eval(folder: Path, config: Config) -> Eval:
             valid = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:len(declaration.choices)])
             if any(value not in valid for value in targets):
                 raise ValueError(f"{path}: target must name an available choice letter")
-        validate_hf_export(declaration, target, str(path))
+        if "rubric" not in kinds:
+            validate_hf_export(declaration, target, str(path))
     if "tests" in kinds:
-        if "workspace/foundry.toml" in files:
-            raise ValueError(f"{folder}: workspace/foundry.toml is runner-owned; remove the author's file")
         if not any(name.startswith("scorer/tests/") and name.endswith(".t.sol") for name in files):
             raise ValueError(f"{folder}: scorer/tests must contain a .t.sol file")
     if "rubric" in kinds:
         rubric_questions(files)
     if "check_script" in kinds:
         validate_script(declaration, files)
-    if declaration.type in {"build", "act"} and not (folder / "scorer/solution").is_dir():
-        raise ValueError(f"{folder}: scorer/solution is required for build and act evals")
+    validate_check_names(files, target, folder)
+    if ("tests" in kinds or declaration.chain) and not (folder / "solution").is_dir():
+        raise ValueError(f"{folder}: solution is required for tests or a chain")
     if (folder / "compose.yaml").is_dir():
         raise ValueError(f"{folder / 'compose.yaml'}: must be a regular file")
     if "compose.yaml" in files:
@@ -118,7 +124,35 @@ def load_eval(folder: Path, config: Config) -> Eval:
 
 
 def validate_hf_export(declaration: EvalDeclaration, target: TargetScorer, source: str) -> None:
-    if declaration.type != "quiz" or "vanilla" not in declaration.modes:
+    if "vanilla" not in declaration.modes:
         return
     if isinstance(target.target, list) and len(target.target) != 1:
         raise ValueError(f"{source}: Inspect's HF loader cannot preserve alternative targets")
+
+
+AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being tested(?:s)?)\b", re.IGNORECASE)
+
+
+def lint_agent_text(value: str, source: str) -> None:
+    if match := AGENT_WORDS.search(value):
+        raise ValueError(f"{source}: agent-visible text contains forbidden word {match.group()!r}")
+
+
+def validate_check_names(files, target, folder):
+    names = [target.name] if target else []
+    if "scorer/rubric.md" in files:
+        names.extend(rubric_questions(files))
+    for path, data in files.items():
+        if path.startswith("scorer/tests/") and path.endswith(".t.sol"):
+            source = data.decode("utf-8")
+            source = re.sub(r"/\*.*?\*/|//[^\n]*", "", source, flags=re.DOTALL)
+            names.extend(re.findall(r"\bfunction\s+(test\w*|compile)\s*\(", source))
+    seen = set()
+    for name in names:
+        if name == "compile":
+            raise ValueError(f"{folder}: check name 'compile' is reserved")
+        if name.startswith("testFail"):
+            raise ValueError(f"{folder}: testFail functions are forbidden: {name}")
+        if name in seen:
+            raise ValueError(f"{folder}: duplicate check name {name!r}")
+        seen.add(name)

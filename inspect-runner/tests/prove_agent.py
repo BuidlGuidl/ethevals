@@ -178,22 +178,19 @@ console.log(JSON.stringify({matches, files, environments}));
             assert "ERC" in result.text or "token" in result.text.lower(), result.text
             search_ok = True
             print(json.dumps({"exa_search": "passed", "result": result.text}), flush=True)
-        if evaluation.declaration.type == "quiz":
+        if evaluation.target is not None:
             if args.answer == "empty":
                 return ModelOutput.from_content("mockllm/model", "No answer.")
             return ModelOutput.from_content("mockllm/model", "ANSWER: C" if evaluation.declaration.choices else "8004")
         if calls == work_call and args.answer == "reference":
-            if evaluation.declaration.type == "act":
-                solution = evaluation.files["scorer/solution/run.sh"]
+            if evaluation.declaration.chain:
+                solution = evaluation.files["solution/run.sh"]
                 encoded = base64.b64encode(solution).decode()
-                command = ("test ! -e /workspace/scorer && "
-                           f"printf '%s' '{encoded}' | base64 -d > /workspace/run.sh && bash /workspace/run.sh")
+                command = f"printf '%s' '{encoded}' | base64 -d > /workspace/run.sh && bash /workspace/run.sh"
                 return ModelOutput.for_tool_call("mockllm/model", "Bash", {"command": command, "description": "Read decimals and sign the transfer"})
-            solution = (evaluation.folder / "scorer/solution/src/BuilderPoints.sol").read_bytes()
+            solution = (evaluation.folder / "solution/src/BuilderPoints.sol").read_bytes()
             encoded = base64.b64encode(solution).decode()
             command = (
-                "test ! -e /workspace/scorer && test ! -e /workspace/test/BuilderPoints.t.sol && "
-                "test ! -e /workspace/rubric.md && "
                 f"printf '%s' '{encoded}' | base64 -d > /workspace/src/BuilderPoints.sol && forge build"
             )
             if harness == "codex_cli":
@@ -202,7 +199,7 @@ console.log(JSON.stringify({matches, files, environments}));
                 name = "Bash" if harness == "claude_code" else "bash"
                 arguments = {"command": command, "description": "Write the requested token"}
             return ModelOutput.for_tool_call("mockllm/model", name, arguments)
-        if evaluation.declaration.type == "act" and args.answer == "reference" and calls == work_call + 1:
+        if evaluation.declaration.chain and args.answer == "reference" and calls == work_call + 1:
             command = r'''read_value() { sed -n 's/.*"'"$1"'": "\([^"]*\)".*/\1/p' chain.json; }; cast call "$(read_value token)" "balanceOf(address)(uint256)" "$(read_value recipient)" --rpc-url "$(read_value rpc_url)"'''
             return ModelOutput.for_tool_call("mockllm/model", "Bash", {
                 "command": command, "description": "Confirm the recipient balance before reporting success"})
@@ -210,7 +207,7 @@ console.log(JSON.stringify({matches, files, environments}));
 
     def grade(messages, tools, tool_choice, config):
         evidence = json.loads(messages[1].text)
-        if evaluation.declaration.type == "act" and args.answer == "reference":
+        if evaluation.declaration.chain and args.answer == "reference":
             call = next(call for message in evidence for call in message.get("tool_calls", [])
                         if "balanceOf(address)(uint256)" in call["arguments"].get("command", ""))
             result = next(message for message in evidence if message.get("tool_call_id") == call["id"])
@@ -219,13 +216,13 @@ console.log(JSON.stringify({matches, files, environments}));
             assert result["role"] == "tool" and result["function"] == "Bash", result
             assert "12500000" in result["content"], result
             print(json.dumps({"grader_balance_check": call, "grader_balance_result": result}), flush=True)
-        elif evaluation.declaration.type == "build":
+        elif "tests" in evaluation.scorer_kinds:
             assert "src/BuilderPoints.sol" in evidence
             assert "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol" not in evidence
         passed = args.answer == "reference"
         return ModelOutput.from_content("mockllm/model", json.dumps({
             "passed": passed,
-            "reason": ("The agent checked the recipient balance before reporting success." if evaluation.declaration.type == "act"
+            "reason": ("The agent checked the recipient balance before reporting success." if evaluation.declaration.chain
                        else "The submitted token uses OpenZeppelin without holder controls.") if passed else "No completed work.",
         }))
 
@@ -275,9 +272,9 @@ console.log(JSON.stringify({matches, files, environments}));
     else:
         assert any("web_search_exa" in name for name in tool_names), tool_names
         assert not tool_names.intersection({"WebSearch", "websearch", "web_search", "web_search_preview", "web__run"}), tool_names
-    if evaluation.declaration.type == "act":
+    if evaluation.declaration.chain:
         assert row["checks"]["rubric:verified_transfer"]["passed"] == (args.answer == "reference"), row
-    if evaluation.declaration.type == "build":
+    if "tests" in evaluation.scorer_kinds:
         assert len([name for name in row["checks"] if name.startswith("forge:")]) == 8, row
         assert set(name for name in row["checks"] if name.startswith("rubric:")) == {
             "rubric:uses_openzeppelin", "rubric:protects_holders",

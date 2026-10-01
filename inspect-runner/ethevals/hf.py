@@ -45,8 +45,8 @@ def write_hf(evals: list[Eval], output: Path, repo: str = DEFAULT_REPO,
     groups = {}
     skipped = []
     for evaluation in sorted(evals, key=lambda item: item.id):
-        if evaluation.declaration.type != "quiz" or "vanilla" not in evaluation.declaration.modes:
-            skipped.append({"eval_id": evaluation.id, "reason": "not a quiz" if evaluation.declaration.type != "quiz"
+        if evaluation.target is None or "vanilla" not in evaluation.declaration.modes:
+            skipped.append({"eval_id": evaluation.id, "reason": "target.yaml is absent" if evaluation.target is None
                             else "vanilla mode is not declared"})
             continue
         if "rubric" in evaluation.scorer_kinds:

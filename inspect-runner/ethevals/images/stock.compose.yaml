@@ -2,14 +2,15 @@ services:
   default:
     mem_limit: 3g
     init: true
-    networks: [private, internet]
+    networks: [work, agent_internet]
   scorer:
     mem_limit: 2g
     init: true
-    networks: [private, internet]
+    networks: [scorer_internet]
 networks:
-  private:
+  work:
     internal: true
     driver_opts:
       com.docker.network.bridge.inhibit_ipv4: "true"
-  internet: {}
+  agent_internet: {}
+  scorer_internet: {}

@@ -27,7 +27,7 @@ All data paths resolve from `site/`.
 Demo mode and an explicit rows path cannot be combined.
 A missing default rows file produces the empty state; a missing explicit file fails the build.
 Malformed rows and duplicate epochs fail with their file and line.
-The loader accepts schema version 4 and displays only current eval hashes.
+The loader accepts schema version 5, skips older rows, and displays only current eval hashes.
 The agent table switches between internet and skills rows.
 The build reports loaded, current, and stale row counts.
 

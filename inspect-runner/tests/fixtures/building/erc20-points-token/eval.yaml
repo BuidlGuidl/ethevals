@@ -1,4 +1,3 @@
-type: build
 motivation: Check whether an agent can build a standard points token without powers that harm holders.
 modes: [internet, skills]
 prompt: |

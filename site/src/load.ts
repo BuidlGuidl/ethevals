@@ -9,7 +9,6 @@ import { logLink } from "./logs";
 // This checks the JSON transport. The runner owns eval declarations and hashes.
 const catalogSchema = z.array(z.object({
   id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
-  type: z.enum(["quiz", "build", "act"]),
   motivation: z.string().min(1), prompt: z.string().min(1),
   choices: z.array(z.string()).nullable().transform((value) => value ?? []),
   modes: z.array(z.enum(["vanilla", "internet", "skills"])).min(1),
@@ -32,14 +31,14 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
   return contents.split(/\r?\n/).flatMap((line, index) => {
     if (!line.trim()) return [];
     try {
-      const row = rowSchema.parse(JSON.parse(line));
+      const value = JSON.parse(line);
+      if (Number.isInteger(value.schema_version) && value.schema_version < 5) return [];
+      const row = rowSchema.parse(value);
       if (row.mode !== "vanilla" && !row.harness) throw new Error("Agent rows require a harness.");
       if (row.mode === "vanilla" && row.harness !== null) throw new Error("Vanilla rows cannot have a harness.");
-      if (row.mode === "vanilla" && row.type !== "quiz") throw new Error("Vanilla rows require a quiz eval.");
       const evaluation = current.get(row.eval_id);
       if (evaluation?.hash === row.eval_hash) {
         if (!evaluation.modes.includes(row.mode)) throw new Error("The eval does not declare this mode.");
-        if (evaluation.type !== row.type) throw new Error("The type differs from the current eval.");
       }
       const key = JSON.stringify([row.eval_id, row.eval_hash, agentKey(row), row.mode, row.epoch]);
       if (identities.has(key)) throw new Error(`Duplicate epoch for ${row.eval_id}, ${row.model}, epoch ${row.epoch}.`);

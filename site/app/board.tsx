@@ -69,7 +69,7 @@ function ResultsTable({ data, mode, onOpen, onMode, hidden }: {
       <details><summary>Browse {evaluations.length} evals</summary><div className="catalog">
         {evaluations.map((evaluation) => <article key={evaluation.id}>
           <h3>{evaluation.title}</h3><p>{evaluation.motivation}</p>
-          <p className="subline">{names[evaluation.pillar]} · {evaluation.type} · {evaluation.modes.join(", ")}</p>
+          <p className="subline">{names[evaluation.pillar]} · {evaluation.modes.join(", ")}</p>
           <details><summary>Read prompt</summary><Prompt evaluation={evaluation} /></details>
         </article>)}
       </div></details>
@@ -115,7 +115,7 @@ function ResultsTable({ data, mode, onOpen, onMode, hidden }: {
               <tbody id={id} hidden={!open}>
                 {items.length ? items.map((entry) => { const evaluation = data.evaluations[entry.id]; return <tr key={evaluation.id} className="eval-row">
                   <th scope="row" className="row-label" onMouseEnter={() => setColumn(null)}>
-                    {evaluation.title}<span className="eval-id">{evaluation.id}</span><span className="subline">{evaluation.type}</span>
+                    {evaluation.title}<span className="eval-id">{evaluation.id}</span>
                   </th>
                   {agents.map((agent) => <td key={agentKey(agent)}
                     className={column === agentKey(agent) ? "column-hover" : ""}
@@ -225,7 +225,7 @@ export function Detail({ selection, data, onSelect, onClose }: {
         <p>Each eval with scored epochs has equal weight. Missing and errored epochs never count as zero.</p>
         {cell.state === "score" && <p className="muted">{percent(cell.score!)} is the mean of {pillarRow.cells[key].scoredEvals} eval scores. The epoch count in each score tooltip adds their epochs together.</p>}
         <div className="eval-list">{pillarRow.evals.map((entry) => { const item = data.evaluations[entry.id]; return <button key={item.id} onClick={() => onSelect({ ...selection, evaluation: item })}>
-          <span>{item.title}<span className="eval-id">{item.type} · {item.id}</span></span>
+          <span>{item.title}<span className="eval-id">{item.id}</span></span>
           <span className="mono">{cellText(entry.cells[key])}</span>
         </button>; })}</div>
         {cell.state === "empty" && <p>No evals yet for this mode.</p>}

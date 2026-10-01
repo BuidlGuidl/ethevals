@@ -16,17 +16,18 @@ CHECK_SECONDS = 120
 
 
 def validate_script(declaration, files):
-    if not all(uses_sandbox(mode) for mode in declaration.modes):
-        raise ValueError("check_script requires an act eval with agent modes only")
+    if not declaration.chain or not all(uses_sandbox(mode) for mode in declaration.modes):
+        raise ValueError("check_script requires a chain and agent modes only")
     script_path(files, "check", required=True)
     script_path(files, "setup")
 
 
 def script_path(files, name, *, required=False):
-    paths = [path for path in files if PurePosixPath(path).parent == PurePosixPath("scorer")
+    directory = "setup" if name == "setup" else "scorer"
+    paths = [path for path in files if PurePosixPath(path).parent == PurePosixPath(directory)
              and (PurePosixPath(path).name == name or PurePosixPath(path).name.startswith(name + "."))]
     if len(paths) > 1 or (required and not paths):
-        raise ValueError(f"Expected one scorer/{name} or scorer/{name}.<ext> file")
+        raise ValueError(f"Expected one {directory}/{name} or {directory}/{name}.<ext> file")
     return paths[0] if paths else None
 
 
@@ -63,7 +64,7 @@ def setup_files(outputs, files):
 async def setup_script(evaluation, environments):
     box = environments["chain"]
     for name, data in evaluation.files.items():
-        if name.startswith("scorer/") and not name.startswith("scorer/solution/"):
+        if name.startswith(("scorer/", "setup/")):
             await box.write_file("/eval/" + name, data)
     scripts = [script_path(evaluation.files, name) for name in ("setup", "check")]
     await runner_exec(box, ["/bin/chmod", "+x", *("/eval/" + path for path in scripts if path)])
@@ -83,11 +84,11 @@ async def setup_script(evaluation, environments):
 async def run_solution(evaluation, box=None):
     box = box if box is not None else sandbox("scorer")
     files = {name.removeprefix("workspace/"): data for name, data in evaluation.files.items() if name.startswith("workspace/")}
-    files.update({name.removeprefix("scorer/solution/"): data for name, data in evaluation.files.items()
-                  if name.startswith("scorer/solution/")})
+    files.update({name.removeprefix("solution/"): data for name, data in evaluation.files.items()
+                  if name.startswith("solution/")})
     for name, data in files.items():
         await box.write_file("/workspace/" + name, data)
-    if "scorer/solution/run.sh" in evaluation.files:
+    if "solution/run.sh" in evaluation.files:
         result = await runner_exec(box, ["/bin/bash", "/workspace/run.sh"], cwd="/workspace", timeout=120)
         if not result.success:
             raise ValueError(f"Reference solution exited {result.returncode}: {result.stderr[-4096:]}")

@@ -21,7 +21,7 @@ class EvalDocker(DockerSandboxEnvironment):
         environments = await super().sample_init(task_name, config, metadata)
         try:
             evaluation = EVALUATIONS[(metadata["eval_id"], metadata["eval_hash"])]
-            if "check_script" in evaluation.scorer_kinds:
+            if evaluation.declaration.chain:
                 await setup_script(evaluation, environments)
         except BaseException:
             with anyio.CancelScope(shield=True):

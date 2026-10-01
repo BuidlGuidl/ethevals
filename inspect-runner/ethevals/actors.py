@@ -5,12 +5,12 @@ from inspect_ai.model import GenerateConfig, Model, ModelInfo, ModelCost, get_mo
 from inspect_ai.solver import SolverSpec
 from inspect_ai._eval.loader import solver_from_spec
 
-from .agents import HARNESSES, CodexModel, internet_solver
+from .agents import HARNESSES, CodexModel, internet_solver, CHOICE_TEMPLATE
 from .config import Mode, GraderConfig, uses_sandbox
 
 
 def quiz_solver_spec(evaluation):
-    return SolverSpec(solver="multiple_choice" if evaluation.declaration.choices else "generate")
+    return SolverSpec(solver="multiple_choice", args={"template": CHOICE_TEMPLATE}) if evaluation.declaration.choices else SolverSpec(solver="generate")
 
 
 def quiz_solver(evaluation):
@@ -59,8 +59,6 @@ def actor(config, key, mode, item, agent=None, planning=False):
 
     def solve(evaluation):
         if mode == "vanilla":
-            if evaluation.declaration.type != "quiz":
-                raise ValueError("The vanilla mode supports only quiz evals")
             return quiz_solver(evaluation)
         return internet_solver(config, agent, evaluation.skills if mode == "skills" else None)
 
@@ -72,7 +70,7 @@ def grader(config):
 
 
 def select_actors(config, *, models=None, agents=None, modes=None, answer=None, planning=False):
-    from .checks import CHECK_MODES, check_agent, check_grader
+    from .checks import check_mode, check_agent, check_grader
     if unknown := set(agents or []) - config.agents.keys():
         raise ValueError(f"Unknown agent names: {', '.join(sorted(unknown))}")
     if unknown := set(models or []) - config.models.keys():
@@ -89,8 +87,10 @@ def select_actors(config, *, models=None, agents=None, modes=None, answer=None, 
         grade = check_grader()
 
         def agents_for(evaluation):
+            if set(evaluation.scorer_kinds) == {"rubric"}:
+                return []
             declared = evaluation.declaration.modes
-            default = CHECK_MODES[evaluation.declaration.type]
+            default = check_mode(evaluation)
             selected = modes or [default if default in declared else declared[0]]
             return [(mode, check_agent(evaluation, answer, mode=mode))
                     for mode in dict.fromkeys(evaluation.declaration.modes) if mode in selected]

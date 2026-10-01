@@ -60,7 +60,7 @@ def plan(evals, config, agents_for, previous, *, epochs=None, retry_errors=False
         # Reserve every remaining runner attempt. Runtime spends one per invocation.
         remaining = max(1, config.max_attempts - attempt + 1)
         per_attempt = config.cost_limit + rubric_budget(evaluation, config)
-        row = {"eval_id": evaluation.id, "eval_hash": evaluation.hash, "type": evaluation.declaration.type,
+        row = {"eval_id": evaluation.id, "eval_hash": evaluation.hash,
                **actor.metadata, "mode": mode, "epoch": epoch, "attempt": attempt,
                "remaining_attempts": remaining,
                "per_attempt_usd": per_attempt, "worst_case_usd": per_attempt * remaining}

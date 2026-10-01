@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
     config = fixture_config()
     evals = [load_eval(path, config) for path in sorted((ROOT / "evals").glob("*/*"))]
-    evals = [item for item in evals if item.declaration.type == "quiz" and "vanilla" in item.declaration.modes]
+    evals = [item for item in evals if item.target is not None and "vanilla" in item.declaration.modes]
     output = tmp_path / answer
     success, rows = run(evals, config, output, answer=answer)
     assert success is True
@@ -54,7 +54,7 @@ def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected
 
 
 def test_choice_target_list_accepts_either_letter(folder, tmp_path):
-    (folder / "eval.yaml").write_text("type: quiz\nmotivation: Check accepted alternatives.\nprompt: Select a greeting.\nmodes: [internet]\nchoices: [hello, hi, goodbye]\n")
+    (folder / "eval.yaml").write_text("motivation: Check accepted alternatives.\nprompt: Select a greeting.\nmodes: [internet]\nchoices: [hello, hi, goodbye]\n")
     (folder / "scorer/target.yaml").write_text('target: ["A", "B"]\n')
     config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "internet", "reference", 1)

@@ -107,7 +107,7 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(config.model_dump_json())
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
-    base = {"eval_id": quiz.id, "eval_hash": quiz.hash, "type": "quiz", "harness": None,
+    base = {"eval_id": quiz.id, "eval_hash": quiz.hash, "harness": None,
             "model": "mockllm/test", "effort": "high", "mode": "vanilla"}
     rows = [{**base, "epoch": 1, "status": "failed", "attempt": 1},
             {**base, "epoch": 2, "status": "error", "attempt": 1},

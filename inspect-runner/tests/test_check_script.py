@@ -48,7 +48,7 @@ def test_check_script_normalizes_reasons():
         "script:balance": {"passed": False, "reason": "Balance is zero."}}
 
 
-def test_act_requires_check_script_and_allows_declared_chain_file(tmp_path):
+def test_chain_allows_combined_scorers_and_declared_chain_file(tmp_path):
     import shutil
     root = Path(__file__).resolve().parents[2]
     folder = tmp_path / "transactions" / "act"
@@ -57,5 +57,4 @@ def test_act_requires_check_script_and_allows_declared_chain_file(tmp_path):
     assert load_eval(folder, fixture_config()).files["workspace/chain.json"] == b"declared input"
     (folder / "scorer/tests").mkdir()
     (folder / "scorer/tests/Test.t.sol").write_text("contract Test {}")
-    with pytest.raises(ValueError, match="scorer files do not match type act"):
-        load_eval(folder, fixture_config())
+    assert load_eval(folder, fixture_config()).scorer_kinds == ["tests", "check_script", "rubric"]

@@ -11,6 +11,7 @@ from typing import Callable
 
 from .skills import skill_index
 
+CHOICE_TEMPLATE = "{question}\n\n{choices}\n\nReply with ANSWER: followed by one letter from {letters}."
 
 @dataclass(frozen=True)
 class Harness:
@@ -76,7 +77,7 @@ def restore_codex_calls(output, tools):
 def open_code(cli_model: str, *, native_search, search_limit, **settings):
     provider = json.loads((Path(__file__).with_name("images") / "opencode-models.json").read_text())
     return as_solver(opencode(
-        cwd="/workspace", retry_refusals=0, opencode_model=cli_model,
+        cwd="/workspace", retry_refusals=0, opencode_model=cli_model, session_title="Ethereum work",
         env={"OPENROUTER_API_KEY": "sk-none",
              "OPENCODE_CONFIG_CONTENT": json.dumps({"provider": {"openrouter": provider}})},
         **settings,
@@ -106,6 +107,6 @@ def internet_solver(config, agent, skills=None):
         if state.choices:
             async def invoke(state, **kwargs):
                 return await run_agent(state, generate)
-            return await multiple_choice()(state, invoke)
+            return await multiple_choice(template=CHOICE_TEMPLATE)(state, invoke)
         return await run_agent(state, generate)
     return solve

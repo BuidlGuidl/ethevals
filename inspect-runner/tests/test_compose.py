@@ -12,7 +12,7 @@ import yaml
     ({"network_mode": "host"}, "forbidden options"),
     ({"build": "."}, "forbidden options"),
     ({"environment": {"KEY": None}}, "inherited host environment"),
-    ({"networks": ["private", "internet"]}, "private network"),
+    ({"networks": ["work", "internet"]}, "work network"),
     ({"mem_limit": 0}, "positive mem_limit"),
 ])
 def test_unsafe_compose_is_rejected(tmp_path, extra, reason):
@@ -63,4 +63,4 @@ def test_compose_checks_decoded_values_and_allows_literal_dollars(tmp_path):
     path.write_text(text.replace('\\u0024SECRET_PROBE', '$$SECRET_PROBE'))
     service = yaml.safe_load(validate_compose(path))["services"]["extra"]
     assert service["environment"] == {"VALUE": "$$SECRET_PROBE"}
-    assert service["networks"] == ["private"]
+    assert service["networks"] == ["work"]

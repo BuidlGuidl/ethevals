@@ -71,6 +71,10 @@ def main(argv=None) -> int:
         if not paths:
             raise ValueError("No eval folders found. Use --evals or start from the repository root.")
         evals = [load_eval(path, config) for path in paths]
+        if args.command == "check":
+            evals = [evaluation for evaluation in evals if set(evaluation.scorer_kinds) != {"rubric"}]
+            if not evals:
+                return 0
         if args.command == "export-hf":
             print(json.dumps(write_hf(evals, args.output, args.hf_repo, args.license), indent=2))
             return 0

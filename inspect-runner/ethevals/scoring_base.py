@@ -21,10 +21,9 @@ def scoring_boundary(name, score):
     async def checked(state, target):
         limit = epoch_limit()
         try:
-            if limit:
-                if limit.type == "operator" or (limit.type == "time" and
-                        limit.working_start < state.metadata["working_limit_seconds"]):
-                    raise RuntimeError(f"Epoch stopped by {limit.type} before its working limit. {limit.message}")
+            if limit and limit.type != "time":
+                if limit.type == "operator":
+                    raise RuntimeError(f"Epoch stopped by operator. {limit.message}")
                 raise SubmissionFailed(f"Epoch reached {limit.type} limit {limit.limit}. {limit.message}")
             return await score(state, target)
         except SubmissionFailed as error:

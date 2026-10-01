@@ -1,14 +1,12 @@
 import { z } from "zod";
 
 const mode = z.enum(["vanilla", "internet", "skills"]);
-const evalType = z.enum(["quiz", "build", "act"]);
 const count = z.number().int().nonnegative();
 const measure = z.number().nonnegative().nullable();
 export const rowSchema = z.object({
-  schema_version: z.literal(4),
+  schema_version: z.literal(5),
   eval_id: z.string().min(1),
   eval_hash: z.string().min(1),
-  type: evalType,
   mode,
   harness: z.string().min(1).nullable(),
   model: z.string().min(1),
