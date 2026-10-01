@@ -249,6 +249,8 @@ A manual dispatch budget overrides that variable; the fallback budget is zero.
 The job graph is `plan → matrix → publish`.
 The plan job calls `ethevals plan` without provider keys and refuses work above the budget.
 It saves the missing epochs, config, and restored results for the matrix jobs.
+The plan checks out current `main`; the matrix and publisher use the SHA that the plan reports.
+CI runs the first 256 missing epochs; a later run picks up the rest.
 Each matrix job selects one epoch and uses a read-only token.
 Each job builds both stock images with the GitHub Actions cache and loads them locally, without a registry.
 The runner reuses local stock images whose tags match their build inputs.
@@ -256,14 +258,15 @@ Each job allows 240 minutes, including 120 for the agent, 60 for scoring, and 60
 The run step stops after 190 minutes and uploads available results even after failure.
 A separate publisher holds no model keys and runs after failed or timed-out steps on `main`.
 It downloads artifacts from every attempt of the workflow run. The next run resumes missing epochs.
+For recovery, use "Re-run all jobs" instead of "Re-run failed jobs".
 
 `scripts/ci.py plan-epochs` restores pending results, checks the budget, and emits the matrix.
-`run-epoch --plan DIR --index N --output DIR` runs one row from that saved plan.
+Each matrix job calls `ethevals run --epoch N` with its row's selectors and the saved config and results.
 `publish-results` rebuilds every artifact's rows and combines its logs into one release for the workflow run.
-It writes one results commit after publication, including links when the upload succeeds.
-If an upload fails, that commit still records completed epochs and errors.
+It writes one results commit with the planned log URLs before the upload starts.
+If an upload stops, the rows remain recorded; the log URLs work after a successful upload retry.
 It folds `origin/main`, `origin/ci/results`, and artifact rows onto current `main`.
-Successful uploads add log links and update the results pull request without a force push.
+The publisher updates the results pull request without a force push.
 A retry can reopen a missing pull request without repeating a successful push.
 If publication fails, rerun the workflow before starting another paid run to avoid paying for missing rows again.
 Exhausted error epochs remain visible in the plan; a completed no-op succeeds.

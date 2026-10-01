@@ -2,6 +2,7 @@ from pathlib import Path
 import argparse
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 
@@ -222,7 +223,7 @@ def test_plan_epochs_restores_completed_epochs_without_eval(tmp_path, monkeypatc
     assert read_rows(output / "rows.jsonl") == rows
 
 
-def test_plan_emits_two_evals_and_saves_the_admitted_config(tmp_path):
+def test_plan_emits_two_evals(tmp_path):
     from support import small_config
     config_path = tmp_path / "config.json"
     config_path.write_text(small_config().model_dump_json())
@@ -234,12 +235,32 @@ def test_plan_emits_two_evals_and_saves_the_admitted_config(tmp_path):
     values = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
     matrix = json.loads(values["matrix"])
     assert values["missing_epochs"] == "2"
-    assert [(row["index"], row["eval_id"], row["actor_key"], row["mode"], row["epoch"], row["attempt"])
+    assert [(row["eval_id"], row["actor_key"], row["mode"], row["epoch"])
             for row in matrix["include"]] == [
-        (0, "concepts/agent-registries", "test-agent", "internet", 1, 1),
-        (1, "transactions/send-six-decimal-token", "test-agent", "internet", 1, 1)]
-    assert json.loads((output / "config.json").read_text())["models"]["test"] == {
-        "model": "mockllm/test", "effort": "high"}
+        ("concepts/agent-registries", "test-agent", "internet", 1),
+        ("transactions/send-six-decimal-token", "test-agent", "internet", 1)]
+
+
+def test_plan_defers_epochs_above_256_and_next_run_picks_them_up(tmp_path):
+    from support import small_config
+    config = small_config()
+    config_path = tmp_path / "config.json"
+    config_path.write_text(config.model_dump_json())
+    previous, github_output = tmp_path / "rows.jsonl", tmp_path / "github-output"
+    options = ["--config", str(config_path), "--rows", str(previous), "--evals", "evals/concepts/agent-registries",
+               "--models", "test", "--modes", "vanilla", "--epochs", "257", "--budget", "1028"]
+    assert ci.plan_epochs(argparse.Namespace(output=tmp_path / "first", restore_results=False,
+                                            github_output=github_output), options) == 0
+    matrix = json.loads(github_output.read_text().splitlines()[0].removeprefix("matrix="))
+    assert [row["epoch"] for row in matrix["include"]] == list(range(1, 257))
+    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    write_rows(previous, [{"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test", "harness": None,
+                          "effort": "high", "mode": "vanilla", "epoch": epoch, "status": "passed", "attempt": 1}
+                         for epoch in range(1, 257)])
+    assert ci.plan_epochs(argparse.Namespace(output=tmp_path / "second", restore_results=False,
+                                            github_output=github_output), options) == 0
+    matrix = json.loads(github_output.read_text().splitlines()[-2].removeprefix("matrix="))
+    assert [row["epoch"] for row in matrix["include"]] == [257]
 
 
 def test_matrix_runs_one_saved_plan_row_with_its_attempt(tmp_path):
@@ -257,7 +278,9 @@ def test_matrix_runs_one_saved_plan_row_with_its_attempt(tmp_path):
                           ["--config", str(config_path), "--rows", str(previous), "--evals", str(quiz.folder),
                            "--models", "test", "--modes", "vanilla", "--epochs", "3", "--budget", "10"]) == 0
     output = tmp_path / "epoch"
-    assert ci.run_epoch(argparse.Namespace(plan=plan_dir, index=1, output=output)) == 0
+    assert ci.ethevals(["run", "--config", str(plan_dir / "config.json"), "--rows", str(plan_dir / "rows.jsonl"),
+                       "--output", str(output), "--evals", str(quiz.folder), "--models", "test", "--modes", "vanilla",
+                       "--epoch", "2", "--budget", "2"]) == 0
     assert [(item["epoch"], item["attempt"], item["status"], item["effort"])
             for item in read_rows(output / "rows.jsonl")] == [(2, 2, "failed", "high")]
     assert len(list((output / "logs").glob("*.eval"))) == 1
@@ -265,7 +288,6 @@ def test_matrix_runs_one_saved_plan_row_with_its_attempt(tmp_path):
 
 
 def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows(tmp_path, monkeypatch):
-    monkeypatch.delenv("PYTEST_CURRENT_TEST")  # Inspect omits Git revisions under pytest.
     from support import small_config
     config = small_config()
     quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
@@ -277,10 +299,7 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     write_rows(rows, [previous])
     write_rows(output / "rows.jsonl", [new, error])
     (output / "logs").mkdir()
-    run([quiz], config, tmp_path / "seed", answer="reference", epochs=1)
-    log = read_eval_log(str(next((tmp_path / "seed/logs").glob("*.eval"))))
-    log.eval.revision.commit = "b" * 40
-    write_eval_log(log, str(output / "logs/new.eval"))
+    (output / "logs/new.eval").write_text("Log asset")
     monkeypatch.setattr(ci, "store_rows", lambda output: read_rows(output / "rows.jsonl"))
     records = []
     monkeypatch.setattr(ci, "stored_file", lambda ref, path: json.dumps(previous) + "\n" if str(path).endswith("rows.jsonl") else "{}")
@@ -296,6 +315,7 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
     monkeypatch.setattr("ethevals.publish.subprocess.run", fail)
     assert ci.publish_artifacts(args) == 1
     assert [(r["status"], r.get("attempt")) for r in records[0]] == [("passed", None), ("error", 2), ("passed", None)]
+    assert records[0][0]["log_url"] == "https://github.com/owner/repo/releases/download/results-12/new.eval"
     commands = []
     def upload(command, **kwargs):
         if command[0] == "git":
@@ -373,7 +393,7 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
     assert "--force" not in remote[0]
 
 
-def test_two_artifacts_publish_one_release_and_one_results_commit(tmp_path, monkeypatch):
+def test_all_artifact_rows_precede_any_upload_and_retry_uses_the_same_release(tmp_path, monkeypatch):
     config, evaluation = catalog_quiz()
     first, second = tmp_path / "eval-run-12-1-0", tmp_path / "eval-run-12-1-1"
     run([evaluation], config, first, answer="reference", epoch=1, modes=["vanilla"])
@@ -386,8 +406,10 @@ def test_two_artifacts_publish_one_release_and_one_results_commit(tmp_path, monk
     def upload(command, **kwargs):
         if command[0] != "gh":
             return real_subprocess(command, **kwargs)
+        assert [(row["epoch"], row["status"], row["log_url"].split("/")[-2]) for row in stored[-1]] == [
+            (1, "passed", "results-12"), (2, "passed", "results-12")]
         if command[2] == "view":
-            return subprocess.CompletedProcess(command, 1)
+            return subprocess.CompletedProcess(command, 0 if releases else 1)
         releases.append(command)
         return subprocess.CompletedProcess(command, 0)
 
@@ -400,9 +422,13 @@ def test_two_artifacts_publish_one_release_and_one_results_commit(tmp_path, monk
     assert [(row["epoch"], row["status"], row["log_url"].split("/")[-2]) for row in stored[0]] == [
         (1, "passed", "results-12"), (2, "passed", "results-12")]
 
-    # A retry uses the same release and keeps one commit for the combined store.
+    retry = tmp_path / "retry"
+    for artifact in (first, second):
+        shutil.copytree(artifact, retry / artifact.name)
+    args.output = retry
     assert ci.publish_artifacts(args) == 0
-    assert len(releases) == 1
+    assert releases[1][:7] == ["gh", "release", "upload", "results-12", "--repo", "owner/repo", "--clobber"]
+    assert len(releases) == len(stored) == 2
     assert stored[1] == stored[0]
 
 

@@ -65,39 +65,19 @@ def plan_epochs(args, run_args):
         status = ethevals([*argv, "--rows", str(rows)])
     print(captured.getvalue(), end="")
     report = json.loads(captured.getvalue())
-    report["retry_errors"] = options.retry_errors
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     if status:
         return status
-    if len(report["missing"]) > 256:
-        raise ValueError("The epoch plan exceeds GitHub's 256-job matrix limit")
-    matrix = {"include": [{"index": index, **row} for index, row in enumerate(report["missing"])]}
+    missing = report["missing"][:256]
+    matrix = {"include": [{"index": index, **{key: row[key] for key in
+               ("eval_id", "actor_key", "mode", "epoch", "worst_case_usd")}} for index, row in enumerate(missing)]}
+    if len(report["missing"]) > len(missing):
+        print(f"Deferred {len(report['missing']) - len(missing)} epochs to a later run.", file=sys.stderr)
     if args.github_output:
         with args.github_output.open("a") as output:
             output.write(f"matrix={json.dumps(matrix, separators=(',', ':'))}\n")
             output.write(f"missing_epochs={report['missing_epochs']}\n")
     return 0
-
-
-def run_epoch(args):
-    report = json.loads((args.plan / "plan.json").read_text())
-    if not report["within_budget"]:
-        raise ValueError("The epoch plan exceeds its budget")
-    if args.index < 0 or args.index >= len(report["missing"]):
-        raise ValueError("Epoch index is outside the plan")
-    if args.output.exists():
-        raise ValueError("Use a fresh output directory for each CI epoch")
-    row = report["missing"][args.index]
-    selector = "--models" if row["mode"] == "vanilla" else "--agents"
-    argv = ["run", "--config", str(args.plan / "config.json"), "--rows", str(args.plan / "rows.jsonl"),
-            "--output", str(args.output), "--evals", f"evals/{row['eval_id']}",
-            selector, row["actor_key"], "--modes", row["mode"], "--epoch", str(row["epoch"]),
-            "--budget", str(row["worst_case_usd"])]
-    if row["effort"] is not None:
-        argv += ["--effort", row["effort"]]
-    if report["retry_errors"]:
-        argv.append("--retry-errors")
-    return ethevals(argv)
 
 
 def commit_results(rows, repo, publish):
@@ -151,33 +131,25 @@ def publish_artifacts(args):
     combined = args.output / "combined"
     logs = combined / "logs"
     logs.mkdir(parents=True, exist_ok=True)
-    status = 0
     for output in sorted(args.output.glob("eval-run-*")):
         own_rows = store_rows(output)
         rows = fold_rows(rows, own_rows)
         for source in sorted((output / "logs").glob("*.eval")):
-            destination = logs / source.name
-            if destination.exists() and destination.read_bytes() != source.read_bytes():
-                print(f"{source}: duplicate log filename", file=sys.stderr)
-                status = 1
-                continue
-            shutil.copyfile(source, destination)
+            shutil.copyfile(source, logs / source.name)
     if not rows:
-        return status
+        return 0
+    linked = [{**row, "log_url": row.get("log_url") or
+               f"https://github.com/{args.repo}/releases/download/results-{args.run_id}/{Path(row['log_file']).name}"}
+              if row["status"] in {"passed", "failed"} else row for row in rows]
+    commit_results(result_record(linked), args.repo, args.publish)
     try:
-        if status:
-            raise ValueError("Release logs have duplicate filenames")
-        for receipt in sorted((combined / "published").glob("results-*.jsonl")):
-            rows = fold_rows(rows, read_rows(receipt))
         report = publish_logs(combined, args.repo, args.run_id, args.commit,
                               publish=args.publish, rows=rows, resume=True)
         print(json.dumps(report, indent=2))
-        rows = fold_rows(rows, read_rows(Path(report["rows_file"])))
     except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
         print(f"{combined}: publication failed: {error}", file=sys.stderr)
-        status = 1
-    commit_results(result_record(rows), args.repo, args.publish)
-    return status
+        return 1
+    return 0
 
 
 def checks(args, evals):
@@ -232,10 +204,6 @@ def main():
     planner.add_argument("--output", type=Path, required=True)
     planner.add_argument("--restore-results", action="store_true")
     planner.add_argument("--github-output", type=Path)
-    epoch_parser = commands.add_parser("run-epoch")
-    epoch_parser.add_argument("--output", type=Path, required=True)
-    epoch_parser.add_argument("--plan", type=Path, required=True)
-    epoch_parser.add_argument("--index", type=int, required=True)
     publisher = commands.add_parser("publish-results")
     publisher.add_argument("--output", type=Path, required=True)
     publisher.add_argument("--repo", required=True)
@@ -252,8 +220,6 @@ def main():
         if args.command == "plan-epochs":
             return plan_epochs(args, run_args)
         args = parser.parse_args()
-        if args.command == "run-epoch":
-            return run_epoch(args)
         if args.command == "publish-results":
             return publish_artifacts(args)
         config = load_config()

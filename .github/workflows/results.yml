@@ -24,10 +24,11 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       missing_epochs: ${{ steps.plan.outputs.missing_epochs }}
+      sha: ${{ steps.plan.outputs.sha }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.sha }}
+          ref: main
           fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
@@ -38,10 +39,9 @@ jobs:
         id: plan
         env:
           RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
-        run: >-
-          uv run python scripts/ci.py plan-epochs
-          --modes vanilla internet skills --budget "$RUN_BUDGET"
-          --restore-results --output results/ci-plan --github-output "$GITHUB_OUTPUT"
+        run: |
+          uv run python scripts/ci.py plan-epochs --modes vanilla internet skills --budget "$RUN_BUDGET" --restore-results --output results/ci-plan --github-output "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: eval-plan-${{ github.run_id }}-${{ github.run_attempt }}
@@ -61,8 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
+          ref: ${{ needs.plan.outputs.sha }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
@@ -75,12 +74,7 @@ jobs:
       - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
       - name: Name stock images from their inputs
         id: images
-        run: |
-          uv run python - <<'PY' >> "$GITHUB_OUTPUT"
-          from ethevals.images.tag import image_tag
-          for image in ("runner", "chain"):
-              print(f"{image}={image_tag(image=image)}")
-          PY
+        run: uv run python -m ethevals.images.tag >> "$GITHUB_OUTPUT"
       - name: Build the runner image
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
@@ -102,14 +96,20 @@ jobs:
       - name: Run one planned epoch
         timeout-minutes: 190
         env:
-          EPOCH_INDEX: ${{ matrix.index }}
+          EVAL_ID: ${{ matrix.eval_id }}
+          ACTOR: ${{ matrix.actor_key }}
+          SELECTOR: ${{ matrix.mode == 'vanilla' && '--models' || '--agents' }}
+          MODE: ${{ matrix.mode }}
+          EPOCH: ${{ matrix.epoch }}
+          BUDGET: ${{ matrix.worst_case_usd }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
         run: >-
-          uv run python scripts/ci.py run-epoch --plan results/ci-plan
-          --index "$EPOCH_INDEX" --output results/ci-run
+          uv run ethevals run --config results/ci-plan/config.json --rows results/ci-plan/rows.jsonl
+          --output results/ci-run --evals "evals/$EVAL_ID" "$SELECTOR" "$ACTOR"
+          --modes "$MODE" --epoch "$EPOCH" --budget "$BUDGET"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -129,7 +129,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: main
+          ref: ${{ needs.plan.outputs.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
@@ -145,7 +145,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RESULTS_REPO: ${{ github.repository }}
           RESULTS_RUN_ID: ${{ github.run_id }}
-          RESULTS_COMMIT: ${{ github.sha }}
+          RESULTS_COMMIT: ${{ needs.plan.outputs.sha }}
         run: >-
           uv run python scripts/ci.py publish-results
           --output results/artifact --repo "$RESULTS_REPO"

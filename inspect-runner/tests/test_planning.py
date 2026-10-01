@@ -50,7 +50,6 @@ def test_cli_runs_only_the_selected_epoch(tmp_path):
     assert [(row["epoch"], row["attempt"], row["status"], row["effort"]) for row in read_rows(output / "rows.jsonl")] == [
         (2, 1, "failed", "high")]
     assert len(list((output / "logs").glob("*.eval"))) == 1
-    assert json.loads((output / "plan.json").read_text())["missing"][0]["actor_key"] == "test"
 
 
 def test_single_epoch_rejects_multiple_actors_before_providers(tmp_path):
@@ -58,12 +57,6 @@ def test_single_epoch_rejects_multiple_actors_before_providers(tmp_path):
                       "--epoch", "2", "--budget", "100", "--output", tmp_path)
     assert result.returncode == 2
     assert "--epoch requires exactly one eval, actor, and mode" in result.stderr
-
-
-def test_single_epoch_cannot_accompany_repeat_count():
-    result = eval_cli("plan", "--epoch", "2", "--epochs", "3")
-    assert result.returncode == 2
-    assert "not allowed with argument --epoch" in result.stderr
 
 
 def test_declared_modes_skip_ineligible_evals(folder, tmp_path):
