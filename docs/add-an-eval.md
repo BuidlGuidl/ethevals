@@ -244,7 +244,11 @@ function test_decimals_match_usdc() public view {
 
 `scorer/rubric.md` asks one question, `uses_standard_library`: did the agent build the ERC-20 on a well-known library such as OpenZeppelin or Solady?
 `solution/src/BuilderPoints.sol` overlays the stub with OpenZeppelin `ERC20Capped` and `Ownable`.
-`solution/lib/` vendors only the OpenZeppelin files it imports.
+
+Write the reference solution in any Foundry project with libraries installed through `forge install ...`.
+Then run `forge flatten src/X.sol > solution/src/X.sol` to ship the solution as one self-contained file.
+Keep one SPDX line and one pragma that matches the prompt.
+
 Checks: `compile`, the ten test functions, and `uses_standard_library`.
 
 ### Import the agent's code
@@ -377,7 +381,7 @@ The reference pass must fail with your assertion message, not an error. Then res
 ## Prepare the pull request
 
 - Use regular files. The loader rejects symlinks and hard links.
-- Git ignores `lib`, `out`, and `cache` at any depth, except `solution/lib/`. Don't use those names for other authored files.
+- Git ignores `lib`, `out`, and `cache` at any depth. Don't use those names for other authored files.
 - Remove stray files before the final check. Eval hashes include uncommitted files.
 - Keep generated logs and rows out of the PR, including `results/rows.jsonl`.
 
