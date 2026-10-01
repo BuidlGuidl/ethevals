@@ -203,7 +203,10 @@
     const head = `<thead><tr><th class="row-label mxh"></th>${agents.map(a => `<th class="agh"><span class="cfg-name">${esc(a.name)}</span><span class="cfg-sub">${vanilla ? orgOf[a.id] : harnessFor(a, mode)}</span></th>`).join("")}</tr></thead>`;
     const meta = ev => `${ev.type} · ${((SCORER[ev.grader] || [ev.grader])[0]).toLowerCase()}`;
     const body = groups.map((g, i) => `<tr class="mxgrp"><th class="mxp mxp-${i % 2}" colspan="${agents.length + 1}">${g.p.name}</th></tr>${g.evs.map(ev => `<tr><th class="row-label evl"><a href="#/eval/${ev.id}">${esc(ev.title)}</a><span class="cid">${meta(ev)}</span></th>${agents.map(a => cell(a, ev)).join("")}</tr>`).join("")}`).join("");
-    return `<div class="table-shell"><div class="mx-title">Eval matrix · ${vanilla ? "Model only" : modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix t2">${head}<tbody>${body}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval for its page, or a cell for its runs.</span><span>Stronger tint = more runs passed</span></div></div>`;
+    // The last row is each column's leaderboard score, so the matrix reads as its breakdown.
+    const total = a => { const s = stats(a.id, mode); return s.n ? `<td class="mx"><button class="mxc" data-open="${a.id}~${mode}~all" style="--p:${s.p.toFixed(3)}" title="${rangeTip(s)}"><b>${pct(s.p)}</b><span>${s.k}/${s.n} runs</span></button></td>` : `<td class="mx na" title="No runs">–</td>`; };
+    const foot = `<tfoot><tr class="mxtot"><th class="row-label evl">Overall<span class="cid">average pass rate, as on the leaderboard</span></th>${agents.map(total).join("")}</tr></tfoot>`;
+    return `<div class="table-shell"><div class="mx-title">Eval matrix · ${vanilla ? "Model only" : modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix t2">${head}<tbody>${body}</tbody>${foot}</table></div><div class="table-note"><span>Runs passed per eval. Click an eval for its page, or a cell for its runs.</span><span>Stronger tint = more runs passed</span></div></div>`;
   }
 
 
