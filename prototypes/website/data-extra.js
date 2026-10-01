@@ -20,11 +20,11 @@
 
   const releases = ["2026-04-22", "2026-05-27", "2026-06-24", "2026-07-29", "2026-08-26", "2026-09-23", "2026-10-21"];
   const checkNames = {
-    deterministic: [["Final answer matches", "expected"], ["Numeric precision", "18 decimals"], ["Answer in requested format", "value only"]],
+    deterministic: [["Final answer matches", "reference answer"], ["Numeric precision", "18 decimals"], ["Answer in requested format", "value only"]],
     tests: [["Compiles (forge build)", "exit 0"], ["Hidden test: happy path", "pass"], ["Hidden test: failure path", "revert"], ["Hidden test: invariant", "holds"]],
     "chain state": [["Transaction receipt", "status 0x1"], ["Balance delta", "−250 USDC"], ["Event emitted", "1 Transfer"], ["Final state", "matches target"]]
   };
-  const wrong = { expected: "off by one field", "18 decimals": "6 decimals assumed", "value only": "value + explanation", "exit 0": "exit 1", pass: "fail", revert: "no revert", holds: "broken after 214 runs", "status 0x1": "status 0x0", "−250 USDC": "−2^256+1 allowance", "1 Transfer": "0 events", "matches target": "differs in 2 slots" };
+  const wrong = { "reference answer": "off by one field", "18 decimals": "6 decimals assumed", "value only": "value + explanation", "exit 0": "exit 1", pass: "fail", revert: "no revert", holds: "broken after 214 runs", "status 0x1": "status 0x0", "−250 USDC": "−2^256+1 allowance", "1 Transfer": "0 events", "matches target": "differs in 2 slots" };
 
   E.evals.forEach(ev => {
     ev.released = releases[hash(ev.id) % releases.length];
