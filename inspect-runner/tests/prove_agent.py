@@ -24,7 +24,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("answer", choices=["reference", "empty"])
     parser.add_argument("--agent", choices=list(fixture_config().agents), required=True)
-    parser.add_argument("--eval", default="inspect-runner/tests/fixtures/building/erc20-points-token")
+    parser.add_argument("--eval", default="evals/building/erc20-points-token")
     parser.add_argument("--mode", choices=["internet", "skills"], default="internet")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--exa-canary", action="store_true")
@@ -273,14 +273,12 @@ console.log(JSON.stringify({matches, files, environments}));
         assert any("web_search_exa" in name for name in tool_names), tool_names
         assert not tool_names.intersection({"WebSearch", "websearch", "web_search", "web_search_preview", "web__run"}), tool_names
     if evaluation.declaration.chain:
-        assert row["checks"]["rubric:verified_transfer"]["passed"] == (args.answer == "reference"), row
+        assert row["checks"]["verified_transfer"]["passed"] == (args.answer == "reference"), row
     if "tests" in evaluation.scorer_kinds:
-        assert len([name for name in row["checks"] if name.startswith("forge:")]) == 8, row
-        assert set(name for name in row["checks"] if name.startswith("rubric:")) == {
-            "rubric:uses_openzeppelin", "rubric:protects_holders",
-        }, row
-        assert all(check["passed"] == (args.answer == "reference" or name == "forge:compile")
-                   for name, check in row["checks"].items()), row
+        assert len([name for name in row["checks"] if name.startswith("test_")]) == 10, row
+        assert "uses_standard_library" in row["checks"], row
+        assert row["checks"]["compile"]["passed"] is True, row
+        assert row["status"] == ("passed" if args.answer == "reference" else "failed"), row
 
 
 if __name__ == "__main__":

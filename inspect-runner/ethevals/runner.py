@@ -15,7 +15,7 @@ from .rows import epoch_identity, export_rows, previous_rows
 from .planning import plan, budget_check
 from .scorers import EVALUATIONS, SCORERS, rubric_budget
 from .preparation import build_images, prepare_compose, check_capacity
-from .images.tag import image_inputs, image_tag
+from .images.tag import image_inputs
 
 
 def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
@@ -34,7 +34,7 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
                 "created_at": datetime.now(timezone.utc).isoformat(), "mode": mode,
                 "images": images,
                 "runner_inputs": image_inputs() if images else {},
-                "chain_inputs": image_inputs(image="chain") if images.get("chain") == image_tag(image="chain") else {},
+                "chain_inputs": image_inputs(image="chain") if images else {},
                 "cost_limit_usd": config.cost_limit,
                 "grader_cost_limit_usd": rubric_budget(evaluation, config), "max_attempts": config.max_attempts,
                 "search_limit": config.search_limit if uses_sandbox(mode) and config.search else 0,

@@ -4,9 +4,11 @@ from inspect_ai.log import transcript
 from inspect_ai.scorer import Score
 
 
-def checks_score(checks):
+def checks_score(checks, *, answer=None):
+    reasons = {name: " ".join(check["reason"].split()) for name, check in checks.items()}
     return Score(value={name: "C" if check["passed"] else "I" for name, check in checks.items()},
-                 metadata={"reasons": {name: " ".join(check["reason"].split()) for name, check in checks.items()}})
+                 answer=answer, explanation="\n".join(f"{name}: {reason}" for name, reason in reasons.items()),
+                 metadata={"reasons": reasons})
 
 
 class SubmissionFailed(Exception):
@@ -24,6 +26,8 @@ def scoring_boundary(name, score):
             if limit and limit.type != "time":
                 if limit.type == "operator":
                     raise RuntimeError(f"Epoch stopped by operator. {limit.message}")
+                if name is None:
+                    return None
                 raise SubmissionFailed(f"Epoch reached {limit.type} limit {limit.limit}. {limit.message}")
             return await score(state, target)
         except SubmissionFailed as error:

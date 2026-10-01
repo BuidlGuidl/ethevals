@@ -22,11 +22,15 @@ The prompt and workspace text reject whole words, without regard to case:
 
 The loader selects scorers from files under `scorer/`.
 `SCORERS` in `scorers.py` maps each kind to an Inspect scorer factory.
+The tests scorer uses the plain `RUNNERS` table, which contains Forge in v0.2.
+Each runner declares its file pattern, name parser, preparation, command, timeout, result parser, and optional source evidence.
+Validation and scoring use the same runner patterns.
+Files no runner claims are helpers. A tests folder with only helpers fails validation.
 
 | Kind | Files | Result |
 | --- | --- | --- |
 | Target | `target.yaml` | A reply check through Inspect's `match`, `pattern`, or `choice`. |
-| Tests | `tests/` | Checks from Forge, including `forge:compile`. |
+| Tests | `tests/` | Checks from Forge, including `compile`. |
 | Check script | `check` or `check.<ext>` | Chain checks from the script's JSON output. |
 | Rubric | `rubric.md` | One model verdict per named question, after the eval's other scorers. |
 
@@ -35,6 +39,8 @@ Check scripts remain supported for the current chain eval until its Forge migrat
 Scorers run in target, tests, check script, and rubric order.
 Each returns check names mapped to `C` or `I` in `Score.value`.
 `Score.metadata["reasons"]` holds the reasons.
+`Score.explanation` shows the same reasons in Inspect's score panel.
+Only a target scorer sets `Score.answer`.
 The row exporter retains completed scores if a later scorer raises an error.
 
 Target settings also drive the Hugging Face export.
@@ -52,30 +58,67 @@ It excludes timestamps, permissions, and local artifacts under the manifest's ex
 The loader rejects symlinks and hard links before it applies exclusions.
 Later disk edits cannot alter an already loaded eval.
 
-Build scoring stops the agent's processes before it captures `src/` and `lib/`.
+Build scoring stops the agent's processes before it captures the whole workspace.
 Forge and the rubric share that snapshot.
 The agent receives only the author's workspace files, including any `foundry.toml`.
 The runner adds no compiler settings or library advice to the prompt.
-The scorer still uses the image's libraries and its own `foundry.toml`.
-Agent tests, cached output, compiler settings, and remappings do not replace them.
+The snapshot excludes `.git`, `out`, and `cache` at every depth.
+Inside any `node_modules`, it keeps only `.sol` files.
+The collector uses `find | tar`, without rsync.
 The archive permits at most 50 MiB of contents and 20,000 files.
-Only Solidity files enter the scorer workspace.
 
-Forge reports `forge:<test path>:<suite>:<function signature>` checks.
-Compilation failure records only `forge:compile`.
-Constructor and setup failures keep the names Forge reports.
-The installed compiler list comes from [solc.json](ethevals/images/solc.json).
-An unavailable compiler fails compilation without a download.
-Scoring disables FFI and filesystem cheatcodes, but retains network access.
+The scorer runs on the chain image and stays idle until grading.
+It starts neither Anvil nor the RPC filter.
+The scorer root mirrors the eval folder, with captured files under `workspace/` and the author's full folder under `scorer/`.
+Tests import the agent's files by path, such as `workspace/src/BuilderPoints.sol`.
+The generated `foundry.toml` sets both `src` and `test` to `scorer/tests`.
+Forge compiles those tests and their imports.
+Broken files that no test imports do not fail compilation.
+One wrong import fails the whole `compile` check, with Forge's diagnostic as its reason.
+The config disables FFI and automatic remappings.
+It declares the `chain` RPC endpoint at `http://chain:8545` and permits reads of `chain.json` and `private.json`.
 
-Build rubric evidence contains compiled source files, with agent source before imported dependencies.
-It excludes private tests, unused libraries, and runner-owned libraries.
-Other evals use non-system message roles and text, with tool-call IDs, functions, arguments, results, and errors.
+Every folder with `foundry.toml` or `package.json` is a project.
+Foundry projects use only remappings that `forge remappings` accepts.
+If that command fails, the project keeps only generated aliases.
+Each npm package under a project's `node_modules` gets a remapping.
+Every agent remapping has a context under its project folder, with deeper contexts first.
+The runner rebases any declared context under that folder too.
+Every project's `src/` imports resolve under its own `src/` folder.
+The runner drops agent remappings for `forge-std` and `ds-test`.
+The chain image ships forge-std at `/opt/solidity/lib/forge-std`; the agent image ships no Solidity libraries.
+`hardhat/console.sol` maps to forge-std's console.
+Other libraries come from the agent's workspace.
+
+Neither image ships a Solidity compiler.
+Forge detects and downloads the version required by each pragma, using the service's internet network.
+A compiler download failure is an error that permits a retry, rather than a failed `compile` check.
+An unexplained Forge timeout is also an error because the compiler download can consume that time.
+Forge runs at the scorer root with `--root . --match-path 'scorer/tests/**' --json --no-storage-caching --build-info`.
+
+Each test check takes its function name without arguments or a suite path.
+A reverting setup produces `<Contract>.setUp`; a constructor failure produces `<Contract>.constructor`.
+Reasons preserve Forge's assertion messages.
+If inherited tests produce duplicate names, grading raises an error that names both suites.
+The tests scorer runs each runner that claims a file and merges its checks.
+One `compile` check passes only when every present runner builds.
+Duplicate runtime names across runners raise an error that names both sources.
+
+Every rubric receives the transcript.
+If the tests compiled, the rubric asks the present runners for source evidence, before the transcript.
+Forge supplies compiled files under `workspace/`.
+Agent source precedes imported library source within that evidence.
+That source includes imported agent libraries and excludes private tests and unused files.
+If compilation failed, the rubric still receives the transcript.
+Transcript evidence includes non-system message text, tool-call IDs, functions, arguments, results, and errors.
 Transcript evidence drops reasoning, signatures, metadata, and tool views.
-Evidence uses JSON with ASCII escapes and a 100,000-byte cap.
-Builds keep the prefix; transcripts keep the suffix to preserve the final reply and recent tool results.
-The cut can leave partial JSON or omit earlier calls. The grader must state uncertainty when evidence is incomplete.
-Every rubric question receives that same evidence block.
+Evidence uses labeled source and transcript JSON with ASCII escapes and has no fixed byte cap.
+The runner trims evidence only when Inspect's local token estimate exceeds the available context window.
+The estimate counts the question, schema, message framing, and output allowance.
+A single proportional cut retains the source prefix and transcript suffix, including the final reply.
+The cut leaves a 20% margin on the available token estimate.
+The cut can leave partial JSON. The grader must state uncertainty when evidence is incomplete.
+Rubric checks take their `##` headings without a prefix.
 The grader has no tools and returns one JSON object with `passed` and `reason`.
 Two invalid replies produce an error; an empty reason produces a failed check.
 
@@ -120,9 +163,12 @@ The runner passes both limits directly to Inspect, without a working limit.
 After the solver stops, Inspect gives scoring its own window of half the time limit.
 A time limit still grades the agent's work. It does not cause an error or a retry.
 
-The grader reserve uses capped evidence, prompt, question size, and the configured output cap.
+The grader reserve covers the context window and configured output cap.
 It covers two calls per question and three provider attempts per call.
 `rubric_budget()` uses the largest configured input price without a cache discount.
+Inspect's model info supplies the grader's context window.
+An unknown context window stops planning with an error.
+The configured Opus 5.5 grader has a 1,000,000-token window and reserves $32.94912 per question.
 The direct Anthropic grader uses low effort and `max_tokens: 32768`, which includes thinking and the JSON verdict.
 Each grader call has a total deadline that includes provider retry backoff.
 The constants live beside the scorer implementation.
@@ -132,13 +178,14 @@ The constants live beside the scorer implementation.
 | Incorrect answer, failed test, or negative rubric verdict | Failed check. |
 | Agent cost limit | Failed check; further scoring work stops. |
 | Agent time limit | Checks grade the work left by the agent. |
-| Invalid submission or unsafe captured archive | Failed `forge:compile` check. |
+| Invalid submission or unsafe captured archive | Failed `compile` check. |
 | Operator stop | Error. |
 | Docker failure, memory failure, or setup failure | Error. |
 | Grader provider failure or exhausted grader allowance | Error with any completed scorer results. |
 | Script crash or malformed verdict | Error. |
-| Scoring exec timeout | Failed check. |
+| Check-script timeout | Failed check. |
 | Forge output without results or a compiler diagnostic | Error. |
+| Compiler download failure or unexplained Forge timeout | Error. |
 
 Inspect retains the last 10 MiB of each exec stream.
 Truncated script output can become malformed JSON; truncated Forge output can lack required results.

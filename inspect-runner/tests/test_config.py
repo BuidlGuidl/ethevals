@@ -9,7 +9,7 @@ from support import build_task, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "inspect-runner/tests/fixtures/building/erc20-points-token"
+BUILD = ROOT / "evals/building/erc20-points-token"
 
 
 @pytest.mark.parametrize("harness,provider,accepted", [

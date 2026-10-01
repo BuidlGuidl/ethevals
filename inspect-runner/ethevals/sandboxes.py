@@ -1,5 +1,4 @@
 import io
-import json
 import tarfile
 import re
 import yaml
@@ -12,7 +11,6 @@ from .images.tag import image_tag
 from .scoring_base import SubmissionFailed
 
 IMAGES = Path(__file__).with_name("images")
-SOLC_VERSIONS = (json.loads((IMAGES / "solc.json").read_bytes())["version"],)
 MAX_WORKSPACE_BYTES = 50 * 1024 * 1024
 
 
@@ -80,7 +78,10 @@ def memory_bytes(value):
 def merged_compose(evaluation):
     document = read_yaml(IMAGES / ("chain.compose.yaml" if evaluation.declaration.chain else "stock.compose.yaml"))
     for name, service in document["services"].items():
-        service["image"] = image_tag(IMAGES, "chain" if name == "chain" else "runner")
+        service["image"] = image_tag(IMAGES, "runner" if name == "default" else "chain")
+        if name == "scorer":
+            service["entrypoint"] = ["sleep", "infinity"]
+            service["working_dir"] = "/workspace"
     if "compose.yaml" in evaluation.files:
         extra = yaml.safe_load(validate_compose(evaluation.folder / "compose.yaml", data=evaluation.files["compose.yaml"]))
         document["services"].update(extra.get("services", {}))
@@ -148,14 +149,11 @@ async def workspace_files() -> dict[str, bytes]:
     if not temporary.success:
         raise RuntimeError(f"Cannot allocate snapshot: {temporary.stderr}")
     path = temporary.stdout.strip() + "/workspace.tar.gz"
-    result = await runner_exec(agent, ["/bin/sh", "-c", """
+    result = await runner_exec(agent, ["/bin/bash", "-o", "pipefail", "-c", """
 archive=$1
-set --
-for tree in src lib; do
-    if [ -e "$tree" ] || [ -L "$tree" ]; then set -- "$@" "$tree"; fi
-done
-/usr/bin/tar --anchored --exclude=lib/openzeppelin-contracts --exclude=lib/forge-std \
-    -czf "$archive" --files-from /dev/null "$@"
+/usr/bin/find . \\( -name .git -o -name out -o -name cache \\) -prune -o -type f \\
+    \\( ! -path '*/node_modules/*' -o -name '*.sol' \\) -print0 | \\
+    /usr/bin/tar --null --no-recursion -T - -czf "$archive"
 """, "snapshot", path], user="root", cwd="/workspace", timeout=60)
     if not result.success:
         raise RuntimeError(f"Cannot collect workspace: {result.stderr}")

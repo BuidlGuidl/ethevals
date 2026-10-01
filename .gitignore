@@ -7,4 +7,6 @@ results/*
 out/
 cache/
 lib/
+!evals/*/*/solution/lib/
+!evals/*/*/solution/lib/**
 .env
