@@ -39,6 +39,9 @@ def docker_command(command):
 
 def build_images():
     for image, dockerfile in (("runner", "Dockerfile"), ("chain", "Chain.Dockerfile")):
+        if subprocess.run(["docker", "image", "inspect", image_tag(IMAGES, image)],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            continue
         docker_command(["docker", "build", "-f", str(IMAGES / dockerfile), "-t", image_tag(IMAGES, image), str(IMAGES)])
 
 

@@ -199,6 +199,8 @@ For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-5
 Only a paid run proves provider access, usable search results, and grader output.
 
 Use `--evals` to select folders and `--output` to choose a results directory.
+`--epochs N` selects repeats 1 through N; `--epoch N` selects only repeat N.
+`--epoch` requires one eval, one model or agent, and one mode. It cannot accompany `--epochs`.
 An explicit `--modes` must match each selector.
 Each eval runs only in modes it declares.
 The skills mode adds the repo's Ethereum skills pack to the internet mode.
@@ -250,15 +252,27 @@ The checker can send further transactions while automining remains active.
 [results.yml](../.github/workflows/results.yml) queues paid runs after `main` changes, excluding results-only changes.
 It uses `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, optional `EXA_API_KEY`, and the `ETHEVALS_BUDGET_USD` repository variable.
 A manual dispatch budget overrides that variable; the fallback budget is zero.
-The paid job has no write token and a six-hour limit.
-Its run step stops after 340 minutes, which leaves time to upload finished epochs even after a timeout.
+The job graph is `plan → matrix → publish`.
+The plan job calls `ethevals plan` without provider keys and refuses work above the budget.
+It saves the missing epochs, config, and restored results for the matrix jobs.
+The plan checks out current `main`; the matrix and publisher use the SHA that the plan reports.
+CI runs the first 256 missing epochs; a later run picks up the rest.
+Each matrix job selects one epoch and uses a read-only token.
+Each job builds both stock images with the GitHub Actions cache and loads them locally, without a registry.
+The runner reuses local stock images whose tags match their build inputs.
+Each job allows 240 minutes, including 120 for the agent, 60 for scoring, and 60 for builds and uploads.
+The run step stops after 190 minutes and uploads available results even after failure.
 A separate publisher holds no model keys and runs after failed or timed-out steps on `main`.
 It downloads artifacts from every attempt of the workflow run. The next run resumes missing epochs.
+For recovery, use "Re-run all jobs" instead of "Re-run failed jobs".
 
-`scripts/ci.py after-merge` restores pending results and calls the main runner CLI.
-`publish-results` rebuilds each artifact's rows and records them before any log upload.
+`scripts/ci.py plan-epochs` restores pending results, checks the budget, and emits the matrix.
+Each matrix job calls `ethevals run --epoch N` with its row's selectors and the saved config and results.
+`publish-results` rebuilds every artifact's rows and combines its logs into one release for the workflow run.
+It writes one results commit with the planned log URLs before the upload starts.
+If an upload stops, the rows remain recorded; the log URLs work after a successful upload retry.
 It folds `origin/main`, `origin/ci/results`, and artifact rows onto current `main`.
-Successful uploads add log links and update the results pull request without a force push.
+The publisher updates the results pull request without a force push.
 A retry can reopen a missing pull request without repeating a successful push.
 If publication fails, rerun the workflow before starting another paid run to avoid paying for missing rows again.
 Exhausted error epochs remain visible in the plan; a completed no-op succeeds.
@@ -266,7 +280,7 @@ Exhausted error epochs remain visible in the plan; a completed no-op succeeds.
 `ethevals publish-logs --output DIR --repo OWNER/REPO --run-id ID --commit SHA` previews a log release.
 Adding `--publish` uploads through `gh` and writes `DIR/published/results-ID.jsonl` after success.
 It skips linked logs and non-final errors. The preview writes nothing.
-CI gets the release's source commit from its Inspect logs.
+CI tags the release at the workflow's source commit.
 
 `ethevals export-hf --output DIR` writes vanilla quizzes to an empty directory.
 It skips quizzes with rubrics and prints the reason.

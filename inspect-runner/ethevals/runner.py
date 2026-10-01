@@ -70,12 +70,12 @@ def build_task(evaluation: Eval, config: Config, agent: Actor, grader: Grader,
 
 
 def run(evals: list[Eval], config: Config, output: Path, *,
-        epochs: int | None = None, fresh: bool = False, retry_errors: bool = False,
+        epochs: int | None = None, epoch: int | None = None, fresh: bool = False, retry_errors: bool = False,
         rows_file: Path | None = None, agents=None, models=None, modes=None, answer=None,
         budget=None) -> tuple[bool, list[dict]]:
     previous = previous_rows(output, rows_file)
     agents_for, _ = select_actors(config, agents=agents, modes=modes, answer=answer, models=models, planning=True)
-    initial = plan(evals, config, agents_for, previous, epochs=epochs, fresh=fresh, retry_errors=retry_errors)
+    initial = plan(evals, config, agents_for, previous, epochs=epochs, epoch=epoch, fresh=fresh, retry_errors=retry_errors)
     report = budget_check(initial.report, budget, required=not answer)
     output.mkdir(parents=True, exist_ok=True)
     (output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")

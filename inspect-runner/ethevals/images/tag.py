@@ -23,4 +23,4 @@ def image_tag(directory=Path(__file__).parent, image="runner"):
 
 if __name__ == "__main__":
     for image in BUILD_INPUTS:
-        print(image + ": " + image_tag(image=image))
+        print(image + "=" + image_tag(image=image))

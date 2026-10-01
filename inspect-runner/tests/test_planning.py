@@ -2,9 +2,10 @@ from pathlib import Path
 import json
 
 from ethevals.actors import select_actors
+from ethevals.cli import main
 from ethevals.loader import load_eval
 from ethevals.planning import budget_check, plan
-from ethevals.rows import epoch_identity, write_rows
+from ethevals.rows import epoch_identity, read_rows, write_rows
 import pytest
 
 from support import catalog_quiz, cli, eval_cli, fixture_config, run, small_config
@@ -36,6 +37,26 @@ def test_plan_derives_modes_from_selectors(tmp_path, selectors, expected):
                       "--epochs", 1, "--output", tmp_path, *selectors)
     assert result.returncode == 0, result.stderr
     assert list(Counter(row["mode"] for row in json.loads(result.stdout)["missing"]).items()) == expected
+
+
+def test_cli_runs_only_the_selected_epoch(tmp_path):
+    config = small_config()
+    path = tmp_path / "config.json"
+    path.write_text(config.model_dump_json())
+    output = tmp_path / "results"
+    assert main(["run", "--config", str(path), "--evals", str(ROOT / "evals/concepts/agent-registries"),
+                 "--models", "test", "--modes", "vanilla", "--epoch", "2", "--budget", "4",
+                 "--rows", str(tmp_path / "rows.jsonl"), "--output", str(output)]) == 0
+    assert [(row["epoch"], row["attempt"], row["status"], row["effort"]) for row in read_rows(output / "rows.jsonl")] == [
+        (2, 1, "failed", "high")]
+    assert len(list((output / "logs").glob("*.eval"))) == 1
+
+
+def test_single_epoch_rejects_multiple_actors_before_providers(tmp_path):
+    result = eval_cli("run", "--evals", ROOT / "evals/concepts/agent-registries", "--modes", "vanilla",
+                      "--epoch", "2", "--budget", "100", "--output", tmp_path)
+    assert result.returncode == 2
+    assert "--epoch requires exactly one eval, actor, and mode" in result.stderr
 
 
 def test_declared_modes_skip_ineligible_evals(folder, tmp_path):

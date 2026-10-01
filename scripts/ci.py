@@ -1,15 +1,16 @@
 """Local entry points for the workflows. Remote writes require --publish."""
 import argparse
 import base64
+from contextlib import redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 from urllib.request import Request, urlopen
-
-from inspect_ai.log import read_eval_log
 
 from ethevals.cli import main as ethevals, parse_args
 from ethevals.config import load_config
@@ -46,15 +47,37 @@ def restore_results(rows):
     write_rows(rows, result_record())
 
 
-def after_merge(args, run_args):
-    argv = ["run", *run_args, "--output", str(args.output)]
-    _, run_args = parse_args(argv)
+def plan_epochs(args, run_args):
+    argv = ["plan", *run_args, "--output", str(args.output)]
+    _, options = parse_args(argv)
     if args.output.exists():
         raise ValueError("Use a fresh output directory for each CI run")
     args.output.mkdir(parents=True)
+    rows = args.output / "rows.jsonl"
     if args.restore_results:
-        restore_results(run_args.rows)
-    return ethevals(argv)
+        restore_results(rows)
+    else:
+        write_rows(rows, read_rows(options.rows))
+    config = load_config(options.config, effort=options.effort)
+    (args.output / "config.json").write_text(config.model_dump_json() + "\n")
+    captured = io.StringIO()
+    with redirect_stdout(captured):
+        status = ethevals([*argv, "--rows", str(rows)])
+    print(captured.getvalue(), end="")
+    report = json.loads(captured.getvalue())
+    (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
+    if status:
+        return status
+    missing = report["missing"][:256]
+    matrix = {"include": [{"index": index, **{key: row[key] for key in
+               ("eval_id", "actor_key", "mode", "epoch", "worst_case_usd")}} for index, row in enumerate(missing)]}
+    if len(report["missing"]) > len(missing):
+        print(f"Deferred {len(report['missing']) - len(missing)} epochs to a later run.", file=sys.stderr)
+    if args.github_output:
+        with args.github_output.open("a") as output:
+            output.write(f"matrix={json.dumps(matrix, separators=(',', ':'))}\n")
+            output.write(f"missing_epochs={report['missing_epochs']}\n")
+    return 0
 
 
 def commit_results(rows, repo, publish):
@@ -104,31 +127,29 @@ def commit_results(rows, repo, publish):
 
 def publish_artifacts(args):
     # Rebuild each attempt from its own logs, even if the run timed out.
-    records, rows = [], []
+    rows = []
+    combined = args.output / "combined"
+    logs = combined / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
     for output in sorted(args.output.glob("eval-run-*")):
         own_rows = store_rows(output)
         rows = fold_rows(rows, own_rows)
-        records.append((output, own_rows))
-    if rows:
-        commit_results(result_record(rows), args.repo, args.publish)
-    status = 0
-    for output, own_rows in records:
-        try:
-            logs = sorted((output / "logs").glob("*.eval"))
-            if not logs:
-                continue
-            commit = read_eval_log(str(logs[0]), header_only=True).eval.revision.commit
-            commit = command("git", "rev-parse", commit, capture_output=True).stdout.strip()
-            report = publish_logs(output, args.repo, output.name.removeprefix("eval-run-"), commit,
-                                  publish=args.publish, rows=own_rows, resume=True)
-            print(json.dumps(report, indent=2))
-            if own_rows:
-                commit_results(result_record(fold_rows(own_rows, read_rows(Path(report["rows_file"])))),
-                               args.repo, args.publish)
-        except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
-            print(f"{output}: publication failed: {error}", file=sys.stderr)
-            status = 1
-    return status
+        for source in sorted((output / "logs").glob("*.eval")):
+            shutil.copyfile(source, logs / source.name)
+    if not rows:
+        return 0
+    linked = [{**row, "log_url": row.get("log_url") or
+               f"https://github.com/{args.repo}/releases/download/results-{args.run_id}/{Path(row['log_file']).name}"}
+              if row["status"] in {"passed", "failed"} else row for row in rows]
+    commit_results(result_record(linked), args.repo, args.publish)
+    try:
+        report = publish_logs(combined, args.repo, args.run_id, args.commit,
+                              publish=args.publish, rows=rows, resume=True)
+        print(json.dumps(report, indent=2))
+    except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        print(f"{combined}: publication failed: {error}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def checks(args, evals):
@@ -179,13 +200,16 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     checks_parser = commands.add_parser("checks")
     checks_parser.add_argument("--output", type=Path, required=True)
-    run_parser = commands.add_parser("after-merge")
-    run_parser.add_argument("--output", type=Path, required=True)
-    run_parser.add_argument("--restore-results", action="store_true")
+    planner = commands.add_parser("plan-epochs")
+    planner.add_argument("--output", type=Path, required=True)
+    planner.add_argument("--restore-results", action="store_true")
+    planner.add_argument("--github-output", type=Path)
     publisher = commands.add_parser("publish-results")
     publisher.add_argument("--output", type=Path, required=True)
     publisher.add_argument("--repo", required=True)
     publisher.add_argument("--publish", action="store_true")
+    publisher.add_argument("--run-id", required=True)
+    publisher.add_argument("--commit", required=True)
     release_parser = commands.add_parser("release")
     release_parser.add_argument("--output", type=Path, required=True)
     release_parser.add_argument("--hf-repo", default=DEFAULT_REPO)
@@ -193,8 +217,8 @@ def main():
     release_parser.add_argument("--publish", action="store_true")
     args, run_args = parser.parse_known_args()
     try:
-        if args.command == "after-merge":
-            return after_merge(args, run_args)
+        if args.command == "plan-epochs":
+            return plan_epochs(args, run_args)
         args = parser.parse_args()
         if args.command == "publish-results":
             return publish_artifacts(args)
