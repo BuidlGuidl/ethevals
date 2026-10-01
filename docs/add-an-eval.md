@@ -126,7 +126,7 @@ Checks: `compile`, `test_recipient_balance`, and the rubric's `verified_transfer
 
 ### Prepare the chain with setup
 
-Before the agent starts, the runner runs `forge script setup/setup.s.sol --broadcast --slow --rpc-url $RPC_URL --offline` in the chain container, on the unfiltered RPC:
+Before the agent starts, the runner runs `forge script setup/setup.s.sol --broadcast --slow --rpc-url $RPC_URL` in the chain container, on the unfiltered RPC:
 
 ```solidity
 import {ChainSetup} from "ethevals/ChainSetup.sol";
@@ -258,7 +258,7 @@ A Scaffold-ETH 2 contract, for example, is `workspace/packages/hardhat/contracts
 - A missing file fails `compile` with Forge's reason, such as `Source "workspace/src/Vault.sol" not found`. One missing import fails every test, so `compile` is all or nothing.
 - Import only forge-std in tests. Reach the agent's contract through forge-std's interfaces, such as `forge-std/interfaces/IERC20.sol`, and `address` casts.
 - The agent's code compiles against the libraries the agent installed with `forge install` or npm. The runner maps each agent project's libraries only for files in that project.
-- The scorer works offline with the last six 0.8.x solc releases. Name one of them in the prompt and in `foundry.toml`.
+- No image ships a Solidity compiler. Forge installs the version each file's pragma asks for, in the agent's container and in the scorer, so any released 0.8.x works. If the task depends on a version, name it in the prompt and in `foundry.toml`.
 - Tests can read only `chain.json` and `private.json`. FFI is off.
 
 Forge test results become checks:

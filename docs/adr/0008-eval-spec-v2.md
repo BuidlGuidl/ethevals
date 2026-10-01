@@ -33,7 +33,7 @@ The folder stays data. Authors write no runner code, and tools read every eval w
 - Tests are Forge tests. They import the agent's code by its workspace path and read the finished chain with `vm.createSelectFork`. Before grading, the runner stops the agent and mines one block. Forge compiles only the tests and what they import.
 - The reference solution overlays `solution/` on the workspace, and `solution/solution.s.sol` runs in the scorer container against the filtered RPC. Every eval with tests or a chain ships one.
 - The agent image ships no Solidity libraries. The agent's `foundry.toml` and libraries are its own. The scorer uses its own config and maps each agent project's libraries only for files in that project.
-- The scorer runs on the chain image, which ships forge, forge-std, `ChainSetup`, and the last six 0.8.x solc releases.
+- The scorer runs on the chain image, which ships forge, forge-std, and `ChainSetup`. No image ships a Solidity compiler: every container has internet, and Forge installs the version each pragma asks for. A failed compiler download is an error that retries, never a failed `compile` check.
 
 We picked Forge tests because every Solidity developer writes them, Hardhat 3 runs the same dialect, and `forge test --json` gives one result per test. One runner grades a build, a transaction, and a fix.
 
