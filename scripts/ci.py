@@ -2,6 +2,7 @@
 import argparse
 import base64
 from contextlib import redirect_stdout
+import hashlib
 import io
 import json
 import os
@@ -12,6 +13,10 @@ import sys
 import tempfile
 from urllib.request import Request, urlopen
 
+from inspect_swe._codex_cli.agentbinary import codex_cli_binary_source, _platform_to_codex_arch
+from inspect_swe._opencode.agentbinary import opencode_binary_source, _asset_name_candidates
+
+from ethevals.agents import HARNESSES
 from ethevals.cli import main as ethevals, parse_args
 from ethevals.config import load_config
 from ethevals.hf import DEFAULT_REPO, write_hf
@@ -25,6 +30,43 @@ RESULTS_BRANCH = "ci/results"
 
 def command(*args, **kwargs):
     return subprocess.run(list(map(str, args)), check=True, text=kwargs.pop("text", True), **kwargs)
+
+
+def prefetch_release(source, version, repo, tag, candidates):
+    platform = "linux-x64"  # The CI runner image uses Debian on ubuntu-latest x64.
+    release = json.loads(command("gh", "api", f"repos/{repo}/releases/tags/{tag}", capture_output=True).stdout)
+    assets = {asset["name"]: asset for asset in release["assets"]}
+    asset = next((assets[name] for name in candidates if name in assets), None)
+    if asset is None:
+        raise ValueError(f"{repo} {tag}: missing asset {', '.join(candidates)}")
+    name = asset["name"]
+    digest = asset.get("digest") or ""
+    if not digest.startswith("sha256:") or len(digest[7:]) != 64:
+        raise ValueError(f"{name}: release has no valid sha256 digest")
+    cache = source.cached_package_path(version, platform)
+    with tempfile.TemporaryDirectory(dir=cache.parent) as directory:
+        downloaded = Path(directory) / name
+        command("gh", "release", "download", tag, "--repo", repo, "--pattern", name, "--output", downloaded)
+        with downloaded.open("rb") as archive:
+            actual = "sha256:" + hashlib.file_digest(archive, "sha256").hexdigest()
+        if actual != digest:
+            raise ValueError(f"{name}: sha256 mismatch: expected {digest}, got {actual}")
+        downloaded.replace(cache)
+    print(f"{name}: {digest} matches; cached at {cache}")
+
+
+def prefetch():
+    if not os.environ.get("GH_TOKEN"):
+        raise ValueError("prefetch requires GH_TOKEN to read public releases")
+    platform = "linux-x64"
+    codex_version = HARNESSES["codex_cli"].version
+    prefetch_release(codex_cli_binary_source(), codex_version, "openai/codex", f"rust-v{codex_version}",
+                     [f"codex-package-{_platform_to_codex_arch(platform)}.tar.gz"])
+    opencode_version = HARNESSES["opencode"].version
+    prefetch_release(opencode_binary_source(), opencode_version, "anomalyco/opencode", f"v{opencode_version}",
+                     _asset_name_candidates(platform))
+    # Claude Code downloads from claude.ai and Google Cloud Storage, not GitHub.
+    return 0
 
 
 def stored_file(ref, path):
@@ -198,6 +240,7 @@ def release(args, evals):
 def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("prefetch")
     checks_parser = commands.add_parser("checks")
     checks_parser.add_argument("--output", type=Path, required=True)
     planner = commands.add_parser("plan-epochs")
@@ -220,6 +263,8 @@ def main():
         if args.command == "plan-epochs":
             return plan_epochs(args, run_args)
         args = parser.parse_args()
+        if args.command == "prefetch":
+            return prefetch()
         if args.command == "publish-results":
             return publish_artifacts(args)
         config = load_config()

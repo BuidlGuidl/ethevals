@@ -22,6 +22,64 @@ ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
 
 
+def prefetch_fixture(monkeypatch, tmp_path, digest):
+    from inspect_swe._codex_cli import agentbinary as codex
+    from inspect_swe._opencode import agentbinary as opencode
+
+    for module in (codex, opencode):
+        monkeypatch.setattr(module, "package_cache_dir", lambda name: tmp_path)
+    monkeypatch.setenv("GH_TOKEN", "offline-unused")
+    monkeypatch.setattr(sys, "argv", ["ci.py", "prefetch"])
+    names = {
+        "openai/codex": "codex-package-x86_64-unknown-linux-musl.tar.gz",
+        "anomalyco/opencode": "opencode-linux-x64-baseline.tar.gz",
+    }
+
+    def github(*args, **kwargs):
+        if args[:2] == ("gh", "api"):
+            repo = next(repo for repo in names if args[2].startswith(f"repos/{repo}/"))
+            version = ci.HARNESSES["codex_cli" if repo == "openai/codex" else "opencode"].version
+            prefix = "rust-v" if repo == "openai/codex" else "v"
+            assert args[2] == f"repos/{repo}/releases/tags/{prefix}{version}"
+            fallback = ("codex-x86_64-unknown-linux-musl.tar.gz" if repo == "openai/codex"
+                        else "opencode-linux-x64.tar.gz")
+            return subprocess.CompletedProcess(args, 0, stdout=json.dumps({"assets": [
+                {"name": fallback, "digest": digest}, {"name": names[repo], "digest": digest}]}))
+        assert args[:3] == ("gh", "release", "download")
+        repo = args[args.index("--repo") + 1]
+        assert args[args.index("--pattern") + 1] == names[repo]
+        Path(args[args.index("--output") + 1]).write_bytes(b"abc")
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setattr(ci, "command", github)
+    return [module.codex_cli_binary_source() if module is codex else module.opencode_binary_source()
+            for module in (codex, opencode)]
+
+
+def test_prefetch_writes_verified_archives_to_inspect_cache(tmp_path, monkeypatch):
+    sources = prefetch_fixture(monkeypatch, tmp_path,
+        "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    assert ci.main() == 0
+    for source, name in zip(sources, ("codex_cli", "opencode")):
+        cache = source.cached_package_path(ci.HARNESSES[name].version, "linux-x64")
+        assert cache.read_bytes() == b"abc"
+
+
+@pytest.mark.parametrize("digest,reason", [
+    ("sha256:" + "0" * 64, "sha256 mismatch"),
+    (None, "release has no valid sha256 digest"),
+])
+def test_prefetch_rejects_bad_digest_without_replacing_cache(tmp_path, monkeypatch, capsys, digest, reason):
+    sources = prefetch_fixture(monkeypatch, tmp_path, digest)
+    cache = sources[0].cached_package_path(ci.HARNESSES["codex_cli"].version, "linux-x64")
+    cache.write_bytes(b"previous archive")
+    with pytest.raises(SystemExit) as error:
+        ci.main()
+    assert error.value.code == 2
+    assert f"codex-package-x86_64-unknown-linux-musl.tar.gz: {reason}" in capsys.readouterr().err
+    assert cache.read_bytes() == b"previous archive"
+
+
 @pytest.mark.parametrize("operation", ["resume", "publish"])
 def test_truncated_log_keeps_completed_epoch(tmp_path, monkeypatch, caplog, operation):
     monkeypatch.delenv("PYTEST_CURRENT_TEST")

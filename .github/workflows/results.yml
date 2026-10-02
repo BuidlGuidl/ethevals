@@ -93,6 +93,10 @@ jobs:
           load: true
           cache-from: type=gha,scope=ethevals-chain
           cache-to: type=gha,scope=ethevals-chain,mode=max
+      - name: Fetch pinned agent binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run python scripts/ci.py prefetch
       - name: Run one planned epoch
         timeout-minutes: 190
         env:
