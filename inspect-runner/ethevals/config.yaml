@@ -1,8 +1,7 @@
 # TODO: For real runs, set opus-5.5 and gpt-5.5 effort to high.
 # Omit effort for kimi-k3 and glm-5.3 to use provider defaults.
 # Set grader effort to medium.
-# TODO: Use 3 epochs for real runs; 3 epochs can exceed CI's 6-hour job; split the run first.
-epochs: 1
+epochs: 3
 time_limit: 7200
 cost_limit: 20.0
 max_attempts: 2
