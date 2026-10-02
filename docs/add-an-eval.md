@@ -1,300 +1,389 @@
-# Add an eval
+# Introduction
 
-An eval is a folder under `evals/<pillar>/<name>/`, where the pillar is `concepts`, `transactions`, `building`, or `security`.
-The folder path is the eval ID.
-You are done when `ethevals validate` passes, the reference pass of `ethevals check` passes every check, the untouched pass fails, and the PR's free checks pass.
+## What is an eval? 
 
-## Prepare the checkout
+An eval is a prompt for an agent or a bare model, plus the checks that decide whether it did it right.
+You write the prompt, what the agent starts with, and the checks, all in one folder.
 
-Install Python 3.13, uv, Node.js 22 or later, and pnpm 9.14.2.
-For any eval that runs in the internet or skills mode, start Docker with Compose support.
-Give Docker at least 7 GiB for one epoch with a chain. Forks and extra services need more.
-Run these commands from the repository root in one shell:
+## The eval folder
 
-```sh
-unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
-uv sync --frozen
+Every eval belongs to one of four pillars:
+
+- `concepts`: Ethereum knowledge and standards.
+- `transactions`: actions that change chain state.
+- `building`: code that works in its workspace.
+- `security`: risks in contracts and their use.
+
+An eval lives in `evals/<pillar_name>/<eval_name>/`, and `<pillar_name>/<eval_name>` is its ID:
+
+```text
+evals/
+└── <pillar_name>/
+    └── <eval_name>/
+        ├── eval.yaml     required: the prompt, the modes, and the chain
+        ├── workspace/    optional: the files the agent starts with
+        ├── setup/        required with a chain: setup.s.sol, which prepares the chain before the agent starts
+        ├── scorer/       required: the checks
+        ├── solution/     required with tests or a chain: the reference solution, which proves the checks can pass
+        └── compose.yaml  optional: extra services the agent can call, like a database
 ```
 
-## Lay out the folder
 
-Copy the example below that is closest to your eval, and keep `eval_dir` set to the new path for the final checks:
+Let's look at each piece: 
 
-```sh
-cp -R evals/transactions/send-six-decimal-token evals/transactions/my-transfer
-eval_dir=evals/transactions/my-transfer
-```
+### `eval.yaml`
 
-Each path has one job. Only `scorer/` is required.
-An eval with a `chain` needs `setup/setup.s.sol`, and `validate` rejects `setup/` without a `chain`.
-
-| Path | Holds | The agent sees it |
-| --- | --- | --- |
-| `eval.yaml` | the prompt and the declaration | the prompt |
-| `workspace/` | the agent's starting files: a README, a `foundry.toml`, source to read | yes, as shipped |
-| `setup/` | `setup.s.sol` and the contracts only setup deploys | no |
-| `scorer/` | `target.yaml`, `tests/*.t.sol`, and `rubric.md`, in any combination | no |
-| `solution/` | the reference solution: files that add or replace workspace files at the same path, and an optional `solution.s.sol` | no |
-| `compose.yaml` | extra services | it can call them |
-
-**The convention to follow: `solution/` mirrors `workspace/`.**
-
-- Keep the workspace a normal Foundry project, with contracts under `src/`.
-- Put each solution file at the path the agent creates or replaces. For `src/BuilderPoints.sol`, use `solution/src/BuilderPoints.sol`.
-- The reference pass copies `solution/` over the workspace. The test imports `workspace/src/BuilderPoints.sol`, which this pass adds.
-- A `solution/solution.s.sol` doesn't replace anything. It runs as a script.
-
-The repository is public, so an agent with internet access can find scorer files. Don't rely on their secrecy.
-
-`eval.yaml` takes these keys. Any other key fails validation.
+`eval.yaml` takes these keys:
 
 | Key | Required | Holds |
 | --- | --- | --- |
 | `prompt` | yes | the message the agent gets |
-| `motivation` | yes | one line on why the eval exists, shown on the board |
+| `motivation` | yes | why the eval exists, shown on the website |
 | `modes` | yes | any of `vanilla`, `internet`, and `skills` |
-| `chain` | no | `anvil` for a fresh chain, or `{fork: mainnet, block: 23819000}` for a pinned fork. Omit it for no chain |
+| `chain` | no | `anvil`, or a fork like `{fork: mainnet, block: 23819000}` |
 | `choices` | no | 2 to 26 answers for a multiple-choice quiz |
 
-- `vanilla` sends the prompt to a bare model with no tools. Use it only when the eval has no `chain`, no `workspace/`, and no `scorer/tests/`, because a bare model has nowhere to put work.
-- `internet` runs an agent with the web, a shell, the workspace, and the chain.
-- `skills` is `internet` with the whole [skills pack](../skills/README.md). Evals don't ship skills. Send helpful notes to the pack upstream. A skills change reruns only skills-mode epochs.
+`prompt`: write it the way a real person would send it, the agent must not know it is being tested.
 
-### Pick the scorers
+`modes` picks how the eval runs:
 
-Use one or more scorers. An epoch passes when every check passes.
+- `vanilla`: sends the prompt to a bare model with no tools. Use it only for an eval with no chain, no workspace files, and no tests.
+- `internet`: runs an agent with the web, a shell, the workspace, and the chain.
+- `skills`: `internet` plus the [skills pack](../skills/README.md).
 
-| File | Grades | Check names |
-| --- | --- | --- |
-| `scorer/target.yaml` | the final reply, with Inspect's `match`, `pattern`, or `choice` | the file's `name`, default `answer` |
-| `scorer/tests/*.t.sol` | the agent's code, the chain, or both, with Forge | each test function's name, plus `compile` |
-| `scorer/rubric.md` | the transcript, with the agent's compiled source in front when it compiled | each `##` heading |
+### `setup/`
 
-The scorer picks the test tool from the file names in `scorer/tests/`. Forge is the one test tool, and it claims `*.t.sol` files.
-A file that no test tool claims is a helper that tests can import.
-`compile` is one check per eval, shared by every test tool.
+`setup.s.sol` extends `ChainSetup`, which gives it these helpers:
 
-Check names must be unique across the eval, and `compile` is reserved.
-Name targets and rubric questions with `[a-z][a-z0-9_]*`.
+| Helper | Does |
+| --- | --- |
+| `fund(addr, amount)` | sets the ETH balance of `addr` |
+| `chainRecord(name, value)` | adds a field to `chain.json`, which the agent and the tests read |
+| `privateRecord(name, value)` | adds a field to `private.json`, which only the tests read |
 
-### Write a prompt a real person would send
-
-The agent must not know it is being tested.
-Write the prompt the way a user would, and give the agent only what that user would give.
-`ethevals validate` rejects these words in the prompt and in `workspace/` files, as whole words in any case: epoch, grader, rubric, score, benchmark, eval, and "being tested".
-`ethevals check` applies the same rule to `chain.json` after setup runs.
-Reviewers ask one question: would a real person send this?
-
-The agent sees only these things:
-
-- the prompt, with the choices under it for a multiple-choice quiz;
-- `workspace/` as shipped, at `/workspace`;
-- `/workspace/chain.json` and the chain at `http://chain:8545`, when the eval has a chain;
-- the services in `compose.yaml`;
-- the skills pack, in the skills mode.
-
-The runner adds no notes, no `foundry.toml`, and no Solidity libraries. The agent picks its own tools and libraries.
-
-## Write a quiz
-
-[agent-registries](../evals/concepts/agent-registries) has only `eval.yaml` and `scorer/target.yaml`. A quiz has no `workspace/`. Its one check is `erc_number`.
-
-```yaml
-# eval.yaml
-motivation: Check whether a model knows the ERC for agent discovery and trust.
-prompt: which ERC defines onchain identity, reputation and validation registries for AI agents? just the number please
-modes: [vanilla, internet, skills]
-
-# scorer/target.yaml
-name: erc_number
-method: match
-target: '8004'
-location: end
-```
-
-- Quote numeric targets and addresses so YAML keeps them as strings.
-- `target` is one answer or a list where any one counts. A vanilla quiz takes one target, or a one-item list.
-- `match` is exact and ignores case by default. `location`, `ignore_case`, and `numeric` pass through to Inspect's `match()`. `location` takes `exact`, `begin`, `end`, or `any`.
-- For a regex, set `method: pattern`, put the regex in `pattern`, and put a complete matching reply in `reference`.
-- For multiple choice, list the `choices` in `eval.yaml` and set `target` to the right uppercase letter. See the [wei-per-ether fixture](../inspect-runner/tests/fixtures/concepts/wei-per-ether).
-- CI publishes every eval that declares `vanilla` and is graded by a target alone to Hugging Face, targets included. Agents in the internet mode can look those targets up.
-
-## Write a chain eval
-
-[send-six-decimal-token](../evals/transactions/send-six-decimal-token) uses all four folders.
-Next to `eval.yaml`, it has `workspace/README.md`, `setup/setup.s.sol` with the `setup/Token.sol` it deploys, `scorer/tests/Transfer.t.sol`, `scorer/rubric.md`, and `solution/solution.s.sol`.
-
-```yaml
-chain: anvil
-motivation: Test whether an agent reads token decimals before signing an exact transfer.
-modes: [internet, skills]
-prompt: |
-  can you send 12.5 tokens to the recipient in chain.json? the file has the rpc url,
-  the token address, the recipient and the private key of my funded account.
-```
-
-The token has 6 decimals, and the prompt doesn't say so.
-Checks: `compile`, `test_recipient_balance`, and the rubric's `verified_transfer`.
-
-### Prepare the chain with setup
-
-Before the agent starts, the runner runs `forge script setup/setup.s.sol --broadcast --slow --rpc-url http://127.0.0.1:8546` in the chain container, on the unfiltered RPC:
+<details>
+<summary>A small <code>setup.s.sol</code></summary>
 
 ```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
+
 import {ChainSetup} from "ethevals/ChainSetup.sol";
 import {Vm} from "forge-std/Vm.sol";
-import {Token} from "./Token.sol";
 
 contract Setup is ChainSetup {
     function run() external {
         Vm.Wallet memory me = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));
+        fund(me.addr, 10 ether);  // (1)
+        chainRecord("privateKey", bytes32(me.privateKey));  // (2)
+        privateRecord("startBalance", uint256(10 ether));  // (3)
+    }
+}
+```
+
+1. Gives the wallet 10 ETH on the chain.
+2. Puts the wallet's key in `chain.json` for the agent.
+3. Puts a value in `private.json` that only the tests can read.
+
+</details>
+
+### `scorer/`
+
+You can use one or more scorers:
+
+| File | Checks |
+| --- | --- |
+| `scorer/target.yaml` | the final reply |
+| `scorer/tests/*.t.sol` | the chain, the agent's code, or both, with Forge |
+| `scorer/rubric.md` | the transcript, graded by an LLM |
+
+A target is the quickest way to write a quiz. You write the answer, and the check compares the reply with it.
+
+<details>
+<summary><code>target.yaml</code> keys, multiple choice, and pattern targets</summary>
+
+`target.yaml` takes these keys:
+
+| Key | Default | Holds |
+| --- | --- | --- |
+| `name` | `answer` | the check's name |
+| `target` | required | the answer, or a list where any one passes |
+| `method` | `match` | `match` or `pattern` |
+| `location` | `exact` | `begin`, `end`, `any`, or `exact` |
+| `ignore_case` | `true` | ignore case when comparing |
+| `numeric` | `false` | compare as numbers |
+| `pattern` | none | the regex for `method: pattern` |
+| `reference` | the first target | the reply `check` sends |
+
+**Multiple choice.** Add `choices` to `eval.yaml` and set `target` to the right letter.
+From the test fixture [`wei-per-ether`](../inspect-runner/tests/fixtures/concepts/wei-per-ether):
+
+```yaml
+motivation: Check whether a model knows Ethereum's base unit conversion.
+prompt: How many wei equal one ether?
+choices:
+  - "10^6"
+  - "10^9"
+  - "10^18"
+  - "10^24"
+modes: [vanilla, internet]
+```
+
+```yaml
+name: wei_conversion
+target: C
+```
+
+**Pattern targets.** `method: pattern` pulls the answer out of the reply with a regex group, then compares it with `target`, for example:
+
+```yaml
+name: erc_number
+method: pattern
+pattern: 'ERC-?(\d+)'
+target: '8004'
+reference: 'It is ERC-8004.'
+```
+
+</details>
+
+### `compose.yaml`
+
+Add a `compose.yaml` with the services the agent can call, for example:
+
+```yaml
+services:
+  database:
+    image: postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
+    environment:
+      POSTGRES_PASSWORD: postgres
+    mem_limit: 512m
+```
+
+An epoch is one agent or model doing an eval once, in one mode. Here is an example lifecycle of epoch: 
+
+```mermaid
+flowchart LR
+	setup["setup/setup.s.sol<br/>can deploy, fund,<br/>and write files"] --> agent["agent<br/>gets the prompt, workspace/,<br/>and chain.json"]
+	agent --> scorer["scorer/<br/>target.yaml reads the reply<br/>tests/ read the chain and workspace/<br/>rubric.md reads the transcript"]
+```
+
+
+## Recipes
+
+### Ask a question
+
+This recipe checks the reply against a fixed answer.
+It's [`evals/concepts/agent-registries`](../evals/concepts/agent-registries).
+
+```text
+agent-registries/
+├── eval.yaml
+└── scorer/
+    └── target.yaml
+```
+
+```yaml
+motivation: Check whether a model knows the ERC for agent discovery and trust.  # (1)
+prompt: which ERC defines onchain identity, reputation and validation registries for AI agents? just the number please  # (2)
+modes: [vanilla, internet, skills]  # (3)
+```
+
+1. The board shows it. The agent never sees it.
+2. Ask the way a person would.
+3. A quiz needs no tools, so it can run in `vanilla`.
+
+<details>
+<summary><code>scorer/target.yaml</code></summary>
+
+```yaml
+name: erc_number  # (1)
+method: match  # (2)
+target: '8004'  # (3)
+location: end  # (4)
+```
+
+1. Names the check.
+2. `match` compares the reply with `target`.
+3. Targets are strings, so quote numbers.
+4. Passes when the reply ends with `8004`.
+
+</details>
+
+### Send a token on a fresh chain
+
+This recipe checks what the agent did on a chain.
+Setup deploys a token with 6 decimals, the agent sends 12.5 of it, and a Forge test reads the recipient's balance.
+It's [`evals/transactions/send-six-decimal-token`](../evals/transactions/send-six-decimal-token).
+
+```text
+send-six-decimal-token/
+├── eval.yaml
+├── workspace/
+│   └── README.md
+├── setup/
+│   ├── setup.s.sol
+│   └── Token.sol
+├── scorer/
+│   ├── tests/
+│   │   └── Transfer.t.sol
+│   └── rubric.md
+└── solution/
+    └── solution.s.sol
+```
+
+```yaml
+chain: anvil  # (1)
+motivation: Test whether an agent reads token decimals before signing an exact transfer.
+modes: [internet, skills]  # (2)
+prompt: |  # (3)
+  can you send 12.5 tokens to the recipient in chain.json? the file has the rpc url,
+  the token address, the recipient and the private key of my funded account.
+```
+
+1. Starts a fresh local chain for each epoch.
+2. A bare model can't send a transaction, so no `vanilla`.
+3. Setup writes `chain.json` into the workspace.
+
+<details>
+<summary><code>workspace/README.md</code></summary>
+
+```markdown
+`chain.json` holds the RPC URL, token address, recipient, and funded private key.
+```
+
+The agent starts with this file.
+
+</details>
+
+<details>
+<summary><code>setup/setup.s.sol</code></summary>
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
+
+import {ChainSetup} from "ethevals/ChainSetup.sol";  // (1)
+import {Vm} from "forge-std/Vm.sol";
+import {Token} from "./Token.sol";  // (2)
+
+contract Setup is ChainSetup {
+    function run() external {
+        Vm.Wallet memory me = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));  // (3)
         Vm.Wallet memory deployer = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));
         address recipient = vm.randomAddress();
-        fund(me.addr, 10 ether);
+        fund(me.addr, 10 ether);  // (4)
         fund(deployer.addr, 1 ether);
 
         vm.startBroadcast(deployer.privateKey);
         Token token = new Token(me.addr);
         vm.stopBroadcast();
 
-        chainRecord("privateKey", bytes32(me.privateKey));
+        chainRecord("privateKey", bytes32(me.privateKey));  // (5)
         chainRecord("recipient", recipient);
         chainRecord("token", address(token));
     }
 }
 ```
 
-`ChainSetup` adds three functions to a plain forge script:
+1. Writes `chain.json` and gives you `fund`, `chainRecord`, and `privateRecord`.
+2. Setup can deploy its own contracts.
+3. Makes a new random wallet each epoch.
+4. Sets the wallet's ETH balance.
+5. Adds a field to `chain.json`.
 
-| Function | What it does |
-| --- | --- |
-| `fund(addr, amount)` | sets the address's ETH balance on the chain with `anvil_setBalance` |
-| `chainRecord(name, value)` | adds a field to `chain.json`, which the agent and the tests read |
-| `privateRecord(name, value)` | adds a field to `private.json`, which only the tests read |
+</details>
 
-The record functions take an address, a `uint256`, a `bytes32`, or a string.
-`chain.json` always has `rpcUrl` and `chainId`, so this setup gives the agent `rpcUrl`, `chainId`, `privateKey`, `recipient`, and `token`.
-
-- Make keys with `vm.randomUint`, never from a label. The repository is public, so anyone can derive a key made from a label.
-- Use `fund`, not `vm.deal`. A forge script runs in Forge's simulation first and then sends only the broadcast transactions, so `vm.deal` changes only the simulation.
-- The chain image ships only forge-std and `ChainSetup`. Write setup contracts that import nothing else, or vendor what they need inside `setup/`.
-- To deploy a contract the agent should read, keep its one copy in `workspace/` and import it from setup. That contract imports only files the workspace ships.
-- Don't ship `workspace/chain.json` or `workspace/private.json`. Setup writes those files, and `validate` rejects them.
-- Setup has 120 seconds. A setup failure is an error, not a failed check.
-
-### Check the chain with a Forge test
-
-[Transfer.t.sol](../evals/transactions/send-six-decimal-token/scorer/tests/Transfer.t.sol) imports only forge-std. Its two functions:
+<details>
+<summary><code>setup/Token.sol</code></summary>
 
 ```solidity
-function setUp() public {
-    string memory chain = vm.readFile("chain.json");
-    recipient = chain.readAddress(".recipient");
-    token = IERC20(chain.readAddress(".token"));
-    vm.createSelectFork("chain");
+// SPDX-License-Identifier: MIT
+pragma solidity =0.8.30;
+
+contract Token {
+    string public constant name = "Six Decimal Token";
+    string public constant symbol = "SIX";
+    uint8 public constant decimals = 6;  // (1)
+    uint256 public constant totalSupply = 1000 * 10 ** 6;
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    constructor(address owner) {
+        balanceOf[owner] = totalSupply;
+        emit Transfer(address(0), owner, totalSupply);
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        _transfer(msg.sender, to, amount);
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        allowance[from][msg.sender] -= amount;
+        _transfer(from, to, amount);
+        return true;
+    }
+
+    function _transfer(address from, address to, uint256 amount) private {
+        require(to != address(0));
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(from, to, amount);
+    }
 }
-
-function test_recipient_balance() public view {
-    assertEq(token.balanceOf(recipient), 12_500_000, "recipient holds 12.5 tokens in base units");
-}
 ```
 
-- Read `chain.json` and `private.json` with `vm.readFile`. They sit in the test's working directory.
-- Fork the finished chain with `vm.createSelectFork("chain")`. Changes a test makes stay in Forge's fork.
-- Before tests run, the runner stops the agent's processes and mines one block, so every transaction the agent sent is in a block.
-- Check only what the prompt asks. A check on the sender's transaction count would grade something the user never said.
-- A test that imports nothing from the workspace, like this one, fails `compile` only on an author error.
+1. The trap: 12.5 tokens are 12,500,000 base units.
 
-### Write the reference solution
+</details>
 
-[solution/solution.s.sol](../evals/transactions/send-six-decimal-token/solution/solution.s.sol) plays the agent.
-It reads `chain.json`, computes `125 * 10 ** token.decimals() / 10`, and broadcasts the transfer from `privateKey`.
-The runner runs it in the scorer container with `forge script --broadcast` against `http://chain:8545`, the filtered RPC the agent uses.
-Use only what the agent gets: the prompt, the workspace, and `chain.json`. Don't read `private.json`.
-
-## Write a build eval
-
-[erc20-points-token](../evals/building/erc20-points-token) asks the agent to write a contract:
-
-```yaml
-motivation: Check whether an agent can build a capped community token on a well-known library.
-modes: [internet, skills]
-prompt: |
-  can you help me build a token for our community? put it in src/BuilderPoints.sol as a contract
-  called BuilderPoints, with no constructor arguments. call it Builder Points (BPT), with the same
-  decimals as USDC. mint 100,000 to whoever deploys it. the deployer should be able to mint more
-  to any address later, but the total supply must never go over 1,000,000. it's a Foundry project
-  on solidity 0.8.30. it's going to hold real value for our members, so follow best practices.
-```
-
-Ship this `workspace/foundry.toml` in a Foundry eval. The agent can change it, and grading never uses it.
-
-```toml
-[profile.default]
-src = "src"
-test = "test"
-libs = ["lib"]
-solc = "0.8.30"
-```
-
-The workspace ships only `foundry.toml`.
-The prompt names the contract and a no-argument constructor. The test calls `mint(address, uint256)`, the usual signature for minting to an address.
-The test relies on those and on standard ERC-20, nothing else.
-[BuilderPoints.t.sol](../evals/building/erc20-points-token/scorer/tests/BuilderPoints.t.sol) has ten test functions. Its imports, `setUp`, and the first test:
+<details>
+<summary><code>scorer/tests/Transfer.t.sol</code></summary>
 
 ```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
+
 import {Test} from "forge-std/Test.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
-import {BuilderPoints} from "workspace/src/BuilderPoints.sol";
 
-function setUp() public {
-    points = new BuilderPoints();
-    token = IERC20(address(points));
-}
+contract TransferCheck is Test {
+    using stdJson for string;
 
-function test_decimals_match_usdc() public view {
-    assertEq(token.decimals(), 6, "decimals");
+    address recipient;
+    IERC20 token;
+
+    function setUp() public {
+        string memory chain = vm.readFile("chain.json");  // (1)
+        recipient = chain.readAddress(".recipient");
+        token = IERC20(chain.readAddress(".token"));
+        vm.createSelectFork("chain");  // (2)
+    }
+
+    function test_recipient_balance() public view {  // (3)
+        assertEq(token.balanceOf(recipient), 12_500_000, "recipient holds 12.5 tokens in base units");  // (4)
+    }
 }
 ```
 
-`scorer/rubric.md` asks one question, `uses_standard_library`: did the agent build the ERC-20 on a well-known library such as OpenZeppelin or Solady?
-The reference pass adds `solution/src/BuilderPoints.sol` to the workspace, with OpenZeppelin `ERC20Capped` and `Ownable`.
+1. Tests read `chain.json`.
+2. Forks the chain as the agent left it.
+3. Each `test*` function is one check.
+4. The message is the reason when the check fails.
 
-Git ignores `lib/` at any depth, so a solution that uses a library ships as one flattened file.
-Write it in a scratch Foundry project with the library installed through `forge install`.
-Then run `forge flatten src/X.sol` there and save the output as `solution/src/X.sol` in the eval.
-Check that the file has one SPDX line and one pragma, and that the pragma matches the version in the prompt.
+</details>
 
-Checks: `compile`, the ten test functions, and `uses_standard_library`.
-
-### Import the agent's code
-
-Import the agent's file by its workspace path with a `workspace/` prefix, as `BuilderPoints.t.sol` does.
-A Scaffold-ETH 2 contract, for example, is `workspace/packages/hardhat/contracts/YourContract.sol`.
-
-- Name the file in the prompt, the way a real user would.
-- The runner copies the agent's final workspace into the scorer under `workspace/`, without `.git`, `out`, or `cache`, and keeps only `.sol` files from `node_modules`. The copy holds at most 50 MiB and 20,000 files.
-- Forge compiles your tests and what they import, and nothing else. A broken file elsewhere in the workspace doesn't matter.
-- A missing file fails `compile` with Forge's reason, such as `Source "workspace/src/Vault.sol" not found`. One missing import fails every test, so `compile` is all or nothing.
-- Apart from the agent's files, import only forge-std in tests. Reach the agent's contract through forge-std's interfaces, such as `forge-std/interfaces/IERC20.sol`, and `address` casts.
-- The agent's code compiles against the libraries the agent installed with `forge install` or npm. The runner maps each agent project's libraries only for files in that project.
-- No image ships a Solidity compiler. Forge installs the version each file's pragma asks for, in the agent's container and in the scorer, so any released 0.8.x works. If the task depends on a version, name it in the prompt and in `foundry.toml`.
-- A pragma that no released compiler satisfies fails `compile`. A failed compiler download is an error, not a failed check, so the epoch can get another attempt.
-- Tests can read only `chain.json` and `private.json`. FFI is off.
-
-Forge test results become checks:
-
-- The check name is the test function's name, without the suite path or `()`.
-- The reason is the assertion message. `assertEq(a, b, "recipient balance")` fails as `recipient balance: 12500000 != 13000000`, so write the message you want on the board.
-- `validate` rejects `testFail*` names, because a failing one hides every other test in its suite. Use `vm.expectRevert`.
-- A reverting `setUp()` or constructor turns its suite into one failed check named `<Contract>.setUp` or `<Contract>.constructor`.
-
-The agent's contract runs inside Forge's test environment, so it can call the cheatcode address and fake what a test reads with `vm.mockCall` or `vm.store`.
-This is allowed for now and watched in transcripts.
-
-## Add a rubric
-
-Add `scorer/rubric.md` with one yes-or-no question per `## name` heading:
+<details>
+<summary><code>scorer/rubric.md</code></summary>
 
 ```markdown
 ## verified_transfer
@@ -302,125 +391,261 @@ Add `scorer/rubric.md` with one yes-or-no question per `## name` heading:
 Before reporting success, did the agent confirm on-chain that the transfer landed, for example by reading the transaction receipt or the recipient's token balance?
 ```
 
-- A rubric works on any eval, alone or with a target or tests.
-- The grader reads the whole transcript: tool calls with their inputs and outputs, and the final reply. When the tests compiled the agent's code, that source comes first.
-- Evidence has no size cap. The runner trims it only when it would exceed the grader model's context window.
-- `check` skips rubrics, so the reviewer reads `rubric.md` in the PR. A rubric-only eval has no reference pass or untouched pass.
+Each `##` heading is a check. A model answers the question from the transcript.
 
-## Use a fork
+</details>
 
-To start from real mainnet or Base state, declare a fork and pin its block:
+<details>
+<summary><code>solution/solution.s.sol</code></summary>
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
+
+import {Script} from "forge-std/Script.sol";
+import {stdJson} from "forge-std/StdJson.sol";
+import {IERC20} from "forge-std/interfaces/IERC20.sol";
+
+contract Solution is Script {
+    using stdJson for string;
+
+    function run() external {
+        string memory chain = vm.readFile("chain.json");  // (1)
+        IERC20 token = IERC20(chain.readAddress(".token"));
+        uint256 amount = 125 * 10 ** token.decimals() / 10;  // (2)
+        vm.startBroadcast(uint256(chain.readBytes32(".privateKey")));
+        token.transfer(chain.readAddress(".recipient"), amount);
+        vm.stopBroadcast();
+    }
+}
+```
+
+1. Uses only what the agent gets.
+2. Reads the decimals from the chain.
+
+</details>
+
+To prove the test catches a wrong answer, change `amount` to `125 * 10 ** 4` and run `check`.
+The reference pass now fails with your assertion message. Change it back.
+
+### Use a mainnet fork
+
+To test against a live protocol, fork mainnet at a pinned block:
 
 ```yaml
 chain: {fork: mainnet, block: 23819000}
 ```
 
-- The block is required, so every epoch starts from the same state. The runner knows `mainnet` and `base`.
-- The runner reads the network's RPC URL from a repository secret and passes it only to anvil in the chain container. The agent never sees it, and the runner replaces it with `<fork rpc>` in RPC replies and command output. Anvil runs with the network's chain ID and no prefunded accounts.
-- The runner runs `forge test --no-storage-caching` on forks, so a cached read from an earlier epoch can't pass a wrong answer.
-- On a fork, the chain container gets 1 GiB, and setup and `forge test` each get 600 seconds.
-- To check a fork eval locally, set `MAINNET_RPC_URL` or `BASE_RPC_URL` to an archive RPC URL.
+Setup can call anvil methods through `vm.rpc`, like `anvil_impersonateAccount`.
+See [`evals/transactions/supply-usdc-to-aave`](../evals/transactions/supply-usdc-to-aave).
+Set `MAINNET_RPC_URL` before you run `check`.
 
-[supply-usdc-to-aave](../evals/transactions/supply-usdc-to-aave) is the example.
-The agent must supply 10,000 USDC to Aave v3's main market and keep 15,000 USDC in the wallet.
-Setup creates the agent's wallet `me` and funds it with 10 ETH for gas.
-Three `vm.rpc` calls move 25,000 USDC from a holder that has enough at the pinned block:
+### Build a contract
 
-```solidity
-vm.rpc("anvil_impersonateAccount", string.concat('["', vm.toString(HOLDER), '"]'));
-vm.rpc("eth_sendTransaction", string.concat('[{"from":"', vm.toString(HOLDER), '","to":"', vm.toString(USDC),
-    '","data":"', vm.toString(abi.encodeCall(IERC20.transfer, (me.addr, 25_000e6))), '"}]'));
-vm.rpc("anvil_stopImpersonatingAccount", string.concat('["', vm.toString(HOLDER), '"]'));
+This recipe checks code the agent writes.
+Forge tests import the agent's contract, and a rubric asks how the agent built it.
+It's [`evals/building/erc20-points-token`](../evals/building/erc20-points-token).
+
+```text
+erc20-points-token/
+├── eval.yaml
+├── workspace/
+│   └── foundry.toml
+├── scorer/
+│   ├── tests/
+│   │   └── BuilderPoints.t.sol
+│   └── rubric.md
+└── solution/
+    └── src/
+        └── BuilderPoints.sol
 ```
-
-- A `vm.rpc` call runs on the chain at once, during Forge's simulation. The USDC lands in `me`'s wallet.
-- Send from the holder with `vm.rpc`, not a broadcast. A broadcast needs the sender's key, and setup has none for the holder.
-- Stop impersonating before `run()` returns.
-
-Checks: `compile`, `test_supplied_10000_usdc`, and `test_kept_15000_usdc`.
-The reference solution approves the Pool for 10,000 USDC and calls `supply(USDC, 10_000e6, me, 0)` from the agent's key.
-
-The free check on a PR has no secrets, so for a fork eval it validates the folder and skips both passes.
-A maintainer reads the PR, then dispatches the `fork-check.yml` workflow with the PR number and the full SHA of the commit they read.
-If the PR head is no longer that commit, the workflow fails.
-Otherwise it runs both passes with the `MAINNET_RPC_URL` and `BASE_RPC_URL` secrets and no model, and posts a `fork check` status on that commit.
-The eval merges only after that status passes.
-
-## Add an extra service
-
-To give the agent another service, create `compose.yaml` in the eval folder with only the extra services and named volumes:
 
 ```yaml
-services:
-  catalog:
-    image: python:3.13-alpine@sha256:79e7a9b9ff1cbceff819f856fb374477792a5967759d94df266de7b7b4120e6f
-    command: [python, -m, http.server, "8080"]
-    mem_limit: 64m
-    networks: [work]
+motivation: Check whether an agent can build a capped community token on a well-known library.
+modes: [internet, skills]
+prompt: |  # (1)
+  can you help me build a token for our community? put it in src/BuilderPoints.sol as a contract
+  called BuilderPoints, with no constructor arguments. call it Builder Points (BPT), with the same
+  decimals as USDC. mint 100,000 to whoever deploys it. the deployer should be able to mint more
+  to any address later, but the total supply must never go over 1,000,000. it's a Foundry project
+  on solidity 0.8.30. it's going to hold real value for our members, so follow best practices.
 ```
 
-- Pin each image by digest, and set a positive `mem_limit`. Give Docker enough memory for the sum plus the stock services.
-- Join only `work`, the default when `networks` is absent. The agent and the chain share `work`. The scorer can't reach the service.
-- Don't redeclare `default`, `scorer`, `chain`, or the networks, which the runner owns. Don't copy stock image tags.
-- Don't use host mounts, published ports, privileged containers, custom builds, or inherited host environment values. For persistent data, use a named volume. See the [Compose rules](../inspect-runner/README.md#compose-and-agents).
+1. Names the file, the contract, and the constructor, because the tests import and deploy them.
+
+<details>
+<summary><code>workspace/foundry.toml</code></summary>
+
+```toml
+[profile.default]
+src = "src"  # (1)
+test = "test"
+libs = ["lib"]
+solc = "0.8.30"
+```
+
+1. The agent's contract goes in `src/`.
+
+</details>
+
+<details>
+<summary><code>scorer/tests/BuilderPoints.t.sol</code></summary>
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
+
+import {Test} from "forge-std/Test.sol";
+import {IERC20} from "forge-std/interfaces/IERC20.sol";
+import {BuilderPoints} from "workspace/src/BuilderPoints.sol";  // (1)
+
+contract BuilderPointsTest is Test {
+    uint256 constant UNIT = 10 ** 6;
+    uint256 constant INITIAL = 100_000 * UNIT;
+    uint256 constant CAP = 1_000_000 * UNIT;
+
+    BuilderPoints points;
+    IERC20 token;
+    address alice = makeAddr("alice");
+    address bob = makeAddr("bob");
+
+    function setUp() public {
+        points = new BuilderPoints();  // (2)
+        token = IERC20(address(points));
+    }
+
+    function test_decimals_match_usdc() public view {
+        assertEq(token.decimals(), 6, "decimals");
+    }
+
+    function test_name_and_symbol() public view {
+        assertEq(token.name(), "Builder Points", "name");
+        assertEq(token.symbol(), "BPT", "symbol");
+    }
+
+    function test_deployer_holds_initial_supply() public view {
+        assertEq(token.totalSupply(), INITIAL, "total supply");
+        assertEq(token.balanceOf(address(this)), INITIAL, "deployer balance");
+    }
+
+    function test_deployer_can_mint() public {
+        points.mint(alice, 5 * UNIT);
+        assertEq(token.balanceOf(alice), 5 * UNIT, "alice balance after mint");
+        assertEq(token.totalSupply(), INITIAL + 5 * UNIT, "total supply after mint");
+    }
+
+    function test_non_deployer_mint_reverts() public {
+        vm.prank(alice);
+        vm.expectRevert();  // (3)
+        points.mint(alice, 1);
+    }
+
+    function test_cap_is_one_million() public {
+        points.mint(alice, CAP - INITIAL);
+        assertEq(token.totalSupply(), CAP, "total supply at the cap");
+        vm.expectRevert();
+        points.mint(alice, 1);
+    }
+
+    function test_holders_can_transfer() public {
+        assertTrue(token.transfer(alice, 5 * UNIT), "transfer returns true");
+        vm.prank(alice);
+        assertTrue(token.transfer(bob, 2 * UNIT), "holder transfer returns true");
+        assertEq(token.balanceOf(alice), 3 * UNIT, "alice balance");
+        assertEq(token.balanceOf(bob), 2 * UNIT, "bob balance");
+    }
+
+    function test_transfer_over_balance_reverts() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        token.transfer(bob, 1);
+    }
+
+    function test_approve_and_transfer_from() public {
+        assertTrue(token.approve(alice, 3 * UNIT), "approve returns true");
+        assertEq(token.allowance(address(this), alice), 3 * UNIT, "allowance");
+        vm.prank(alice);
+        assertTrue(token.transferFrom(address(this), bob, 3 * UNIT), "transferFrom returns true");
+        assertEq(token.balanceOf(bob), 3 * UNIT, "bob balance");
+        assertEq(token.allowance(address(this), alice), 0, "allowance spent");
+    }
+
+    function test_transfer_from_without_allowance_reverts() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        token.transferFrom(address(this), bob, 1);
+    }
+}
+```
+
+1. Tests import the agent's code from `workspace/`.
+2. The test contract deploys the token, so it is the deployer.
+3. Any revert passes, so the agent can use its own errors.
+
+</details>
+
+<details>
+<summary><code>scorer/rubric.md</code></summary>
+
+```markdown
+## uses_standard_library
+
+Did the agent build the ERC-20 on a well-known library such as OpenZeppelin or Solady?
+```
+
+Tests can't tell whether the agent used a library. The grader can.
+
+</details>
+
+The solution is a flattened OpenZeppelin token in [`solution/src/BuilderPoints.sol`](../evals/building/erc20-points-token/solution/src/BuilderPoints.sol).
+`check` copies `solution/` over the workspace, so the file lands at `src/BuilderPoints.sol`.
 
 ## Check your eval
 
-With `eval_dir` set by your copy step, run:
+Install the runner as the [README](../README.md#install) says, then run:
 
 ```sh
+eval_dir=evals/transactions/send-six-decimal-token
 uv run ethevals validate --evals "$eval_dir"
-rm -rf results/author-eval
 uv run ethevals check --evals "$eval_dir" --output results/author-eval
 ```
 
-`validate` needs no Docker and no model. It checks the keys, the folders, the vanilla rule, the check names, and the prompt rule, then prints the eval ID and hash.
+`check` runs the eval without a model, so it skips rubrics. It runs two passes:
 
-`check` makes no model calls and skips rubrics. Every eval with tests or a chain needs a reference solution. `check` runs `epochs` from `config.yaml` twice:
+- With the solution, every check must pass.
+- Untouched, at least one check must fail.
 
-- The reference pass applies every reference the eval has: the target's reference reply, the `solution/` overlay, and `solution/solution.s.sol`. Every check must pass.
-- The untouched pass sends an empty reply and leaves the workspace and the chain as setup left them. At least one check must fail.
-
-Expected final lines, where `<epochs>` is the configured count:
+It ends with:
 
 ```text
-<epochs> results rows: results/author-eval/reference/rows.jsonl
-<epochs> results rows: results/author-eval/empty/rows.jsonl
+3 results rows: results/author-eval/reference/rows.jsonl
+3 results rows: results/author-eval/empty/rows.jsonl
 ```
 
-Read both row files. Every reference row needs `status: passed`, and every untouched row needs `status: failed`.
-If the command fails, use these steps:
+Each row is one epoch and lists its checks with their `reason`.
+`check` needs Docker, except for a `vanilla` quiz.
 
-- For a declaration error, fix the named key or file, then rerun `validate`.
-- For `status: error`, read `error_reason` and the log at `log_file`, relative to that pass's output folder. Fix setup failures before you submit.
-- For a failed reference, read each failed check's `reason`: Forge's compiler error, your assertion message, or a `<Contract>.setUp` or `<Contract>.constructor` failure.
-- If the untouched pass passes, strengthen the tests so they reject unfinished work.
-- For a Docker capacity error, increase Docker memory or reduce concurrency in the runner configuration.
+## Open the pull request
 
-For a chain eval, prove the test catches a wrong answer. Change `solution.s.sol` to send the wrong amount and rerun `check`.
-The reference pass must fail with your assertion message, not an error. Then restore `solution.s.sol`.
-
-## Prepare the pull request
-
-- Use regular files. The loader rejects symlinks and hard links.
-- Git ignores `lib`, `out`, and `cache` at any depth. Don't use those names for other authored files.
-- Remove stray files before the final check. Eval hashes include uncommitted files.
-- Keep generated logs and rows out of the PR, including `results/rows.jsonl`.
-
-To reproduce the PR's `Free checks` job, run:
+Run the free checks that CI runs. They need Docker, Node.js 22, and pnpm 9.14.2:
 
 ```sh
+rm -rf results/ci-checks
 (cd site && pnpm install --frozen-lockfile)
-rm -rf results/ci
-uv run python scripts/ci.py checks --output results/ci
-git diff --check
+env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AUTH_TOKEN -u EXA_API_KEY \
+	uv run python scripts/ci.py checks --output results/ci-checks
 ```
 
-This needs Docker and takes several minutes. It makes no paid calls.
-A reviewer checks the prompt's facts and any rubric.
+Git ignores folders named `lib`, `out`, and `cache`, so don't use those names in an eval.
+After merge, CI runs the eval within the maintainers' budget and opens a pull request with the results.
 
-Paid runs start after merge, once a maintainer sets `ETHEVALS_BUDGET_USD` above its default of zero.
-CI runs each missing epoch as its own job, with a 2-hour time limit and a $20 cost limit. An epoch that reaches the time limit is scored on what the agent left.
-CI opens a results PR, and merging it puts the results on the board. Changing an eval file changes its hash and makes earlier results stale.
-A skills change reruns only skills-mode epochs and preserves internet and vanilla results.
-See [CI and publication](../inspect-runner/README.md#ci-and-publication) for operator steps.
+## Runner details
+
+The [runner README](../inspect-runner/README.md) covers the rest:
+
+- [Captured files and build scoring](../inspect-runner/README.md#captured-files-and-build-scoring)
+- [Limits and errors](../inspect-runner/README.md#limits-and-errors)
+- [Compose and agents](../inspect-runner/README.md#compose-and-agents)
+- [Setup and solution contract](../inspect-runner/README.md#setup-and-solution-contract)
+- [Forks](../inspect-runner/README.md#forks)
+- [CI and publication](../inspect-runner/README.md#ci-and-publication)
