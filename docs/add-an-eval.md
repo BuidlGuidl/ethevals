@@ -62,7 +62,7 @@ Let's look at each piece:
 | `privateRecord(name, value)` | adds a field to `private.json`, which only the tests read |
 
 <details>
-<summary>A small <code>setup.s.sol</code></summary>
+<summary>Example <code>setup.s.sol</code></summary>
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -163,14 +163,18 @@ An epoch is one agent or model doing an eval once, in one mode. Here is an examp
 
 ```mermaid
 flowchart LR
-	setup["setup/setup.s.sol<br/>can deploy, fund,<br/>and write files"] --> agent["agent<br/>gets the prompt, workspace/,<br/>and chain.json"]
-	agent --> scorer["scorer/<br/>target.yaml reads the reply<br/>tests/ read the chain and workspace/<br/>rubric.md reads the transcript"]
+	setup["Step 1: setup runs"] --> work["Step 2: the agent works"] --> stop["Step 3: the agent stops"] --> checks["Step 4: the checks run"]
 ```
+
+1. `setup/setup.s.sol` deploys, funds, and writes `chain.json`.
+2. The agent gets only the prompt, `workspace/`, and `chain.json`.
+3. Its reply, `workspace/`, and the chain stay as the agent left them.
+4. `target.yaml` reads the reply, `tests/` read the chain and `workspace/`, and `rubric.md` reads the transcript.
 
 
 ## Recipes
 
-### Ask a question
+### Simple quiz
 
 This recipe checks the reply against a fixed answer.
 It's [`evals/concepts/agent-registries`](../evals/concepts/agent-registries).
@@ -188,7 +192,7 @@ prompt: which ERC defines onchain identity, reputation and validation registries
 modes: [vanilla, internet, skills]  # (3)
 ```
 
-1. The board shows it. The agent never sees it.
+1. The website shows it. The agent never sees it.
 2. Ask the way a person would.
 3. A quiz needs no tools, so it can run in `vanilla`.
 
@@ -209,7 +213,7 @@ location: end  # (4)
 
 </details>
 
-### Send a token on a fresh chain
+### Eval with a fresh chain
 
 This recipe checks what the agent did on a chain.
 Setup deploys a token with 6 decimals, the agent sends 12.5 of it, and a Forge test reads the recipient's balance.
@@ -232,17 +236,17 @@ send-six-decimal-token/
 ```
 
 ```yaml
-chain: anvil  # (1)
 motivation: Test whether an agent reads token decimals before signing an exact transfer.
-modes: [internet, skills]  # (2)
-prompt: |  # (3)
+modes: [internet, skills]  # (1)
+prompt: |  # (2)
   can you send 12.5 tokens to the recipient in chain.json? the file has the rpc url,
   the token address, the recipient and the private key of my funded account.
+chain: anvil  # (3)
 ```
 
-1. Starts a fresh local chain for each epoch.
-2. A bare model can't send a transaction, so no `vanilla`.
-3. Setup writes `chain.json` into the workspace.
+1. A bare model can't send a transaction, so no `vanilla`.
+2. Setup writes `chain.json` into the workspace.
+3. Starts a fresh local chain for each epoch.
 
 <details>
 <summary><code>workspace/README.md</code></summary>
@@ -428,7 +432,7 @@ contract Solution is Script {
 To prove the test catches a wrong answer, change `amount` to `125 * 10 ** 4` and run `check`.
 The reference pass now fails with your assertion message. Change it back.
 
-### Use a mainnet fork
+### Eval on a mainnet fork
 
 To test against a live protocol, fork mainnet at a pinned block:
 
@@ -440,7 +444,7 @@ Setup can call anvil methods through `vm.rpc`, like `anvil_impersonateAccount`.
 See [`evals/transactions/supply-usdc-to-aave`](../evals/transactions/supply-usdc-to-aave).
 Set `MAINNET_RPC_URL` before you run `check`.
 
-### Build a contract
+### Eval that tests the agent's code
 
 This recipe checks code the agent writes.
 Forge tests import the agent's contract, and a rubric asks how the agent built it.
