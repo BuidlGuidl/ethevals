@@ -407,6 +407,7 @@ It saves the missing epochs, config, and restored results for the matrix jobs.
 The plan checks out current `main`; the matrix and publisher use the SHA that the plan reports.
 CI runs the first 256 missing epochs; a later run picks up the rest.
 Each matrix job selects one epoch and uses a read-only token.
+Each job fetches pinned agent binaries with its token, so the runner never calls GitHub's API unauthenticated.
 Each job builds both stock images with the GitHub Actions cache and loads them locally, without a registry.
 The runner reuses local stock images whose tags match their build inputs.
 Each job allows 240 minutes, including 120 for the agent, 60 for scoring, and 60 for builds, setup, and uploads.
