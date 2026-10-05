@@ -221,3 +221,13 @@ html:has(dialog[open]) { overflow: hidden; padding-right: var(--sbw, 0px); }
 dialog { overscroll-behavior: contain; }
 /* phones: the panel is the whole screen, edge to edge */
 @media (max-width: 760px) { dialog { width: 100%; border-left: 0; box-shadow: none; } }
+/* the panel takes focus itself (site-simple.js), so it needs no ring of its own */
+dialog:focus { outline: none; }
+/* Close: one line, a 40px touch target, and taps answered at once (no wait for a double-tap zoom) */
+.close-button { flex: none; white-space: nowrap; min-height: 40px; }
+dialog button { touch-action: manipulation; }
+/* touch screens: no hover fill, which stays stuck after a tap and makes Close look pressed */
+@media (hover: none) {
+  .close-button:hover { background: transparent; color: var(--ink); }
+  :root[data-ui="geek"] .close-button:hover { background: transparent; border-color: var(--border-2); color: var(--ink); }
+}

@@ -319,9 +319,13 @@
 
   // Opening the panel locks the page's scroll (CSS) and hides its scrollbar: measure the bar first, so the
   // page can be padded by its width and doesn't shift sideways.
+  // Focus goes to the panel itself (named by its title), not to its first button: on touch screens a
+  // pre-focused Close looked already pressed.
   function showPanel() {
     document.documentElement.style.setProperty("--sbw", `${innerWidth - document.documentElement.clientWidth}px`);
     dialog().showModal();
+    dialog().setAttribute("tabindex", "-1");
+    dialog().focus({ preventScroll: true });
   }
   function openD(state, opener) {
     if (!dialog().open) { drOpener = opener || document.activeElement; }
@@ -330,10 +334,12 @@
     else { setD(encD(dr), false); paintD(); }
   }
   function goD(patch) { dr = { ...dr, ...patch }; setD(encD(dr), false); paintD(); document.querySelector("#detail").scrollTop = 0; }
+  // The panel closes at once; the history catches up after (Back is asynchronous).
   function closeD() {
     if (!dialog().open) return;
+    dialog().close();
     if (drPushed) { drPushed = false; history.back(); }
-    else { setD(null, false); dialog().close(); }
+    else setD(null, false);
   }
   // Called when the URL changes: open, move or close the panel to match it.
   function syncD() {
