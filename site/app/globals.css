@@ -210,10 +210,19 @@
   .modes-grid article:last-child .eyebrow { @apply text-accent; }
   .eval-tree { @apply min-w-0 border border-border bg-sheet p-6 text-[13px]; font-family: var(--font-mono); }
   .eval-tree-root { @apply mb-3; overflow-wrap: anywhere; }
-  .eval-tree ul { @apply grid gap-2; }
-  .eval-tree li { @apply grid gap-x-5; grid-template-columns: 23ch minmax(0, 1fr); }
+  .eval-tree ul { @apply grid; }
+  .eval-tree li { @apply relative grid gap-x-5 py-1; grid-template-columns: 23ch minmax(0, 1fr); }
+  .eval-tree li::before { content: ""; position: absolute; left: .7ch; top: 0; bottom: 0; border-left: 1px solid var(--color-muted); }
+  .eval-tree li::after { content: ""; position: absolute; left: .7ch; top: calc(4px + .8em); width: 1.6ch; border-top: 1px solid var(--color-muted); }
+  .eval-tree li:first-child::before { top: calc(4px + .8em); }
+  .eval-tree li:last-child::before { bottom: auto; height: calc(4px + .8em); }
+  .eval-tree-child { background-image: linear-gradient(var(--color-muted), var(--color-muted)); background-repeat: no-repeat; background-position: 4.7ch 0; background-size: 1px 100%; }
+  .eval-tree li.eval-tree-child::after { left: 4.7ch; }
+  .eval-tree-child-last { background-size: 1px calc(4px + .8em); }
+  .eval-tree-parent { background-image: linear-gradient(var(--color-muted), var(--color-muted)); background-repeat: no-repeat; background-position: 4.7ch calc(4px + 1.6em); background-size: 1px calc(100% - 4px - 1.6em); }
   .eval-tree-file { white-space: pre; }
-  .eval-tree-branch, .eval-tree-comment { @apply text-muted; }
+  .eval-tree-branch { visibility: hidden; }
+  .eval-tree-comment { @apply text-muted; }
   .eval-tree-comment { overflow-wrap: anywhere; }
   .diagram-figure { @apply min-w-0 border border-border bg-sheet p-7; background-image: radial-gradient(rgb(228 231 242 / 9%) 1px, transparent 1px); background-size: 20px 20px; }
   .diagram { @apply block h-auto w-full; overflow: visible; }
@@ -239,6 +248,7 @@
   .diagram-node.container .diagram-box { stroke: var(--color-accent); stroke-width: 1.5; }
   .container-tag rect { fill: var(--color-tint); stroke: var(--color-border-strong); }
   .container-tag text { fill: var(--color-muted); font-size: 10px; font-family: var(--font-mono); }
+  .run-diagram .container-tag text { font-size: 12px; }
   .inspect-frame { fill: transparent; stroke: var(--color-border-strong); }
   .inspect-title { text-decoration: underline; text-underline-offset: 3px; }
   .diagram .diagram-file { fill: var(--color-ink); font-size: 12px; font-family: var(--font-mono); }
@@ -295,7 +305,7 @@
   .eval-tree { padding: 18px 14px; font-size: 12px; }
   .eval-tree li { grid-template-columns: minmax(0, 1fr); gap: 3px; }
   .eval-tree-comment { padding-left: 4ch; }
-  .eval-tree-child .eval-tree-comment { padding-left: 8ch; }
+  .eval-tree-child .eval-tree-comment, .eval-tree-parent .eval-tree-comment { padding-left: 8ch; }
   .rules ul { grid-template-columns: 1fr; }
   .sitefoot { padding-inline: 18px; }
 }

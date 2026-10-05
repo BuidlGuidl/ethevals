@@ -48,7 +48,11 @@ export default function Page() {
     <section id="hw-eval" className="how-section"><div className="how-head"><p className="eyebrow">Inside an eval</p><h2>An eval is a folder</h2>
       <p>Only <code>eval.yaml</code> and one scorer are required, and a run passes only if every check passes.</p></div>
       <div className="eval-tree" aria-label="Eval folder contents"><div className="eval-tree-root">evals/&lt;pillar&gt;/&lt;name&gt;/</div>
-        <ul>{evalFiles.map(([branch, name, comment]) => <li key={name} className={branch.startsWith("│") ? "eval-tree-child" : ""}>
+        <ul>{evalFiles.map(([branch, name, comment]) => <li key={name} className={[
+          branch.startsWith("│") ? "eval-tree-child" : "",
+          branch.startsWith("│") && branch.includes("└") ? "eval-tree-child-last" : "",
+          name === "setup/" || name === "scorer/" ? "eval-tree-parent" : "",
+        ].filter(Boolean).join(" ")}>
           <span className="eval-tree-file"><span className="eval-tree-branch" aria-hidden="true">{branch} </span>{name}</span>
           {comment && <span className="eval-tree-comment"># {comment}</span>}
         </li>)}</ul>
