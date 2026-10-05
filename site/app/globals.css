@@ -196,12 +196,11 @@
   .lead { @apply max-w-[900px] text-[15px] text-muted; }
   .how-section { @apply grid gap-6; }
   .how-head { @apply grid gap-2; }
-  .how-head > p:not(.eyebrow) { @apply max-w-[850px] text-muted; }
+  .how-head > p:not(.eyebrow), .how-intro { @apply max-w-[850px] text-muted; }
   .pillars-grid { @apply grid grid-cols-4 border border-border bg-sheet; }
-  .pillars-grid li { @apply grid gap-3 border-r border-border p-5; grid-template-rows: auto auto 1fr auto; }
+  .pillars-grid li { @apply grid gap-3 border-r border-border p-5; grid-template-rows: auto 1fr; }
   .pillars-grid li:last-child { border-right: 0; }
   .pillars-grid p { @apply text-muted; }
-  .pillar-example { @apply border-t border-border pt-3 text-[11px]; overflow-wrap: anywhere; }
   .how-modes { @apply grid gap-4 pt-2; }
   .modes-grid { @apply grid grid-cols-3 gap-4; }
   .modes-grid article { @apply grid min-w-0 content-start gap-3 border border-border-strong bg-sheet p-5; }

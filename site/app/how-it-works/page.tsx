@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { loadBoard } from "../../src/load";
 import { pillars } from "../../src/board";
 import { names } from "../../src/labels";
 import { PipelineDiagram, RunDiagram } from "../../components/diagrams";
@@ -11,7 +9,6 @@ const scope = {
   building: "Code that has to work: contracts from a spec, test suites, repairing a project, wallet flows in a frontend.",
   security: "Vulnerabilities: spotting known bug patterns, triaging an audit, fixing a bug before it ships.",
 };
-const examples = { concepts: "concepts/agent-registries", transactions: "transactions/send-six-decimal-token", building: "building/erc20-points-token", security: null };
 const evalFiles = [
   ["├──", "eval.yaml", "the prompt, why the eval exists, its modes, its chain"],
   ["├──", "workspace/", "files the agent starts with"],
@@ -26,19 +23,15 @@ const evalFiles = [
 ];
 
 export default function Page() {
-  const data = loadBoard(), evaluations = Object.values(data.evaluations);
   return <main id="main" className="page how-page">
     <header className="how-hero"><h1>Automated, open evals for AI on Ethereum</h1><p className="lead">Experts add evals by pull request. After review, CI runs them on every agent and model, grades each run, and publishes the results with their full logs. No step needs anyone to copy a number by hand.</p></header>
-    <section id="hw-pipe" className="how-section"><div className="how-head"><p className="eyebrow">The pipeline</p><h2>One pull request starts everything</h2></div>
+    <section id="hw-pipe" className="how-section"><div className="how-head"><p className="eyebrow">The pipeline</p><h2>One pull request starts everything</h2>
+      <p>A new model is one line of config, so it can be tested the day it launches. A new or changed eval runs on every agent and model as soon as it merges.</p></div>
       <figure className="diagram-figure"><PipelineDiagram /></figure>
     </section>
     <section id="hw-pillars" className="how-section"><div className="how-head"><p className="eyebrow">What we measure</p><h2>Four pillars</h2>
       <p>Each eval tests one of these four areas of Ethereum work.</p></div>
-      <ol className="pillars-grid">{pillars.map((pillar) => {
-        const count = evaluations.filter((ev) => ev.pillar === pillar).length, example = examples[pillar];
-        return <li key={pillar}><h3>{names[pillar]}</h3><span className="eyebrow">{count ? `${count} ${count === 1 ? "eval" : "evals"}` : "No evals yet"}</span><p>{scope[pillar]}</p>
-          {example && data.evaluations[example] ? <Link className="pillar-example" href={`/#eval-${example.replaceAll("/", "-")}`}>{example} →</Link> : <span className="pillar-example muted">No evals yet</span>}</li>;
-      })}</ol>
+      <ol className="pillars-grid">{pillars.map((pillar) => <li key={pillar}><h3>{names[pillar]}</h3><p>{scope[pillar]}</p></li>)}</ol>
       <div className="how-modes"><h3>Three ways to run an eval</h3>
         <div className="modes-grid"><article className="model-only"><p className="eyebrow">Model only</p><h3>What does the model know?</h3><p>The bare model answers in one API call, with no tools or web.</p></article>
           <article><p className="eyebrow">Internet</p><h3>Can an agent do the work?</h3><p>A coding agent with a shell, the web, and its own chain when the task needs one.</p></article>
@@ -46,7 +39,7 @@ export default function Page() {
       </div>
     </section>
     <section id="hw-eval" className="how-section"><div className="how-head"><p className="eyebrow">Inside an eval</p><h2>An eval is a folder</h2>
-      <p>Only <code>eval.yaml</code> and one scorer are required, and a run passes only if every check passes.</p></div>
+      <p>Only <code>eval.yaml</code> and one scorer are required.</p></div>
       <div className="eval-tree" aria-label="Eval folder contents"><div className="eval-tree-root">evals/&lt;pillar&gt;/&lt;name&gt;/</div>
         <ul>{evalFiles.map(([branch, name, comment]) => <li key={name} className={[
           branch.startsWith("│") ? "eval-tree-child" : "",
@@ -57,6 +50,7 @@ export default function Page() {
           {comment && <span className="eval-tree-comment"># {comment}</span>}
         </li>)}</ul>
       </div>
+      <p className="how-intro">Chain setup is a Forge script and the tests are Forge tests, so an Ethereum developer writes them the way they already work.</p>
     </section>
     <section id="hw-run" className="how-section"><div className="how-head"><p className="eyebrow">Inside one run</p><h2>One task, start to finish</h2>
       <p>Take one Transactions eval: &quot;send 12.5 tokens to the recipient.&quot; Here is what happens.</p></div>

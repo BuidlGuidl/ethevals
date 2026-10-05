@@ -37,9 +37,6 @@ for (const svg of runDiagrams) {
 }
 assert.ok(run.includes("Three separate containers. The agent can&#x27;t reach the scorer."));
 assert.ok(!/no route|Grader model|Result row|filtered RPC|grader/i.test(how));
-for (const [, id] of how.matchAll(/href="\/#(eval-[^"]+)"/g)) {
-  assert.ok(html.includes(`id="${id}"`), `The example must link to matrix row ${id}.`);
-}
 if (expected === "demo") {
   assert.ok(html.includes("<strong>Demo data</strong>"), "The demo banner must be visible.");
   assert.ok(html.includes("Demo model A"));
