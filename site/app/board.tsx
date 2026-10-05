@@ -68,7 +68,7 @@ function EvalView({ evaluation, epochs, onRun }: { evaluation: Eval; epochs: Epo
   </>;
 }
 
-function RunView({ epoch, epochs, onRun, onBack }: { epoch: Epoch; epochs: Epoch[]; onRun: (run: number) => void; onBack: () => void }) {
+function RunView({ epoch, epochs, onRun }: { epoch: Epoch; epochs: Epoch[]; onRun: (run: number) => void }) {
   const checks = Object.entries(epoch.checks);
   return <>
     <div className="run-switcher" role="group" aria-label="Runs">{epochs.map((run) => <button key={run.epoch}
@@ -89,7 +89,6 @@ function RunView({ epoch, epochs, onRun, onBack }: { epoch: Epoch; epochs: Epoch
     </section>
     {epoch.logHref || epoch.logUrl ? <div className="log-links"><a className="button" href={epoch.logHref ?? epoch.logUrl!} target="_blank" rel="noreferrer">{epoch.logHref && epoch.logHref !== epoch.logUrl ? "Open log" : "Download log"} ↗</a>
       {epoch.logHref && epoch.logUrl && epoch.logHref !== epoch.logUrl && <a href={epoch.logUrl} target="_blank" rel="noreferrer">Download log ↗</a>}</div> : <p className="muted">Full log not published.</p>}
-    <button className="back-button" onClick={onBack}><ArrowLeft size={14} />All runs</button>
   </>;
 }
 
@@ -114,9 +113,10 @@ export function Detail({ selection, data, onSelect }: {
       {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scope.passed}/{scope.total} scored · {scope.errors} errors excluded</p>}
       {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No evals yet" : "No epochs yet"}</p>}
     </header>
-    {evaluation && fromList && !epoch && <button className="back-button" onClick={() => onSelect({ agent, mode, pillar })}>
-      <ArrowLeft size={14} />{pillar ? names[pillar] : "All pillars"}</button>}
-    {epoch ? <RunView epoch={epoch} epochs={epochs} onRun={(run) => onSelect({ ...selection, run })} onBack={() => onSelect({ ...selection, run: undefined })} /> :
+    {epoch ? <button className="back-button" onClick={() => onSelect({ ...selection, run: undefined })}><ArrowLeft size={14} />All runs</button>
+      : evaluation && fromList && <button className="back-button" onClick={() => onSelect({ agent, mode, pillar })}>
+        <ArrowLeft size={14} />{pillar ? names[pillar] : "All pillars"}</button>}
+    {epoch ? <RunView epoch={epoch} epochs={epochs} onRun={(run) => onSelect({ ...selection, run })} /> :
       evaluation ? <EvalView evaluation={evaluation} epochs={epochs} onRun={(run) => onSelect({ ...selection, run })} /> :
       <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar}
         onEval={(value) => onSelect({ ...selection, evaluation: value, fromList: true })} />}
