@@ -25,7 +25,7 @@ export interface Agent {
 
 export type Epoch = Pick<Row, "epoch" | "status" | "checks" | "error_kind" | "error_reason"
   | "total_tokens" | "total_seconds" | "model_cost_usd" | "grader_cost_usd"
-  | "cost_source"> & {
+  | "cost_source" | "limit"> & {
   cost: number | null;
   issue: string;
   logUrl: string | null;
@@ -54,11 +54,44 @@ export interface PillarRow {
 export interface Table {
   agents: Agent[];
   pillars: Record<Pillar, PillarRow>;
+  summaries: Record<string, ConfigurationSummary>;
+}
+export interface ConfigurationSummary {
+  overall: number | null;
+  costPerPass: number | null;
+  medianTokens: number | null;
+  passed: number;
+  total: number;
+  errors: number;
 }
 export interface BoardData {
   demo: boolean;
   evaluations: Record<string, DisplayEval>;
   tables: Record<Mode, Table>;
+  lifts: Record<string, Record<Pillar | "overall", number | null>>;
+  counts: { evals: number; agents: number; runs: number };
+}
+
+export function overallScore(scores: (number | null)[]): number | null {
+  const scored = scores.filter((score): score is number => score !== null);
+  return scored.length ? scored.reduce((sum, score) => sum + score, 0) / scored.length : null;
+}
+
+export function costPerPass(epochs: Pick<Epoch, "status" | "model_cost_usd">[]): number | null {
+  const scored = epochs.filter((epoch) => epoch.status !== "error");
+  const passed = scored.filter((epoch) => epoch.status === "passed").length;
+  if (!passed || scored.some((epoch) => epoch.model_cost_usd === null)) return null;
+  return scored.reduce((sum, epoch) => sum + epoch.model_cost_usd!, 0) / passed;
+}
+
+export function skillLift(skills: number | null, internet: number | null): number | null {
+  return skills === null || internet === null ? null : (skills - internet) * 100;
+}
+
+function median(values: (number | null)[]): number | null {
+  const sorted = values.filter((value): value is number => value !== null).sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length ? sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2 : null;
 }
 
 export function agentKey(agent: Agent): string {
@@ -77,6 +110,7 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[]): EvalCell {
       error_reason: row.error_reason, total_tokens: row.total_tokens, total_seconds: row.total_seconds,
       model_cost_usd: row.model_cost_usd, grader_cost_usd: row.grader_cost_usd,
       cost_source: row.cost_source,
+      limit: row.limit,
       cost: epochCost(row), issue: row.error_reason ?? (row.limit
         ? [...new Set(Object.values(row.checks).filter((check) => !check.passed).map((check) => check.reason))].join(" ")
         : ""),
@@ -109,9 +143,11 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
     groups.get(group)!.push(row);
   }
   const tables = {} as BoardData["tables"];
+  const configurations = new Map([...agents.internet, ...agents.skills]);
   for (const mode of ["internet", "skills", "vanilla"] as const) {
-    const columns = [...agents[mode].values()].sort((a, b) => agentKey(a).localeCompare(agentKey(b), "en"));
-    const table = { agents: columns, pillars: {} as Table["pillars"] };
+    const columns = [...(mode === "vanilla" ? agents.vanilla : configurations).values()]
+      .sort((a, b) => agentKey(a).localeCompare(agentKey(b), "en"));
+    const table: Table = { agents: columns, pillars: {} as Table["pillars"], summaries: {} };
     // The knowledge table shows declared vanilla evals. Both table and panel use these rows.
     const eligible = evaluations.filter((evaluation) => mode !== "vanilla" || evaluation.modes.includes("vanilla"));
     for (const pillar of pillars) {
@@ -130,10 +166,29 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
         })),
       };
     }
+    for (const agent of columns) {
+      const key = agentKey(agent);
+      const cells = pillars.map((pillar) => table.pillars[pillar].cells[key]);
+      const epochs = pillars.flatMap((pillar) => table.pillars[pillar].evals.flatMap((entry) => entry.cells[key].epochs));
+      const scored = epochs.filter((epoch) => epoch.status !== "error");
+      table.summaries[key] = {
+        overall: overallScore(cells.map((cell) => cell.score)), costPerPass: costPerPass(epochs),
+        medianTokens: median(scored.map((epoch) => epoch.total_tokens)),
+        passed: cells.reduce((sum, cell) => sum + cell.passed, 0),
+        total: cells.reduce((sum, cell) => sum + cell.total, 0),
+        errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
+      };
+    }
     tables[mode] = table;
   }
+  const lifts = Object.fromEntries([...configurations.keys()].map((key) => [key,
+    Object.fromEntries(["overall", ...pillars].map((pillar) => [pillar, skillLift(
+      pillar === "overall" ? tables.skills.summaries[key].overall : tables.skills.pillars[pillar as Pillar].cells[key].score,
+      pillar === "overall" ? tables.internet.summaries[key].overall : tables.internet.pillars[pillar as Pillar].cells[key].score,
+    )])) as Record<Pillar | "overall", number | null>,
+  ]));
   return {
-    demo, tables,
+    demo, tables, lifts, counts: { evals: evaluations.length, agents: configurations.size, runs: rows.length },
     evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {
       id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar,
       motivation: evaluation.motivation, prompt: evaluation.prompt, choices: evaluation.choices, modes: evaluation.modes,
