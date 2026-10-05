@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { agentKey, pillars, type BoardData, type Mode, type Agent } from "../../src/board";
-import { Configuration, names } from "../board";
+import { Configuration } from "../../components/configuration";
+import { names } from "../../src/labels";
 import { ModeToggle } from "../../components/mode-toggle";
 import { Hint, formulas, percent, money, pp } from "../../components/scores";
 import { TooltipProvider } from "../../components/ui/tooltip";
@@ -14,13 +15,13 @@ export default function Compare({ data }: { data: BoardData }) {
   const mode: Mode = query.get("mode") === "skills" ? "skills" : query.get("mode") === "vanilla" ? "vanilla" : "internet";
   const table = data.tables[mode];
   const keys = table.agents.map(agentKey);
-  const defaults = [...table.agents].sort((a, b) => (table.summaries[agentKey(b)].overall ?? -1) - (table.summaries[agentKey(a)].overall ?? -1)).slice(0, 3).map(agentKey);
+  const defaults = [...table.agents].sort((a, b) => (table.summaries[agentKey(b)].scores.overall ?? -1) - (table.summaries[agentKey(a)].scores.overall ?? -1)).slice(0, 3).map(agentKey);
   const chosen = query.has("pick") ? parseSelection(query.get("pick"), keys) : defaults;
   const selected = chosen.map((key) => table.agents.find((agent) => agentKey(agent) === key)!);
   const metrics: { label: string; formula: string; value: (agent: Agent) => number | null; format: (value: number | null) => string; lower?: boolean }[] = [
-    { label: "Overall", formula: formulas.overall, value: (agent) => table.summaries[agentKey(agent)].overall, format: percent },
-    ...pillars.map((pillar) => ({ label: names[pillar], formula: formulas.pillar, value: (agent: Agent) => table.pillars[pillar].cells[agentKey(agent)].score, format: percent })),
-    ...(mode === "vanilla" ? [] : [{ label: "Lift from skills", formula: formulas.lift, value: (agent: Agent) => data.lifts[agentKey(agent)]?.overall ?? null, format: pp }]),
+    { label: "Overall", formula: formulas.overall, value: (agent) => table.summaries[agentKey(agent)].scores.overall, format: percent },
+    ...pillars.map((pillar) => ({ label: names[pillar], formula: formulas.pillar, value: (agent: Agent) => table.summaries[agentKey(agent)].scores[pillar], format: percent })),
+    ...(mode === "skills" ? [{ label: "Lift from skills", formula: formulas.lift, value: (agent: Agent) => data.lifts[agentKey(agent)]?.overall ?? null, format: pp }] : []),
     { label: "$ / pass ↓", formula: formulas.cost, value: (agent) => table.summaries[agentKey(agent)].costPerPass, format: money, lower: true },
     { label: "Tokens per run ↓", formula: formulas.tokens, value: (agent) => table.summaries[agentKey(agent)].medianTokens, format: (value) => value === null ? "–" : value.toLocaleString("en"), lower: true },
   ];
@@ -33,7 +34,7 @@ export default function Compare({ data }: { data: BoardData }) {
       {table.agents.map((agent) => <ToggleGroupItem key={agentKey(agent)} value={agentKey(agent)} disabled={!chosen.includes(agentKey(agent)) && chosen.length >= 5}>
         <Configuration agent={agent} /></ToggleGroupItem>)}
     </ToggleGroup></div>
-    <ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: null })} />
+    <ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: JSON.stringify(chosen) })} />
     {mode === "vanilla" && <p className="mode-note">Model only calls the API with no tools or web. Its eval set differs from the agent modes.</p>}
     {selected.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Configuration comparison">
       <table className="comparison"><caption className="sr-only">Compare scores and costs for selected configurations</caption><thead><tr><th scope="col">Metric</th>

@@ -37,8 +37,21 @@ test("the board publishes summaries, costs and paired lifts for each configurati
   const board = buildBoard(evals, [base, { ...base, eval_id: "building/b", eval_hash: "b", status: "failed" },
     { ...base, mode: "skills", skills_hash: "pack" }, { ...base, mode: "skills", skills_hash: "pack", eval_id: "building/b", eval_hash: "b" }]);
   assert.deepEqual(board.tables.internet.summaries['["m","h",null]'], {
-    overall: 0.5, costPerPass: 1, medianTokens: 100, passed: 1, total: 2, errors: 0,
+    scores: { overall: 0.5, concepts: 1, transactions: null, building: 0, security: null },
+    costPerPass: 1, medianTokens: 100, passed: 1, total: 2, errors: 0,
   });
   assert.deepEqual(board.lifts['["m","h",null]'], { overall: 50, concepts: 0, transactions: null, building: 100, security: null });
   assert.deepEqual(board.counts, { evals: 2, agents: 1, runs: 4 });
+});
+
+test("lift pairs evals when skills covers a strict subset of Internet results", () => {
+  const evaluation: Eval = { id: "concepts/a", hash: "a", title: "A", pillar: "concepts", motivation: "Check A.", prompt: "A?", choices: [], modes: ["internet", "skills"] };
+  const evals: Eval[] = [evaluation, { ...evaluation, id: "concepts/b" }, { ...evaluation, id: "building/c", pillar: "building" }];
+  const base: Row = { schema_version: 6, eval_id: "concepts/a", eval_hash: "a", skills_hash: null, model: "m", harness: "h", effort: null,
+    mode: "internet", epoch: 1, status: "failed", checks: {}, error_kind: null, error_reason: null, limit: null,
+    model_cost_usd: 0.5, grader_cost_usd: 0, total_tokens: 100, total_seconds: 10, working_seconds: 8, cost_source: "computed", log_url: null };
+  const internet: Row[] = [base, { ...base, eval_id: "concepts/b", status: "passed" }, { ...base, eval_id: "building/c" }];
+  const board = buildBoard(evals, [...internet, { ...base, mode: "skills" }, { ...base, mode: "skills", eval_id: "building/c", status: "passed" }]);
+  assert.deepEqual(board.lifts['["m","h",null]'], { overall: 50, concepts: 0, transactions: null, building: 100, security: null });
+  assert.deepEqual(buildBoard(evals, internet).lifts['["m","h",null]'], { overall: null, concepts: null, transactions: null, building: null, security: null });
 });

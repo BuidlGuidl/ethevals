@@ -57,7 +57,7 @@ export interface Table {
   summaries: Record<string, ConfigurationSummary>;
 }
 export interface ConfigurationSummary {
-  overall: number | null;
+  scores: Record<Pillar | "overall", number | null>;
   costPerPass: number | null;
   medianTokens: number | null;
   passed: number;
@@ -171,8 +171,11 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
       const cells = pillars.map((pillar) => table.pillars[pillar].cells[key]);
       const epochs = pillars.flatMap((pillar) => table.pillars[pillar].evals.flatMap((entry) => entry.cells[key].epochs));
       const scored = epochs.filter((epoch) => epoch.status !== "error");
+      const scores: ConfigurationSummary["scores"] = { overall: null, concepts: null, transactions: null, building: null, security: null };
+      for (const pillar of pillars) scores[pillar] = table.pillars[pillar].cells[key].score;
+      scores.overall = overallScore(pillars.map((pillar) => scores[pillar]));
       table.summaries[key] = {
-        overall: overallScore(cells.map((cell) => cell.score)), costPerPass: costPerPass(epochs),
+        scores, costPerPass: costPerPass(epochs),
         medianTokens: median(scored.map((epoch) => epoch.total_tokens)),
         passed: cells.reduce((sum, cell) => sum + cell.passed, 0),
         total: cells.reduce((sum, cell) => sum + cell.total, 0),
@@ -181,12 +184,18 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
     }
     tables[mode] = table;
   }
-  const lifts = Object.fromEntries([...configurations.keys()].map((key) => [key,
-    Object.fromEntries(["overall", ...pillars].map((pillar) => [pillar, skillLift(
-      pillar === "overall" ? tables.skills.summaries[key].overall : tables.skills.pillars[pillar as Pillar].cells[key].score,
-      pillar === "overall" ? tables.internet.summaries[key].overall : tables.internet.pillars[pillar as Pillar].cells[key].score,
-    )])) as Record<Pillar | "overall", number | null>,
-  ]));
+  const lifts: BoardData["lifts"] = {};
+  for (const key of configurations.keys()) {
+    const lift: ConfigurationSummary["scores"] = { overall: null, concepts: null, transactions: null, building: null, security: null };
+    for (const pillar of pillars) {
+      const internet = tables.internet.pillars[pillar].evals;
+      const skills = tables.skills.pillars[pillar].evals;
+      const paired = internet.map((entry, index) => skillLift(skills[index].cells[key].score, entry.cells[key].score));
+      lift[pillar] = overallScore(paired);
+    }
+    lift.overall = overallScore(pillars.map((pillar) => lift[pillar]));
+    lifts[key] = lift;
+  }
   return {
     demo, tables, lifts, counts: { evals: evaluations.length, agents: configurations.size, runs: rows.length },
     evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {

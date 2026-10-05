@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import Board, { Detail } from "../app/board";
 import { buildBoard, epochCost, agentKey, type Eval, type Row, type Agent } from "../src/board";
 import { loadBoard, parseRows } from "../src/load";
+import { decodeSelection } from "../src/selection";
 
 const evaluation: Eval = {
   id: "concepts/units", hash: "current", title: "Units", pillar: "concepts",
@@ -105,10 +106,10 @@ test("the table and panel both label an empty pillar as No evals yet", () => {
   const table = renderToStaticMarkup(createElement(Board, { data }));
   const panel = renderToStaticMarkup(createElement(Detail, {
     data, selection: { pillar: "transactions", agent, mode: "internet" },
-    onSelect: () => {}, onClose: () => {},
+    onSelect: () => {},
   }));
   assert.ok(table.includes('aria-label="Transactions, harness-a / model-a. No evals yet. Open details."'));
-  assert.ok(panel.includes('<p class="mono">No evals yet</p>'));
+  assert.ok(panel.includes('<p class="muted">No evals yet</p>'));
   assert.ok(panel.includes("No evals yet for this mode."));
 });
 
@@ -135,13 +136,58 @@ test("the agent switch and skills details use their own scores", () => {
   assert.match(html, /aria-checked="false"[^>]*>Internet \+ Skills<\/button>/);
   assert.ok(html.includes('>Model only</button>'));
   const panel = renderToStaticMarkup(createElement(Detail, {
-    data, selection: { evaluation, pillar: "concepts", agent, mode: "skills", run: 1 },
-    onSelect: () => {}, onClose: () => {},
+    data, selection: { evaluation, pillar: "concepts", agent, mode: "skills" },
+    onSelect: () => {},
   }));
   assert.ok(panel.includes(">Fail</span>"));
   assert.ok(panel.includes("The answer differs."));
   assert.deepEqual([data.tables.internet.pillars.concepts.cells[agentKey(agent)].score,
     data.tables.skills.pillars.concepts.cells[agentKey(agent)].score], [1, 0]);
+});
+
+test("selection decoding accepts known ids and closes unknown or prototype-named ids", () => {
+  const data = buildBoard([evaluation], [row()]);
+  const input = { agent: agentKey(agent), mode: "internet", eval: evaluation.id, pillar: "concepts", list: true };
+  const decode = (value: unknown) => decodeSelection(new URLSearchParams({ d: JSON.stringify(value) }), data);
+  assert.deepEqual(decode(input), { agent, mode: "internet", evaluation: data.evaluations["concepts/units"], pillar: "concepts", fromList: true });
+  for (const id of ["missing", "constructor", "toString", "__proto__"]) assert.equal(decode({ ...input, eval: id }), null);
+  for (const value of [null, [], { ...input, agent: "missing" }, { ...input, mode: "missing" }, { ...input, pillar: "constructor" }]) assert.equal(decode(value), null);
+  assert.equal(decodeSelection(new URLSearchParams({ d: "{" }), data), null);
+  assert.equal(decodeSelection(new URLSearchParams({ eval: "constructor" }), data), null);
+});
+
+test("list rows have one eval button and Overall groups them under pillar headings", () => {
+  const data = buildBoard([evaluation, { ...evaluation, id: "building/token", pillar: "building" }], [row()]);
+  const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, onSelect: () => {} }));
+  assert.equal((panel.match(/<button/g) ?? []).length, 2);
+  assert.ok(panel.includes('<h3>Concepts</h3>') && panel.includes('<h3>Building</h3>'));
+  assert.ok(panel.includes('class="run-dot passed"') && panel.includes('class="heat-chip"'));
+  const board = renderToStaticMarkup(createElement(Board, { data }));
+  assert.equal((board.match(/aria-label="Which results"/g) ?? []).length, 1);
+  assert.ok(board.includes('id="eval-concepts-units"') && board.includes('<span class="eval-title">Units</span>'));
+  assert.ok(board.includes('<span class="matrix-cell" data-empty="true" title="No epochs yet">–</span>'));
+  assert.match(board, /<span class="cost-value"[^>]*>\$0\.20<\/span>/);
+  assert.ok(!board.match(/<span class="cost-value"[^>]*tabindex/));
+});
+
+test("eval details collapse the prompt, expand the first failure and show failed checks first", () => {
+  const quiz = { ...evaluation, choices: ["Wei", "Gwei"] };
+  const data = buildBoard([quiz], [row(), row({ epoch: 2, ...failure, log_url: "https://example.com/run.eval", checks: {
+    good: { passed: true, reason: "The units match." }, bad: { passed: false, reason: "The answer differs." },
+  } }), row({ epoch: 3, ...failure })]);
+  const selection = { evaluation: quiz, agent, mode: "internet" as const, pillar: "concepts" as const };
+  const panel = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
+  assert.ok(panel.includes('<details class="prompt-disclosure"><summary>Prompt</summary>'));
+  assert.ok(panel.includes('<ol class="prompt-choices" type="A"><li>Wei</li><li>Gwei</li></ol>'));
+  assert.match(panel, /<details class="run-row" open=""><summary><span>Run 2<\/span>/);
+  assert.equal((panel.match(/open=""/g) ?? []).length, 1);
+  assert.ok(panel.indexOf('<code>bad</code>') < panel.indexOf('<code>good</code>'));
+  assert.ok(panel.includes("The answer differs.") && panel.includes("Open log ↗"));
+  assert.equal((panel.match(/class="back-button"/g) ?? []).length, 0);
+  const fromList = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, fromList: true }, onSelect: () => {} }));
+  assert.match(fromList, /class="back-button"[\s\S]*?<\/svg>Concepts/);
+  const passed = renderToStaticMarkup(createElement(Detail, { data: buildBoard([quiz], [row()]), selection, onSelect: () => {} }));
+  assert.ok(passed.includes("Run 1") && !passed.includes('open=""'));
 });
 
 test("row parsing keeps long named-check reasons and reports malformed verdicts with a line number", () => {

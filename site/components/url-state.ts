@@ -5,6 +5,8 @@ function subscribe(callback: () => void) {
   window.addEventListener("board-url", callback);
   return () => { window.removeEventListener("popstate", callback); window.removeEventListener("board-url", callback); };
 }
+// Static export avoids useSearchParams, which needs a Suspense boundary.
+// The server snapshot is empty on purpose; the client reads the URL after hydration.
 export function useQuery() {
   return new URLSearchParams(useSyncExternalStore(subscribe, () => window.location.search, () => ""));
 }

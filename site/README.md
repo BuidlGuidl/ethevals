@@ -53,7 +53,9 @@ A pillar score averages eval scores, excluding evals without scored epochs.
 The board shows epoch counts instead of confidence intervals.
 Unsupported modes show `Not applicable`; supported cells without scores show `No epochs yet`.
 Overall is the mean of scored pillar scores, excluding pillars without scores.
-Skill lift subtracts the Internet score from the Internet + Skills score for the same configuration, in percentage points.
+Skill lift averages the change over evals scored in both Internet and Internet + Skills for the same configuration.
+Overall lift averages the pillar lifts, excluding pillars without paired evals.
+Lift uses percentage points and stays unknown when no evals pair.
 Each configuration includes its effort; different efforts stay separate.
 `$ / pass` divides the model cost of scored epochs by passed epochs.
 No passes or a missing model price produce `–`.
@@ -61,8 +63,9 @@ Cost limits count as failures. Errors remain in the drawer and do not enter scor
 
 Epoch cost adds model and grader cost. If either amount is unknown, the total stays unknown.
 The drawer shows the cost source, total tokens, elapsed time, checks, and error or limit from the row.
-Its list, eval, and run views use the `d` query parameter; browser Back closes a drawer opened from the board.
-The `eval` query parameter opens a catalog eval, including an eval with no runs.
+Its list and eval views use the `d` query parameter; browser Back closes a drawer opened from the board.
+Runs expand inside the eval view, and the drawer keeps the mode selected when it opened.
+Example links point to highlighted rows in the eval matrix.
 Log links use the normal Inspect viewer when a matching log is bundled.
 The loader computes cells, summaries, and lifts once; the client reuses them across pages.
 
@@ -70,6 +73,7 @@ The loader computes cells, summaries, and lifts once; the client reuses them acr
 
 The site ports the geek design from Pablo's prototype to React components.
 Tailwind CSS v4 defines its dark tokens and responsive layout in `app/globals.css`.
+Styling uses named classes in `globals.css` built with `@apply`.
 The used shadcn/ui components are Sheet, Tooltip, and ToggleGroup, built on Radix primitives.
 JetBrains Mono covers the interface, VT323 covers section headings, and Archivo covers diagram text.
 `next/font/google` bundles all three fonts during the build.

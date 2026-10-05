@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileText, ShieldCheck, GitMerge, Terminal, GitPullRequest, Table2, Bot, Box, Scale, FileCheck } from "lucide-react";
 import { loadBoard } from "../../src/load";
 import { pillars } from "../../src/board";
+import { names } from "../../src/labels";
 import { PipelineDiagram, RunDiagram } from "../../components/diagrams";
 
 export const metadata = { title: "How it works · ETH Evals" };
@@ -13,7 +14,6 @@ const scope = {
   security: "Vulnerabilities: spotting known bug patterns, triaging an audit, fixing a bug before it ships.",
 };
 const examples = { concepts: "concepts/agent-registries", transactions: "transactions/send-six-decimal-token", building: "building/erc20-points-token", security: null };
-const names = { concepts: "Concepts", transactions: "Transactions", building: "Building", security: "Security" };
 const runNotes = [
   { icon: Bot, title: "The agent works.", body: "It reads chain.json, checks the token, and sends the transfer through the filtered RPC." },
   { icon: Box, title: "The scorer checks the chain.", body: "Once the agent stops, a Forge test reads the recipient's balance." },
@@ -38,7 +38,7 @@ export default function Page() {
       <ol className="pillars-grid">{pillars.map((pillar) => {
         const count = evaluations.filter((ev) => ev.pillar === pillar).length, example = examples[pillar];
         return <li key={pillar}><h3>{names[pillar]}</h3><span className="eyebrow">{count ? `${count} ${count === 1 ? "eval" : "evals"}` : "No evals yet"}</span><p>{scope[pillar]}</p>
-          {example && data.evaluations[example] ? <Link className="pillar-example" href={`/?eval=${encodeURIComponent(example)}`}>{example} →</Link> : <span className="pillar-example muted">No evals yet</span>}</li>;
+          {example && data.evaluations[example] ? <Link className="pillar-example" href={`/#eval-${example.replaceAll("/", "-")}`}>{example} →</Link> : <span className="pillar-example muted">No evals yet</span>}</li>;
       })}</ol>
       <p>Each eval also lists the modes it runs in. Each mode answers its own question.</p>
       <div className="modes-grid"><article className="model-only"><p className="eyebrow">Model only</p><h3>What does the model know?</h3><p>The bare model answers in one API call, with no tools, no web and no workspace. Only evals with a fixed answer run this way.</p></article>
@@ -48,7 +48,7 @@ export default function Page() {
     <section id="hw-run" className="how-section"><div className="how-head"><p className="eyebrow">Inside one run</p><h2>One task, start to finish</h2>
       <p>Take one Transactions eval: &quot;can you send 12.5 tokens to the recipient in chain.json?&quot; Here is what happens in a single run.</p></div>
       <figure className="diagram-figure"><RunDiagram /><ol className="diagram-notes run-notes">{runNotes.map(({ icon: Icon, title, body }) => <li key={title}><span className="note-icon"><Icon size={20} /></span><h3>{title}</h3><p>{body}</p></li>)}</ol></figure>
-      <p className="inspect-line"><a href={inspect}>Inspect</a>, the UK AI Security Institute&apos;s open-source eval framework, runs every epoch and keeps the full log. Every result on the board opens that log.</p>
+      <p><a href={inspect}>Inspect</a>, the UK AI Security Institute&apos;s open-source eval framework, runs every epoch and keeps the full log. Every result on the board opens that log.</p>
       <div className="rules"><h3>Rules every run follows</h3><ul>
         <li><b>The agent can&apos;t reach the scorer.</b> Tests and setup run in their own container, on a network the agent has no route to.</li>
         <li><b>No shortcuts on the chain.</b> The RPC filter blocks chain controls like <code>anvil_setBalance</code>, so the agent can&apos;t fake a result.</li>

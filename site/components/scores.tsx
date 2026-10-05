@@ -10,7 +10,7 @@ export const formulas = {
   pillar: "Pillar score = mean of scored eval pass rates; evals without scores are skipped.",
   eval: "Eval pass rate = passed epochs ÷ scored epochs; errors are excluded.",
   cost: "$ / pass = model cost of scored epochs ÷ passed epochs; no passes or missing prices show –.",
-  lift: "Lift = skills score − Internet score for the same configuration, in percentage points.",
+  lift: "Lift = mean change over evals scored in both modes for the same configuration, in percentage points. Overall averages paired pillar lifts.",
   tokens: "Tokens per run = median total model and grader tokens across scored epochs.",
 };
 export function Hint({ text, children }: { text: string; children: React.ReactElement }) {
@@ -21,7 +21,7 @@ export function Score({ score, lift, onOpen, label, formula, empty = "No epochs 
   formula: string; empty?: string; counts?: string;
 }) {
   return <Hint text={`${formula}${lift !== undefined && lift !== null ? ` ${formulas.lift}` : ""}`}>
-    <button className={`score-cell ${score === null ? "score-empty" : ""}`} style={heat(score)} onClick={onOpen}
+    <button className="score-cell" data-empty={score === null} style={heat(score)} onClick={onOpen}
       aria-label={`${label}. ${score === null ? empty : percent(score)}.${counts ? ` ${counts}.` : ""} Open details.`}>
       <span>{percent(score)}</span>{lift !== undefined && lift !== null && <small className={lift < 0 ? "negative" : "lift"}>{pp(lift)}</small>}
     </button>
