@@ -130,14 +130,15 @@ test("the agent switch and skills details use their own scores", () => {
   const data = buildBoard([{ ...evaluation, modes: ["vanilla", "internet", "skills"] }],
     [row(), row({ mode: "skills", ...failure })]);
   const html = renderToStaticMarkup(createElement(Board, { data }));
-  assert.ok(html.includes('aria-label="Agent mode"'));
-  assert.ok(html.includes('aria-pressed="true">Internet</button>'));
-  assert.ok(html.includes('aria-pressed="false">With skills</button>'));
+  assert.ok(html.includes('aria-label="Which results"'));
+  assert.match(html, /aria-checked="true"[^>]*>Internet<\/button>/);
+  assert.match(html, /aria-checked="false"[^>]*>Internet \+ Skills<\/button>/);
+  assert.ok(html.includes('>Model only</button>'));
   const panel = renderToStaticMarkup(createElement(Detail, {
-    data, selection: { evaluation, pillar: "concepts", agent, mode: "skills" },
+    data, selection: { evaluation, pillar: "concepts", agent, mode: "skills", run: 1 },
     onSelect: () => {}, onClose: () => {},
   }));
-  assert.ok(panel.includes("0%"));
+  assert.ok(panel.includes(">Fail</span>"));
   assert.ok(panel.includes("The answer differs."));
   assert.deepEqual([data.tables.internet.pillars.concepts.cells[agentKey(agent)].score,
     data.tables.skills.pillars.concepts.cells[agentKey(agent)].score], [1, 0]);
