@@ -4,9 +4,34 @@
 .hw-hero .lead { margin-top: 14px; font-size: 18px; max-width: 60ch; }
 .hw-head { display: grid; gap: 8px; margin-bottom: 22px; }
 .hw-head h2 { font: 600 30px/1.05 var(--sans); font-stretch: 80%; letter-spacing: -.015em; }
-.hw-sub { color: var(--muted); font-size: 15px; max-width: 64ch; }
+/* wide enough that section intros run to two or three lines, not five; in px, so both looks get the same width
+   (in the geek look's monospace, ch units come out narrower) */
+.hw-sub { color: var(--muted); font-size: 15px; max-width: 800px; }
 .hw-sub b, .hw-run-note b { color: var(--ink); font-weight: 600; }
 .hw code { font: 12.5px var(--mono); background: var(--tint); border: 1px solid var(--grid); padding: 0 4px; }
+/* section titles can be linked to (the Results header links to the pillars): clear the sticky nav */
+.hw-head h2[id] { scroll-margin-top: 104px; }
+
+/* The four pillars: what each covers, and one real eval as an example */
+.hw-pillars { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--grid); background: var(--sheet); }
+.hw-pillars li { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; padding: 20px; border-left: 1px solid var(--grid); }
+.hw-pillars li:first-child { border-left: 0; }
+.hw-pillars h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font: 600 19px/1.15 var(--sans); font-stretch: 85%; }
+.hw-pillars h3 span { font: 400 11px var(--mono); color: var(--dim); }
+.hw-pillars p { font-size: 14px; line-height: 1.55; color: var(--muted); }
+.hw-eg { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--grid); font: 12px/1.5 var(--mono); color: var(--ink); text-decoration: none; }
+.hw-eg span { color: var(--dim); }
+.hw-eg:hover { color: var(--accent); }
+@media (max-width: 1000px) {
+  .hw-pillars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hw-pillars li:nth-child(3) { border-left: 0; }
+  .hw-pillars li:nth-child(n+3) { border-top: 1px solid var(--grid); }
+}
+@media (max-width: 560px) {
+  .hw-pillars { grid-template-columns: minmax(0, 1fr); }
+  .hw-pillars li { border-left: 0; }
+  .hw-pillars li + li { border-top: 1px solid var(--grid); }
+}
 
 /* Pipeline */
 .hw-bp { margin: 0; background: var(--sheet); border: 1px solid var(--grid); padding: 30px 30px 0;

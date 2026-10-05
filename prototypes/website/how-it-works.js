@@ -110,6 +110,22 @@
     </div>
     <p class="hw-run-note">Each eval declares the modes it runs in, and a run passes only if every check passes. Internet + Skills also gives the agent Ethereum skills to read, such as ${ext(TOOL.ethskills, "ethskills")}. Any eval can also add an <b>AI judge</b>: yes-or-no questions a grader model answers from the transcript, or from the code for builds.</p>`;
 
+  // ---------- The four pillars ----------
+  // What each pillar covers, in one line, and one real eval as an example. Counts come from the suite.
+  const PILLARS = [
+    ["concepts", "How the protocol works: finality, gas and fees, L2s, ERCs and EIPs, wallets and keys.", "gas-basefee-01"],
+    ["transactions", "Acting on chain: encoding calldata and signatures, reading live state, sending transfers and swaps.", "tx-eip1559-transfer"],
+    ["building", "Code that has to work: contracts from a spec, test suites, repairing a project, wallet flows in a frontend.", "testing-goal-001"],
+    ["security", "Vulnerabilities: spotting known bug patterns, triaging an audit, exploiting a bug and then patching it.", "vault-exploit-patch"],
+  ];
+  const pillars = () => {
+    const E = window.EVALS;
+    return `<ol class="hw-pillars">${PILLARS.map(([id, covers, ex]) => {
+      const p = E.pillars.find(x => x.id === id), n = E.evals.filter(ev => ev.pillar === id).length, eg = E.evals.find(ev => ev.id === ex);
+      return `<li><h3>${esc(p.name)}<span>${n} evals</span></h3><p>${covers}</p>${eg ? `<a class="hw-eg" href="#/eval/${eg.id}"><span>e.g.</span> ${esc(eg.title)}</a>` : ""}</li>`;
+    }).join("")}</ol>`;
+  };
+
   window.ETHHowItWorks = function ({ repo }) {
     return `<div class="page hw">
       <header class="hw-hero"><h1>Automated, open evals for AI on Ethereum</h1>
@@ -120,6 +136,11 @@
         <figure class="hw-bp">${pipeline()}
           <ol class="hw-notes">${notes(repo).map(([ic, k, h, p]) => `<li class="${k}"><span class="hw-ni">${icon(ic)}</span><h3>${h}</h3><p>${p}</p></li>`).join("")}</ol>
           <figcaption><span class="hw-plus">${icon("dataset")}</span><span>On every merge, the quiz evals are also published as a ${ext(TOOL.hf, "<b>Hugging Face dataset</b>")}, ready to load in ${ext(TOOL.inspect, "Inspect")}.</span></figcaption></figure>
+      </section>
+
+      <section class="hw-sec" aria-labelledby="hw-pillars">
+        <div class="hw-head"><p class="eyebrow">What we measure</p><h2 id="hw-pillars">Four pillars</h2><p class="hw-sub">Each eval tests one of these four areas of Ethereum work.</p></div>
+        ${pillars()}
       </section>
 
       <section class="hw-sec" aria-labelledby="hw-one">
