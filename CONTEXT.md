@@ -160,11 +160,11 @@ _Avoid_: category, stage, track
 
 **Agent table**:
 Scores for agents in the internet or skills mode.
-Its current board tab label is "Agent board", a working label that can change.
+Its board mode labels are "Internet" and "Internet + Skills".
 
 **Knowledge table**:
 Scores for bare models in the vanilla mode.
-Its current board tab label is "Pre-training (Vanilla)", a working label that can change.
+Its board mode label is "Model only".
 
 **Dataset**:
 The vanilla evals graded by a target alone, published to Hugging Face as JSONL, one line per eval with its prompt and target.

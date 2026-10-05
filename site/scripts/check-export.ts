@@ -5,15 +5,22 @@ const expected = process.argv[2];
 assert.ok(expected === "demo" || expected === "empty", "Pass demo or empty.");
 const html = readFileSync("out/index.html", "utf8");
 assert.ok(existsSync("out/_next/static"), "The export must contain static assets.");
-assert.equal((html.match(/<section\b[^>]*\brole="tabpanel"[^>]*>/g) ?? []).length, 2, "The export must contain both tab panels.");
+assert.ok(html.includes('id="leaderboard"') && html.includes('id="evals"'), "The export must contain the leaderboard and eval matrix.");
+assert.ok(html.includes("Internet + Skills") && html.includes("Model only"));
+assert.ok(existsSync("out/compare/index.html"));
+const how = readFileSync("out/how-it-works/index.html", "utf8");
+assert.ok(how.includes("Open evals for AI on Ethereum"));
+for (const id of ["hw-pillars", "hw-run", "hw-pipe", "hw-stack", "hw-add"]) assert.ok(how.includes(`id="${id}"`));
+assert.ok(how.includes('class="diagram pipeline-diagram"') && how.includes('class="diagram run-diagram"'));
 if (expected === "demo") {
   assert.ok(html.includes("<strong>Demo data</strong>"), "The demo banner must be visible.");
   assert.ok(html.includes("Demo model A"));
   assert.ok(html.includes("2 of 3 epochs passed"));
   assert.ok(html.includes('aria-label="Concepts, Demo harness A / Demo model A. 83%.'), "The concepts pillar must show the rounded mean of 2/3 and 1/1.");
+  assert.ok(html.includes("$ / pass"));
 } else {
-  assert.ok(html.includes("No agent epochs yet") && html.includes("No knowledge epochs yet"));
+  assert.ok(html.includes("No agent epochs yet") && html.includes("No evals yet"));
   assert.ok(!html.includes("Demo model") && !html.includes("<strong>Demo data</strong>"));
   assert.ok(!html.includes("mockllm/model"));
 }
-console.log(`PASS: ${expected} static export, tables, and data labels.`);
+console.log(`PASS: ${expected} static export, leaderboard, matrix, How it works, and Compare.`);

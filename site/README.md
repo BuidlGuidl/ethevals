@@ -31,7 +31,11 @@ Malformed rows and duplicate epochs fail with their file and line.
 The loader accepts schema version 6 and skips older rows.
 It displays only current eval hashes and, for skills-mode rows, the current skills hash.
 A skills change reruns only skills-mode epochs and preserves internet and vanilla results.
-The agent table switches between internet and skills rows.
+The leaderboard switches between Internet, Internet + Skills, and Model only.
+Internet and Internet + Skills share configuration rows; Model only shows bare models.
+The eval matrix uses the same mode and groups evals under pillar bands.
+The How it works page explains the pillars, modes, isolated runs, and publication pipeline.
+The comparison page shows up to five configurations and highlights the best value for each metric.
 The build reports loaded, current, and stale row counts.
 
 Published rows supply full log URLs.
@@ -48,11 +52,30 @@ An eval score is its share of passed epochs; errors remain visible but do not en
 A pillar score averages eval scores, excluding evals without scored epochs.
 The board shows epoch counts instead of confidence intervals.
 Unsupported modes show `Not applicable`; supported cells without scores show `No epochs yet`.
+Overall is the mean of scored pillar scores, excluding pillars without scores.
+Skill lift subtracts the Internet score from the Internet + Skills score for the same configuration, in percentage points.
+Each configuration includes its effort; different efforts stay separate.
+`$ / pass` divides the model cost of scored epochs by passed epochs.
+No passes or a missing model price produce `–`.
+Cost limits count as failures. Errors remain in the drawer and do not enter scores or the cost calculation.
 
 Epoch cost adds model and grader cost. If either amount is unknown, the total stays unknown.
-The panel shows the cost source, total tokens, and elapsed time from the row.
-Different efforts stay in separate columns.
-The loader computes cells once; the client reuses them for tables and the detail panel.
+The drawer shows the cost source, total tokens, elapsed time, checks, and error or limit from the row.
+Its list, eval, and run views use the `d` query parameter; browser Back closes a drawer opened from the board.
+The `eval` query parameter opens a catalog eval, including an eval with no runs.
+Log links use the normal Inspect viewer when a matching log is bundled.
+The loader computes cells, summaries, and lifts once; the client reuses them across pages.
+
+## Interface
+
+The site ports the geek design from Pablo's prototype to React components.
+Tailwind CSS v4 defines its dark tokens and responsive layout in `app/globals.css`.
+The used shadcn/ui components are Sheet, Tooltip, and ToggleGroup, built on Radix primitives.
+JetBrains Mono covers the interface, VT323 covers section headings, and Archivo covers diagram text.
+`next/font/google` bundles all three fonts during the build.
+Motion animates the Results logo into the nav; reduced motion disables the animation.
+Lucide supplies the stroke icons. The pipeline and isolated-run diagrams use inline SVG.
+On phones, diagram notes form a vertical timeline and the detail drawer fills the screen.
 
 ## Checks
 
