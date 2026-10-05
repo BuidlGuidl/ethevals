@@ -1,6 +1,6 @@
 # Introduction
 
-## What is an eval? 
+## What is an eval?
 
 An eval is a prompt for an agent or a bare model, plus the checks that decide whether it did it right.
 You write the prompt, what the agent starts with, and the checks, all in one folder.
@@ -9,10 +9,10 @@ You write the prompt, what the agent starts with, and the checks, all in one fol
 
 Every eval belongs to one of four pillars:
 
-- `concepts`: Ethereum knowledge and standards.
-- `transactions`: actions that change chain state.
-- `building`: code that works in its workspace.
-- `security`: risks in contracts and their use.
+- `concepts`
+- `transactions`
+- `building`
+- `security`
 
 An eval lives in `evals/<pillar_name>/<eval_name>/`, and `<pillar_name>/<eval_name>` is its ID:
 
@@ -22,26 +22,25 @@ evals/
     └── <eval_name>/
         ├── eval.yaml     required: the prompt, the modes, and the chain
         ├── workspace/    optional: the files the agent starts with
-        ├── setup/        required with a chain: setup.s.sol, which prepares the chain before the agent starts
         ├── scorer/       required: the checks
-        ├── solution/     required with tests or a chain: the reference solution, which proves the checks can pass
+        ├── setup/        required if chain is needed: setup.s.sol, which prepares the chain before the agent starts
+        ├── solution/     required if tests or a chain is needed: the reference solution, which proves the checks can pass
         └── compose.yaml  optional: extra services the agent can call, like a database
 ```
 
-
-Let's look at each piece: 
+Let's look at each piece:
 
 ### `eval.yaml`
 
-`eval.yaml` takes these keys:
+`eval.yaml` is the eval's entry point. It holds the prompt given to the agent or model being tested, and how the eval runs. It takes these keys:
 
-| Key | Required | Holds |
-| --- | --- | --- |
-| `prompt` | yes | the message the agent gets |
-| `motivation` | yes | why the eval exists, shown on the website |
-| `modes` | yes | any of `vanilla`, `internet`, and `skills` |
-| `chain` | no | `anvil`, or a fork like `{fork: mainnet, block: 23819000}` |
-| `choices` | no | 2 to 26 answers for a multiple-choice quiz |
+| Key          | Required | Holds                                                            |
+| ------------ | -------- | ---------------------------------------------------------------- |
+| `prompt`     | yes      | the message / task the agent or model which is being tested gets |
+| `motivation` | yes      | why the eval exists, shown on the website                        |
+| `modes`      | yes      | any of `vanilla`, `internet`, and `skills`                       |
+| `chain`      | no       | `anvil`, or a fork like `{fork: mainnet, block: 23819000}`       |
+| `choices`    | no       | 2 to 26 answers for a multiple-choice quiz                       |
 
 `prompt`: write it the way a real person would send it, the agent must not know it is being tested.
 
@@ -51,15 +50,116 @@ Let's look at each piece:
 - `internet`: runs an agent with the web, a shell, the workspace, and the chain.
 - `skills`: `internet` plus the [skills pack](../skills/README.md).
 
+### `workspace/`
+
+`workspace/` is the folder the agent works in. Anything you put here is waiting for the agent when it starts, like a Foundry project to build on, or a `AGENTS.md` that adds detail to the `prompt`.
+
+If the eval has a chain, `setup` dir writes `chain.json` here before the agent starts. That's our convention for telling the agent about the chain it works on. Since setup writes it each time the eval runs, you don't have to fix contract addresses or the agent's wallet ahead of time.
+
+### `scorer/`
+
+`scorer/` holds the checks that decide whether the agent got it right. A check is one pass-or-fail result with a name and a short reason. The agent passes only if every check passes. You pick the checks that fit your eval, and you can use more than one kind:
+
+| File                   | Checks                                           |
+| ---------------------- | ------------------------------------------------ |
+| `scorer/target.yaml`   | the final reply                                  |
+| `scorer/tests/*.t.sol` | the chain, the agent's code, or both, with Forge |
+| `scorer/rubric.md`     | the transcript, graded by an LLM                 |
+
+**Target:** A target is the quickest way to write a quiz. You write the answer, and the check compares the reply with it.
+
+<details>
+<summary><code>target.yaml</code> keys, multiple choice, and pattern targets</summary>
+
+`target.yaml` takes these keys:
+
+| Key           | Default          | Holds                                      |
+| ------------- | ---------------- | ------------------------------------------ |
+| `name`        | `answer`         | the check's name                           |
+| `target`      | required         | the answer, or a list where any one passes |
+| `method`      | `match`          | `match` or `pattern`                       |
+| `location`    | `exact`          | `begin`, `end`, `any`, or `exact`          |
+| `ignore_case` | `true`           | ignore case when comparing                 |
+| `numeric`     | `false`          | compare as numbers                         |
+| `pattern`     | none             | the regex for `method: pattern`            |
+| `reference`   | the first target | the reply `check` sends                    |
+
+**Multiple choice:** Add `choices` to `eval.yaml` and set `target` to the right letter.
+From the test fixture [`wei-per-ether`](../inspect-runner/tests/fixtures/concepts/wei-per-ether):
+
+```yaml
+motivation: Check whether a model knows Ethereum's base unit conversion.
+prompt: How many wei equal one ether?
+choices:
+  - "10^6"
+  - "10^9"
+  - "10^18"
+  - "10^24"
+modes: [vanilla, internet]
+```
+
+```yaml
+name: wei_conversion
+target: C
+```
+
+**Pattern targets:** `method: pattern` pulls the answer out of the reply with a regex group, then compares it with `target`, for example:
+
+```yaml
+name: erc_number
+method: pattern
+pattern: 'ERC-?(\d+)'
+target: "8004"
+reference: "It is ERC-8004."
+```
+
+</details>
+
+**Tests:** Forge tests check the chain, the agent's code, or both. Each test function is one check.
+
+<details>
+<summary>Example test</summary>
+
+```solidity
+function test_recipient_balance() public view {  // (1)
+    assertEq(token.balanceOf(recipient), 12_500_000, "recipient holds 12.5 tokens in base units");  // (2)
+}
+```
+
+1. The function name is the check's name.
+2. If the assertion fails, its message becomes the reason, like `recipient holds 12.5 tokens in base units: 1250000 != 12500000`.
+
+</details>
+
+**Rubric:** A rubric covers what only the transcript shows, like whether the agent verified its work. Each heading is one check.
+
+<details>
+<summary>Example rubric</summary>
+
+```markdown
+## verified_transfer  <!-- (1) -->
+
+Before reporting success, did the agent confirm on-chain that the transfer landed, for example by reading the transaction receipt or the recipient's token balance?  <!-- (2) -->
+```
+
+1. The heading is the check's name.
+2. An LLM reads the transcript, answers the question with pass or fail, and writes the reason.
+
+</details>
+
 ### `setup/`
 
-`setup.s.sol` extends `ChainSetup`, which gives it these helpers:
+`setup/` runs before the agent starts and sets up its world. For example, it can pick the wallet the agent uses, fund it, or deploy the contracts the eval asks about.
 
-| Helper | Does |
-| --- | --- |
-| `fund(addr, amount)` | sets the ETH balance of `addr` |
-| `chainRecord(name, value)` | adds a field to `chain.json`, which the agent and the tests read |
-| `privateRecord(name, value)` | adds a field to `private.json`, which only the tests read |
+Setup scripts are Solidity files, `setup/setup.s.sol`, and we run them with `forge script`. So you can use anything Foundry gives you.
+
+To tell the agent about the chain, like its wallet or a contract address, you write it to `chain.json`. We put that file in the agent's `workspace/`, and your prompt can ask the agent to read it.
+
+We also have a `ChainSetup` helper that your script can extend. It gives you these functions:
+
+- `fund(addr, amount)`: sets the ETH balance of `addr`.
+- `chainRecord(name, value)`: adds a field to `chain.json`, which the agent and the tests read.
+- `privateRecord(name, value)`: adds a field to `private.json`, which only the tests read.
 
 <details>
 <summary>Example <code>setup.s.sol</code></summary>
@@ -87,65 +187,6 @@ contract Setup is ChainSetup {
 
 </details>
 
-### `scorer/`
-
-You can use one or more scorers:
-
-| File | Checks |
-| --- | --- |
-| `scorer/target.yaml` | the final reply |
-| `scorer/tests/*.t.sol` | the chain, the agent's code, or both, with Forge |
-| `scorer/rubric.md` | the transcript, graded by an LLM |
-
-A target is the quickest way to write a quiz. You write the answer, and the check compares the reply with it.
-
-<details>
-<summary><code>target.yaml</code> keys, multiple choice, and pattern targets</summary>
-
-`target.yaml` takes these keys:
-
-| Key | Default | Holds |
-| --- | --- | --- |
-| `name` | `answer` | the check's name |
-| `target` | required | the answer, or a list where any one passes |
-| `method` | `match` | `match` or `pattern` |
-| `location` | `exact` | `begin`, `end`, `any`, or `exact` |
-| `ignore_case` | `true` | ignore case when comparing |
-| `numeric` | `false` | compare as numbers |
-| `pattern` | none | the regex for `method: pattern` |
-| `reference` | the first target | the reply `check` sends |
-
-**Multiple choice.** Add `choices` to `eval.yaml` and set `target` to the right letter.
-From the test fixture [`wei-per-ether`](../inspect-runner/tests/fixtures/concepts/wei-per-ether):
-
-```yaml
-motivation: Check whether a model knows Ethereum's base unit conversion.
-prompt: How many wei equal one ether?
-choices:
-  - "10^6"
-  - "10^9"
-  - "10^18"
-  - "10^24"
-modes: [vanilla, internet]
-```
-
-```yaml
-name: wei_conversion
-target: C
-```
-
-**Pattern targets.** `method: pattern` pulls the answer out of the reply with a regex group, then compares it with `target`, for example:
-
-```yaml
-name: erc_number
-method: pattern
-pattern: 'ERC-?(\d+)'
-target: '8004'
-reference: 'It is ERC-8004.'
-```
-
-</details>
-
 ### `compose.yaml`
 
 Add a `compose.yaml` with the services the agent can call, for example:
@@ -159,18 +200,31 @@ services:
     mem_limit: 512m
 ```
 
-An epoch is one agent or model doing an eval once, in one mode. Here is an example lifecycle of epoch: 
+An epoch is one agent or model doing an eval once, in one mode. Here is the lifecycle of an epoch:
 
 ```mermaid
 flowchart LR
-	setup["Step 1: setup runs"] --> work["Step 2: the agent works"] --> stop["Step 3: the agent stops"] --> checks["Step 4: the checks run"]
+	host["Host: the runner"]
+	subgraph chainbox["Chain container"]
+		anvil["anvil"]
+	end
+	subgraph agentbox["Agent container"]
+		agent["the agent in workspace/"]
+	end
+	subgraph scorerbox["Scorer container"]
+		tests["scorer/tests/"]
+	end
+	host -- "Step 1: runs setup.s.sol" --> anvil
+	host -- "Step 2: prompt, workspace/, chain.json" --> agent
+	agent -- "Step 3: RPC calls" --> anvil
+	host -- "Step 4: workspace/, chain.json, private.json" --> tests
+	tests -- "reads the chain" --> anvil
 ```
 
-1. `setup/setup.s.sol` deploys, funds, and writes `chain.json`.
-2. The agent gets only the prompt, `workspace/`, and `chain.json`.
-3. Its reply, `workspace/`, and the chain stay as the agent left them.
-4. `target.yaml` reads the reply, `tests/` read the chain and `workspace/`, and `rubric.md` reads the transcript.
-
+1. The host runs `setup/setup.s.sol` against the chain. Setup writes `chain.json` and `private.json`.
+2. The host copies `workspace/` and `chain.json` into the agent container and sends the prompt.
+3. The agent works in `workspace/` and talks to the chain over RPC. It never sees `scorer/`, `solution/`, or `private.json`.
+4. When the agent stops, the host copies its `workspace/`, `chain.json`, and `private.json` into the scorer container, and the tests run there against the chain. The host checks the reply against `target.yaml`, and an LLM reads the transcript for `rubric.md`.
 
 ## Recipes
 
@@ -187,9 +241,9 @@ agent-registries/
 ```
 
 ```yaml
-motivation: Check whether a model knows the ERC for agent discovery and trust.  # (1)
-prompt: which ERC defines onchain identity, reputation and validation registries for AI agents? just the number please  # (2)
-modes: [vanilla, internet, skills]  # (3)
+motivation: Check whether a model knows the ERC for agent discovery and trust. # (1)
+prompt: which ERC defines onchain identity, reputation and validation registries for AI agents? just the number please # (2)
+modes: [vanilla, internet, skills] # (3)
 ```
 
 1. The website shows it. The agent never sees it.
@@ -200,10 +254,10 @@ modes: [vanilla, internet, skills]  # (3)
 <summary><code>scorer/target.yaml</code></summary>
 
 ```yaml
-name: erc_number  # (1)
-method: match  # (2)
-target: '8004'  # (3)
-location: end  # (4)
+name: erc_number # (1)
+method: match # (2)
+target: "8004" # (3)
+location: end # (4)
 ```
 
 1. Names the check.
@@ -237,11 +291,11 @@ send-six-decimal-token/
 
 ```yaml
 motivation: Test whether an agent reads token decimals before signing an exact transfer.
-modes: [internet, skills]  # (1)
-prompt: |  # (2)
+modes: [internet, skills] # (1)
+prompt: | # (2)
   can you send 12.5 tokens to the recipient in chain.json? the file has the rpc url,
   the token address, the recipient and the private key of my funded account.
-chain: anvil  # (3)
+chain: anvil # (3)
 ```
 
 1. A bare model can't send a transaction, so no `vanilla`.
@@ -437,7 +491,7 @@ The reference pass now fails with your assertion message. Change it back.
 To test against a live protocol, fork mainnet at a pinned block:
 
 ```yaml
-chain: {fork: mainnet, block: 23819000}
+chain: { fork: mainnet, block: 23819000 }
 ```
 
 Setup can call anvil methods through `vm.rpc`, like `anvil_impersonateAccount`.
@@ -467,7 +521,7 @@ erc20-points-token/
 ```yaml
 motivation: Check whether an agent can build a capped community token on a well-known library.
 modes: [internet, skills]
-prompt: |  # (1)
+prompt: | # (1)
   can you help me build a token for our community? put it in src/BuilderPoints.sol as a contract
   called BuilderPoints, with no constructor arguments. call it Builder Points (BPT), with the same
   decimals as USDC. mint 100,000 to whoever deploys it. the deployer should be able to mint more
