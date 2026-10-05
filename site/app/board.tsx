@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle } from "lucide-react";
-import { agentLabel, modelLabel, names, modeNames } from "../src/labels";
+import { agentLabel, modelLabel, names, modeNames, unwrapPrompt } from "../src/labels";
 import { pillars, agentKey, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Epoch, type Agent } from "../src/board";
 import { decodeSelection, encodeSelection, type Selection } from "../src/selection";
 import { Configuration } from "../components/configuration";
@@ -50,7 +50,7 @@ function EvalList({ table, evaluations, agent, pillar, onEval }: {
 function EvalView({ evaluation, epochs, onRun }: { evaluation: Eval; epochs: Epoch[]; onRun: (run: number) => void }) {
   return <>
     <p className="why">{evaluation.motivation}</p>
-    <details className="prompt-disclosure" open><summary>Prompt</summary><pre>{evaluation.prompt}</pre>
+    <details className="prompt-disclosure" open><summary>Prompt</summary><pre>{unwrapPrompt(evaluation.prompt)}</pre>
       {evaluation.choices.length > 0 && <ol className="prompt-choices" type="A">{evaluation.choices.map((choice, index) => <li key={index}>{choice}</li>)}</ol>}
     </details>
     <section className="detail-section"><h3>Runs</h3>{epochs.length ?

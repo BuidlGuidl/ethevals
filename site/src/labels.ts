@@ -18,6 +18,8 @@ const providers = new Map([
   ["anthropic", "claude"], ["openai", "openai"], ["openrouter", "openrouter"],
 ]);
 
+// eval.yaml prompts are hard-wrapped in the file. Join those wraps for display; keep blank lines and list items.
+export const unwrapPrompt = (text: string) => text.trimEnd().replace(/(\S)\n(?!\n|\s|[-*•]\s|\d+[.)]\s)/g, "$1 ");
 export const modelLabel = (id: string) => models.get(id) ?? id;
 export const harnessLabel = (id: string) => harnesses.get(id)?.label ?? id;
 export const agentLabel = (agent: Agent) => agent.harness
