@@ -607,7 +607,7 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
     return `${landHero()}
       ${SHOW_FINDINGS ? `<section class="lsec" id="findings"><h2>Key findings</h2><ol class="kf">${[1, 2, 3].map(finding).join("")}</ol><p class="fine">Placeholders: written by hand for each release, once the results are real.</p></section>` : ""}
       <section class="rsec" id="agents"><div class="rsec-h"><h2>Leaderboard</h2><a class="backbtn" href="#/compare">Compare configurations →</a></div><div class="toolbar tvbar">${viewSel()}${viewIntro(nEv)}</div>${resultsTable(rows)}</section>
-      <p class="readnote"><b>How to read it.</b> A run passes only if it meets every check of its eval. Each eval runs 3–5 times per agent and mode; its score is the share of runs that passed, and a table score is the average over its evals.</p>
+      <p class="readnote"><b>How to read it.</b> Every task is tried 3–5 times. A score is the agent's average success rate across the tasks in the column. Click a cell to see more details about how the agent performed.</p>
       ${evalsSection()}`;
   }
 
@@ -653,7 +653,7 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
         <div class="lh-brand"><h1 class="lh-logo" aria-label="ETH Evals"><span class="lh-word" aria-hidden="true">ETH Evals</span><span class="lh-ascii" aria-hidden="true">${asciiLogo()}</span></h1>
         <p class="lh-plate"><span><span class="lh-ver">${S.version}</span><span title="Suite hash">${S.hash}</span><span title="Data date">${S.date}</span></span><span><span><b>${E.evals.length}</b> evals</span><span><b>${E.agents.length}</b> agents</span><span><b>${totalRuns.toLocaleString("en")}</b> runs</span></span></p></div>
         <p class="lh-tag">The Open Benchmark for AI on Ethereum</p>
-        <p class="lh-desc">We test AI agents, and the models behind them, on real Ethereum work. Every task, run and transcript is public, and anyone can run the same evals.</p>
+        <p class="lh-desc">We test AI agents, and the models behind them, on real Ethereum work. Every task, run and transcript is public, allowing anyone to run the same evals.</p>
         <p class="lh-pillars">We evaluate <a href="#/how#hw-pillars" title="What each pillar covers">four pillars</a>: ${listOf(pillars)}.</p>
       </header>`;
   }
@@ -665,7 +665,7 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
     const shown = st.tv === "vanilla" ? E.evals.filter(ev => ev.modes.includes("vanilla")) : E.evals;
     const count = t => shown.filter(ev => ev.type === t).length;
     const types = ["Quiz", "Scenario", "Build", "Act"].filter(count).map(t => `${count(t)} ${t.toLowerCase()}`).join(" · ");
-    return `<section class="rsec" id="evals"><div class="rsec-h"><div><h2>Results by eval</h2><p class="rsub">The scores above, broken down: how many runs each agent passed on every eval, grouped by pillar.</p></div><a class="backbtn" href="${REPO}/blob/main/docs/add-an-eval.md" target="_blank" rel="noopener">How to add an eval ↗</a></div>
+    return `<section class="rsec" id="evals"><div class="rsec-h"><div><h2>Results by eval</h2><p class="rsub">A detailed view of the Leaderboard. See how many runs each agent passed on every eval, grouped by pillar.</p></div><a class="backbtn" href="${REPO}/blob/main/docs/add-an-eval.md" target="_blank" rel="noopener">How to add an eval ↗</a></div>
       <div class="toolbar tvbar">${viewSel()}</div><p class="evcount">${shown.length} evals · ${types}${st.tv === "vanilla" ? " · only the evals with a checkable answer" : ""}</p>${viewMatrix2()}</section>`;
   }
 
