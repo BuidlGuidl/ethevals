@@ -11,24 +11,32 @@ assert.equal((html.match(/aria-label="Which results"/g) ?? []).length, 1, "The l
 assert.equal((html.match(/aria-label="Which eval results"/g) ?? []).length, 1, "The matrix must have its own mode toggle.");
 assert.ok(existsSync("out/compare/index.html"));
 const how = readFileSync("out/how-it-works/index.html", "utf8");
-assert.ok(how.includes("Automated, open evals for AI on Ethereum"));
+assert.ok(how.includes("<h1>Automated, open evals for AI on Ethereum</h1>"));
 const sections = [...how.matchAll(/<section id="(hw-[^"]+)"/g)].map((match) => match[1]);
-assert.deepEqual(sections, ["hw-pipe", "hw-pillars", "hw-modes", "hw-run", "hw-stack", "hw-add"]);
-for (const heading of ["One pull request starts everything", "Four pillars", "Three ways to run an eval"]) assert.ok(how.includes(`<h2>${heading}</h2>`));
-const modes = how.slice(how.indexOf('<section id="hw-modes"'), how.indexOf('<section id="hw-run"'));
-assert.ok(modes.includes('<p class="eyebrow">Modes</p>') && modes.includes('class="modes-grid"'));
+assert.deepEqual(sections, ["hw-pipe", "hw-pillars", "hw-eval", "hw-run", "hw-add"]);
+const modes = how.slice(how.indexOf('<section id="hw-pillars"'), how.indexOf('<section id="hw-eval"'));
+assert.ok(modes.includes('<h3>Three ways to run an eval</h3>') && modes.includes('class="modes-grid"'));
 assert.equal((modes.match(/<article[ >]/g) ?? []).length, 3);
 assert.ok(modes.includes('<article class="model-only">'));
 for (const label of ["Model only", "Internet", "Internet + Skills"]) assert.ok(modes.includes(`<p class="eyebrow">${label}</p>`));
-assert.ok(modes.includes('href="https://ethskills.com">ethskills</a>') && modes.includes("skill lift on the website."));
-assert.ok(!/mode-progression|modes-strip|mode-step|mode-arrow|skill-bracket|Each eval runs in up to three modes\./.test(how));
-assert.ok(how.includes('class="diagram pipeline-diagram"') && how.includes('class="diagram run-diagram"'));
-const run = how.slice(how.indexOf('<section id="hw-run"'), how.indexOf('<section id="hw-stack"'));
-assert.equal((run.match(/class="container-tag"/g) ?? []).length, 3);
-for (const label of ["sends transactions", "reads the chain state", "prompt", "workspace/", "Runner", "transcript", "checks", "LLM as judge", "Results + logs", "on the website, one click"]) assert.ok(run.includes(label));
-assert.equal((run.match(/class="diagram-file"/g) ?? []).length, 2);
+assert.ok(modes.includes('href="https://ethskills.com">ethskills</a>'));
+for (const diagram of ["pipeline", "run"]) {
+  for (const layout of ["desktop", "phone"]) assert.ok(how.includes(`class="diagram ${diagram}-diagram diagram-${layout}"`));
+}
+const tree = how.slice(how.indexOf('<section id="hw-eval"'), how.indexOf('<section id="hw-run"'));
+assert.ok(tree.includes('class="eval-tree"'));
+for (const file of ["eval.yaml", "workspace/", "setup.s.sol", "target.yaml", "tests/*.t.sol", "rubric.md", "solution/", "compose.yaml"]) assert.ok(tree.includes(file));
+const run = how.slice(how.indexOf('<section id="hw-run"'), how.indexOf('<section id="hw-add"'));
+const runDiagrams = run.split(/(?=<svg class="diagram run-diagram)/).slice(1)
+  .map((fragment) => fragment.slice(0, fragment.lastIndexOf("</svg>") + 6));
+assert.equal(runDiagrams.length, 2);
+for (const svg of runDiagrams) {
+  assert.equal((svg.match(/class="container-tag"/g) ?? []).length, 3);
+  assert.equal((svg.match(/class="diagram-file"/g) ?? []).length, 2);
+  for (const label of ["ETH Evals", "Inspect", "prompt", "workspace/", "transcript", "checks", "LLM as judge", "Results + logs"]) assert.ok(svg.includes(label));
+}
 assert.ok(run.includes("Three separate containers. The agent can&#x27;t reach the scorer."));
-assert.ok(!/no route|Grader model|Result row|filtered RPC/.test(how));
+assert.ok(!/no route|Grader model|Result row|filtered RPC|grader/i.test(how));
 for (const [, id] of how.matchAll(/href="\/#(eval-[^"]+)"/g)) {
   assert.ok(html.includes(`id="${id}"`), `The example must link to matrix row ${id}.`);
 }

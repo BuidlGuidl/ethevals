@@ -202,13 +202,22 @@
   .pillars-grid li:last-child { border-right: 0; }
   .pillars-grid p { @apply text-muted; }
   .pillar-example { @apply border-t border-border pt-3 text-[11px]; overflow-wrap: anywhere; }
+  .how-modes { @apply grid gap-4 pt-2; }
   .modes-grid { @apply grid grid-cols-3 gap-4; }
   .modes-grid article { @apply grid min-w-0 content-start gap-3 border border-border-strong bg-sheet p-5; }
   .modes-grid article.model-only { border-style: dashed; }
   .modes-grid p:not(.eyebrow) { @apply text-muted; }
   .modes-grid article:last-child .eyebrow { @apply text-accent; }
-  .diagram-figure { @apply border border-border bg-sheet px-7 pt-7; background-image: radial-gradient(rgb(228 231 242 / 9%) 1px, transparent 1px); background-size: 20px 20px; }
+  .eval-tree { @apply min-w-0 border border-border bg-sheet p-6 text-[13px]; font-family: var(--font-mono); }
+  .eval-tree-root { @apply mb-3; overflow-wrap: anywhere; }
+  .eval-tree ul { @apply grid gap-2; }
+  .eval-tree li { @apply grid gap-x-5; grid-template-columns: 23ch minmax(0, 1fr); }
+  .eval-tree-file { white-space: pre; }
+  .eval-tree-branch, .eval-tree-comment { @apply text-muted; }
+  .eval-tree-comment { overflow-wrap: anywhere; }
+  .diagram-figure { @apply min-w-0 border border-border bg-sheet p-7; background-image: radial-gradient(rgb(228 231 242 / 9%) 1px, transparent 1px); background-size: 20px 20px; }
   .diagram { @apply block h-auto w-full; overflow: visible; }
+  .diagram-phone { display: none; }
   .diagram text { font-family: var(--font-diagram); }
   .diagram-zone path { fill: none; stroke: var(--color-ink); stroke-width: 2; }
   .diagram-zone text { @apply fill-ink text-[11px] uppercase tracking-wider; font-family: var(--font-mono); }
@@ -230,27 +239,17 @@
   .diagram-node.container .diagram-box { stroke: var(--color-accent); stroke-width: 1.5; }
   .container-tag rect { fill: var(--color-tint); stroke: var(--color-border-strong); }
   .container-tag text { fill: var(--color-muted); font-size: 10px; font-family: var(--font-mono); }
-  .diagram-caption { fill: var(--color-muted); font-size: 15px; }
+  .inspect-frame { fill: transparent; stroke: var(--color-border-strong); }
+  .inspect-title { text-decoration: underline; text-underline-offset: 3px; }
   .diagram .diagram-file { fill: var(--color-ink); font-size: 12px; font-family: var(--font-mono); }
   .diagram-dim { fill: var(--color-dim); }
   .edge-label { fill: var(--color-accent); font-size: 13px; }
-  .diagram-notes { @apply mt-5 grid gap-6 pb-7; }
-  .pipeline-notes { @apply grid-cols-6; }
-  .run-notes { @apply grid-cols-4; }
-  .diagram-notes li { @apply grid content-start gap-2 border-t-2 border-ink pt-4; }
-  .diagram-notes li.automatic { @apply border-accent; }
-  .diagram-notes h3 { @apply text-[13px]; }
-  .diagram-notes p { @apply text-[12px] text-muted; }
-  .note-icon { @apply hidden; }
-  .diagram-figure figcaption { @apply -mx-7 border-t border-border bg-tint px-7 py-4 text-xs text-muted; }
+  .diagram-figure figcaption { @apply -mx-7 -mb-7 mt-4 border-t border-border bg-tint px-7 py-4 text-xs text-muted; }
   .rules { @apply grid gap-4 border-t border-border-strong pt-5; }
   .rules ul { @apply grid grid-cols-2 gap-5; }
   .rules li { @apply text-muted; }
   .rules b { @apply block pb-1 text-ink font-medium; }
   .how-page code { @apply border border-border bg-tint px-1; }
-  .stack-list { @apply max-w-[1000px] border-t border-border-strong; }
-  .stack-list li { @apply border-b border-border py-4 text-muted; }
-  .stack-list b { @apply font-medium text-ink; }
   .how-add { @apply flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6; }
 }
 
@@ -289,16 +288,14 @@
   .eval-list-title { min-width: 55%; }
   .how-page { gap: 48px; }
   .modes-grid { grid-template-columns: 1fr; }
-  .diagram { display: none; }
-  .diagram-figure { padding: 20px 18px 0; background-image: none; }
-  .diagram-notes { display: grid; grid-template-columns: 1fr; gap: 0; margin: 0; padding: 0 0 20px; }
-  .diagram-notes li { position: relative; grid-template-columns: 32px 1fr; border-top: 0; padding: 0 0 26px; gap: 5px 14px; }
-  .diagram-notes li:not(:last-child)::before { content: ""; position: absolute; left: 15px; top: 32px; bottom: 0; width: 1px; background: var(--color-border-strong); }
-  .diagram-notes li:last-child { padding-bottom: 0; }
-  .note-icon { display: grid; grid-row: span 2; width: 32px; height: 32px; place-items: center; border: 1px solid var(--color-border-strong); background: var(--color-tint); color: var(--color-accent); }
-  .diagram-notes h3 { padding-top: 5px; }
-  .diagram-notes p { grid-column: 2; }
-  .diagram-figure figcaption { margin-inline: -18px; padding-inline: 18px; }
+  .diagram-desktop { display: none; }
+  .diagram-phone { display: block; max-width: 400px; margin-inline: auto; }
+  .diagram-figure { padding: 14px 8px; background-image: none; }
+  .diagram-figure figcaption { margin-inline: -8px; margin-bottom: -14px; padding-inline: 18px; }
+  .eval-tree { padding: 18px 14px; font-size: 12px; }
+  .eval-tree li { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .eval-tree-comment { padding-left: 4ch; }
+  .eval-tree-child .eval-tree-comment { padding-left: 8ch; }
   .rules ul { grid-template-columns: 1fr; }
   .sitefoot { padding-inline: 18px; }
 }
