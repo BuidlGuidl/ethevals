@@ -33,7 +33,7 @@ assert.equal(runDiagrams.length, 2);
 for (const svg of runDiagrams) {
   assert.equal((svg.match(/class="container-tag"/g) ?? []).length, 3);
   assert.equal((svg.match(/class="diagram-file"/g) ?? []).length, 2);
-  for (const label of ["ETH Evals", "Inspect", "prompt", "workspace/", "transcript", "checks", "LLM as judge", "Results + logs"]) assert.ok(svg.includes(label));
+  for (const label of ["ETH Evals", "Inspect runs it", "Decide what to run", "Record it", "One result per run", "LLM as judge", "Forge tests", "Results + logs", "prompt", "workspace/"]) assert.ok(svg.includes(label));
 }
 assert.ok(run.includes("Three separate containers. The agent can&#x27;t reach the scorer."));
 assert.ok(!/no route|Grader model|Result row|filtered RPC|grader/i.test(how));

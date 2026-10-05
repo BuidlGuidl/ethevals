@@ -249,6 +249,10 @@
   .container-tag rect { fill: var(--color-tint); stroke: var(--color-border-strong); }
   .container-tag text { fill: var(--color-muted); font-size: 10px; font-family: var(--font-mono); }
   .run-diagram .container-tag text { font-size: 12px; }
+  .run-diagram.diagram-phone .diagram-sub, .run-diagram.diagram-phone .diagram-file, .run-diagram.diagram-phone .container-tag text { font-size: 13px; }
+  .evals-frame { fill: transparent; stroke: var(--color-accent); stroke-width: 1.5; }
+  .evals-frame-title { font-size: 18px; }
+  .run-band-title { font-size: 13px; }
   .inspect-frame { fill: transparent; stroke: var(--color-border-strong); }
   .inspect-title { text-decoration: underline; text-underline-offset: 3px; }
   .diagram .diagram-file { fill: var(--color-ink); font-size: 12px; font-family: var(--font-mono); }

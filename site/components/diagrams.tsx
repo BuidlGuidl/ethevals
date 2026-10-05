@@ -1,6 +1,6 @@
 import { FileText, Cpu, ShieldCheck, GitMerge, Terminal, GitPullRequest, Table2, Database, Bot, Box, Scale, type LucideIcon } from "lucide-react";
 
-type Node = { id: string; x: number; y: number; width?: number; height?: number; title: string; titleLines?: string[]; lines: string[]; icon: LucideIcon; kind?: "auto" | "dest"; container?: boolean; files?: string[]; note?: string };
+type Node = { id: string; x: number; y: number; width?: number; height?: number; title: string; titleLines?: string[]; lines: string[]; icon: LucideIcon; kind?: "auto" | "dest"; container?: boolean; files?: string[]; note?: string; noteLines?: string[] };
 function DiagramNode({ node }: { node: Node }) {
   const Icon = node.icon;
   return <g className={`diagram-node ${node.kind ?? "phase"}${node.container ? " container" : ""}`} aria-label={node.title}>
@@ -12,7 +12,7 @@ function DiagramNode({ node }: { node: Node }) {
     {node.lines.map((line, i) => <text key={i} className="diagram-sub" x={node.x + 18} y={node.y + 84 + ((node.titleLines?.length ?? 1) - 1) * 17 + i * 17}>{line}</text>)}
     {node.files?.map((file, i) => <g key={file}><FileText className="diagram-icon" x={node.x + 18} y={node.y + 107 + i * 23} width="14" height="14" strokeWidth={1.6} />
       <text className="diagram-file" x={node.x + 40} y={node.y + 119 + i * 23}>{file}</text></g>)}
-    {node.note && <text className="diagram-sub diagram-dim" x={node.x + 18} y={node.y + 171}>{node.note}</text>}
+    {node.note && <text className="diagram-sub diagram-dim" x={node.x + 18} y={node.y + 171}>{node.noteLines ? node.noteLines.map((line, i) => <tspan key={line} x={node.x + 18} dy={i ? 18 : 0}>{line}{i < node.noteLines!.length - 1 ? " " : ""}</tspan>) : node.note}</text>}
   </g>;
 }
 function Arrows({ id }: { id: string }) {
@@ -65,53 +65,79 @@ function PipelineLayout({ mobile = false }: { mobile?: boolean }) {
 export function PipelineDiagram() {
   return <><PipelineLayout /><PipelineLayout mobile /></>;
 }
-
-function EvalsBox({ x, y, width, lines }: { x: number; y: number; width: number; lines: string[] }) {
-  return <g className="diagram-node"><rect className="diagram-box" x={x} y={y} width={width} height={lines.length > 1 ? 110 : 100} rx="10" />
-    <text className="diagram-title" x={x + width / 2} y={y + 34} textAnchor="middle">ETH Evals</text>
-    <text className="diagram-sub" x={x + width / 2} y={y + 62} textAnchor="middle">{lines.map((line, i) => <tspan key={line} x={x + width / 2} dy={i ? 20 : 0}>{line}{i < lines.length - 1 ? " " : ""}</tspan>)}</text>
+function RunStep({ x, y, width, height = 100, title, lines = [] }: { x: number; y: number; width: number; height?: number; title: string; lines?: string[] }) {
+  return <g className="diagram-node">
+    <rect className="diagram-box" x={x} y={y} width={width} height={height} rx="10" />
+    <text className="diagram-title" x={x + 18} y={y + 32}>{title}</text>
+    {lines.length > 0 && <text className="diagram-sub" x={x + 18} y={y + 58}>{lines.map((line, i) => <tspan key={line} x={x + 18} dy={i ? 18 : 0}>{line}{i < lines.length - 1 ? " " : ""}</tspan>)}</text>}
   </g>;
 }
 
 function RunLayout({ mobile = false }: { mobile?: boolean }) {
-  const variant = mobile ? "phone" : "desktop", id = `run-${variant}`;
+  const variant = mobile ? "phone" : "desktop", id = "run-" + variant;
   const nodes: Node[] = [
-    { id: "agent", x: 40, y: 300, width: 280, height: 188, title: "Agent", lines: ["Claude Code, Codex or OpenCode"], files: ["prompt", "workspace/"], note: "+ Ethereum skills, in skills mode", icon: Bot, container: true },
-    { id: "chain", x: 430, y: 300, width: 260, height: 108, title: "Chain", lines: ["a fresh chain or a copy of mainnet"], icon: Box, container: true },
-    { id: "scorer", x: 820, y: 300, width: 260, height: 108, title: "Scorer", lines: ["checks the result"], icon: ShieldCheck, container: true },
+    { id: "agent", x: 55, y: 330, width: 280, height: 188, title: "Agent", lines: ["Claude Code, Codex or OpenCode"], files: ["prompt", "workspace/"], note: "+ Ethereum skills, in skills mode", icon: Bot, container: true },
+    { id: "chain", x: 435, y: 330, width: 260, height: 108, title: "Chain", lines: ["a fresh chain or a copy of mainnet"], icon: Box, container: true },
+    { id: "scorer", x: 815, y: 330, width: 250, height: 108, title: "Scorer", lines: ["Forge tests"], icon: ShieldCheck, container: true },
   ];
-  const judge = { x: mobile ? 45 : 40, y: mobile ? 585 : 550, width: mobile ? 230 : 280 };
-  const phoneNodes = nodes.map((node, index) => ({ ...node, x: 45, y: [340, 745, 955][index], width: 230,
-    height: [188, 125, 108][index], lines: index === 1 ? ["a fresh chain or a", "copy of mainnet"] : node.lines }));
-  return <svg className={`diagram run-diagram diagram-${variant}`} viewBox={mobile ? "0 0 320 1290" : "0 0 1120 820"} role="img" aria-labelledby={`${id}-title ${id}-desc`}>
-    <title id={`${id}-title`}>Inside one run</title><desc id={`${id}-desc`}>ETH Evals reads the eval folder and picks the agent, model and mode. Inspect starts three separate containers and records the transcript. The agent sends transactions to the chain. The scorer reads the chain state. An LLM judge answers yes-or-no questions about the transcript. ETH Evals combines the checks into Results + logs on the website.</desc>
+  const phoneNodes: Node[] = [
+    { ...nodes[0], x: 60, y: 590, width: 235, height: 205, lines: ["Claude Code, Codex or ", "OpenCode"], noteLines: ["+ Ethereum skills,", "in skills mode"] },
+    { ...nodes[1], x: 60, y: 1050, width: 235, height: 125, lines: ["a fresh chain or a ", "copy of mainnet"] },
+    { ...nodes[2], x: 60, y: 1235, width: 235 },
+  ];
+  const judge = { x: mobile ? 60 : 55, y: mobile ? 885 : 580, width: mobile ? 235 : 280 };
+  return <svg className={"diagram run-diagram diagram-" + variant} viewBox={mobile ? "0 0 345 1700" : "0 0 1120 970"} role="img" aria-labelledby={id + "-title " + id + "-desc"}>
+    <title id={id + "-title"}>Inside one run</title>
+    <desc id={id + "-desc"}>ETH Evals reads the eval folder, picks the agent, model and mode, and builds the task. Inspect runs three separate containers. The agent sends transactions to the chain. The scorer reads the chain state with Forge tests. An LLM judge answers yes-or-no questions about the transcript. ETH Evals records one result per run and publishes results with logs on the website.</desc>
     <Arrows id={id} />
-    <EvalsBox x={mobile ? 45 : 310} y={20} width={mobile ? 230 : 500} lines={mobile ? ["reads the eval folder,", "picks agent, model and mode"] : ["reads the eval folder, picks agent, model and mode"]} />
-    <Edge d={mobile ? "M160 130V237" : "M560 120V217"} id={id} />
-    <text className="edge-label" x={mobile ? 176 : 576} y={mobile ? 204 : 174}>hands the task to</text>
-    <rect className="diagram-box inspect-frame" x={mobile ? 5 : 20} y={mobile ? 240 : 220} width={mobile ? 310 : 1080} height={mobile ? 855 : 440} rx="10" />
-    <a href="https://inspect.aisi.org.uk/"><text className="diagram-title inspect-title" x={mobile ? 45 : 40} y={mobile ? 270 : 250}>Inspect</text></a>
-    <text className="diagram-sub" x={mobile ? 45 : 40} y={mobile ? 294 : 274}>{mobile ? <><tspan x="45">starts the containers, </tspan><tspan x="45" dy="18">records the transcript</tspan></> : "starts the containers, records the transcript"}</text>
+    <rect className="diagram-box evals-frame" x={mobile ? 5 : 10} y="10" width={mobile ? 335 : 1100} height={mobile ? 1670 : 950} rx="12" />
+    <text className="diagram-title evals-frame-title" x={mobile ? 25 : 35} y="43">ETH Evals</text>
+    <text className="diagram-title run-band-title" x={mobile ? 60 : 55} y="79">Decide what to run</text>
+    <RunStep x={mobile ? 60 : 55} y={105} width={mobile ? 235 : 200} height={mobile ? 65 : 100} title="Eval folder" />
+    <RunStep x={mobile ? 60 : 365} y={mobile ? 210 : 105} width={mobile ? 235 : 300} title="Find what hasn't run" lines={["agent, model and mode", "with no result yet"]} />
+    <RunStep x={mobile ? 60 : 775} y={mobile ? 350 : 105} width={mobile ? 235 : 290} title="Build the task" lines={mobile ? ["prompt, agent, checks,", "containers"] : ["prompt, agent, checks, containers"]} />
+    <Edge d={mobile ? "M177.5 170V207" : "M255 155H362"} id={id} />
+    <Edge d={mobile ? "M177.5 310V347" : "M665 155H772"} id={id} />
+    <Edge d={mobile ? "M177.5 450V487" : "M920 205V247"} id={id} />
+    <rect className="diagram-box inspect-frame" x={mobile ? 15 : 35} y={mobile ? 490 : 250} width={mobile ? 315 : 1050} height={mobile ? 890 : 445} rx="10" />
+    <a href="https://inspect.aisi.org.uk/"><text className="diagram-title inspect-title" x={mobile ? 60 : 55} y={mobile ? 522 : 282}>Inspect runs it</text></a>
+    <text className="diagram-sub" x={mobile ? 60 : 55} y={mobile ? 546 : 306}>{mobile ? <><tspan x="60">starts the containers, </tspan><tspan x="60" dy="18">records the transcript</tspan></> : "starts the containers, records the transcript"}</text>
     {mobile ? <>
-      <Edge d="M160 528V582" id={id} /><text className="edge-label" x="176" y="559">transcript</text>
-      <Edge d="M45 434H25V799H42" id={id} /><text className="edge-label" x="45" y="704"><tspan x="45">sends </tspan><tspan x="45" dy="16">transactions</tspan></text>
-      <Edge d="M160 955V873" id={id} /><text className="edge-label" x="176" y="909"><tspan x="176">reads the </tspan><tspan x="176" dy="16">chain state</tspan></text>
-      <Edge d="M275 630H295V1202H278" id={id} />
-      <Edge d="M160 1063V1137" id={id} /><text className="edge-label" x="176" y="1107">checks</text>
+      <Edge d="M90 795V830H35V1104H57" id={id} />
+      <text className="edge-label" x="105" y="818">sends transactions</text>
+      <Edge d="M225 795V882" id={id} />
+      <text className="edge-label" x="231" y="858">transcript</text>
+      <Edge d="M177.5 1235V1178" id={id} />
+      <text className="edge-label" x="194" y="1200"><tspan x="194">reads the </tspan><tspan x="194" dy="18">chain state</tspan></text>
+      <Edge d="M177.5 975V1010H310V1500H298" id={id} />
+      <text className="edge-label" x="195" y="1001">judge output</text>
+      <Edge d="M177.5 1343V1462" id={id} />
+      <text className="edge-label" x="194" y="1410">checks</text>
     </> : <>
-      <Edge d="M320 354H427" id={id} /><text className="edge-label" x="375" y="320" textAnchor="middle"><tspan x="375">sends </tspan><tspan x="375" dy="18">transactions</tspan></text>
-      <Edge d="M820 354H693" id={id} /><text className="edge-label" x="755" y="320" textAnchor="middle"><tspan x="755">reads the </tspan><tspan x="755" dy="18">chain state</tspan></text>
-      <Edge d="M180 488V547" id={id} /><text className="edge-label" x="196" y="525">transcript</text>
-      <Edge d="M950 408V750H813" id={id} /><text className="edge-label" x="966" y="600">checks</text>
-      <Edge d="M180 640V750H307" id={id} />
+      <Edge d="M335 384H432" id={id} />
+      <text className="edge-label" x="385" y="350" textAnchor="middle"><tspan x="385">sends </tspan><tspan x="385" dy="18">transactions</tspan></text>
+      <Edge d="M815 384H698" id={id} />
+      <text className="edge-label" x="755" y="350" textAnchor="middle"><tspan x="755">reads the </tspan><tspan x="755" dy="18">chain state</tspan></text>
+      <Edge d="M195 518V577" id={id} />
+      <text className="edge-label" x="211" y="555">transcript</text>
+      <Edge d="M195 670V780H377" id={id} />
+      <text className="edge-label" x="211" y="717">judge output</text>
+      <Edge d="M940 438V780H743" id={id} />
+      <text className="edge-label" x="956" y="640">checks</text>
     </>}
     {(mobile ? phoneNodes : nodes).map((node) => <DiagramNode key={node.id} node={node} />)}
-    <g className="diagram-node"><rect className="diagram-box" x={judge.x} y={judge.y} width={judge.width} height="90" rx="10" />
+    <g className="diagram-node">
+      <rect className="diagram-box" x={judge.x} y={judge.y} width={judge.width} height="90" rx="10" />
       <Scale className="diagram-icon" x={judge.x + 18} y={judge.y + 18} width="24" height="24" strokeWidth="1.6" />
       <text className="diagram-title" x={judge.x + 54} y={judge.y + 35}>LLM as judge</text>
       <text className="diagram-sub" x={judge.x + 18} y={judge.y + 65}>answers yes-or-no questions</text>
     </g>
-    <EvalsBox x={mobile ? 45 : 310} y={mobile ? 1140 : 700} width={mobile ? 230 : 500} lines={mobile ? ["turns the log into Results + logs", "on the website"] : ["turns the log into Results + logs on the website"]} />
+    <text className="diagram-title run-band-title" x={mobile ? 60 : 55} y={mobile ? 1437 : 738}>Record it</text>
+    <g className="diagram-node"><rect className="diagram-box" x={mobile ? 60 : 380} y={mobile ? 1465 : 745} width={mobile ? 235 : 360} height="70" rx="10" />
+      <text className="diagram-title" x={mobile ? 177.5 : 560} y={mobile ? 1506 : 786} textAnchor="middle">One result per run</text></g>
+    <Edge d={mobile ? "M177.5 1535V1582" : "M560 815V857"} id={id} />
+    <g className="diagram-node"><rect className="diagram-box" x={mobile ? 60 : 340} y={mobile ? 1585 : 860} width={mobile ? 235 : 440} height={mobile ? 80 : 65} rx="10" />
+      <text className="diagram-title" x={mobile ? 177.5 : 560} y={mobile ? 1619 : 898} textAnchor="middle">{mobile ? <><tspan x="177.5">Results + logs </tspan><tspan x="177.5" dy="20">on the website</tspan></> : "Results + logs on the website"}</text></g>
   </svg>;
 }
 
