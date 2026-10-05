@@ -61,9 +61,10 @@ uv run ethevals run --evals evals/concepts/agent-registries evals/transactions/s
 
 ## Open the board
 
-The agent table shows internet and skills results by harness, model, and effort.
-The knowledge table shows vanilla quiz results for bare models.
-Open a cell to read its prompt, epoch checks, costs, and published log links.
+The leaderboard compares configurations by model, harness, and effort in Internet and Internet + Skills modes.
+Model only shows bare models. The eval matrix shows passed and scored epoch counts.
+Open a score for its evals, checks, costs, and Inspect log links.
+The How it works page explains the modes, isolated runs, and publication pipeline.
 
 From `site/`, start the local board:
 
