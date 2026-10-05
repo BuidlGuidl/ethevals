@@ -238,6 +238,7 @@
   .diagram-icon { stroke: var(--color-ink); }
   .diagram-title { fill: var(--color-ink); font-size: 15px; font-weight: 650; }
   .pipeline-diagram .diagram-title { font-size: 14px; }
+  .pipeline-diagram.diagram-phone .diagram-sub, .pipeline-diagram.diagram-phone .diagram-zone text { font-size: 13px; }
   .diagram-sub { fill: var(--color-muted); font-size: 12px; }
   .diagram-node.auto .diagram-box { fill: color-mix(in srgb, var(--color-accent) 5%, var(--color-sheet)); stroke: var(--color-accent); }
   .diagram-node.auto .diagram-icon { stroke: var(--color-accent); }
