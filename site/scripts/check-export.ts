@@ -35,7 +35,6 @@ for (const svg of runDiagrams) {
   assert.equal((svg.match(/class="diagram-file"/g) ?? []).length, 2);
   for (const label of ["ETH Evals", "Inspect runs it", "Decide what to run", "Record it", "One result per run", "LLM as judge", "Forge tests", "Results + logs", "prompt", "workspace/"]) assert.ok(svg.includes(label));
 }
-assert.ok(run.includes("Three separate containers. The agent can&#x27;t reach the scorer."));
 assert.ok(!/no route|Grader model|Result row|filtered RPC|grader/i.test(how));
 if (expected === "demo") {
   assert.ok(html.includes("<strong>Demo data</strong>"), "The demo banner must be visible.");

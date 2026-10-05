@@ -54,7 +54,7 @@ export default function Page() {
     </section>
     <section id="hw-run" className="how-section"><div className="how-head"><p className="eyebrow">Inside one run</p><h2>One task, start to finish</h2>
       <p>Take one Transactions eval: &quot;send 12.5 tokens to the recipient.&quot; Here is what happens.</p></div>
-      <figure className="diagram-figure"><RunDiagram /><figcaption>Three separate containers. The agent can&apos;t reach the scorer.</figcaption></figure>
+      <figure className="diagram-figure"><RunDiagram /></figure>
       <div className="rules"><h3>Rules every run follows</h3><ul>
         <li><b>The agent only gets the task.</b> The prompt and its workspace; the scorer runs in its own container the agent can&apos;t reach.</li>
         <li><b>No shortcuts on the chain.</b> Cheat codes, like setting a balance by hand, are blocked, so the agent can&apos;t fake a result.</li>
