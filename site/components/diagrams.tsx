@@ -76,6 +76,21 @@ function RunStep({ x, y, width, height = 100, title, lines = [] }: { x: number; 
   </g>;
 }
 
+function CompactRunContainer({ node }: { node: Node }) {
+  const Icon = node.icon, width = node.width ?? 180;
+  return <g className="diagram-node phase container" aria-label={node.title}>
+    <rect className="diagram-box" x={node.x} y={node.y} width={width} height="138" rx="10" />
+    <Icon className="diagram-icon" x={node.x + 16} y={node.y + 15} width="24" height="24" strokeWidth="1.6" />
+    <g className="container-tag"><rect x={node.x + width - 92} y={node.y + 15} width="74" height="22" rx="4" />
+      <text x={node.x + width - 55} y={node.y + 30} textAnchor="middle">container</text></g>
+    <text className="diagram-title" x={node.x + 54} y={node.y + 32}>{node.title}</text>
+    {node.lines.map((line, i) => <text key={line} className="diagram-sub" x={node.x + 18} y={node.y + 54 + i * 17}>{line}</text>)}
+    {node.files?.map((file, i) => <g key={file}><FileText className="diagram-icon" x={node.x + 18} y={node.y + 65 + i * 23} width="14" height="14" strokeWidth="1.6" />
+      <text className="diagram-file" x={node.x + 40} y={node.y + 77 + i * 23}>{file}</text></g>)}
+    {node.note && <text className="diagram-sub diagram-dim" x={node.x + 18} y={node.y + 121}>{node.note}</text>}
+  </g>;
+}
+
 function RunLayout({ mobile = false }: { mobile?: boolean }) {
   const variant = mobile ? "phone" : "desktop", id = "run-" + variant;
   const nodes: Node[] = [
@@ -88,12 +103,12 @@ function RunLayout({ mobile = false }: { mobile?: boolean }) {
     { ...nodes[1], x: 75, y: 1085, width: 185, height: 125, lines: ["a fresh chain or a ", "copy of mainnet"] },
     { ...nodes[2], x: 75, y: 1270, width: 185 },
   ];
-  const judge = { x: mobile ? 75 : 55, y: mobile ? 920 : 580, width: mobile ? 185 : 280 };
-  return <svg className={"diagram run-diagram diagram-" + variant} viewBox={mobile ? "0 0 345 1735" : "0 0 1120 970"} role="img" aria-labelledby={id + "-title " + id + "-desc"}>
+  const judge = { x: mobile ? 75 : 55, y: mobile ? 920 : 500, width: mobile ? 185 : 280 };
+  return <svg className={"diagram run-diagram diagram-" + variant} viewBox={mobile ? "0 0 345 1735" : "0 0 1120 915"} role="img" aria-labelledby={id + "-title " + id + "-desc"}>
     <title id={id + "-title"}>Inside one run</title>
     <desc id={id + "-desc"}>ETH Evals reads the eval folder, picks the agent, model and mode, and builds the task. Inspect runs three separate containers. The agent sends transactions to the chain. The scorer reads the chain state with Forge tests. An LLM judge answers yes-or-no questions about the transcript. ETH Evals records one result per run and publishes results with logs on the website.</desc>
     <Arrows id={id} />
-    <rect className="diagram-box evals-frame" x={mobile ? 5 : 10} y="10" width={mobile ? 335 : 1100} height={mobile ? 1705 : 950} rx="12" />
+    <rect className="diagram-box evals-frame" x={mobile ? 5 : 10} y="10" width={mobile ? 335 : 1100} height={mobile ? 1705 : 885} rx="12" />
     <text className="diagram-title evals-frame-title" x={mobile ? 25 : 35} y="43">ETH Evals</text>
     <text className="diagram-title run-band-title" x={mobile ? 75 : 55} y="79">Decide what to run</text>
     <RunStep x={mobile ? 75 : 55} y={105} width={mobile ? 185 : 200} title="Eval folder" lines={["prompt, files, checks"]} />
@@ -101,11 +116,10 @@ function RunLayout({ mobile = false }: { mobile?: boolean }) {
     <RunStep x={mobile ? 75 : 775} y={mobile ? 385 : 105} width={mobile ? 185 : 290} title="Build the task" lines={mobile ? ["prompt, agent, checks,", "containers"] : ["prompt, agent, checks, containers"]} />
     <Edge d={mobile ? "M167.5 205V242" : "M255 155H362"} id={id} />
     <Edge d={mobile ? "M167.5 345V382" : "M665 155H772"} id={id} />
-    <Edge d={mobile ? "M167.5 485V522" : "M920 205V227H560V247"} id={id} />
-    {mobile ? <rect className="diagram-box inspect-frame" x="25" y="525" width="295" height="890" rx="10" />
-      : <path className="diagram-box inspect-frame" d="M45 250H1075Q1085 250 1085 260V455Q1085 465 1075 465H370Q360 465 360 475V685Q360 695 350 695H45Q35 695 35 685V260Q35 250 45 250Z" />}
-    <a href="https://inspect.aisi.org.uk/"><text className="diagram-title inspect-title" x={mobile ? 75 : 560} y={mobile ? 557 : 282} textAnchor={mobile ? undefined : "middle"}>Inspect runs it</text></a>
-    <text className="diagram-sub" x={mobile ? 75 : 560} y={mobile ? 581 : 306} textAnchor={mobile ? undefined : "middle"}>{mobile ? <><tspan x="75">starts the containers, </tspan><tspan x="75" dy="18">records the transcript</tspan></> : "starts the containers, records the transcript"}</text>
+    <Edge d={mobile ? "M167.5 485V522" : "M920 205V227H120V247"} id={id} />
+    <rect className="diagram-box inspect-frame" x={mobile ? 25 : 35} y={mobile ? 525 : 250} width={mobile ? 295 : 1050} height={mobile ? 890 : 345} rx="10" />
+    <a href="https://inspect.aisi.org.uk/"><text className={mobile ? "diagram-title inspect-title" : "diagram-title evals-frame-title inspect-title"} x={mobile ? 75 : 60} y={mobile ? 557 : 283}>Inspect runs it</text></a>
+    <text className="diagram-sub" x={mobile ? 75 : 60} y={mobile ? 581 : 306}>{mobile ? <><tspan x="75">starts the containers, </tspan><tspan x="75" dy="18">records the transcript</tspan></> : "starts the containers, records the transcript"}</text>
     {mobile ? <>
       <Edge d="M75 805H50V1139H72" id={id} />
       <text className="edge-label" x="65" y="858">sends transactions</text>
@@ -122,26 +136,26 @@ function RunLayout({ mobile = false }: { mobile?: boolean }) {
       <text className="edge-label" x="385" y="350" textAnchor="middle"><tspan x="385">sends </tspan><tspan x="385" dy="18">transactions</tspan></text>
       <Edge d="M815 384H698" id={id} />
       <text className="edge-label" x="755" y="350" textAnchor="middle"><tspan x="755">reads the </tspan><tspan x="755" dy="18">chain state</tspan></text>
-      <Edge d="M195 518V577" id={id} />
-      <text className="edge-label" x="211" y="555">transcript</text>
-      <Edge d="M195 670V780H337" id={id} />
-      <text className="edge-label" x="211" y="717">judge output</text>
-      <Edge d="M940 438V780H783" id={id} />
-      <text className="edge-label" x="956" y="640">checks</text>
+      <Edge d="M195 468V497" id={id} />
+      <text className="edge-label" x="211" y="485">transcript</text>
+      <Edge d="M195 575V725H337" id={id} />
+      <text className="edge-label" x="211" y="624">judge output</text>
+      <Edge d="M940 468V725H783" id={id} />
+      <text className="edge-label" x="956" y="540">checks</text>
     </>}
-    {(mobile ? phoneNodes : nodes).map((node) => <DiagramNode key={node.id} node={node} />)}
+    {mobile ? phoneNodes.map((node) => <DiagramNode key={node.id} node={node} />) : nodes.map((node) => <CompactRunContainer key={node.id} node={node} />)}
     <g className="diagram-node">
-      <rect className="diagram-box" x={judge.x} y={judge.y} width={judge.width} height={mobile ? 108 : 90} rx="10" />
+      <rect className="diagram-box" x={judge.x} y={judge.y} width={judge.width} height={mobile ? 108 : 75} rx="10" />
       <Scale className="diagram-icon" x={judge.x + 18} y={judge.y + 18} width="24" height="24" strokeWidth="1.6" />
       <text className="diagram-title" x={judge.x + 54} y={judge.y + 35}>LLM as judge</text>
       <text className="diagram-sub" x={judge.x + 18} y={judge.y + 65}>{mobile ? <><tspan x={judge.x + 18}>answers yes-or-no </tspan><tspan x={judge.x + 18} dy="18">questions</tspan></> : "answers yes-or-no questions"}</text>
     </g>
-    <text className="diagram-title run-band-title" x={mobile ? 75 : 340} y={mobile ? 1472 : 722}>Record it</text>
-    <g className="diagram-node"><rect className="diagram-box" x={mobile ? 75 : 340} y={mobile ? 1500 : 745} width={mobile ? 185 : 440} height="70" rx="10" />
-      <text className="diagram-title" x={mobile ? 167.5 : 560} y={mobile ? 1541 : 786} textAnchor="middle">One result per run</text></g>
-    <Edge d={mobile ? "M167.5 1570V1617" : "M560 815V857"} id={id} />
-    <g className="diagram-node"><rect className="diagram-box" x={mobile ? 75 : 340} y={mobile ? 1620 : 860} width={mobile ? 185 : 440} height={mobile ? 80 : 65} rx="10" />
-      <text className="diagram-title" x={mobile ? 167.5 : 560} y={mobile ? 1654 : 898} textAnchor="middle">{mobile ? <><tspan x="167.5">Results + logs </tspan><tspan x="167.5" dy="20">on the website</tspan></> : "Results + logs on the website"}</text></g>
+    <text className="diagram-title run-band-title" x={mobile ? 75 : 340} y={mobile ? 1472 : 664}>Record it</text>
+    <g className="diagram-node"><rect className="diagram-box" x={mobile ? 75 : 340} y={mobile ? 1500 : 690} width={mobile ? 185 : 440} height="70" rx="10" />
+      <text className="diagram-title" x={mobile ? 167.5 : 560} y={mobile ? 1541 : 731} textAnchor="middle">One result per run</text></g>
+    <Edge d={mobile ? "M167.5 1570V1617" : "M560 760V802"} id={id} />
+    <g className="diagram-node"><rect className="diagram-box" x={mobile ? 75 : 340} y={mobile ? 1620 : 805} width={mobile ? 185 : 440} height={mobile ? 80 : 65} rx="10" />
+      <text className="diagram-title" x={mobile ? 167.5 : 560} y={mobile ? 1654 : 843} textAnchor="middle">{mobile ? <><tspan x="167.5">Results + logs </tspan><tspan x="167.5" dy="20">on the website</tspan></> : "Results + logs on the website"}</text></g>
   </svg>;
 }
 
