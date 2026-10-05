@@ -372,7 +372,7 @@
     return {
       head: `<h2 id="detail-title">${esc(a.name)}</h2><p class="dsub">${harnessFor(a, dr.mode)} · ${modeName(dr.mode)} · ${scopeName(dr.scope)}</p><p class="dsum"><b>${pct(s.p)}</b> average pass rate over ${s.ran < s.evals ? `${s.ran} of ${s.evals} evals` : plural(s.ran, "eval")} · ${s.k} of ${s.n} runs passed</p>`,
       main: `${dmodeSel(m => E.evals.some(ev => f(ev) && ev.modes.includes(m)))}
-        ${s.n ? `<div class="tiles">${tile("$ / pass", usd(s.costPerPass))}${tile("Cost / run", usd(s.costPerRun))}${tile("Tokens / run", tok(s.tokMed))}${tile("Time / run", s.timeMed + "s")}${dr.mode === "skills" ? tile("Skill read", pct(s.read)) : ""}</div><p class="fine">Cost per run is an average; tokens and time are medians.</p>` : ""}
+        ${s.n ? `<div class="tiles">${tile("$ / pass", usd(s.costPerPass))}${tile("Cost / run", usd(s.costPerRun))}${tile("Tokens / run", tok(s.tokMed))}${tile("Time / run", s.timeMed + "s")}${dr.mode === "skills" ? tile("Skill read", pct(s.read)) : ""}</div><p class="fine">Cost per run is an average. Tokens and time are medians.</p>` : ""}
         <div class="dlist">${evs.map(ev => { const rs = runsOf(ev, dr.agent, dr.mode), ok = rs.filter(r => !r.invalid), k = ok.filter(r => r.pass).length;
         return `<button class="drow2" data-dl="${ev.id}"><span class="dt"><b>${esc(ev.title)}</b><span class="dmeta">${ev.type} · ${GRADER_FILE[ev.grader] || ev.grader}${ev.released <= a.cutoff ? ' · <em>released before model cutoff</em>' : ""}</span></span>${rs.length ? dotsOnly(rs) : ""}${heatCell(k, ok.length)}<span class="dgo">›</span></button>`; }).join("") || '<p class="muted">No evals here in this mode.</p>'}</div>`,
     };
@@ -607,7 +607,7 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
     return `${landHero()}
       ${SHOW_FINDINGS ? `<section class="lsec" id="findings"><h2>Key findings</h2><ol class="kf">${[1, 2, 3].map(finding).join("")}</ol><p class="fine">Placeholders: written by hand for each release, once the results are real.</p></section>` : ""}
       <section class="rsec" id="agents"><div class="rsec-h"><h2>Leaderboard</h2><a class="backbtn" href="#/compare">Compare configurations →</a></div><div class="toolbar tvbar">${viewSel()}${viewIntro(nEv)}</div>${resultsTable(rows)}</section>
-      <p class="readnote"><b>How to read it.</b> Every task is tried 3–5 times. A score is the agent's average success rate across the tasks in the column. Click a cell to see more details about how the agent performed.</p>
+      <p class="readnote"><b>How to read it:</b> Every task is tried 3–5 times. A score is the agent's average success rate across the tasks in the column.</p>
       ${evalsSection()}`;
   }
 
