@@ -183,7 +183,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
                   onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} />}</td>)}
             </tr>)}</tbody></table></div><div className="table-note">Click a score for its evals and runs.{mode === "skills" && " +pp is the change over Internet."} Costs are in USD.</div></div> :
         <div className="empty"><h3>{mode === "vanilla" ? "No model epochs yet" : "No agent epochs yet"}</h3><p>No published results match the current evals. Browse the eval catalog below.</p></div>}
-      <div className="read-note" id="scoring"><b>How to read it.</b> Each row is an agent or a model, scored on the four pillars of Ethereum work. Overall is the average of the pillar scores. Click a pillar cell to see its evals and every run behind them.</div>
+      <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on the four pillars of Ethereum work. Overall is the average of the pillar scores. Click a pillar cell to see its evals and every run behind them.</div>
     </section>
     <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by eval · {modeNames[evalsMode]}</h2><p>How many runs each configuration passed on every eval, grouped by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which eval results" />
