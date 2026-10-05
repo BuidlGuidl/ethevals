@@ -45,25 +45,19 @@ function PipelineLayout({ mobile = false }: { mobile?: boolean }) {
   ];
   const variant = mobile ? "phone" : "desktop", id = `pipeline-${variant}`;
   const phoneNodes: Node[] = [
-    { ...nodes[0], x: 15, y: 60, width: 142, height: 144, titleLines: ["Add or edit", "an eval"], lines: ["a folder: prompt,", "files, scoring"] },
-    { ...nodes[1], x: 173, y: 60, width: 142, height: 144, titleLines: ["Add a", "model"], lines: ["one entry in", "config.yaml"] },
-    { ...nodes[2], x: 25, y: 300, width: 280 },
-    { ...nodes[3], x: 25, y: 440, width: 280 },
-    { ...nodes[4], x: 15, y: 665, width: 142, height: 144, titleLines: ["CI runs only", "what's new"], lines: ["every agent", "and model"] },
-    { ...nodes[5], x: 15, y: 850, width: 142 },
-    { ...nodes[6], x: 15, y: 1000, width: 142, height: 125, titleLines: ["Merge →", "website"] },
-    { ...nodes[7], x: 173, y: 665, width: 142, height: 144, titleLines: ["Publish", "Hugging Face", "dataset"] },
+    ...[60, 200, 390, 540, 926, 1070, 1214].map((y, index) => ({ ...nodes[index], x: 35, y, width: 260 })),
+    { ...nodes[7], x: 35, y: 710, width: 260, height: 108, titleLines: undefined },
   ];
   const phoneEdges = [
-    ["phase", "M86 204V232H165V297"], ["phase", "M244 204V232H165"], ["phase", "M165 408V437"],
-    ["auto", "M165 548V632H86V662"], ["auto", "M165 632H244V662"],
-    ["auto", "M86 809V847"], ["auto", "M86 958V997"],
+    ["phase", "M35 114H10V335"], ["phase", "M165 308V335H10"], ["phase", "M10 335V444H32"],
+    ["phase", "M165 498V537"], ["auto", "M165 648V678H10V980H32"],
+    ["auto", "M165 678V707"], ["auto", "M165 1034V1067"], ["auto", "M165 1178V1211"],
   ];
-  return <svg className={`diagram pipeline-diagram diagram-${variant}`} viewBox={mobile ? "0 0 330 1150" : "0 0 1320 400"} role="img" aria-labelledby={`${id}-title ${id}-desc`}>
+  return <svg className={`diagram pipeline-diagram diagram-${variant}`} viewBox={mobile ? "0 0 330 1350" : "0 0 1320 400"} role="img" aria-labelledby={`${id}-title ${id}-desc`}>
     <title id={`${id}-title`}>From pull request to website</title><desc id={`${id}-desc`}>Eval and model pull requests pass validity checks with a mock model and maintainer review. After merge, CI runs new epochs for every agent and model. A results pull request updates the website. Model-only evals also go to Hugging Face.</desc>
     <Arrows id={id} />
-    {[["1 · Contribute", 20, 200], ["2 · Review", 240, 640], ["3 · Automatic on main", 680, 1300]].map(([label, start, end], index) => <g key={label} className={`diagram-zone ${index === 2 ? "auto" : "phase"}`}><path d={mobile ? `M20 ${[34, 272, 606][index]}H${index ? 135 : 310}` : `M${start} 34H${end}`} /><text x={mobile ? 20 : start} y={mobile ? [22, 260, 578][index] : 22}>{mobile && index === 2 ? <><tspan x="20">3 · Automatic on </tspan><tspan x="20" dy="16">main</tspan></> : label}</text></g>)}
-    {(mobile ? phoneEdges : edges).map(([kind, d], index) => <Edge key={index} d={d} kind={kind} id={id} index={index} arrow={!mobile || index !== 1} />)}
+    {[["1 · Contribute", 20, 200], ["2 · Review", 240, 640], ["3 · Automatic on main", 680, 1300]].map(([label, start, end], index) => <g key={label} className={`diagram-zone ${index === 2 ? "auto" : "phase"}`}><path d={mobile ? `M35 ${[34, 362, 898][index]}H295` : `M${start} 34H${end}`} /><text x={mobile ? 35 : start} y={mobile ? [22, 350, 886][index] : 22}>{label}</text></g>)}
+    {(mobile ? phoneEdges : edges).map(([kind, d], index) => <Edge key={index} d={d} kind={kind} id={id} index={index} arrow={!mobile || index > 1} />)}
     {(mobile ? phoneNodes : nodes).map((node) => <DiagramNode key={node.id} node={node} />)}
   </svg>;
 }
