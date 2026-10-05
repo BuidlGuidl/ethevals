@@ -202,7 +202,7 @@
     };
     const head = `<thead><tr><th class="row-label mxh"></th>${agents.map(a => `<th class="agh"><span class="cfg-name">${esc(a.name)}</span><span class="cfg-sub">${vanilla ? orgOf[a.id] : harnessFor(a, mode)}</span></th>`).join("")}</tr></thead>`;
     const meta = ev => `${ev.type} · ${((SCORER[ev.grader] || [ev.grader])[0]).toLowerCase()}`;
-    const body = groups.map((g, i) => `<tr class="mxgrp"><th class="mxp mxp-${i % 2}" colspan="${agents.length + 1}">${g.p.name}</th></tr>${g.evs.map(ev => `<tr><th class="row-label evl"><a href="#/eval/${ev.id}">${esc(ev.title)}</a><span class="cid">${meta(ev)}</span></th>${agents.map(a => cell(a, ev)).join("")}</tr>`).join("")}`).join("");
+    const body = groups.map((g, i) => `<tr class="mxgrp"><th class="mxp mxp-${i % 2}" colspan="${agents.length + 1}"><span class="mxp-l">${g.p.name}</span></th></tr>${g.evs.map(ev => `<tr><th class="row-label evl"><a href="#/eval/${ev.id}">${esc(ev.title)}</a><span class="cid">${meta(ev)}</span></th>${agents.map(a => cell(a, ev)).join("")}</tr>`).join("")}`).join("");
     return `<div class="table-shell"><div class="mx-title">Eval matrix · ${vanilla ? "Model only" : modeName(mode)}</div><div class="table-scroll" tabindex="0"><table class="matrix t2">${head}<tbody>${body}</tbody></table></div><div class="table-note"><span>Runs passed per eval. Click an eval for its page, or a cell for its runs.</span></div></div>`;
   }
 
@@ -317,10 +317,16 @@
   const dotsOnly = rs => `<span class="dots">${rs.map(r => `<span class="dot ${r.invalid ? "x" : r.end === "time limit" ? "t" : r.pass ? "p" : "f"}"></span>`).join("")}</span>`;
   const heatCell = (k, n) => n ? `<span class="dscore" style="--p:${(k / n).toFixed(3)}"><b>${pct(k / n)}</b><small>${k}/${n}</small></span>` : `<span class="dscore na">no run</span>`;
 
+  // Opening the panel locks the page's scroll (CSS) and hides its scrollbar: measure the bar first, so the
+  // page can be padded by its width and doesn't shift sideways.
+  function showPanel() {
+    document.documentElement.style.setProperty("--sbw", `${innerWidth - document.documentElement.clientWidth}px`);
+    dialog().showModal();
+  }
   function openD(state, opener) {
     if (!dialog().open) { drOpener = opener || document.activeElement; }
     dr = { scope: "", ev: "", run: 0, ...state };
-    if (!dialog().open) { setD(encD(dr), true); drPushed = true; paintD(); dialog().showModal(); }
+    if (!dialog().open) { setD(encD(dr), true); drPushed = true; paintD(); showPanel(); }
     else { setD(encD(dr), false); paintD(); }
   }
   function goD(patch) { dr = { ...dr, ...patch }; setD(encD(dr), false); paintD(); document.querySelector("#detail").scrollTop = 0; }
@@ -334,7 +340,7 @@
     const [, q = ""] = location.hash.split("?");
     const d = decD(new URLSearchParams(q).get("d"));
     if (!d) { if (dialog().open) dialog().close(); dr = null; drPushed = false; return; }
-    dr = d; paintD(); if (!dialog().open) dialog().showModal();
+    dr = d; paintD(); if (!dialog().open) showPanel();
   }
 
   function paintD() {
@@ -589,18 +595,61 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
   function renderReport() {
     const rows = agentRows();
     const nEv = E.evals.filter(ev => ev.modes.includes("skills")).length;
-    const pillarsList = E.pillars.map(p => `<a class="ps" href="${evalsHash()}"><span class="ps-h"><b>${p.name}</b> · ${E.evals.filter(ev => ev.pillar === p.id).length} evals</span><span class="ps-a">${PILLAR_INFO[p.id].areas.map(x => x[0]).join(" · ")}</span></a>`).join("");
     // Key findings are hidden until the results are real; set to true to bring them back.
     const SHOW_FINDINGS = false;
     const finding = n => `<li><span class="kfn">${n}</span><div><b>Key finding ${n}</b><p>One or two sentences on a result worth highlighting, with the number behind it.</p></div></li>`;
-    return `<header class="land"><div class="land-l"><p class="eyebrow land-tag">The open benchmark for AI on Ethereum</p><h1>How well do AI agents handle Ethereum?</h1>
-        <p class="lead">We test AI agents, and the models behind them, on real Ethereum work: understanding the protocol, making transactions, building contracts and apps, and keeping them secure. Every task, scorer, run and transcript is public, and anyone can run the same evals.</p>
-        <p class="prov6">suite ${S.version} · ${S.hash} · data ${S.date} · ${E.evals.length} evals · ${E.agents.length} agents · ${totalRuns.toLocaleString("en")} runs</p></div>
-        <nav class="pstrip" aria-label="What we measure">${pillarsList}</nav></header>
+    return `${landHero()}
       ${SHOW_FINDINGS ? `<section class="lsec" id="findings"><h2>Key findings</h2><ol class="kf">${[1, 2, 3].map(finding).join("")}</ol><p class="fine">Placeholders: written by hand for each release, once the results are real.</p></section>` : ""}
       <section class="rsec" id="agents"><div class="rsec-h"><h2>Leaderboard</h2><a class="backbtn" href="#/compare">Compare configurations →</a></div><div class="toolbar tvbar">${viewSel()}${viewIntro(nEv)}</div>${resultsTable(rows)}</section>
       <p class="readnote"><b>How to read it.</b> A run passes only if it meets every check of its eval. Each eval runs 3–5 times per agent and mode; its score is the share of runs that passed, and a table score is the average over its evals.</p>
       ${evalsSection()}`;
+  }
+
+  // ---------- Results header ----------
+  // After ethevals.com: the logo, the release under it like a version line, then the tagline, one sentence on
+  // what we do and the four pillars by name. The logo is the nav's brand drawn large, so it can fly up into the
+  // nav on scroll: the name with its square in clean, the block letters in geek. Both are in the page; each
+  // look's CSS shows its own.
+  // The block letters are the ones on ethevals.com (github.com/austintgriffith/ethevals, index.html).
+  const ASCII_LOGO = [
+    "███████╗████████╗██╗  ██╗███████╗██╗   ██╗ █████╗ ██╗     ███████╗",
+    "██╔════╝╚══██╔══╝██║  ██║██╔════╝██║   ██║██╔══██╗██║     ██╔════╝",
+    "█████╗     ██║   ███████║█████╗  ██║   ██║███████║██║     ███████╗",
+    "██╔══╝     ██║   ██╔══██║██╔══╝  ╚██╗ ██╔╝██╔══██║██║     ╚════██║",
+    "███████╗   ██║   ██║  ██║███████╗ ╚████╔╝ ██║  ██║███████╗███████║",
+    "╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝  ╚═══╝  ╚═╝  ╚═╝╚══════╝╚══════╝",
+  ];
+  // Drawn as shapes from the same text, one monospace cell per character: a block for █ and double lines
+  // for ═ ║ ╗ ╔ ╝ ╚. It looks the same whatever fonts are installed, and scales with the viewBox on phones.
+  function asciiLogo(id = "glogo-g") {
+    const cw = 10, ch = 19, cx = cw / 2, cy = ch / 2, d = 2.1;
+    // each double-line glyph as two polylines, in cell coordinates
+    const LINES = {
+      "═": [[[0, cy - d], [cw, cy - d]], [[0, cy + d], [cw, cy + d]]],
+      "║": [[[cx - d, 0], [cx - d, ch]], [[cx + d, 0], [cx + d, ch]]],
+      "╗": [[[0, cy - d], [cx + d, cy - d], [cx + d, ch]], [[0, cy + d], [cx - d, cy + d], [cx - d, ch]]],
+      "╔": [[[cw, cy - d], [cx - d, cy - d], [cx - d, ch]], [[cw, cy + d], [cx + d, cy + d], [cx + d, ch]]],
+      "╝": [[[0, cy + d], [cx + d, cy + d], [cx + d, 0]], [[0, cy - d], [cx - d, cy - d], [cx - d, 0]]],
+      "╚": [[[cw, cy + d], [cx - d, cy + d], [cx - d, 0]], [[cw, cy - d], [cx + d, cy - d], [cx + d, 0]]],
+    };
+    const blocks = [], lines = [];
+    ASCII_LOGO.forEach((row, y) => {
+      // runs of █ become one rectangle, so no seams show between cells
+      row.replace(/█+/g, (run, x) => { blocks.push(`<rect x="${x * cw}" y="${y * ch}" width="${run.length * cw}" height="${ch}"/>`); return run; });
+      [...row].forEach((c, x) => (LINES[c] || []).forEach(pl => lines.push("M" + pl.map(([px, py]) => `${x * cw + px} ${y * ch + py}`).join("L"))));
+    });
+    const w = ASCII_LOGO[0].length * cw, h = ASCII_LOGO.length * ch;
+    return `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="0"><stop offset="0" stop-color="#8c8dfc"/><stop offset=".55" stop-color="#627eea"/><stop offset="1" stop-color="#62d3e5"/></linearGradient></defs><g fill="url(#${id})">${blocks.join("")}</g><path d="${lines.join("")}" fill="none" stroke="url(#${id})" stroke-width="1.1"/></svg>`;
+  }
+  function landHero() {
+    const pillars = E.pillars.map(p => `<b>${p.name}</b>`);
+    return `<header class="lhero">
+        <div class="lh-brand"><h1 class="lh-logo" aria-label="ETH Evals"><span class="lh-word" aria-hidden="true">ETH Evals</span><span class="lh-ascii" aria-hidden="true">${asciiLogo()}</span></h1>
+        <p class="lh-plate"><span><span class="lh-ver">${S.version}</span><span title="Suite hash">${S.hash}</span><span title="Data date">${S.date}</span></span><span><span><b>${E.evals.length}</b> evals</span><span><b>${E.agents.length}</b> agents</span><span><b>${totalRuns.toLocaleString("en")}</b> runs</span></span></p></div>
+        <p class="lh-tag">The Open Benchmark for AI on Ethereum</p>
+        <p class="lh-desc">We test AI agents, and the models behind them, on real Ethereum work. Every task, run and transcript is public, and anyone can run the same evals.</p>
+        <p class="lh-pillars">We evaluate <a href="#/how#hw-pillars" title="What each pillar covers">four pillars</a>: ${listOf(pillars)}.</p>
+      </header>`;
   }
 
   // ---------- Results by eval ----------
@@ -614,9 +663,32 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
       <div class="toolbar tvbar">${viewSel()}</div><p class="evcount">${shown.length} evals · ${types}${st.tv === "vanilla" ? " · only the evals with a checkable answer" : ""}</p>${viewMatrix2()}</section>`;
   }
 
+  // ---------- look: clean (the lab report) or geek (a terminal) ----------
+  // index.html applies the saved look before the first paint; the switch sits at the right of the nav.
+  // Wide screens get both names side by side; phones get one icon button that switches to the other look,
+  // like a light/dark toggle: it shows where it takes you, drawn in that look's style (a pixel space invader
+  // to geek, a line-drawn briefcase to clean).
+  let ui = document.documentElement.dataset.ui === "geek" ? "geek" : "clean";
+  const INVADER = ["..X.....X..", "...X...X...", "..XXXXXXX..", ".XX.XXX.XX.", "XXXXXXXXXXX", "X.XXXXXXX.X", "X.X.....X.X", "...XX.XX..."];
+  const UI_ICON = {
+    geek: `<svg class="ic-invader" viewBox="0 0 11 8" aria-hidden="true">${INVADER.flatMap((row, y) => [...row].map((c, x) => c === "X" ? `<rect x="${x}" y="${y}" width="1" height="1"/>` : "")).join("")}</svg>`,
+    clean: `<svg class="ic-case" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3 12.5h18M10.5 12.5v1.5h3v-1.5"/></svg>`,
+  };
+  const otherUi = () => ui === "geek" ? "clean" : "geek";
+  const uiSwitch = () => `<span class="uisw" role="group" aria-label="Look">${["clean", "geek"].map(id => `<button data-uiset="${id}" aria-pressed="${ui === id}">${id}</button>`).join("")}</span>`;
+  const uiToggle = () => `<button class="uitg" data-uitoggle aria-label="Switch to the ${otherUi()} look" title="Switch to the ${otherUi()} look">${UI_ICON[otherUi()]}</button>`;
+  function setUi(next) {
+    ui = next; document.documentElement.dataset.ui = next;
+    try { localStorage.setItem("ethevals-ui", next); } catch (e) {}
+    root.querySelectorAll("[data-uiset]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.uiset === next)));
+    root.querySelector(".uitg").outerHTML = uiToggle();
+    const y = scrollY; render(false); scrollTo(0, y);
+  }
+
   // ---------- shell ----------
   const NAV = [["results", "Results"], ["how", "How it works"]];
-  root.innerHTML = `<nav class="topnav sitenav" aria-label="Site"><a class="brand" href="#/">ETH Evals</a><span class="navtag">The open benchmark for AI on Ethereum</span><span class="navlinks">${NAV.map(([id, t]) => `<a href="#/${id === "results" ? "" : id}" data-nav="${id}">${t}</a>`).join("")}<a class="gh" href="${REPO}" target="_blank" rel="noopener">GitHub ↗</a></span></nav>
+  // The brand carries both marks: the name in text (clean) and the block-letter logo (geek); the look's CSS shows one.
+  root.innerHTML = `<nav class="topnav sitenav" aria-label="Site"><a class="brand" href="#/" aria-label="ETH Evals"><span class="brand-txt">ETH Evals</span><span class="brand-logo">${asciiLogo("nlogo-g")}</span></a><span class="navtag">The open benchmark for AI on Ethereum</span><span class="navlinks">${NAV.map(([id, t]) => `<a href="#/${id === "results" ? "" : id}" data-nav="${id}">${t}</a>`).join("")}<a class="gh" href="${REPO}" target="_blank" rel="noopener">GitHub ↗</a>${uiSwitch()}</span>${uiToggle()}</nav>
     <main id="page"></main>
     <footer class="sitefoot"><div><b>ETH Evals</b><span>Open evaluations of AI on Ethereum · <a href="${REPO}" target="_blank" rel="noopener">BuidlGuidl/ethevals</a></span></div><div><span class="canary">${S.canary}</span></div></footer>
     <dialog id="detail" aria-labelledby="detail-title"><div id="detail-content"></div></dialog>`;
@@ -661,9 +733,48 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
     if (resetScroll && here !== lastRoute) window.scrollTo(0, 0);
     lastRoute = here;
     if (anchor) document.getElementById(anchor)?.scrollIntoView();
+    watchHeroBrand();
     spy();
     lastPageKey = pageKey(); syncD();
   }
+  // Results page: the big logo is the brand. The nav's brand and tagline hide while the big logo is on screen;
+  // once the nav covers half of it, the big logo flies up into the nav's brand (FLIP: a copy starts at the big
+  // logo's place and size and eases into the nav's) while the big one fades. Scrolling back reverses it with a
+  // fade. Every other page keeps the brand in the nav.
+  let heroObs = null;
+  function watchHeroBrand() {
+    const nav = root.querySelector(".sitenav"), logo = root.querySelector(".lh-logo");
+    heroObs?.disconnect(); heroObs = null;
+    if (!logo || !("IntersectionObserver" in window)) { nav.classList.remove("hero-brand"); return; }
+    nav.classList.add("hero-brand");
+    let first = true;
+    heroObs = new IntersectionObserver(([e]) => {
+      const inHero = e.intersectionRatio >= .5, was = nav.classList.contains("hero-brand");
+      nav.classList.toggle("hero-brand", inHero);
+      if (!first && was && !inHero) flyToNav(logo, nav.querySelector(".brand"));
+      first = false;
+    }, { rootMargin: `-${nav.offsetHeight}px 0px 0px 0px`, threshold: [0, .5, 1] });
+    heroObs.observe(logo);
+  }
+  // The flight is drawn by a copy of the big logo in a fixed layer, so the nav's clipping doesn't cut it.
+  // It goes centre to centre and scales by width onto the same mark in the nav: the name in clean (the square
+  // fades in with the rest of the brand), the block letters in geek.
+  const shown = el => [...el.children].find(c => c.getClientRects().length);
+  function flyToNav(logo, brand) {
+    const from = shown(logo), to = brand && shown(brand);
+    if (!from || !to || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+    if (!a.width || !b.width) return;
+    const ghost = from.cloneNode(true);
+    ghost.classList.add("logo-ghost");
+    Object.assign(ghost.style, { left: a.left + "px", top: a.top + "px", width: a.width + "px", height: a.height + "px" });
+    document.body.append(ghost);
+    to.style.opacity = "0";
+    const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
+    ghost.animate([{ transform: "none" }, { transform: `translate(${dx}px, ${dy}px) scale(${b.width / a.width})` }],
+      { duration: 480, easing: "cubic-bezier(.2, .8, .2, 1)", fill: "forwards" }).finished.finally(() => { to.style.opacity = ""; ghost.remove(); });
+  }
+
   // Changing pillar or mode redraws in place, keeping scroll and focus.
   function rerender(btn, key) {
     const { parts } = parse(false); const [a, b] = parts;
@@ -678,6 +789,8 @@ inspect eval runner/tasks.py@ethevals -T mode=skills -T agent=claude_code \\
   document.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.id === "close-detail") closeD();
+    else if (b.dataset.uiset) setUi(b.dataset.uiset);
+    else if (b.hasAttribute("data-uitoggle")) { setUi(otherUi()); root.querySelector(".uitg")?.focus(); }
     else if (b.dataset.jump) { const el = document.getElementById(b.dataset.jump); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + scrollY - (document.querySelector(".secbar:not(.flat)") ? 116 : 70), behavior: "smooth" }); }
     else if (b.dataset.tv) { st.tv = b.dataset.tv; rerender(b, `#${b.closest("section").id} [data-tv="${st.tv}"]`); }
     else if (b.dataset.sort) { st.sort = b.dataset.sort; rerender(b, `[data-sort="${st.sort}"]`); }
