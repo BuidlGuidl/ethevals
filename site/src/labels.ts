@@ -1,6 +1,7 @@
 import type { Agent, Mode, Pillar } from "./board";
 
 export const names: Record<Pillar, string> = { concepts: "Concepts", transactions: "Transactions", building: "Building", security: "Security" };
+export const modelOnlyNote = "Bare model, one API call, no tools or web. Fixed-answer evals only.";
 export const modeNames: Record<Mode, string> = { internet: "Internet", skills: "Internet + Skills", vanilla: "Model only" };
 
 const harnesses = new Map([

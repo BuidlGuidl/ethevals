@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle } from "lucide-react";
-import { agentLabel, modelLabel, names, modeNames, unwrapPrompt } from "../src/labels";
+import { agentLabel, modelLabel, modelOnlyNote, names, modeNames, unwrapPrompt } from "../src/labels";
 import { pillars, agentKey, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Epoch, type Agent } from "../src/board";
 import { decodeSelection, encodeSelection, type Selection } from "../src/selection";
 import { Configuration } from "../components/configuration";
@@ -167,7 +167,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
     </header>
     <section id="leaderboard" className="results-section"><div className="section-head"><div><h2>Results</h2><p>The same work, with and without Ethereum skills.</p></div>
       <Link className="text-link" href={`/compare/?mode=${mode}`}>Compare configurations →</Link></div>
-      <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} />{mode === "vanilla" && <p className="mode-note">Model only calls the API with no tools or web. Its eval set differs from the agent modes.</p>}</div>
+      <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} />{mode === "vanilla" && <p className="mode-note">{modelOnlyNote}</p>}</div>
       {agents.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Leaderboard. Scroll horizontally for all columns.">
         <table className="leaderboard"><caption className="sr-only">Configuration scores, sorted by {sort.key} {sort.ascending ? "ascending" : "descending"}</caption>
           <colgroup><col className="config-col" />{columns.map(([key]) => <col key={key} className="score-col" />)}</colgroup>
