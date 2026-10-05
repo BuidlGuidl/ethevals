@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle } from "lucide-react";
 import { agentLabel, modelLabel, names, modeNames } from "../src/labels";
 import { pillars, agentKey, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Epoch, type Agent } from "../src/board";
-import { decodeSelection, type Selection } from "../src/selection";
+import { decodeSelection, encodeSelection, type Selection } from "../src/selection";
 import { Configuration } from "../components/configuration";
 import { Logo } from "../components/logo";
 import { ModeToggle } from "../components/mode-toggle";
@@ -16,12 +16,17 @@ import { updateQuery, useQuery } from "../components/url-state";
 import { repo } from "../components/shell";
 
 type Sort = "overall" | Pillar | "costPerPass";
+const verdictLabels = { passed: "PASS", failed: "FAIL", error: "ERROR" };
 
 function Verdict({ epoch }: { epoch: Epoch }) {
   return <span className={`verdict ${epoch.status === "passed" ? "positive" : epoch.status === "failed" ? "negative" : "caution"}`}>
     {epoch.status === "passed" ? <Check size={14} /> : epoch.status === "failed" ? <X size={14} /> : <AlertTriangle size={14} />}
-    {epoch.status === "passed" ? "Pass" : epoch.status === "failed" ? "Fail" : "Error"}</span>;
+    {verdictLabels[epoch.status]}</span>;
 }
+
+const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+const tokens = (value: number) => tokenFormat.format(value).toLowerCase();
+const duration = (epoch: Epoch) => epoch.total_seconds === null ? "–" : `${epoch.total_seconds.toFixed(1)}s`;
 
 function EvalList({ table, evaluations, agent, pillar, onEval }: {
   table: Table; evaluations: BoardData["evaluations"]; agent: Agent; pillar?: Pillar; onEval: (evaluation: Eval) => void;
@@ -42,38 +47,49 @@ function EvalList({ table, evaluations, agent, pillar, onEval }: {
     </section>)}</div>;
 }
 
-function EvalView({ evaluation, epochs }: { evaluation: Eval; epochs: Epoch[] }) {
-  const [expanded, setExpanded] = useState<number[]>(() => {
-    const failed = epochs.find((epoch) => epoch.status === "failed");
-    return failed ? [failed.epoch] : [];
-  });
+function EvalView({ evaluation, epochs, onRun }: { evaluation: Eval; epochs: Epoch[]; onRun: (run: number) => void }) {
   return <>
     <p className="why">{evaluation.motivation}</p>
-    <details className="prompt-disclosure"><summary>Prompt</summary><pre>{evaluation.prompt}</pre>
+    <details className="prompt-disclosure" open><summary>Prompt</summary><pre>{evaluation.prompt}</pre>
       {evaluation.choices.length > 0 && <ol className="prompt-choices" type="A">{evaluation.choices.map((choice, index) => <li key={index}>{choice}</li>)}</ol>}
     </details>
-    <section className="detail-section"><h3>Runs</h3>{epochs.map((epoch) =>
-      <details className="run-row" key={epoch.epoch} open={expanded.includes(epoch.epoch)}>
-        <summary onClick={(event) => { event.preventDefault(); setExpanded((values) => values.includes(epoch.epoch)
-          ? values.filter((value) => value !== epoch.epoch) : [...values, epoch.epoch]); }}>
-          <span>Run {epoch.epoch}</span><Verdict epoch={epoch} /><span>{money(epoch.cost, 4)}</span>
-          <span>{epoch.total_seconds === null ? "–" : `${epoch.total_seconds.toFixed(1)}s`}</span><span>{epoch.total_tokens.toLocaleString("en")} tokens</span>
-        </summary>
-        <div className="run-details">
-          {epoch.issue && <p className="issue">{epoch.error_kind ?? epoch.limit?.type ?? "Run"}: {epoch.issue}</p>}
-          {epoch.status === "error" && <p className="caution">This error does not enter the score.</p>}
-          {epoch.limit && <p className="caution">{epoch.limit.type} limit: {epoch.limit.limit}{epoch.limit.reason ? ` · ${epoch.limit.reason}` : ""}</p>}
-          <ul className="checks">{Object.entries(epoch.checks).sort((a, b) => Number(a[1].passed) - Number(b[1].passed)).map(([name, check]) =>
-            <li key={name}><span className={check.passed ? "positive" : "negative"}>{check.passed ? <Check size={16} /> : <X size={16} />}</span>
-              <div><code>{name}</code><p>{check.reason}</p></div></li>)}</ul>
-          {!Object.keys(epoch.checks).length && <p className="muted">No checks completed.</p>}
-          <p className="muted">Model: {money(epoch.model_cost_usd, 4)} · Grader: {money(epoch.grader_cost_usd, 4)} · Cost source: {epoch.cost_source}. Time includes setup. Tokens include the model and grader.</p>
-          {epoch.logHref || epoch.logUrl ? <div className="log-links"><a className="button" href={epoch.logHref ?? epoch.logUrl!} target="_blank" rel="noreferrer">Open log ↗</a>
-            {epoch.logHref && epoch.logUrl && epoch.logHref !== epoch.logUrl && <a href={epoch.logUrl} target="_blank" rel="noreferrer">Download log ↗</a>}</div> : <p className="muted">Full log not published.</p>}
-        </div>
-      </details>)}
-      {!epochs.length && <p>No epochs yet.</p>}
+    <section className="detail-section"><h3>Runs</h3>{epochs.length ?
+      <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Runs. Scroll horizontally for all columns.">
+        <table className="runs-table"><caption className="sr-only">Runs for this eval and configuration. Open a row for checks and logs.</caption>
+          <thead><tr>{["Run", "Result", "Checks", "Time", "Tokens", "Cost"].map((label) => <th scope="col" key={label}>{label}</th>)}<th scope="col"><span className="sr-only">Open run</span></th></tr></thead>
+          <tbody>{epochs.map((epoch) => {
+            const checks = Object.values(epoch.checks), passed = checks.filter((check) => check.passed).length;
+            return <tr key={epoch.epoch}><td><button className="run-open" onClick={() => onRun(epoch.epoch)}
+              aria-label={`Run ${epoch.epoch}, ${verdictLabels[epoch.status]}, ${passed} of ${checks.length} checks passed, ${duration(epoch)}, ${tokens(epoch.total_tokens)} tokens, ${money(epoch.cost, 4)}. Open run.`}>Run {epoch.epoch}</button></td>
+              <td><Verdict epoch={epoch} /></td><td>{passed}/{checks.length}</td><td>{duration(epoch)}</td><td>{tokens(epoch.total_tokens)}</td><td>{money(epoch.cost, 4)}</td><td aria-hidden="true">›</td></tr>;
+          })}</tbody></table>
+      </div></div> : <p>No epochs yet.</p>}
     </section>
+  </>;
+}
+
+function RunView({ epoch, epochs, onRun, onBack }: { epoch: Epoch; epochs: Epoch[]; onRun: (run: number) => void; onBack: () => void }) {
+  const checks = Object.entries(epoch.checks);
+  return <>
+    <div className="run-switcher" role="group" aria-label="Runs">{epochs.map((run) => <button key={run.epoch}
+      className={run.status === "passed" ? "positive" : run.status === "failed" ? "negative" : "caution"}
+      aria-pressed={run.epoch === epoch.epoch} aria-label={`Run ${run.epoch}: ${run.status}`} onClick={() => onRun(run.epoch)}>
+      Run {run.epoch} {run.status === "passed" ? "✓" : run.status === "failed" ? "✗" : "!"}</button>)}</div>
+    <dl className="run-stats">{[
+      ["Checks", `${checks.filter(([, check]) => check.passed).length} / ${checks.length}`],
+      ["Tokens", tokens(epoch.total_tokens)], ["Cost", money(epoch.cost, 4)], ["Time", duration(epoch)],
+    ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    {epoch.issue && <p className="issue">{epoch.error_kind ?? epoch.limit?.type ?? "Run"}: {epoch.issue}</p>}
+    {epoch.status === "error" && <p className="caution">This error does not enter the score.</p>}
+    {epoch.limit && <p className="caution">{epoch.limit.type} limit: {epoch.limit.limit}{epoch.limit.reason ? ` · ${epoch.limit.reason}` : ""}</p>}
+    <section className="scorer-verdict"><h3>Scorer verdict</h3><ul className="checks">{checks.sort((a, b) => Number(a[1].passed) - Number(b[1].passed)).map(([name, check]) =>
+      <li key={name}><span className={check.passed ? "positive" : "negative"}>{check.passed ? <Check size={16} /> : <X size={16} />}</span>
+        <div><code>{name}</code>{!check.passed && <p>{check.reason}</p>}</div></li>)}</ul>
+      {!checks.length && <p className="muted">No checks completed.</p>}
+    </section>
+    {epoch.logHref || epoch.logUrl ? <div className="log-links"><a className="button" href={epoch.logHref ?? epoch.logUrl!} target="_blank" rel="noreferrer">{epoch.logHref && epoch.logHref !== epoch.logUrl ? "Open log" : "Download log"} ↗</a>
+      {epoch.logHref && epoch.logUrl && epoch.logHref !== epoch.logUrl && <a href={epoch.logUrl} target="_blank" rel="noreferrer">Download log ↗</a>}</div> : <p className="muted">Full log not published.</p>}
+    <button className="back-button" onClick={onBack}><ArrowLeft size={14} />All runs</button>
   </>;
 }
 
@@ -83,16 +99,25 @@ export function Detail({ selection, data, onSelect }: {
   const { evaluation, pillar, agent, mode, fromList } = selection;
   const table = data.tables[mode], key = agentKey(agent), summary = table.summaries[key];
   const cell = evaluation ? table.pillars[evaluation.pillar].evals.find((entry) => entry.id === evaluation.id)?.cells[key] : undefined;
+  const epochs = cell?.epochs ?? [], epoch = epochs.find((value) => value.epoch === selection.run);
+  const runLevel = epoch !== undefined;
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.closest(".sheet")?.scrollTo({ top: 0 });
+    heading.current?.focus({ preventScroll: true });
+  }, [evaluation?.id, runLevel]);
   const scope = pillar ? table.pillars[pillar].cells[key] : summary;
   return <div className="detail-body">
-    <header className="drawer-header"><h1>{evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
+    <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={epoch ? "run-heading" : undefined}>{epoch ? <>Run {epoch.epoch} of {epochs.length} <Verdict epoch={epoch} /></> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
+      {epoch && <p>{evaluation!.title}</p>}
       <Configuration agent={agent} /><p className="muted">{modeNames[mode]}</p>
       {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scope.passed}/{scope.total} scored · {scope.errors} errors excluded</p>}
       {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No evals yet" : "No epochs yet"}</p>}
     </header>
-    {evaluation && fromList && <button className="back-button" onClick={() => onSelect({ agent, mode, pillar })}>
+    {evaluation && fromList && !epoch && <button className="back-button" onClick={() => onSelect({ agent, mode, pillar })}>
       <ArrowLeft size={14} />{pillar ? names[pillar] : "All pillars"}</button>}
-    {evaluation ? <EvalView key={evaluation.id} evaluation={evaluation} epochs={cell?.epochs ?? []} /> :
+    {epoch ? <RunView epoch={epoch} epochs={epochs} onRun={(run) => onSelect({ ...selection, run })} onBack={() => onSelect({ ...selection, run: undefined })} /> :
+      evaluation ? <EvalView evaluation={evaluation} epochs={epochs} onRun={(run) => onSelect({ ...selection, run })} /> :
       <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar}
         onEval={(value) => onSelect({ ...selection, evaluation: value, fromList: true })} />}
   </div>;
@@ -100,18 +125,23 @@ export function Detail({ selection, data, onSelect }: {
 
 export default function Board({ data }: { data: BoardData }) {
   const query = useQuery();
+  return <Results data={data} query={query} />;
+}
+
+export function Results({ data, query }: { data: BoardData; query: URLSearchParams }) {
   const mode: Mode = query.get("mode") === "skills" ? "skills" : query.get("mode") === "vanilla" ? "vanilla" : "internet";
+  const evalsMode: Mode = query.get("evals") === "skills" ? "skills" : query.get("evals") === "vanilla" ? "vanilla" : "internet";
   const [sort, setSort] = useState<{ key: Sort; ascending: boolean }>({ key: "overall", ascending: false });
   const pushed = useRef(false);
   const opener = useRef<HTMLElement | null>(null);
   const selection = decodeSelection(query, data);
   useEffect(() => { if (!selection) opener.current?.focus({ preventScroll: true }); }, [selection]);
   const table = data.tables[mode];
+  const matrixTable = data.tables[evalsMode];
   const changeMode = (value: Mode) => updateQuery({ mode: value });
   const select = (value: Selection) => {
     if (!selection) { pushed.current = true; opener.current = document.activeElement as HTMLElement | null; }
-    updateQuery({ d: JSON.stringify({ agent: agentKey(value.agent),
-      mode: value.mode, pillar: value.pillar, eval: value.evaluation?.id, list: value.fromList }) }, !selection);
+    updateQuery({ d: encodeSelection(value) }, !selection);
   };
   const close = () => {
     if (pushed.current) { pushed.current = false; window.history.back(); }
@@ -124,9 +154,9 @@ export default function Board({ data }: { data: BoardData }) {
     return x === null ? y === null ? agentKey(a).localeCompare(agentKey(b)) : 1 : y === null ? -1 : (sort.ascending ? 1 : -1) * (x - y) || agentKey(a).localeCompare(agentKey(b));
   });
   const columns: [Sort, string][] = [["overall", "Overall"], ...pillars.map((pillar): [Sort, string] => [pillar, names[pillar]]), ["costPerPass", "$ / pass"]];
-  const matrixAgents = [...table.agents].sort((a, b) =>
-    (data.tables[mode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(b)].scores.overall ?? -1) -
-    (data.tables[mode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(a)].scores.overall ?? -1));
+  const matrixAgents = [...matrixTable.agents].sort((a, b) =>
+    (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(b)].scores.overall ?? -1) -
+    (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(a)].scores.overall ?? -1));
   return <TooltipProvider delayDuration={200}><main id="main" className="page">
     {data.demo && <aside className="banner"><strong>Demo data</strong> · Invented results for a board preview.</aside>}
     <header className="hero"><div className="hero-brand"><h1 id="hero-logo" aria-label="ETH Evals"><Logo id="hero-gradient" /></h1>
@@ -155,21 +185,22 @@ export default function Board({ data }: { data: BoardData }) {
         <div className="empty"><h3>{mode === "vanilla" ? "No model epochs yet" : "No agent epochs yet"}</h3><p>No published results match the current evals. Browse the eval catalog below.</p></div>}
       <div className="read-note" id="scoring"><b>How to read it.</b> An epoch passes only if every check passes. An eval score is its pass rate. A pillar score is the mean of its scored evals, and Overall is the mean of scored pillars. Errors stay visible in the details and do not enter scores. Cost limits count as failures. An epoch that reaches its time limit is graded on the work it left. Counts show the scored epochs; no confidence intervals are shown.</div>
     </section>
-    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by eval · {modeNames[mode]}</h2><p>The scores above, broken down: how many runs each agent passed on every eval, grouped by pillar.</p></div>
+    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by eval · {modeNames[evalsMode]}</h2><p>How many runs each configuration passed on every eval, grouped by pillar.</p></div>
+      <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which eval results" />
       <a className="button" href={`${repo}/blob/main/docs/add-an-eval.md`} target="_blank" rel="noreferrer">How to add an eval ↗</a></div>
-      <p className="eyebrow">{pillars.reduce((sum, pillar) => sum + table.pillars[pillar].evals.length, 0)} evals · {modeNames[mode]}</p>
-      <div className="table-shell"><div className="matrix-title">Eval matrix · {modeNames[mode]}</div><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Eval matrix. Scroll for more configurations.">
+      <p className="eyebrow">{pillars.reduce((sum, pillar) => sum + matrixTable.pillars[pillar].evals.length, 0)} evals · {modeNames[evalsMode]}</p>
+      <div className="table-shell"><div className="matrix-title">Eval matrix · {modeNames[evalsMode]}</div><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Eval matrix. Scroll for more configurations.">
         <table className="matrix"><caption className="sr-only">Passed runs / scored runs for each eval and configuration</caption><thead><tr><th className="row-label" scope="col">Eval</th>
           {matrixAgents.map((agent) => <th key={agentKey(agent)} scope="col"><Configuration agent={agent} /></th>)}</tr></thead>
-          <tbody>{pillars.map((pillar) => <Fragment key={pillar}><tr className="pillar-band"><th scope="colgroup" colSpan={matrixAgents.length + 1}>{names[pillar]}<small>{table.pillars[pillar].evals.length} evals</small></th></tr>
-            {table.pillars[pillar].evals.length ? table.pillars[pillar].evals.map((entry) => <tr key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
+          <tbody>{pillars.map((pillar) => <Fragment key={pillar}><tr className="pillar-band"><th scope="colgroup" colSpan={matrixAgents.length + 1}>{names[pillar]}<small>{matrixTable.pillars[pillar].evals.length} evals</small></th></tr>
+            {matrixTable.pillars[pillar].evals.length ? matrixTable.pillars[pillar].evals.map((entry) => <tr key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
               <th scope="row" className="row-label"><span className="eval-title">{data.evaluations[entry.id].title}</span><small>{entry.id}</small></th>
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
                 return <td key={agentKey(agent)}>{cell.state === "na" || cell.score === null ?
                   <span className="matrix-cell" data-empty title={cell.state === "na" ? "Not applicable" : cell.errors ? `${cell.errors} errors; no scored epochs` : "No epochs yet"}>–</span> :
                   <Hint text={formulas.eval}><button className="matrix-cell" style={heat(cell.score)}
                     aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} epochs passed. Open details.`}
-                    onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode })}>{cell.passed}/{cell.total}</button></Hint>}</td>;
+                    onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{cell.passed}/{cell.total}</button></Hint>}</td>;
               })}
             </tr>) : <tr><td colSpan={matrixAgents.length + 1} className="no-evals">No evals yet</td></tr>}
           </Fragment>)}</tbody></table></div><div className="table-note">Runs passed per eval. Click a scored cell for its prompt and runs. Errors are excluded from counts.</div></div>

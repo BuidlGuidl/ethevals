@@ -33,7 +33,8 @@ It displays only current eval hashes and, for skills-mode rows, the current skil
 A skills change reruns only skills-mode epochs and preserves internet and vanilla results.
 The leaderboard switches between Internet, Internet + Skills, and Model only.
 Internet and Internet + Skills share configuration rows; Model only shows bare models.
-The eval matrix uses the same mode and groups evals under pillar bands.
+The eval matrix has its own mode toggle and groups evals under pillar bands.
+The URL keeps the leaderboard mode in `mode` and the matrix mode in `evals`.
 The How it works page explains the pillars, modes, isolated runs, and publication pipeline.
 The comparison page shows up to five configurations and highlights the best value for each metric.
 The build reports loaded, current, and stale row counts.
@@ -62,11 +63,16 @@ No passes or a missing model price produce `–`.
 Cost limits count as failures. Errors remain in the drawer and do not enter scores or the cost calculation.
 
 Epoch cost adds model and grader cost. If either amount is unknown, the total stays unknown.
-The drawer shows the cost source, total tokens, elapsed time, checks, and error or limit from the row.
-Its list and eval views use the `d` query parameter; browser Back closes a drawer opened from the board.
-Runs expand inside the eval view, and the drawer keeps the mode selected when it opened.
+The drawer shows cost, tokens, elapsed time, checks, and any error or limit from the row.
+Its list, eval, and run views use the `d` query parameter; browser Back closes a drawer opened from the board.
+The eval view lists runs in a table. Each row opens that run's checks and log.
+The selection's `run` field keeps the run in the URL; the run switcher changes only that field.
+The selected run has four stat tiles and a Scorer verdict panel below the switcher.
+Failed checks show their reasons. Passed checks show their names without reasons.
+"All runs" returns to the eval view. The drawer keeps the mode selected when it opened.
 Example links point to highlighted rows in the eval matrix.
 Log links use the normal Inspect viewer when a matching log is bundled.
+Without a bundled log, the link says "Download log" and points to the published file.
 The loader computes cells, summaries, and lifts once; the client reuses them across pages.
 
 ## Interface
