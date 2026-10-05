@@ -74,7 +74,7 @@
 
   // Step notes sit under the diagram, one per column; on phones they become the diagram.
   const notes = repo => [
-    ["eval", "phase", "Add an eval or a model", `An eval is a folder: the prompt, the files the agent starts with, and how it is scored. A new model is one entry in ${ext(`${repo}/blob/main/inspect-runner/ethevals/config.yaml`, "<code>config.yaml</code>")}.`],
+    ["eval", "phase", "Add an eval or a model", `An eval includes the prompt, the files the agent starts with, and how it is scored. A new model is one entry in ${ext(`${repo}/blob/main/inspect-runner/ethevals/config.yaml`, "<code>config.yaml</code>")}.`],
     ["checks", "phase", "PR: free checks", "The reference solution must pass and an empty answer must fail. No API calls, so anyone can open a PR from a fork."],
     ["merge", "phase", "Merge to main", "A maintainer reads the eval and its grading rubric, then merges."],
     ["run", "auto", "CI runs missing epochs", "CI runs every agent and model on the evals they have no result for yet, within a set budget."],
@@ -90,16 +90,16 @@
   const modes = ms => `<span class="hw-modes">${ms.map(m => `<i class="${m}">${MODE[m]}</i>`).join("")}</span>`;
   const card = (type, does, ms, body) => `<div class="hw-run"><div class="hw-run-h"><b>${type}</b>${modes(ms)}</div><p class="hw-run-d">${does}</p>${body}</div>`;
   const runs = () => `<div class="hw-runs">
-      ${card("Quiz", "Tests what a model or agent knows. It answers a question that has one fixed answer, checked deterministically. It is also the only type a model can answer without an agent, because it needs no tools.", ["vanilla", "internet", "skills"], `
+      ${card("Quiz", "Tests what a model or agent knows by having it answer a question with one correct answer. It is the only type a model can answer without an agent, because it needs no tools.", ["vanilla", "internet", "skills"], `
         ${flowStep("prompt", "Question", "“Which ERC defines on-chain registries for AI agents? Reply with just the number.”")}${arrow}
-        ${flowStep("agent", "Model or agent", "Either can answer: the model alone in one API call, with no tools and web search off, or an agent in its sandbox with the web.")}${arrow}
+        ${flowStep("agent", "Model or agent", "A model answers in one API call with no tools. An agent answers from its sandbox with internet access.")}${arrow}
         ${flowStep("target", "Deterministic match", "The reply must match the expected answer, 8004: exactly, by pattern or as a multiple-choice letter.")}`)}
-      ${card("Build", "Tests whether an agent can write working code. It finishes or fixes a project in its workspace, and tests it never sees decide the result.", ["internet", "skills"], `
+      ${card("Build", "Tests whether an agent can write working code. The agent finishes or fixes a project, then tests it never saw decide the result.", ["internet", "skills"], `
         ${flowStep("prompt", "Prompt + starter code", "For example: finish an ERC-20 points token in <code>src/</code>.")}${arrow}
         <div class="hw-sandbox"><span class="hw-sb-k">Fresh Docker sandbox</span>
           ${flowStep("agent", "Agent writes the code", `Claude Code, Codex or OpenCode, with ${ext(TOOL.foundry, "Foundry")} and internet.`)}</div>${arrow}
         ${flowStep("checks", "Forge tests", "Tests kept out of its workspace run on its code. It must compile and pass them all.")}`)}
-      ${card("Act", "Tests whether an agent can operate on Ethereum. It sends transactions on a private chain, and a script checks the state they leave behind.", ["internet", "skills"], `
+      ${card("Act", "Tests whether an agent can operate on Ethereum. The agent sends transactions on a private chain, then a script checks the state they leave behind.", ["internet", "skills"], `
         ${flowStep("prompt", "Prompt + chain details", "“Send exactly 12.5 tokens”, with an RPC URL and a funded key.")}${arrow}
         <div class="hw-sandbox"><span class="hw-sb-k">Fresh Docker sandbox</span>
           ${flowStep("agent", "Agent", "Signs transactions with its key.")}
@@ -108,7 +108,7 @@
         ${flowStep("chain", "Script reads the chain", "Recipient got 12,500,000 units (6 decimals); one transaction, from the agent’s key.")}
         <div class="hw-plus-j">${flowStep("judge", "AI judge reads the transcript", "Did it confirm the transfer before reporting?")}</div>`)}
     </div>
-    <p class="hw-run-note">Each eval declares the modes it runs in, and a run passes only if every check passes. Internet + Skills also gives the agent Ethereum skills to read, such as ${ext(TOOL.ethskills, "ethskills")}. Any eval can also add an <b>AI judge</b>: yes-or-no questions a grader model answers from the transcript, or from the code for builds.</p>`;
+    <p class="hw-run-note">Each eval declares the modes it runs in, and a run passes only if every check passes. Internet + Skills also gives the agent Ethereum skills to read, such as ${ext(TOOL.ethskills, "ethskills")}. Any eval can also add an <b>AI judge</b>, a model that answers yes-or-no questions about the agent's transcript or code.</p>`;
 
   // ---------- The four pillars ----------
   // What each pillar covers, in one line, and one real eval as an example. Counts come from the suite.
@@ -129,7 +129,7 @@
   window.ETHHowItWorks = function ({ repo }) {
     return `<div class="page hw">
       <header class="hw-hero"><h1>Automated, open evals for AI on Ethereum</h1>
-        <p class="lead">Experts add evals by pull request. After review, CI runs them on every agent and model, grades each run, and publishes the results with their full logs. No step needs anyone to copy a number by hand.</p></header>
+        <p class="lead">Evals are added by pull request. After review, an automated pipeline runs them on every agent and model, grades each run, and publishes the results with their full logs.</p></header>
 
       <section class="hw-sec" aria-labelledby="hw-pipe">
         <div class="hw-head"><p class="eyebrow">The pipeline</p><h2 id="hw-pipe">One pull request starts everything</h2></div>
@@ -144,7 +144,7 @@
       </section>
 
       <section class="hw-sec" aria-labelledby="hw-one">
-        <div class="hw-head"><p class="eyebrow">Eval types</p><h2 id="hw-one">Answer, build or act</h2><p class="hw-sub">Every eval is one of three types. The type sets what the agent starts with, what it has to do and how its work is graded, and the tags show which modes it runs in. A fourth type, <b>Scenario</b>, is on the way: the agent reviews a situation and writes up what it finds.</p></div>
+        <div class="hw-head"><p class="eyebrow">Eval types</p><h2 id="hw-one">Quiz, Build or Act</h2><p class="hw-sub">The eval type sets what the agent starts with, what it has to do and how its work is graded. Additional eval types are under development, including <b>Scenario</b>: the agent reviews a situation and writes up what it finds.</p></div>
         ${runs()}
       </section>
 
