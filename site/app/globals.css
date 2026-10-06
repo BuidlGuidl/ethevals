@@ -274,8 +274,12 @@
 @keyframes sheet-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
 @media (max-width: 1100px) { .navtag { display: none; } .pillars-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .pillars-grid li:nth-child(2) { border-right: 0; } .pillars-grid li:nth-child(n+3) { border-top: 1px solid var(--color-border); } }
 @media (max-width: 760px) {
+  .sheet { padding-inline: 16px; }
   .runs-table { min-width: 0; }
-  .runs-table th, .runs-table td { padding-inline: 4px; white-space: nowrap; }
+  .runs-table th, .runs-table td { padding-inline: 8px; white-space: nowrap; }
+  .runs-table th:first-child, .runs-table td:first-child { padding-left: 11px; }
+  .runs-table th:last-child, .runs-table td:last-child { padding-right: 11px; }
+  .runs-table th:nth-child(5), .runs-table td:nth-child(5) { display: none; }
   .run-stats > div { padding-inline: 8px; }
   .run-stats dd { font-size: 14px; }
   .page { padding: 28px 18px; }
