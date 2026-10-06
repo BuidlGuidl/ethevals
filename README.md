@@ -1,80 +1,82 @@
 # ETH Evals
 
-ETH Evals measures what bare models know about Ethereum and how well agents do Ethereum work.
-The runner uses Inspect and grades each eval with a target, Forge tests, a rubric, or several of these.
-Claude Code, Codex CLI, and OpenCode run in Docker.
+<h4 align="center">
+  <a href="https://ethevals-site.vercel.app">Website</a> |
+  <a href="https://ethevals-site.vercel.app/how-it-works">How it works</a> |
+  <a href="docs/add-an-eval.md">Add an eval</a>
+</h4>
 
-The board separates agent results from bare-model knowledge.
-See [the glossary](CONTEXT.md) for terms and [the decisions](docs/adr/) for the system's design.
+ETH Evals is an open eval framework built on [Inspect](https://inspect.aisi.org.uk/). It evaluates AI agents and models across four pillars of Ethereum work: concepts, transactions, building, and security.
 
-## Install
+- **An eval is a folder**: a prompt in YAML, plus Forge tests when it needs a chain.
+- **New models on launch day**: adding one is a config change.
+- **Every eval proves itself**: its reference answer must pass and an empty answer must fail.
+- **The agent can't touch its score**: scoring runs where the agent can't reach.
+- **Every run is public**: each result links to its full log.
 
-Install Python 3.13 and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-From the repository root, run:
+```mermaid
+flowchart LR
+	eval["Add or edit an eval<br/>a folder: prompt, files, scoring"] --> pr["PR: validity checks<br/>checked with a mock model"]
+	model["Add a model<br/>one entry in config.yaml"] --> pr
+	pr --> merge["Merge to main<br/>a maintainer reviews"]
+	merge --> ci["CI runs only what's new<br/>every agent and model"]
+	ci --> results["Results PR<br/>results + logs"]
+	results -- merge --> site["Website<br/>the board updates"]
+	merge --> hf["Hugging Face dataset<br/>model-only evals"]
+```
+
+## Requirements
+
+Before you begin, install these tools:
+
+- [Git](https://git-scm.com/downloads)
+- [Python 3.13](https://www.python.org/downloads/) and [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose, for agent runs
+- [Node.js 22 or later](https://nodejs.org/en/download/) and [pnpm 9.14.2](https://pnpm.io/installation), for the website
+
+## Quickstart
+
+1. Clone the repository and install the runner:
 
 ```sh
+git clone https://github.com/BuidlGuidl/ethevals.git
+cd ethevals
 uv sync --frozen
 ```
 
-Docker is required for internet and skills epochs.
-Vanilla quizzes need no containers.
-The runner builds its images before the first sandbox epoch in each run.
-
-## Run the free check
-
-Strip provider credentials before a free check:
+2. Ask Opus 5.5 a quiz question, with no tools and no Docker:
 
 ```sh
-env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY \
-  -u ANTHROPIC_AUTH_TOKEN -u EXA_API_KEY uv run ethevals check
+export ANTHROPIC_API_KEY=<your key>
+uv run ethevals run --evals evals/concepts/agent-registries --models opus-5.5 --modes vanilla --epochs 1 --budget 50 --output results/quickstart --rows results/quickstart/rows.jsonl
 ```
 
-`check` runs reference answers and solutions, then empty answers and untouched workspaces.
-It succeeds only when every reference passes and every untouched case fails.
-It makes no paid calls and skips rubric grading.
-The configured epoch count applies to both cases.
-Every invocation runs fresh, even when the output folder already contains logs.
+`--budget` is a ceiling in USD. This run costs under a cent. `--output` and `--rows` keep your run apart from the published results.
 
-Results go to `results/check/reference/rows.jsonl` and `results/check/empty/rows.jsonl`.
-Each case has a `logs/` folder with full Inspect logs.
-These check results stay separate from the board's paid results.
-
-To check one eval, select its folder:
+3. Start Docker and give the same question to Claude Code, which gets a shell and the internet:
 
 ```sh
-uv run ethevals check --evals evals/concepts/agent-registries
+uv run ethevals run --evals evals/concepts/agent-registries --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 50 --output results/quickstart --rows results/quickstart/rows.jsonl
 ```
 
-To check the folder format without execution, replace `check` with `validate`.
-For new evals, follow [Add an eval](docs/add-an-eval.md).
-
-## Run with provider keys
-
-Read [Plan and run](inspect-runner/README.md#plan-and-run) for budgets, keys, and resume options.
-[ADR 0006](docs/adr/0006-direct-provider-keys-and-native-search.md) records the provider and search decisions.
-
-For a first paid Claude Code test, set `ANTHROPIC_API_KEY` and run:
+4. Read the logs in Inspect's viewer, at the URL it prints:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries evals/transactions/send-six-decimal-token --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 100
+uv run inspect view --log-dir results/quickstart/logs
 ```
 
-## Open the board
-
-The leaderboard compares configurations by model, harness, and effort in Internet and Internet + Skills modes.
-Model only shows bare models. The eval matrix shows passed and scored epoch counts.
-Open a score for its evals, checks, costs, and Inspect log links.
-The How it works page explains the modes, isolated runs, and publication pipeline.
-
-From `site/`, start the local board:
+5. Start the website in a second terminal, then open http://localhost:3000:
 
 ```sh
+cd site
 pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-Open the local URL printed by Next.js, normally <http://localhost:3000>.
-Without results, the board shows its empty state and eval catalog.
-See [the site guide](site/README.md) for demo data, settings, and site checks.
+**What's next**
 
-Runner maintainers can use [the runner reference](inspect-runner/README.md) for scoring, limits, rows, and CI.
+- Write your own eval with the [add-an-eval guide](docs/add-an-eval.md).
+- Add a model or an agent in [`config.yaml`](inspect-runner/ethevals/config.yaml).
+- Look up scoring, limits, budgets, and CI in the [runner reference](inspect-runner/README.md).
+- Build and check the website with the [site guide](site/README.md).
+- Look up words like mode, harness, and epoch in the [glossary](CONTEXT.md).

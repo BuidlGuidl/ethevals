@@ -660,7 +660,7 @@ The solution is a flattened OpenZeppelin token in [`solution/src/BuilderPoints.s
 
 ## Check your eval
 
-Install the runner as the [README](../README.md#install) says, then run:
+Install the runner as the [README](../README.md#quickstart) says, then run:
 
 ```sh
 eval_dir=evals/transactions/send-six-decimal-token
