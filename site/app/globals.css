@@ -120,7 +120,7 @@
   .pillar-band th { @apply bg-tint px-4 py-2 text-[11px] uppercase tracking-wider; }
   .pillar-band small { @apply ml-3 text-dim text-[10px] normal-case; }
   .eval-title { @apply text-left text-[13px] font-semibold; }
-  .no-evals { @apply p-4 text-xs text-muted; }
+  .matrix .no-evals { @apply p-4 text-xs text-muted; }
   .empty { @apply border border-border bg-sheet p-6; }
   .empty p { @apply mt-2 text-muted; }
   .banner { @apply mb-8 border border-amber/30 bg-amber/5 p-3 text-xs text-amber; }
