@@ -2,7 +2,7 @@
 
 The site builds a static board from the runner's catalog and results.
 The browser receives public declarations and row details, without targets or scorer files.
-[The root guide](../README.md#open-the-board) covers opening the board.
+[The root guide](../README.md#quickstart) covers opening the board.
 
 ## Build
 

@@ -274,7 +274,7 @@ Paid runs require keys for each selected provider and the grader.
 Opus and the grader use `ANTHROPIC_API_KEY`. GPT uses `OPENAI_API_KEY`.
 Kimi and GLM use `OPENROUTER_API_KEY`.
 The runner reports all missing keys before constructing providers or starting containers. Keys stay on the host.
-For the first paid command, see [the root guide](../README.md#run-with-provider-keys).
+For the first paid command, see [the root guide](../README.md#quickstart).
 For Codex, also set `OPENAI_API_KEY` and replace the agent with `codex-cli-gpt-5.5`.
 Only a paid run proves provider access, usable search results, and grader output.
 
