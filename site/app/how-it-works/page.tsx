@@ -24,7 +24,7 @@ const evalFiles = [
 
 export default function Page() {
   return <main id="main" className="page how-page">
-    <header className="how-hero"><h1>Automated, open evals for AI on Ethereum</h1><p className="lead">Experts add evals by pull request. After review, CI runs them on every agent and model, grades each run, and publishes the results with their full logs. No step needs anyone to copy a number by hand.</p></header>
+    <header className="how-hero"><h1>Automated, open evals for AI on Ethereum</h1><p className="lead">Experts add evals by pull request. After review, an automated pipeline runs them on every agent and model, grades each run, and publishes the results with their full logs.</p></header>
     <section id="hw-pipe" className="how-section"><div className="how-head"><p className="eyebrow">The pipeline</p><h2>One pull request starts everything</h2>
       <p>A new model is one line of config, so it can be tested the day it launches. A new or changed eval runs on every agent and model as soon as it merges.</p></div>
       <figure className="diagram-figure"><PipelineDiagram /></figure>

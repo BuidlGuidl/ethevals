@@ -162,7 +162,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
     <header className="hero"><div className="hero-brand"><h1 id="hero-logo" aria-label="ETH Evals"><Logo id="hero-gradient" /></h1>
       <p className="hero-plate"><span><b>{data.counts.evals}</b> evals</span><span><b>{data.counts.agents}</b> agents</span><span><b>{data.counts.runs.toLocaleString("en")}</b> runs</span></p></div>
       <p className="hero-tag">The Open Benchmark for AI on Ethereum</p>
-      <p className="hero-desc">We test AI agents, and the models behind them, on real Ethereum work. Every task, run and transcript is public, and anyone can run the same evals.</p>
+      <p className="hero-desc">We test AI agents, and the models behind them, on real Ethereum work. Every task, run and transcript is public, allowing anyone to run the same evals.</p>
       <p className="hero-desc">We evaluate <Link href="/how-it-works/#hw-pillars">four pillars</Link>: <b>Concepts</b>, <b>Transactions</b>, <b>Building</b> and <b>Security</b>.</p>
     </header>
     <section id="leaderboard" className="results-section"><div className="section-head"><div><h2>Results</h2><p>The same work, with and without Ethereum skills.</p></div>
@@ -185,7 +185,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
         <div className="empty"><h3>{mode === "vanilla" ? "No model epochs yet" : "No agent epochs yet"}</h3><p>No published results match the current evals. Browse the eval catalog below.</p></div>}
       <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on the four pillars of Ethereum work. Overall is the average of the pillar scores. Click a pillar cell to see its evals and every run behind them.</div>
     </section>
-    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by eval · {modeNames[evalsMode]}</h2><p>How many runs each configuration passed on every eval, grouped by pillar.</p></div>
+    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by eval · {modeNames[evalsMode]}</h2><p>A detailed view of the Leaderboard. See how many runs each agent passed on every eval, grouped by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which eval results" />
       <a className="button" href={`${repo}/blob/main/docs/add-an-eval.md`} target="_blank" rel="noreferrer">How to add an eval ↗</a></div>
       <p className="eyebrow">{pillars.reduce((sum, pillar) => sum + matrixTable.pillars[pillar].evals.length, 0)} evals · {modeNames[evalsMode]}</p>
