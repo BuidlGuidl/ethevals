@@ -14,13 +14,13 @@ export const formulas = {
   tokens: "Tokens per run = median total model and grader tokens across scored epochs.",
 };
 export function Hint({ text, children }: { text: string; children: React.ReactElement }) {
-  return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent>{text}</TooltipContent></Tooltip>;
+  return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent className="whitespace-pre-line">{text}</TooltipContent></Tooltip>;
 }
 export function Score({ score, lift, onOpen, label, formula, empty = "No epochs yet", counts }: {
   score: number | null; lift?: number | null; onOpen: () => void; label: string;
   formula: string; empty?: string; counts?: string;
 }) {
-  return <Hint text={`${formula}${lift !== undefined && lift !== null ? ` ${formulas.lift}` : ""}`}>
+  return <Hint text={`${formula}${lift !== undefined && lift !== null ? `\n${formulas.lift}` : ""}`}>
     <button className="score-cell" data-empty={score === null} style={heat(score)} onClick={onOpen}
       aria-label={`${label}. ${score === null ? empty : percent(score)}.${counts ? ` ${counts}.` : ""} Open details.`}>
       <span>{percent(score)}</span>{lift !== undefined && lift !== null && <small className={lift < 0 ? "negative" : "lift"}>{pp(lift)}</small>}

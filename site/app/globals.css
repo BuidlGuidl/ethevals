@@ -56,7 +56,7 @@
   .sitefoot b { @apply text-ink text-[13px]; }
   .skip-link { @apply sr-only; }
   .skip-link:focus { @apply not-sr-only fixed left-4 top-4 z-[80] bg-accent px-4 py-2 text-sheet; }
-  .hero { @apply mb-14 grid gap-4; }
+  .hero { @apply mb-14 grid grid-cols-[minmax(0,1fr)] gap-4; }
   .hero-brand { @apply mb-4 w-[660px] max-w-full; }
   .hero-brand h1 { @apply w-full; }
   .hero-brand svg { @apply block h-auto w-full max-w-full; }
@@ -120,7 +120,7 @@
   .pillar-band th { @apply bg-tint px-4 py-2 text-[11px] uppercase tracking-wider; }
   .pillar-band small { @apply ml-3 text-dim text-[10px] normal-case; }
   .eval-title { @apply text-left text-[13px] font-semibold; }
-  .no-evals { @apply p-4 text-xs text-muted; }
+  .matrix .no-evals { @apply p-4 text-xs text-muted; }
   .empty { @apply border border-border bg-sheet p-6; }
   .empty p { @apply mt-2 text-muted; }
   .banner { @apply mb-8 border border-amber/30 bg-amber/5 p-3 text-xs text-amber; }
