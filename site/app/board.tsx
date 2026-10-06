@@ -192,7 +192,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
       <div className="table-shell"><div className="matrix-title">Eval matrix · {modeNames[evalsMode]}</div><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Eval matrix. Scroll for more configurations.">
         <table className="matrix"><caption className="sr-only">Passed runs / scored runs for each eval and configuration</caption><thead><tr><th className="row-label" scope="col">Eval</th>
           {matrixAgents.map((agent) => <th key={agentKey(agent)} scope="col"><Configuration agent={agent} /></th>)}</tr></thead>
-          <tbody>{pillars.map((pillar) => <Fragment key={pillar}><tr className="pillar-band"><th scope="colgroup" colSpan={matrixAgents.length + 1}>{names[pillar]}<small>{matrixTable.pillars[pillar].evals.length} evals</small></th></tr>
+          <tbody>{pillars.map((pillar) => <Fragment key={pillar}><tr className="pillar-band"><th scope="colgroup" colSpan={matrixAgents.length + 1}><span className="band-label">{names[pillar]}<small>{matrixTable.pillars[pillar].evals.length} evals</small></span></th></tr>
             {matrixTable.pillars[pillar].evals.length ? matrixTable.pillars[pillar].evals.map((entry) => <tr key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
               <th scope="row" className="row-label"><span className="eval-title">{data.evaluations[entry.id].title}</span><small>{entry.id}</small></th>
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
@@ -202,7 +202,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
                     aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} epochs passed. Open details.`}
                     onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{cell.passed}/{cell.total}</button></Hint>}</td>;
               })}
-            </tr>) : <tr><td colSpan={matrixAgents.length + 1} className="no-evals">No evals yet</td></tr>}
+            </tr>) : <tr><td colSpan={matrixAgents.length + 1} className="no-evals"><span className="band-label">No evals yet</span></td></tr>}
           </Fragment>)}</tbody></table></div><div className="table-note">Runs passed per eval. Click a scored cell for its prompt and runs. Errors are excluded from counts.</div></div>
     </section>
     <noscript>Enable JavaScript to change modes and open run details.</noscript>
