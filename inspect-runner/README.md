@@ -348,7 +348,7 @@ Changes in the test's fork stay in Forge.
 Declare a network and a positive block number:
 
 ```yaml
-chain: {fork: mainnet, block: 23819000}
+chain: {fork: mainnet, block: 1}
 ```
 
 The runner accepts `mainnet` and `base`.
@@ -378,10 +378,10 @@ The filter allows 60 seconds per upstream request on forks, compared with 15 sec
 This gives Anvil time to fetch archive state on its first read.
 Forge tests use `--no-storage-caching` to prevent state from an earlier fork from affecting checks.
 
-`ethevals check` validates a fork eval even when its RPC variable is absent.
-It then prints one reason and skips both the reference and untouched passes.
-`scripts/ci.py checks` uses the same command and skip rule.
-With the variable set, both passes run without model calls.
+The [Harbor free check](../docs/harbor.md) lints tasks even when their required environment variables are absent.
+It prints the missing variable names and skips their oracle and nop runs.
+`scripts/ci.py checks` uses that command.
+With the variables set, both runs execute without model calls.
 
 After reading a PR, dispatch [fork-check.yml](../.github/workflows/fork-check.yml) with its PR number and reviewed commit SHA:
 
@@ -392,14 +392,15 @@ gh workflow run fork-check.yml -f pr=<number> -f sha=<full commit SHA>
 GitHub dispatches a workflow only when it is on the default branch, so `fork-check.yml` must be on `main`.
 The workflow checks out that PR's head without saved credentials.
 If the head differs from the reviewed SHA, the workflow fails before running PR code.
-It checks every fork eval with the `MAINNET_RPC_URL` and `BASE_RPC_URL` secrets and posts a `fork check` status on the reviewed SHA.
+It selects tasks that declare `metadata.required_env` and requires those variables before the free check.
+It provides the `MAINNET_RPC_URL` and `BASE_RPC_URL` secrets and posts a `fork check` status on the reviewed SHA.
 The workflow has only content-read and status-write permissions.
 
 ## CI and publication
 
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
-It runs the [Harbor free check](../docs/harbor.md) and the Inspect free check during the move.
-The free-check job no longer exports an Inspect dataset because no quizzes remain under `evals/`.
+It runs the [Harbor free check](../docs/harbor.md).
+No public tasks remain under `evals/`.
 [results.yml](../.github/workflows/results.yml) queues paid runs after `main` changes, excluding results-only changes.
 It uses `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, optional `EXA_API_KEY`, and the `ETHEVALS_BUDGET_USD` repository variable.
 The matrix also receives `MAINNET_RPC_URL` and `BASE_RPC_URL` for fork evals.

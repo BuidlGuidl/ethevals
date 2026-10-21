@@ -15,25 +15,33 @@ from support import eval_cli, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
-AAVE = ROOT / "evals/transactions/supply-usdc-to-aave"
+
+
+@pytest.fixture
+def fork_task(tmp_path):
+    folder = tmp_path / "transactions/fork"
+    shutil.copytree(ROOT / "inspect-runner/tests/fixtures/transactions/native-transfer", folder)
+    declaration = yaml.safe_load((folder / "eval.yaml").read_text())
+    declaration["chain"] = {"fork": "mainnet", "block": 1}
+    (folder / "eval.yaml").write_text(yaml.safe_dump(declaration))
+    return folder
 
 
 @pytest.mark.parametrize("network,variable", [("mainnet", "MAINNET_RPC_URL"), ("base", "BASE_RPC_URL")])
-def test_fork_compose_keeps_the_rpc_url_out_of_saved_files(tmp_path, monkeypatch, network, variable):
-    folder = tmp_path / "transactions/fork"
-    shutil.copytree(AAVE, folder)
+def test_fork_compose_keeps_the_rpc_url_out_of_saved_files(tmp_path, monkeypatch, fork_task, network, variable):
+    folder = fork_task
     declaration = yaml.safe_load((folder / "eval.yaml").read_text())
     declaration["chain"]["fork"] = network
     (folder / "eval.yaml").write_text(yaml.safe_dump(declaration))
     evaluation = load_eval(folder, fixture_config())
-    assert evaluation.declaration.chain.model_dump() == {"fork": network, "block": 23819000}
+    assert evaluation.declaration.chain.model_dump() == {"fork": network, "block": 1}
     fake_url = "https://archive.example/secret-file-probe"
     monkeypatch.setenv(variable, fake_url)
     output = tmp_path / "output"
     path = prepare_compose(evaluation, output)
     document = yaml.safe_load(path.read_text())
     assert document["services"]["chain"]["environment"] == {
-        "FORK_RPC_URL": "${" + variable + "}", "FORK_BLOCK_NUMBER": "23819000"}
+        "FORK_RPC_URL": "${" + variable + "}", "FORK_BLOCK_NUMBER": "1"}
     assert document["services"]["chain"]["mem_limit"] == "1g"
     for name in ("default", "scorer"):
         assert "environment" not in document["services"][name]
@@ -60,24 +68,24 @@ def test_invalid_fork_declarations_fail_validation(folder, chain):
         load_eval(folder, fixture_config())
 
 
-def test_fork_check_validates_and_skips_without_its_rpc_variable(tmp_path, monkeypatch, capsys):
+def test_fork_check_validates_and_skips_without_its_rpc_variable(tmp_path, monkeypatch, capsys, fork_task):
     monkeypatch.delenv("MAINNET_RPC_URL", raising=False)
     output = tmp_path / "output"
-    result = eval_cli("check", "--evals", AAVE, "--output", output)
+    result = eval_cli("check", "--evals", fork_task, "--output", output)
     assert result.returncode == 0, result.stderr
     assert result.stdout == (
-        "transactions/supply-usdc-to-aave: validated; skipped reference and untouched passes because MAINNET_RPC_URL is unset.\n")
+        "transactions/fork: validated; skipped reference and untouched passes because MAINNET_RPC_URL is unset.\n")
     assert not output.exists()
-    evaluation = load_eval(AAVE, fixture_config())
+    evaluation = load_eval(fork_task, fixture_config())
     monkeypatch.setenv("MAINNET_RPC_URL", "https://archive.example/check-probe")
     assert available_checks([evaluation]) == [evaluation]
     assert capsys.readouterr().out == ""
 
 
-def test_fork_run_fails_before_creating_output_without_its_rpc_variable(tmp_path, monkeypatch):
+def test_fork_run_fails_before_creating_output_without_its_rpc_variable(tmp_path, monkeypatch, fork_task):
     monkeypatch.delenv("MAINNET_RPC_URL", raising=False)
     config = fixture_config()
-    evaluation = load_eval(AAVE, config)
+    evaluation = load_eval(fork_task, config)
     output = tmp_path / "output"
     with pytest.raises(ValueError, match="Missing fork RPC variables: MAINNET_RPC_URL"):
         run([evaluation], config, output, answer="reference", epochs=1)

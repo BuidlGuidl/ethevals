@@ -1,6 +1,7 @@
 """Lint task folders and prove their solutions through Harbor."""
 from pathlib import Path
 import json
+import os
 import re
 
 from harbor.models.task.task import Task
@@ -17,7 +18,12 @@ def lint_task(path: Path) -> None:
     for name in ("task.toml", "instruction.md", "tests/test.sh", "solution/solve.sh"):
         if not (path / name).is_file():
             raise ValueError(f"{path / name}: required file is missing")
-    Task(path)
+    task = Task(path)
+    required = task.config.metadata.get("required_env", [])
+    if not isinstance(required, list) or any(
+        not isinstance(name, str) or not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name) for name in required
+    ):
+        raise ValueError(f"{path / 'task.toml'}: metadata.required_env must list environment variable names")
     visible = [path / "instruction.md", *(path / "environment").rglob("*")]
     for item in visible:
         if not item.is_file():
@@ -54,6 +60,16 @@ async def free_check(paths: list[Path], output: Path) -> None:
 
     if output.exists():
         raise ValueError(f"{output}: use a fresh output directory for each free check")
+    available = []
+    for path in paths:
+        missing = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
+        if missing:
+            print(f"{path}: skipped oracle and nop runs because {', '.join(missing)} is unset.", flush=True)
+        else:
+            available.append(path)
+    paths = available
+    if not paths:
+        return
     for path in paths:
         if (path / "tests/criteria.md").is_file():
             print(f"{path}: criteria skipped in the free check; the judge needs a paid API call.", flush=True)

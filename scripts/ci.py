@@ -196,8 +196,6 @@ def publish_artifacts(args):
 
 def checks(args):
     command(sys.executable, "-m", "ethevals.cli", "free-check", "--output", args.output / "harbor")
-    command(sys.executable, "-m", "ethevals.cli", "validate")
-    command(sys.executable, "-m", "ethevals.cli", "check", "--output", args.output / "check")
     command(sys.executable, "-m", "pytest", "-q")
     command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
             "--ignore=inspect-runner/tests/test_agents_docker.py")

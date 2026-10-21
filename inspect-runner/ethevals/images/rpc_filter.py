@@ -26,7 +26,7 @@ def redact(text, urls):
     for url in filter(None, urls):
         parts = urlsplit(url)
         path = parts.path[:-1] if parts.path.endswith("/") else parts.path + "/"
-        for value in (url, urlunsplit(parts._replace(path=path))):
+        for value in sorted({url, urlunsplit(parts._replace(path=path))}, key=len, reverse=True):
             if isinstance(text, bytes):
                 text = text.replace(value.encode(), b"<fork rpc>")
             else:
@@ -144,7 +144,8 @@ def main():
     fork_url = os.environ.pop("FORK_RPC_URL", None)
     if fork_url:
         command.extend(["--fork-url", fork_url, "--fork-block-number", os.environ["FORK_BLOCK_NUMBER"]])
-    process = subprocess.Popen(command)
+    # Anvil can print its upstream URL even with --silent on startup failures.
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     open(REFUSALS, "w").close()
     for attempt in range(250):
         try:

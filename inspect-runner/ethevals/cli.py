@@ -90,7 +90,7 @@ def main(argv=None) -> int:
             return 0
         config = load_config(args.config, effort=args.effort)
         paths = [Path(value) for value in args.evals] if args.evals else sorted(Path("evals").glob("*/*"))
-        if not paths:
+        if not paths and args.command != "catalog":
             raise ValueError("No eval folders found. Use --evals or start from the repository root.")
         skills_pack = pack_skills()
         evals = [load_eval(path, config, skills_pack) for path in paths]

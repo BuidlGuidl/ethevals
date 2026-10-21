@@ -19,5 +19,6 @@ contract Setup is ChainSetup {
         vm.rpc("anvil_stopImpersonatingAccount", string.concat('["', vm.toString(HOLDER), '"]'));
 
         chainRecord("privateKey", bytes32(me.privateKey));
+        privateRecord("sender", me.addr);
     }
 }

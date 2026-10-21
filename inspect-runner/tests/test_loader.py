@@ -16,6 +16,17 @@ ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "inspect-runner/tests/fixtures/building/counter"
 
 
+def test_catalog_exports_an_empty_legacy_tree(tmp_path, monkeypatch):
+    from ethevals.cli import main
+    from ethevals.skills import pack_skills
+
+    monkeypatch.chdir(tmp_path)
+    output = tmp_path / "catalog"
+    assert main(["catalog", "--output", str(output)]) == 0
+    assert json.loads((output / "catalog.json").read_text()) == {
+        "skills_hash": pack_skills().hash, "evals": []}
+
+
 def test_loader_preserves_target_and_prompt(folder):
     (folder / "eval.yaml").write_text("motivation: Test a literal answer.\nprompt: Say hello.\nmodes: [internet]\n")
     (folder / "scorer/target.yaml").write_text('target: ["hello", "hi"]\n')
@@ -143,7 +154,7 @@ def test_eval_root_cannot_be_a_symlink(tmp_path):
         load_eval(folder, fixture_config())
 
 
-@pytest.mark.parametrize("value", ["hardhat", "{fork: mainnet, block: 23819000}", "anvil"])
+@pytest.mark.parametrize("value", ["hardhat", "{fork: mainnet, block: 1}", "anvil"])
 def test_chain_rejects_invalid_declarations(folder, value):
     path = folder / "eval.yaml"
     path.write_text(f"motivation: Check files.\nprompt: Say hello.\nmodes: [internet]\nchain: {value}\n")

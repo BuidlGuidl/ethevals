@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tomllib
 
 import pytest
 import yaml
@@ -13,7 +14,9 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.mark.docker
 def test_sidecar_controls_and_context_access_before_verification(tmp_path):
     source = next(path.parent.parent for path in (ROOT / "tasks").rglob("environment/docker-compose.yaml")
-                  if "chain" in yaml.safe_load(path.read_text())["services"])
+                  if "chain" in yaml.safe_load(path.read_text())["services"]
+                  and not tomllib.loads((path.parent.parent / "task.toml").read_text())
+                  .get("metadata", {}).get("required_env"))
     task = tmp_path / "transfer"
     shutil.copytree(source, task)
     compose = task / "environment/docker-compose.yaml"

@@ -123,6 +123,17 @@ test("missing eval roots and missing or malformed catalogs fail loudly", (t) => 
   assert.throws(() => loadBoard({}, f.site), /catalog.json: cannot load eval catalog/);
 });
 
+test("an empty catalog needs no legacy task root and excludes old rows", (t) => {
+  const f = fixture(t);
+  rmSync(path.join(f.root, "evals"), { recursive: true });
+  writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", evals: [] }));
+  f.write([{}]);
+  const board = loadBoard({}, f.site);
+  assert.deepEqual(board.evaluations, {});
+  assert.deepEqual(board.tables.internet.agents, []);
+  assert.deepEqual(board.tables.internet.pillars.concepts.evals, []);
+});
+
 test("published URLs reach the board and unsafe URLs fail with a line number", (t) => {
   const f = fixture(t);
   f.write([{ log_url: "https://example.org/results/epoch.eval" }, { epoch: 2 }]);

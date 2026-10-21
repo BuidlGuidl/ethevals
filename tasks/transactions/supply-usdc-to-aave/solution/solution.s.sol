@@ -16,7 +16,7 @@ contract Solution is Script {
     address constant POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
 
     function run() external {
-        string memory chain = vm.readFile("chain.json");
+        string memory chain = vm.readFile("chain_context.json");
         uint256 privateKey = uint256(chain.readBytes32(".privateKey"));
         address me = vm.addr(privateKey);
         vm.startBroadcast(privateKey);

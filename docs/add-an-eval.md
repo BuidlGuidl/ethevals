@@ -39,7 +39,7 @@ Let's look at each piece:
 | `prompt`     | yes      | the message / task the agent or model which is being tested gets |
 | `motivation` | yes      | why the eval exists, shown on the website                        |
 | `modes`      | yes      | any of `vanilla`, `internet`, and `skills`                       |
-| `chain`      | no       | `anvil`, or a fork like `{fork: mainnet, block: 23819000}`       |
+| `chain`      | no       | `anvil`, or a fork like `{fork: mainnet, block: 1}`       |
 | `choices`    | no       | 2 to 26 answers for a multiple-choice quiz                       |
 
 `prompt`: write it the way a real person would send it, the agent must not know it is being tested.
@@ -232,24 +232,18 @@ flowchart LR
 
 New quizzes use Harbor task folders under `tasks/`.
 Read [the Harbor guide](harbor.md) for final-reply inputs and the free check.
-The recipes below cover tasks that still use Inspect during the move.
+New tasks use Harbor.
 
 ### Task with a fresh chain
 
 New chain tasks use Harbor sidecars.
 Read [the Harbor guide](harbor.md) for setup, context files, and Forge checks.
 
-### Eval on a mainnet fork
+### Task on a fork
 
-To test against a live protocol, fork mainnet at a pinned block:
-
-```yaml
-chain: { fork: mainnet, block: 23819000 }
-```
-
-Setup can call anvil methods through `vm.rpc`, like `anvil_impersonateAccount`.
-See [`evals/transactions/supply-usdc-to-aave`](../evals/transactions/supply-usdc-to-aave).
-Set `MAINNET_RPC_URL` before you run `check`.
+Declare the sidecar and its pinned block in the task's compose file.
+List the required secret's variable name in `metadata.required_env` in `task.toml`.
+Read [the Harbor guide](harbor.md) for the free check and the manual fork check.
 
 ## Check your task
 

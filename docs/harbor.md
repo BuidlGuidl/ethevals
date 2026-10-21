@@ -41,6 +41,16 @@ It writes `private_chain_context.json` in a root-only directory on a separate vo
 The agent runs as `agent`. The shared verifier runs as root and reads the live chain.
 Only the filtered RPC listens outside the sidecar's loopback interface.
 
+Tasks list required secret variable names in `metadata.required_env` in `task.toml`.
+If a variable is unset, the free check lints the task and skips its runs.
+It prints the missing variable's name.
+The task's compose file passes each secret only to the sidecar that needs it.
+A fork's sidecar sets `FORK_RPC_URL` and `FORK_BLOCK_NUMBER` for Anvil.
+Setup and the agent receive no upstream URL.
+The chain discards Anvil output. Startup failures report a generic error.
+The manual fork-check workflow requires these variables before it starts oracle and nop runs.
+It checks the reviewed commit and posts the result as that commit's `fork check` status.
+
 Forge verifiers call `python3 /opt/forge_checks.py` from `tests/test.sh`.
 The helper copies the agent's files and tests into a fresh project.
 It disables FFI and scopes library remappings to each agent project.
@@ -53,7 +63,6 @@ Each `##` heading names a check and the following text asks a yes-or-no question
 The free check prints a skip note because the judge needs a paid API call.
 
 Pull-request CI calls the free check through `scripts/ci.py checks`.
-The existing Inspect free check covers folders that remain under `evals/` during the move.
 
 References: [Harbor v0.24.0](https://github.com/harbor-framework/harbor/tree/v0.24.0),
 [separate verifier inputs](https://docs.harborframework.com/tasks/separate-verifier).

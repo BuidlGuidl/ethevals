@@ -22,15 +22,13 @@ ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
 
 
-def test_pr_checks_run_both_runners_without_exporting_removed_quizzes(tmp_path, monkeypatch):
+def test_pr_checks_run_harbor_without_the_removed_public_tasks(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(ci, "command", lambda *args, **kwargs: calls.append((args, kwargs)))
     monkeypatch.setattr(sys, "argv", ["ci.py", "checks", "--output", str(tmp_path)])
     assert ci.main() == 0
     assert calls == [
         ((sys.executable, "-m", "ethevals.cli", "free-check", "--output", tmp_path / "harbor"), {}),
-        ((sys.executable, "-m", "ethevals.cli", "validate"), {}),
-        ((sys.executable, "-m", "ethevals.cli", "check", "--output", tmp_path / "check"), {}),
         ((sys.executable, "-m", "pytest", "-q"), {}),
         ((sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
           "--ignore=inspect-runner/tests/test_agents_docker.py"), {}),

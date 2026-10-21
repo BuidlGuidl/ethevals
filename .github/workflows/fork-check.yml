@@ -37,7 +37,7 @@ jobs:
         with:
           enable-cache: false
       - run: uv sync --frozen
-      - name: Run the fork references and untouched passes
+      - name: Run the fork oracle and nop runs
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
@@ -46,16 +46,16 @@ jobs:
           import os
           from pathlib import Path
           from ethevals.cli import main
-          from ethevals.config import load_config
-          from ethevals.loader import load_eval
-          forks = [evaluation for path in sorted(Path("evals").glob("*/*"))
-                   if (evaluation := load_eval(path, load_config())).fork]
-          if not forks:
-              raise SystemExit("No fork evals found.")
-          for evaluation in forks:
-              if not os.environ.get(evaluation.fork.rpc_variable):
-                  raise SystemExit(f"Missing {evaluation.fork.rpc_variable}")
-          raise SystemExit(main(["check", "--evals", *[str(e.folder) for e in forks],
+          from harbor.models.task.task import Task
+          tasks = [Task(path.parent) for path in sorted(Path("tasks").rglob("task.toml"))]
+          tasks = [task for task in tasks if task.config.metadata.get("required_env")]
+          if not tasks:
+              raise SystemExit("No tasks declare required environment variables.")
+          for task in tasks:
+              for variable in task.config.metadata["required_env"]:
+                  if not os.environ.get(variable):
+                      raise SystemExit(f"Missing {variable}")
+          raise SystemExit(main(["free-check", "--tasks", *[str(task.task_dir) for task in tasks],
                                  "--output", "results/fork-check"]))
           PY
       - name: Post the commit status

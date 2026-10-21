@@ -1,11 +1,12 @@
 """Prepare a declared chain sidecar before its healthcheck releases the agent."""
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import sys
 import time
 
-from rpc_filter import rpc
+from rpc_filter import redact, rpc
 
 
 def main():
@@ -14,7 +15,10 @@ def main():
     public.mkdir(exist_ok=True)
     private.mkdir(exist_ok=True)
     private.chmod(0o700)
-    process = subprocess.Popen([sys.executable, "/opt/rpc_filter.py"])
+    chain_env = os.environ.copy()
+    fork_url = os.environ.pop("FORK_RPC_URL", None)
+    process = subprocess.Popen([sys.executable, "/opt/rpc_filter.py"], env=chain_env)
+    del chain_env
     try:
         for _ in range(300):
             try:
@@ -28,8 +32,11 @@ def main():
             raise RuntimeError("The chain did not start.")
         shutil.copytree("/setup", "/eval/setup")
         shutil.copyfile("/opt/setup-foundry.toml", "/eval/foundry.toml")
-        subprocess.run(["forge", "script", "setup/setup.s.sol", "--broadcast", "--slow",
-                        "--rpc-url", "http://127.0.0.1:8546"], cwd="/eval", check=True)
+        setup = subprocess.run(["forge", "script", "setup/setup.s.sol", "--broadcast", "--slow",
+                                "--rpc-url", "http://127.0.0.1:8546"], cwd="/eval",
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        print(redact(setup.stdout, [fork_url]), end="", flush=True)
+        setup.check_returncode()
         rpc("anvil_setIntervalMining", [0])
         rpc("evm_setAutomine", [True])
         for directory, name in ((public, "chain_context.json"), (private, "private_chain_context.json")):

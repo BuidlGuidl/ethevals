@@ -10,11 +10,11 @@ contract SuppliedCheck is Test {
 
     IERC20 constant USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     IERC20 constant AUSDC = IERC20(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c);
+    address constant POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
     address me;
 
     function setUp() public {
-        string memory chain = vm.readFile("chain.json");
-        me = vm.addr(uint256(chain.readBytes32(".privateKey")));
+        me = vm.readFile("private_chain_context.json").readAddress(".sender");
         vm.createSelectFork("chain");
     }
 
@@ -25,5 +25,9 @@ contract SuppliedCheck is Test {
 
     function test_kept_15000_usdc() public view {
         assertEq(USDC.balanceOf(me), 15_000e6, "wallet keeps exactly 15,000 USDC");
+    }
+
+    function test_zero_pool_allowance() public view {
+        assertEq(USDC.allowance(me, POOL), 0, "wallet leaves zero allowance for the pool");
     }
 }
