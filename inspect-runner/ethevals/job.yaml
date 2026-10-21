@@ -2,7 +2,7 @@ harbor_version: 0.24.0
 time_limit: 7200
 trials: 3
 max_attempts: 2
-modes: [vanilla, internet]
+modes: [vanilla, internet, skills]
 models:
   opus-5.5:
     name: anthropic/claude-opus-5-5
@@ -47,23 +47,27 @@ agents:
     name: claude-code
     version: 2.1.284
     model: opus-5.5
+    modes: [internet, skills]
     paid_by: plan
     cost_limit_usd: 20.0
   codex-gpt-6:
     name: codex
     version: 0.159.0
     model: gpt-6
+    modes: [internet, skills]
     paid_by: plan
     cost_limit_usd: 20.0
   opencode-kimi-k3:
     name: opencode
     version: 1.18.33
     model: kimi-k3
+    modes: [internet, skills]
     paid_by: api_key
     cost_limit_usd: 20.0
   opencode-glm-5.3:
     name: opencode
     version: 1.18.33
     model: glm-5.3
+    modes: [internet, skills]
     paid_by: api_key
     cost_limit_usd: 20.0

@@ -45,7 +45,7 @@ def parse_args(argv=None):
         command = parsers[name]
         command.add_argument("--agents", nargs="+", help="Agent keys from the job config.")
         command.add_argument("--models", nargs="+", help="Model keys from the job config.")
-        command.add_argument("--modes", nargs="+", help="Modes from the job config. Internet is available.")
+        command.add_argument("--modes", nargs="+", help="Modes from the job config: vanilla, internet, or skills.")
         repeats = command.add_mutually_exclusive_group()
         repeats.add_argument("--trials", type=positive)
         repeats.add_argument("--trial", type=positive, help="One numbered trial with one task, agent, and mode.")
@@ -77,10 +77,11 @@ def main(argv=None) -> int:
             if not paths:
                 raise ValueError("No task folders found. Use --tasks or start from the repository root.")
             config = jobs.load_job(args.config)
+            skills_pack = jobs.pack_skills() if "skills" in (args.modes or config.modes) else None
             previous = previous_rows(args.output, args.rows)
             report = jobs.budget_check(jobs.plan(
                 paths, config, previous, agents=args.agents, models=args.models, modes=args.modes,
-                trials=args.trials, trial=args.trial, retry_errors=args.retry_errors,
+                trials=args.trials, trial=args.trial, retry_errors=args.retry_errors, skills_pack=skills_pack,
             ), args.budget, required=args.command == "run")
             if args.command == "plan":
                 print(json.dumps(report, indent=2))
@@ -90,7 +91,7 @@ def main(argv=None) -> int:
             if not report["within_budget"]:
                 raise ValueError("Budget exceeded; no trials started")
             write_rows(args.output / "rows.jsonl", previous)
-            success = asyncio.run(jobs.run(report, config, args.output, previous))
+            success = asyncio.run(jobs.run(report, config, args.output, previous, skills_pack=skills_pack))
             print(f"Results rows: {args.output / 'rows.jsonl'}")
             return 0 if success else 1
         if args.command in {"lint", "free-check"}:

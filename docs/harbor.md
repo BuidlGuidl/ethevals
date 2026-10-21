@@ -8,7 +8,10 @@ Its `paid_by` field is `plan`, `api_key`, or `free` for a local stand-in.
 Model effort becomes Harbor's `reasoning_effort`; `kwargs` carries other agent options.
 An entry's `modes` defaults to `[internet]`.
 The planner intersects those modes with the job selection and each task's modes.
-Skills mode requires the skills runner.
+Skills mode uploads the repo's captured skills pack through Harbor.
+Harbor registers the pack in the selected agent's skill directory.
+The same captured bytes supply the skills hash and every skills trial in the command.
+Snapshots stay under `OUTPUT/skills/HASH/` beside the jobs that use them.
 
 ```sh
 uv run ethevals plan --modes internet --trials 1 --budget 100
@@ -31,6 +34,8 @@ Planning needs no provider keys or Docker.
 Use `--tasks`, `--agents`, and `--models` to select entries.
 Use `--trial N` with one task, agent, and mode to run one numbered trial.
 Completed passes and failures never repeat for the same task hash, agent, model, effort, mode, and trial number.
+Skills trials also include the skills hash in their identity.
+Internet and vanilla trials record `skills_hash: null`, so a skill edit repeats only skills trials.
 Errors repeat up to `max_attempts`; `--retry-errors` grants one further attempt per selected error.
 
 Run the same command and output directory after an interruption.

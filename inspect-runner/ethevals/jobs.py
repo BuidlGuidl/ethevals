@@ -13,6 +13,7 @@ from pydantic import Field, model_validator
 from .config import Declaration, parse_file
 from .files import content_hash
 from .harbor_tasks import lint_task
+from .skills import SkillsPack, pack_skills
 from .trial_rows import fold_rows, recover_rows, write_rows
 
 
@@ -81,8 +82,6 @@ def task_entry(path: Path) -> dict:
 
 
 def write_catalog(paths: list[Path], output: Path) -> None:
-    from .skills import pack_skills
-
     entries = [task_entry(path) for path in paths]
     if len({entry["id"] for entry in entries}) != len(entries):
         raise ValueError("Task IDs must be unique")
@@ -91,14 +90,15 @@ def write_catalog(paths: list[Path], output: Path) -> None:
 
 
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,
-         models=None, modes=None, trials=None, trial=None, retry_errors=False) -> dict:
+         models=None, modes=None, trials=None, trial=None, retry_errors=False,
+         skills_pack: SkillsPack | None = None) -> dict:
     from .trial_rows import trial_identity
 
     modes = modes or config.modes
     if set(modes) - set(config.modes):
         raise ValueError("Selected modes must be listed in the job config")
-    if "skills" in modes:
-        raise ValueError("Skills mode requires the skills runner")
+    if "skills" in modes and skills_pack is None:
+        skills_pack = pack_skills()
     for selected, available, label in [(agents, config.agents, "agent"), (models, config.models, "model")]:
         if selected and set(selected) - available.keys():
             raise ValueError(f"Unknown {label}: {', '.join(sorted(set(selected) - available.keys()))}")
@@ -120,7 +120,8 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     continue
                 combinations += 1
                 for number in [trial] if trial is not None else range(1, (trials or config.trials) + 1):
-                    metadata = {"task_id": task["id"], "task_hash": task["hash"], "skills_hash": None,
+                    metadata = {"task_id": task["id"], "task_hash": task["hash"],
+                                "skills_hash": skills_pack.hash if mode == "skills" else None,
                                 "agent": None if mode == "vanilla" else agent.name, "model": model.name, "effort": model.effort,
                                 "mode": mode, "trial": number}
                     identity = trial_identity(metadata)
@@ -159,13 +160,24 @@ def budget_check(report: dict, budget: float | None, *, required=False) -> dict:
     return report
 
 
-async def run(report: dict, config: JobSettings, output: Path, previous: list[dict]) -> bool:
+async def run(report: dict, config: JobSettings, output: Path, previous: list[dict], *,
+              skills_pack: SkillsPack | None = None) -> bool:
     from harbor.job import Job
     from harbor.models.job.config import JobConfig
     from .trial_rows import trial_identity
 
     if not report["within_budget"]:
         raise ValueError("Budget exceeded; no trials started")
+    skills_path = None
+    if any(item["mode"] == "skills" for item in report["missing"]):
+        skills_pack = skills_pack if skills_pack is not None else pack_skills()
+        if any(item["skills_hash"] != skills_pack.hash for item in report["missing"] if item["mode"] == "skills"):
+            raise ValueError("The skills pack differs from the plan; plan the trials again")
+        skills_path = (output / "skills" / skills_pack.hash).resolve()
+        for name, data in skills_pack.files.items():
+            path = skills_path / name.removeprefix("/skills/")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
     for item in report["missing"]:
         path = Path(item["task_path"])
         missing = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
@@ -182,6 +194,8 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
                 kwargs["reasoning_effort"] = model.effort
             harbor = {"name": agent.name, "model_name": model.name, "kwargs": kwargs,
                       "override_timeout_sec": config.time_limit}
+            if item["mode"] == "skills":
+                harbor["skills"] = [str(skills_path)]
             name = hashlib.sha256(json.dumps([item, harbor], sort_keys=True).encode()).hexdigest()[:24]
             destination = output / "jobs" / name
             destination.mkdir(parents=True, exist_ok=True)

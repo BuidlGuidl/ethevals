@@ -89,6 +89,36 @@ def test_row_builder_reads_a_recorded_real_trial(tmp_path):
     assert row["total_seconds"] > 0
 
 
+def test_skill_edits_repeat_only_skills_trials(tmp_path, monkeypatch):
+    import asyncio
+    from ethevals.jobs import budget_check, load_job, plan, run
+
+    config, task = load_job(job_config(tmp_path, "free")), task_folder(tmp_path)
+    config.modes = ["vanilla", "internet", "skills"]
+    config.agents["local"].modes = ["internet", "skills"]
+    config.agents["bare"] = config.agents["local"].model_copy(update={"modes": ["vanilla"]})
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('["internet"]', '["vanilla", "internet", "skills"]'))
+    skill = tmp_path / "skills/units/SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: units\ndescription: Units.\n---\nOne metre.\n")
+    monkeypatch.setattr("ethevals.skills.PACK", skill.parent.parent)
+    report = plan([task], config, [], trials=1)
+    before = report["missing"]
+    assert [(row["mode"], row["skills_hash"] is not None) for row in before] == [
+        ("internet", False), ("skills", True), ("vanilla", False)]
+    previous = [{**row, "status": "passed"} for row in before]
+    assert plan([task], config, previous, trials=1)["missing_trials"] == 0
+    skill.write_text(skill.read_text().replace("One metre.", "Two metres."))
+    after = plan([task], config, previous, trials=1)["missing"]
+    assert [(row["mode"], row["trial"], row["attempt"]) for row in after] == [("skills", 1, 1)]
+    assert after[0]["task_hash"] == before[1]["task_hash"]
+    assert after[0]["skills_hash"] != before[1]["skills_hash"]
+    with pytest.raises(ValueError, match="The skills pack differs from the plan"):
+        asyncio.run(run(budget_check(report, 0), config, tmp_path / "out", []))
+    assert not (tmp_path / "out/jobs").exists()
+
+
 def test_published_trajectory_enriches_the_same_attempt_and_a_later_error_stays_latest():
     from ethevals.trial_rows import fold_rows, results_row
 
@@ -227,6 +257,55 @@ def test_any_configured_agent_keeps_api_price_cost_when_a_plan_or_key_pays(tmp_p
     assert row["limit"]["limit"] == 1
     trial_config = json.loads(next((tmp_path / "out/jobs").glob("*/*/config.json")).read_text())
     assert trial_config["agent"]["kwargs"] == {"delay": 2, "version": "1.0.0", "reasoning_effort": "high"}
+
+
+@pytest.mark.docker
+@pytest.mark.parametrize("skills_dir", [None, "/opt/task-skills"])
+def test_skills_trial_loads_captured_pack_through_harbor(tmp_path, monkeypatch, skills_dir):
+    import asyncio
+    import shutil
+    from ethevals.jobs import budget_check, load_job, plan, run
+    from ethevals.skills import pack_skills
+    from ethevals.trial_rows import previous_rows
+
+    fixture = Path(__file__).parent / "fixtures/harbor"
+    monkeypatch.syspath_prepend(str(fixture.resolve()))
+    task = tmp_path / "question"
+    shutil.copytree(fixture / "question", task)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('["internet"]', '["internet", "skills"]'))
+    if skills_dir:
+        with settings.open("a") as file:
+            file.write(f'skills_dir = "{skills_dir}"\n')
+    config = load_job(job_config(tmp_path, "free"))
+    config.modes = config.agents["local"].modes = ["internet", "skills"]
+    config.agents["local"].name = "local_agent:SkillsAgent"
+    captured = pack_skills()
+    report = budget_check(plan([task], config, [], trials=1, skills_pack=captured), 0)
+    # A live pack edit after planning cannot change the bytes that Harbor receives.
+    changed = tmp_path / "changed-skills/units/SKILL.md"
+    changed.parent.mkdir(parents=True)
+    changed.write_text("---\nname: units\ndescription: Changed.\n---\nDifferent bytes.\n")
+    monkeypatch.setattr("ethevals.skills.PACK", changed.parent.parent)
+    output = tmp_path / "out"
+    assert asyncio.run(run(report, config, output, [], skills_pack=captured)) is True
+    rows = previous_rows(output, tmp_path / "none")
+    assert [(row["mode"], row["status"], row["skills_hash"]) for row in rows] == [
+        ("internet", "passed", None), ("skills", "passed", captured.hash)]
+    expected = {name.removeprefix("/skills/"): data.hex() for name, data in captured.files.items()}
+    for row in rows:
+        trial = Path(row["trajectory_file"]).parent.parent
+        proof = json.loads((trial / "agent/skills.json").read_text())
+        saved = json.loads((trial / "config.json").read_text())
+        if row["mode"] == "skills":
+            assert proof == {"directory": skills_dir or "/harbor/skills", "files": expected}
+            assert saved["agent"]["skills"] == [str((output / "skills" / captured.hash).resolve())]
+        else:
+            assert proof == {"directory": skills_dir, "files": {}}
+            assert saved["agent"].get("skills", []) == []
+    assert plan([task], config, rows, trials=1, skills_pack=captured)["missing_trials"] == 0
+    assert [(item["mode"], item["attempt"]) for item in plan([task], config, rows, trials=1)["missing"]] == [
+        ("skills", 1)]
 
 
 @pytest.mark.docker

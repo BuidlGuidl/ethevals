@@ -4,6 +4,7 @@ import json
 import shlex
 
 from harbor.agents.nop import NopAgent
+from harbor.agents.capabilities import AgentCapabilities
 
 
 class LocalAgent(NopAgent):
@@ -28,3 +29,25 @@ class LocalAgent(NopAgent):
         context.n_output_tokens = 10
         context.cost_usd = 0.01234
         await asyncio.sleep(self.delay)
+
+
+class SkillsAgent(LocalAgent):
+    capabilities = AgentCapabilities(skills=True)
+
+    def __init__(self, *args, skills_dir=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.skills_dir = skills_dir
+
+    async def run(self, instruction, environment, context):
+        script = f"""
+import json
+from pathlib import Path
+root = Path({self.skills_dir!r}) if {self.skills_dir!r} else None
+files = {{path.relative_to(root).as_posix(): path.read_bytes().hex()
+         for path in root.rglob('*') if path.is_file()}} if root else {{}}
+Path('/logs/agent/skills.json').write_text(json.dumps({{'directory': {self.skills_dir!r}, 'files': files}}))
+"""
+        result = await environment.exec(command="python3 -c " + shlex.quote(script))
+        if result.return_code != 0:
+            raise RuntimeError(result.stderr)
+        await super().run(instruction, environment, context)
