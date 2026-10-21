@@ -39,12 +39,12 @@ assert.ok(!/no route|Grader model|Result row|filtered RPC|grader/i.test(how));
 if (expected === "demo") {
   assert.ok(html.includes("<strong>Demo data</strong>"), "The demo banner must be visible.");
   assert.ok(html.includes("Demo model A"));
-  assert.ok(html.includes("2 of 3 epochs passed"));
-  assert.ok(html.includes('aria-label="Concepts, Demo harness A / Demo model A. 83%.'), "The concepts pillar must show the rounded mean of 2/3 and 1/1.");
+  assert.ok(html.includes("2 of 3 trials passed"));
+  assert.ok(html.includes('aria-label="Concepts, Demo agent A / Demo model A. 83%.'), "The concepts pillar must show the rounded mean of 2/3 and 1/1.");
   assert.ok(html.includes("$ / pass"));
-  assert.ok(html.includes('<span class="eval-title">Agent registries</span>'));
+  assert.ok(html.includes('<span class="eval-title">Units</span>'));
 } else {
-  assert.ok(html.includes("No agent epochs yet") && html.includes("No evals yet"));
+  assert.ok(html.includes("No agent trials yet") && html.includes("No evals yet"));
   assert.ok(!html.includes("Demo model") && !html.includes("<strong>Demo data</strong>"));
   assert.ok(!html.includes("mockllm/model"));
 }

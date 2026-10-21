@@ -180,7 +180,7 @@
   .run-stats dd { @apply mt-1 text-[17px] font-semibold; }
   .verdict { @apply inline-flex items-center gap-1.5 border border-current px-2 py-0.5 text-[10px] font-semibold; }
   .issue { @apply border border-amber/30 bg-amber/5 p-3; overflow-wrap: anywhere; }
-  .log-links { @apply flex flex-wrap items-center gap-4; }
+  .trajectory-links { @apply flex flex-wrap items-center gap-4; }
   .compare-page { @apply grid gap-6; }
   .configuration-picks { @apply flex flex-wrap gap-2 border-0; }
   .configuration-picks button { @apply min-w-0 max-w-full border border-border-strong; }

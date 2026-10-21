@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle } from "lucide-react";
 import { agentLabel, modelLabel, modelOnlyNote, names, modeNames, unwrapPrompt } from "../src/labels";
-import { pillars, agentKey, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Epoch, type Agent } from "../src/board";
+import { pillars, agentKey, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Trial, type Agent } from "../src/board";
 import { decodeSelection, encodeSelection, type Selection } from "../src/selection";
 import { Configuration } from "../components/configuration";
 import { Logo } from "../components/logo";
@@ -18,15 +18,15 @@ import { repo } from "../components/shell";
 type Sort = "overall" | Pillar | "costPerPass";
 const verdictLabels = { passed: "PASS", failed: "FAIL", error: "ERROR" };
 
-function Verdict({ epoch }: { epoch: Epoch }) {
-  return <span className={`verdict ${epoch.status === "passed" ? "positive" : epoch.status === "failed" ? "negative" : "caution"}`}>
-    {epoch.status === "passed" ? <Check size={14} /> : epoch.status === "failed" ? <X size={14} /> : <AlertTriangle size={14} />}
-    {verdictLabels[epoch.status]}</span>;
+function Verdict({ trial }: { trial: Trial }) {
+  return <span className={`verdict ${trial.status === "passed" ? "positive" : trial.status === "failed" ? "negative" : "caution"}`}>
+    {trial.status === "passed" ? <Check size={14} /> : trial.status === "failed" ? <X size={14} /> : <AlertTriangle size={14} />}
+    {verdictLabels[trial.status]}</span>;
 }
 
 const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 const tokens = (value: number) => tokenFormat.format(value).toLowerCase();
-const duration = (epoch: Epoch) => epoch.total_seconds === null ? "–" : `${epoch.total_seconds.toFixed(1)}s`;
+const duration = (trial: Trial) => trial.total_seconds === null ? "–" : `${trial.total_seconds.toFixed(1)}s`;
 
 function EvalList({ table, evaluations, agent, pillar, onEval }: {
   table: Table; evaluations: BoardData["evaluations"]; agent: Agent; pillar?: Pillar; onEval: (evaluation: Eval) => void;
@@ -38,8 +38,8 @@ function EvalList({ table, evaluations, agent, pillar, onEval }: {
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
-          <span className="run-dots" aria-label={cell.epochs.map((epoch) => `Run ${epoch.epoch}: ${epoch.status}`).join(", ")}>
-            {cell.epochs.map((epoch) => <span key={epoch.epoch} className={`run-dot ${epoch.status}`} />)}</span>
+          <span className="run-dots" aria-label={cell.trials.map((trial) => `Run ${trial.trial}: ${trial.status}`).join(", ")}>
+            {cell.trials.map((trial) => <span key={trial.trial} className={`run-dot ${trial.status}`} />)}</span>
           <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)}>{cell.passed}/{cell.total}</span>
         </button>;
       })}
@@ -47,48 +47,48 @@ function EvalList({ table, evaluations, agent, pillar, onEval }: {
     </section>)}</div>;
 }
 
-function EvalView({ evaluation, epochs, onRun }: { evaluation: Eval; epochs: Epoch[]; onRun: (run: number) => void }) {
+function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Trial[]; onRun: (run: number) => void }) {
   return <>
     <p className="why">{evaluation.motivation}</p>
     <details className="prompt-disclosure" open><summary>Prompt</summary><pre>{unwrapPrompt(evaluation.prompt)}</pre>
       {evaluation.choices.length > 0 && <ol className="prompt-choices" type="A">{evaluation.choices.map((choice, index) => <li key={index}>{choice}</li>)}</ol>}
     </details>
-    <section className="detail-section"><h3>Runs</h3>{epochs.length ?
+    <section className="detail-section"><h3>Runs</h3>{trials.length ?
       <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Runs. Scroll horizontally for all columns.">
         <table className="runs-table"><caption className="sr-only">Runs for this eval and configuration. Open a row for checks and logs.</caption>
           <thead><tr>{["Run", "Result", "Checks", "Time", "Tokens", "Cost"].map((label) => <th scope="col" key={label}>{label}</th>)}<th scope="col"><span className="sr-only">Open run</span></th></tr></thead>
-          <tbody>{epochs.map((epoch) => {
-            const checks = Object.values(epoch.checks), passed = checks.filter((check) => check.passed).length;
-            return <tr key={epoch.epoch}><td><button className="run-open" onClick={() => onRun(epoch.epoch)}
-              aria-label={`Run ${epoch.epoch}, ${verdictLabels[epoch.status]}, ${passed} of ${checks.length} checks passed, ${duration(epoch)}, ${tokens(epoch.total_tokens)} tokens, ${money(epoch.cost, 4)}. Open run.`}>Run {epoch.epoch}</button></td>
-              <td><Verdict epoch={epoch} /></td><td>{passed}/{checks.length}</td><td>{duration(epoch)}</td><td>{tokens(epoch.total_tokens)}</td><td>{money(epoch.cost, 4)}</td><td aria-hidden="true">›</td></tr>;
+          <tbody>{trials.map((trial) => {
+            const checks = Object.values(trial.checks), passed = checks.filter((check) => check.passed).length;
+            return <tr key={trial.trial}><td><button className="run-open" onClick={() => onRun(trial.trial)}
+              aria-label={`Run ${trial.trial}, ${verdictLabels[trial.status]}, ${passed} of ${checks.length} checks passed, ${duration(trial)}, ${tokens(trial.total_tokens)} tokens, ${money(trial.cost, 4)}. Open run.`}>Run {trial.trial}</button></td>
+              <td><Verdict trial={trial} /></td><td>{passed}/{checks.length}</td><td>{duration(trial)}</td><td>{tokens(trial.total_tokens)}</td><td>{money(trial.cost, 4)}</td><td aria-hidden="true">›</td></tr>;
           })}</tbody></table>
-      </div></div> : <p>No epochs yet.</p>}
+      </div></div> : <p>No trials yet.</p>}
     </section>
   </>;
 }
 
-function RunView({ epoch, epochs, onRun }: { epoch: Epoch; epochs: Epoch[]; onRun: (run: number) => void }) {
-  const checks = Object.entries(epoch.checks);
+function RunView({ trial, trials, onRun }: { trial: Trial; trials: Trial[]; onRun: (run: number) => void }) {
+  const checks = Object.entries(trial.checks);
   return <>
-    <div className="run-switcher" role="group" aria-label="Runs">{epochs.map((run) => <button key={run.epoch}
+    <div className="run-switcher" role="group" aria-label="Runs">{trials.map((run) => <button key={run.trial}
       className={run.status === "passed" ? "positive" : run.status === "failed" ? "negative" : "caution"}
-      aria-pressed={run.epoch === epoch.epoch} aria-label={`Run ${run.epoch}: ${run.status}`} onClick={() => onRun(run.epoch)}>
-      Run {run.epoch} {run.status === "passed" ? "✓" : run.status === "failed" ? "✗" : "!"}</button>)}</div>
+      aria-pressed={run.trial === trial.trial} aria-label={`Run ${run.trial}: ${run.status}`} onClick={() => onRun(run.trial)}>
+      Run {run.trial} {run.status === "passed" ? "✓" : run.status === "failed" ? "✗" : "!"}</button>)}</div>
     <dl className="run-stats">{[
       ["Checks", `${checks.filter(([, check]) => check.passed).length} / ${checks.length}`],
-      ["Tokens", tokens(epoch.total_tokens)], ["Cost", money(epoch.cost, 4)], ["Time", duration(epoch)],
+      ["Tokens", tokens(trial.total_tokens)], ["Cost", money(trial.cost, 4)], ["Time", duration(trial)],
     ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-    {epoch.issue && <p className="issue">{epoch.error_kind ?? epoch.limit?.type ?? "Run"}: {epoch.issue}</p>}
-    {epoch.status === "error" && <p className="caution">This error does not enter the score.</p>}
-    {epoch.limit && <p className="caution">{epoch.limit.type} limit: {epoch.limit.limit}{epoch.limit.reason ? ` · ${epoch.limit.reason}` : ""}</p>}
-    <section className="scorer-verdict"><h3>Scorer verdict</h3><ul className="checks">{checks.sort((a, b) => Number(a[1].passed) - Number(b[1].passed)).map(([name, check]) =>
+    {trial.issue && <p className="issue">{trial.error_kind ?? trial.limit?.type ?? "Run"}: {trial.issue}</p>}
+    {trial.status === "error" && <p className="caution">This error does not enter the score.</p>}
+    {trial.limit && <p className="caution">{trial.limit.type} limit: {trial.limit.limit}{trial.limit.reason ? ` · ${trial.limit.reason}` : ""}</p>}
+    <section className="scorer-verdict"><h3>Verifier checks</h3><ul className="checks">{checks.sort((a, b) => Number(a[1].passed) - Number(b[1].passed)).map(([name, check]) =>
       <li key={name}><span className={check.passed ? "positive" : "negative"}>{check.passed ? <Check size={16} /> : <X size={16} />}</span>
-        <div><code>{name}</code>{!check.passed && <p>{check.reason}</p>}</div></li>)}</ul>
+        <div><code>{name}</code><p>{check.reason}</p></div></li>)}</ul>
       {!checks.length && <p className="muted">No checks completed.</p>}
     </section>
-    {epoch.logHref || epoch.logUrl ? <div className="log-links"><a className="button" href={epoch.logHref ?? epoch.logUrl!} target="_blank" rel="noreferrer">{epoch.logHref && epoch.logHref !== epoch.logUrl ? "Open log" : "Download log"} ↗</a>
-      {epoch.logHref && epoch.logUrl && epoch.logHref !== epoch.logUrl && <a href={epoch.logUrl} target="_blank" rel="noreferrer">Download log ↗</a>}</div> : <p className="muted">Full log not published.</p>}
+    <p className="muted">{trial.paid_by === "free" ? "No model spend" : `Paid by ${trial.paid_by === "plan" ? "plan" : "API key"}`} · Cost at API prices</p>
+    {trial.trajectoryUrl ? <div className="trajectory-links"><a className="button" href={trial.trajectoryUrl} target="_blank" rel="noreferrer">Open trajectory ↗</a></div> : <p className="muted">Trajectory not published.</p>}
   </>;
 }
 
@@ -98,8 +98,8 @@ export function Detail({ selection, data, onSelect }: {
   const { evaluation, pillar, agent, mode, fromList } = selection;
   const table = data.tables[mode], key = agentKey(agent), summary = table.summaries[key];
   const cell = evaluation ? table.pillars[evaluation.pillar].evals.find((entry) => entry.id === evaluation.id)?.cells[key] : undefined;
-  const epochs = cell?.epochs ?? [], epoch = epochs.find((value) => value.epoch === selection.run);
-  const runLevel = epoch !== undefined;
+  const trials = cell?.trials ?? [], trial = trials.find((value) => value.trial === selection.run);
+  const runLevel = trial !== undefined;
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.closest(".sheet")?.scrollTo({ top: 0 });
@@ -107,17 +107,17 @@ export function Detail({ selection, data, onSelect }: {
   }, [evaluation?.id, runLevel]);
   const scope = pillar ? table.pillars[pillar].cells[key] : summary;
   return <div className="detail-body">
-    <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={epoch ? "run-heading" : undefined}>{epoch ? <>Run {epoch.epoch} of {epochs.length} <Verdict epoch={epoch} /></> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
-      {epoch && <p>{evaluation!.title}</p>}
+    <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial ? <>Run {trial.trial} of {trials.length} <Verdict trial={trial} /></> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
+      {trial && <p>{evaluation!.title}</p>}
       <Configuration agent={agent} /><p className="muted">{modeNames[mode]}</p>
       {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scope.passed}/{scope.total} scored · {scope.errors} errors excluded</p>}
-      {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No evals yet" : "No epochs yet"}</p>}
+      {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No evals yet" : "No trials yet"}</p>}
     </header>
-    {epoch ? <button className="back-button" onClick={() => onSelect({ ...selection, run: undefined })}><ArrowLeft size={14} />All runs</button>
+    {trial ? <button className="back-button" onClick={() => onSelect({ ...selection, run: undefined })}><ArrowLeft size={14} />All runs</button>
       : evaluation && fromList && <button className="back-button" onClick={() => onSelect({ agent, mode, pillar })}>
         <ArrowLeft size={14} />{pillar ? names[pillar] : "All pillars"}</button>}
-    {epoch ? <RunView epoch={epoch} epochs={epochs} onRun={(run) => onSelect({ ...selection, run })} /> :
-      evaluation ? <EvalView evaluation={evaluation} epochs={epochs} onRun={(run) => onSelect({ ...selection, run })} /> :
+    {trial ? <RunView trial={trial} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
+      evaluation ? <EvalView evaluation={evaluation} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
       <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar}
         onEval={(value) => onSelect({ ...selection, evaluation: value, fromList: true })} />}
   </div>;
@@ -171,7 +171,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
       {agents.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Leaderboard. Scroll horizontally for all columns.">
         <table className="leaderboard"><caption className="sr-only">Configuration scores, sorted by {sort.key} {sort.ascending ? "ascending" : "descending"}</caption>
           <colgroup><col className="config-col" />{columns.map(([key]) => <col key={key} className="score-col" />)}</colgroup>
-          <thead><tr><th scope="col" className="row-label">{mode === "vanilla" ? "Model" : "Configuration"}<small>model · harness</small></th>
+          <thead><tr><th scope="col" className="row-label">{mode === "vanilla" ? "Model" : "Configuration"}<small>model · agent</small></th>
             {columns.map(([key, name]) => <th key={key} scope="col" aria-sort={sort.key === key ? sort.ascending ? "ascending" : "descending" : "none"}>
               <button className="sort-button" onClick={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : key === "costPerPass" })}>{name}{sort.key === key && (sort.ascending ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}</button>
             </th>)}</tr></thead><tbody>{agents.map((agent) => <tr key={agentKey(agent)}><th scope="row" className="row-label"><Configuration agent={agent} /></th>
@@ -179,10 +179,10 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
                 <Score score={value(agent, key)} lift={mode === "skills" ? data.lifts[agentKey(agent)]?.[key] : undefined}
                   formula={key === "overall" ? formulas.overall : formulas.pillar}
                   label={`${key === "overall" ? "Overall" : names[key]}, ${agentLabel(agent)}`}
-                  empty={key !== "overall" && table.pillars[key].cells[agentKey(agent)].state === "empty" ? "No evals yet" : "No epochs yet"}
+                  empty={key !== "overall" && table.pillars[key].cells[agentKey(agent)].state === "empty" ? "No evals yet" : "No trials yet"}
                   onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} />}</td>)}
             </tr>)}</tbody></table></div>{mode === "skills" && <div className="table-note">+pp is the change over Internet.</div>}</div> :
-        <div className="empty"><h3>{mode === "vanilla" ? "No model epochs yet" : "No agent epochs yet"}</h3><p>No published results match the current evals. Browse the eval catalog below.</p></div>}
+        <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current evals. Browse the eval catalog below.</p></div>}
       <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on the four pillars of Ethereum work. Overall is the average of the pillar scores. Click a pillar cell to see its evals and every run behind them.</div>
     </section>
     <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by eval · {modeNames[evalsMode]}</h2><p>A detailed view of the Leaderboard. See how many runs each agent passed on every eval, grouped by pillar.</p></div>
@@ -197,9 +197,9 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
               <th scope="row" className="row-label"><span className="eval-title">{data.evaluations[entry.id].title}</span><small>{entry.id}</small></th>
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
                 return <td key={agentKey(agent)}>{cell.state === "na" || cell.score === null ?
-                  <span className="matrix-cell" data-empty title={cell.state === "na" ? "Not applicable" : cell.errors ? `${cell.errors} errors; no scored epochs` : "No epochs yet"}>–</span> :
+                  <span className="matrix-cell" data-empty title={cell.state === "na" ? "Not applicable" : cell.errors ? `${cell.errors} errors; no scored trials` : "No trials yet"}>–</span> :
                   <Hint text={formulas.eval}><button className="matrix-cell" style={heat(cell.score)}
-                    aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} epochs passed. Open details.`}
+                    aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} trials passed. Open details.`}
                     onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{cell.passed}/{cell.total}</button></Hint>}</td>;
               })}
             </tr>) : <tr><td colSpan={matrixAgents.length + 1} className="no-evals"><span className="band-label">No evals yet</span></td></tr>}

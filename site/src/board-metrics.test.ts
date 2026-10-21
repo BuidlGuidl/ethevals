@@ -31,11 +31,11 @@ test("the board publishes summaries, costs and paired lifts for each configurati
     { id: "concepts/a", hash: "a", title: "A", pillar: "concepts", motivation: "Check A.", prompt: "A?", choices: [], modes: ["internet", "skills"] },
     { id: "building/b", hash: "b", title: "B", pillar: "building", motivation: "Check B.", prompt: "B?", choices: [], modes: ["internet", "skills"] },
   ];
-  const base: Row = { schema_version: 6, eval_id: "concepts/a", eval_hash: "a", skills_hash: null, model: "m", harness: "h", effort: null,
-    mode: "internet", epoch: 1, status: "passed", checks: {}, error_kind: null, error_reason: null, limit: null,
-    model_cost_usd: 0.5, grader_cost_usd: 90, total_tokens: 100, total_seconds: 10, working_seconds: 8, cost_source: "computed", log_url: null };
-  const board = buildBoard(evals, [base, { ...base, eval_id: "building/b", eval_hash: "b", status: "failed" },
-    { ...base, mode: "skills", skills_hash: "pack" }, { ...base, mode: "skills", skills_hash: "pack", eval_id: "building/b", eval_hash: "b" }]);
+  const base: Row = { schema_version: 7, task_id: "concepts/a", task_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
+    mode: "internet", trial: 1, status: "passed", checks: {}, error_kind: null, error_reason: null, limit: null,
+    model_cost_usd: 0.5, judge_cost_usd: 90, total_tokens: 100, total_seconds: 10, working_seconds: 8, paid_by: "api_key", judge: null, judge_paid_by: null, cost_source: "harbor", trajectory_url: null };
+  const board = buildBoard(evals, [base, { ...base, task_id: "building/b", task_hash: "b", status: "failed" },
+    { ...base, mode: "skills", skills_hash: "pack" }, { ...base, mode: "skills", skills_hash: "pack", task_id: "building/b", task_hash: "b" }]);
   assert.deepEqual(board.tables.internet.summaries['["m","h",null]'], {
     scores: { overall: 0.5, concepts: 1, transactions: null, building: 0, security: null },
     costPerPass: 1, medianTokens: 100, passed: 1, total: 2, errors: 0,
@@ -47,11 +47,11 @@ test("the board publishes summaries, costs and paired lifts for each configurati
 test("lift pairs evals when skills covers a strict subset of Internet results", () => {
   const evaluation: Eval = { id: "concepts/a", hash: "a", title: "A", pillar: "concepts", motivation: "Check A.", prompt: "A?", choices: [], modes: ["internet", "skills"] };
   const evals: Eval[] = [evaluation, { ...evaluation, id: "concepts/b" }, { ...evaluation, id: "building/c", pillar: "building" }];
-  const base: Row = { schema_version: 6, eval_id: "concepts/a", eval_hash: "a", skills_hash: null, model: "m", harness: "h", effort: null,
-    mode: "internet", epoch: 1, status: "failed", checks: {}, error_kind: null, error_reason: null, limit: null,
-    model_cost_usd: 0.5, grader_cost_usd: 0, total_tokens: 100, total_seconds: 10, working_seconds: 8, cost_source: "computed", log_url: null };
-  const internet: Row[] = [base, { ...base, eval_id: "concepts/b", status: "passed" }, { ...base, eval_id: "building/c" }];
-  const board = buildBoard(evals, [...internet, { ...base, mode: "skills" }, { ...base, mode: "skills", eval_id: "building/c", status: "passed" }]);
+  const base: Row = { schema_version: 7, task_id: "concepts/a", task_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
+    mode: "internet", trial: 1, status: "failed", checks: {}, error_kind: null, error_reason: null, limit: null,
+    model_cost_usd: 0.5, judge_cost_usd: 0, total_tokens: 100, total_seconds: 10, working_seconds: 8, paid_by: "api_key", judge: null, judge_paid_by: null, cost_source: "harbor", trajectory_url: null };
+  const internet: Row[] = [base, { ...base, task_id: "concepts/b", status: "passed" }, { ...base, task_id: "building/c" }];
+  const board = buildBoard(evals, [...internet, { ...base, mode: "skills" }, { ...base, mode: "skills", task_id: "building/c", status: "passed" }]);
   assert.deepEqual(board.lifts['["m","h",null]'], { overall: 50, concepts: 0, transactions: null, building: 100, security: null });
   assert.deepEqual(buildBoard(evals, internet).lifts['["m","h",null]'], { overall: null, concepts: null, transactions: null, building: null, security: null });
 });

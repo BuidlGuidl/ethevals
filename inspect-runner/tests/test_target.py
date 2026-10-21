@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.mark.parametrize("answer,expected", [("reference", True), ("empty", False)])
 def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
     config = fixture_config()
-    evals = [load_eval(path, config) for path in sorted((ROOT / "inspect-runner/tests/fixtures").glob("*/*"))]
+    evals = [load_eval(path.parent, config) for path in sorted((ROOT / "inspect-runner/tests/fixtures").glob("*/*/eval.yaml"))]
     evals = [item for item in evals if item.target is not None and "vanilla" in item.declaration.modes]
     output = tmp_path / answer
     success, rows = run(evals, config, output, answer=answer)

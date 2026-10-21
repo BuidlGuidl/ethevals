@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "inspect-runner/tests/fixtures/building/counter"
 
 
-def test_catalog_exports_an_empty_legacy_tree(tmp_path, monkeypatch):
+def test_catalog_exports_an_empty_task_tree(tmp_path, monkeypatch):
     from ethevals.cli import main
     from ethevals.skills import pack_skills
 
@@ -24,7 +24,7 @@ def test_catalog_exports_an_empty_legacy_tree(tmp_path, monkeypatch):
     output = tmp_path / "catalog"
     assert main(["catalog", "--output", str(output)]) == 0
     assert json.loads((output / "catalog.json").read_text()) == {
-        "skills_hash": pack_skills().hash, "evals": []}
+        "skills_hash": pack_skills().hash, "tasks": []}
 
 
 def test_loader_preserves_target_and_prompt(folder):
@@ -84,30 +84,6 @@ def test_loaded_eval_uses_captured_files(tmp_path):
     assert load_eval(folder, config).hash != evaluation.hash
 
 
-def test_catalog_exports_a_loaded_eval(tmp_path, config_path):
-    folder = tmp_path / "concepts" / "units"
-    (folder / "workspace").mkdir(parents=True)
-    (folder / "scorer").mkdir()
-    (folder / "eval.yaml").write_text(
-        "motivation: Check units.\nprompt: How many wei?\n"
-        "modes: [vanilla, internet]\nchoices: null\n"
-    )
-    (folder / "scorer" / "target.yaml").write_text('target: "1000000000000000000"\n')
-    output = tmp_path / "export"
-    result = subprocess.run(
-        [sys.executable, "-m", "ethevals.cli", "catalog", "--evals", str(folder), "--output", str(output), "--config", str(config_path)],
-        capture_output=True, text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    catalog = json.loads((output / "catalog.json").read_text())
-    assert catalog["evals"] == [{
-        "id": "concepts/units",
-        "hash": "cc49e54adbee0419687e4cac9914259b3d0c0798bd774cc2d1d51f82965b0090",
-        "pillar": "concepts", "chain": None, "motivation": "Check units.",
-        "prompt": "How many wei?", "modes": ["vanilla", "internet"], "choices": None,
-    }]
-    from ethevals.skills import pack_skills
-    assert catalog["skills_hash"] == pack_skills().hash
 
 
 @pytest.mark.parametrize("file,content", [

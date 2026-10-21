@@ -19,17 +19,16 @@ export type DisplayEval = Omit<Eval, "hash">;
 
 export interface Agent {
   model: string;
-  harness: string | null;
+  agent: string | null;
   effort: string | null;
 }
 
-export type Epoch = Pick<Row, "epoch" | "status" | "checks" | "error_kind" | "error_reason"
-  | "total_tokens" | "total_seconds" | "model_cost_usd" | "grader_cost_usd"
-  | "cost_source" | "limit"> & {
+export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind" | "error_reason"
+  | "total_tokens" | "total_seconds" | "model_cost_usd" | "judge_cost_usd"
+  | "cost_source" | "limit" | "paid_by"> & {
   cost: number | null;
   issue: string;
-  logUrl: string | null;
-  logHref?: string | null;
+  trajectoryUrl: string | null;
 };
 
 interface Counts {
@@ -40,7 +39,7 @@ interface Counts {
 }
 export interface EvalCell extends Counts {
   state: "score" | "na" | "pending";
-  epochs: Epoch[];
+  trials: Trial[];
 }
 export interface PillarCell extends Counts {
   state: "score" | "empty" | "pending";
@@ -77,11 +76,11 @@ export function overallScore(scores: (number | null)[]): number | null {
   return scored.length ? scored.reduce((sum, score) => sum + score, 0) / scored.length : null;
 }
 
-export function costPerPass(epochs: Pick<Epoch, "status" | "model_cost_usd">[]): number | null {
-  const scored = epochs.filter((epoch) => epoch.status !== "error");
-  const passed = scored.filter((epoch) => epoch.status === "passed").length;
-  if (!passed || scored.some((epoch) => epoch.model_cost_usd === null)) return null;
-  return scored.reduce((sum, epoch) => sum + epoch.model_cost_usd!, 0) / passed;
+export function costPerPass(trials: Pick<Trial, "status" | "model_cost_usd">[]): number | null {
+  const scored = trials.filter((trial) => trial.status !== "error");
+  const passed = scored.filter((trial) => trial.status === "passed").length;
+  if (!passed || scored.some((trial) => trial.model_cost_usd === null)) return null;
+  return scored.reduce((sum, trial) => sum + trial.model_cost_usd!, 0) / passed;
 }
 
 export function skillLift(skills: number | null, internet: number | null): number | null {
@@ -95,7 +94,7 @@ function median(values: (number | null)[]): number | null {
 }
 
 export function agentKey(agent: Agent): string {
-  return JSON.stringify([agent.model, agent.harness, agent.effort]);
+  return JSON.stringify([agent.model, agent.agent, agent.effort]);
 }
 
 function evalCell(evaluation: Eval, mode: Mode, rows: Row[]): EvalCell {
@@ -105,16 +104,17 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[]): EvalCell {
     state: !evaluation.modes.includes(mode) ? "na" : scored.length ? "score" : "pending",
     score: scored.length ? passed / scored.length : null,
     passed, total: scored.length, errors: rows.length - scored.length,
-    epochs: rows.sort((a, b) => a.epoch - b.epoch).map((row) => ({
-      epoch: row.epoch, status: row.status, checks: row.checks, error_kind: row.error_kind,
+    trials: rows.sort((a, b) => a.trial - b.trial).map((row) => ({
+      trial: row.trial, status: row.status, checks: row.checks, error_kind: row.error_kind,
       error_reason: row.error_reason, total_tokens: row.total_tokens, total_seconds: row.total_seconds,
-      model_cost_usd: row.model_cost_usd, grader_cost_usd: row.grader_cost_usd,
+      model_cost_usd: row.model_cost_usd, judge_cost_usd: row.judge_cost_usd,
       cost_source: row.cost_source,
+      paid_by: row.paid_by,
       limit: row.limit,
-      cost: epochCost(row), issue: row.error_reason ?? (row.limit
+      cost: trialCost(row), issue: row.error_reason ?? (row.limit
         ? [...new Set(Object.values(row.checks).filter((check) => !check.passed).map((check) => check.reason))].join(" ")
         : ""),
-      logUrl: row.log_url,
+      trajectoryUrl: row.trajectory_url,
     })),
   };
 }
@@ -137,8 +137,8 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
   const agents: Record<Mode, Map<string, Agent>> = { internet: new Map(), skills: new Map(), vanilla: new Map() };
   for (const row of rows) {
     const key = agentKey(row);
-    agents[row.mode].set(key, { model: row.model, harness: row.harness, effort: row.effort });
-    const group = JSON.stringify([row.eval_id, row.mode, key]);
+    agents[row.mode].set(key, { model: row.model, agent: row.agent, effort: row.effort });
+    const group = JSON.stringify([row.task_id, row.mode, key]);
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group)!.push(row);
   }
@@ -169,14 +169,14 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
     for (const agent of columns) {
       const key = agentKey(agent);
       const cells = pillars.map((pillar) => table.pillars[pillar].cells[key]);
-      const epochs = pillars.flatMap((pillar) => table.pillars[pillar].evals.flatMap((entry) => entry.cells[key].epochs));
-      const scored = epochs.filter((epoch) => epoch.status !== "error");
+      const trials = pillars.flatMap((pillar) => table.pillars[pillar].evals.flatMap((entry) => entry.cells[key].trials));
+      const scored = trials.filter((trial) => trial.status !== "error");
       const scores: ConfigurationSummary["scores"] = { overall: null, concepts: null, transactions: null, building: null, security: null };
       for (const pillar of pillars) scores[pillar] = table.pillars[pillar].cells[key].score;
       scores.overall = overallScore(pillars.map((pillar) => scores[pillar]));
       table.summaries[key] = {
-        scores, costPerPass: costPerPass(epochs),
-        medianTokens: median(scored.map((epoch) => epoch.total_tokens)),
+        scores, costPerPass: costPerPass(trials),
+        medianTokens: median(scored.map((trial) => trial.total_tokens)),
         passed: cells.reduce((sum, cell) => sum + cell.passed, 0),
         total: cells.reduce((sum, cell) => sum + cell.total, 0),
         errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
@@ -205,7 +205,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
   };
 }
 
-export function epochCost(row: Pick<Row, "model_cost_usd" | "grader_cost_usd">): number | null {
-  return row.model_cost_usd === null || row.grader_cost_usd === null
-    ? null : row.model_cost_usd + row.grader_cost_usd;
+export function trialCost(row: Pick<Row, "model_cost_usd" | "judge_cost_usd">): number | null {
+  return row.model_cost_usd === null || row.judge_cost_usd === null
+    ? null : row.model_cost_usd + row.judge_cost_usd;
 }

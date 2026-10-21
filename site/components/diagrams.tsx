@@ -56,7 +56,7 @@ function PipelineLayout({ mobile = false }: { mobile?: boolean }) {
     ["auto", "M185 928V967"], ["auto", "M185 1078V1117"],
   ];
   return <svg className={`diagram pipeline-diagram diagram-${variant}`} viewBox={mobile ? "0 0 345 1460" : "0 0 1320 400"} role="img" aria-labelledby={`${id}-title ${id}-desc`}>
-    <title id={`${id}-title`}>From pull request to website</title><desc id={`${id}-desc`}>Eval and model pull requests pass validity checks with a mock model and maintainer review. After merge, CI runs new epochs for every agent and model. A results pull request updates the website. Model-only evals also go to Hugging Face.</desc>
+    <title id={`${id}-title`}>From pull request to website</title><desc id={`${id}-desc`}>Eval and model pull requests pass validity checks with a mock model and maintainer review. After merge, CI runs new trials for every agent and model. A results pull request updates the website. Model-only evals also go to Hugging Face.</desc>
     <Arrows id={id} />
     {[["1 · Contribute", 20, 200], ["2 · Review", 240, 640], ["3 · Automatic on main", 680, 1300]].map(([label, start, end], index) => <g key={label} className={`diagram-zone ${index === 2 ? "auto" : "phase"}`}><path d={mobile ? `M55 ${[34, 396, 756][index]}H315` : `M${start} 34H${end}`} /><text x={mobile ? 55 : start} y={mobile ? [22, 382, 742][index] : 22}>{label}</text></g>)}
     {(mobile ? phoneEdges : edges).map(([kind, d], index) => <Edge key={index} d={d} kind={kind} id={id} index={index} arrow={!mobile || (index > 1 && index !== 5)} />)}

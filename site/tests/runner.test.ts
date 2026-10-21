@@ -1,43 +1,52 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Detail, Results } from "../app/board";
 import { loadCatalog, parseRows } from "../src/load";
+import { agentKey, buildBoard } from "../src/board";
 import { siteRoot } from "../src/paths";
 
-test("the board reads the merged runner's catalog and reference and empty rows", (t) => {
+test("a real Harbor oracle row reaches the board and its trajectory reaches the drawer", (t) => {
   const scratch = path.join(siteRoot, ".test-tmp");
   mkdirSync(scratch, { recursive: true });
-  const root = mkdtempSync(path.join(scratch, "runner-"));
+  const root = mkdtempSync(path.join(scratch, "harbor-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const site = path.join(root, "site");
-  const folder = path.join(root, "evals/concepts/unit");
-  mkdirSync(path.join(folder, "scorer"), { recursive: true });
-  mkdirSync(path.join(folder, "workspace"));
-  writeFileSync(path.join(folder, "eval.yaml"), "motivation: Check units.\nprompt: Name the unit.\nmodes: [vanilla]\n");
-  writeFileSync(path.join(folder, "scorer/target.yaml"), 'target: "wei"\n');
+  const repo = path.dirname(siteRoot);
+  const fixture = path.join(repo, "inspect-runner/tests/fixtures/harbor");
   const env = { ...process.env };
   for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY"]) delete env[key];
-  function run(args: string[]) {
-    const result = spawnSync("uv", ["run", "ethevals", ...args, "--evals", folder], {
-      cwd: path.dirname(siteRoot), env, encoding: "utf8", timeout: 60_000,
-    });
-    assert.equal(result.status, 0, result.error?.message ?? result.stderr + result.stdout);
-    return result.stdout;
-  }
-  run(["catalog", "--output", path.join(site, ".catalog")]);
-  run(["check", "--epochs", "1", "--output", path.join(root, "results")]);
-  const { evals: evaluations } = loadCatalog(path.join(site, ".catalog/catalog.json"));
-  assert.deepEqual(evaluations.map((evaluation) => evaluation.id),
-    ["concepts/unit"]);
-  for (const answer of ["reference", "empty"]) {
-    const filename = path.join(root, "results", answer, "rows.jsonl");
-    const rows = parseRows(readFileSync(filename, "utf8"), filename, evaluations);
-    assert.deepEqual(rows.map((row) => [row.eval_id, row.schema_version, row.status]),
-      [["concepts/unit", 6, answer === "reference" ? "passed" : "failed"]]);
-    assert.equal(rows[0].skills_hash, null);
-    assert.equal(rows[0].eval_hash, evaluations.find((evaluation) => evaluation.id === rows[0].eval_id)!.hash);
-    assert.equal(rows[0].log_url, null);
-  }
+  const script = `
+import json
+from pathlib import Path
+from ethevals.jobs import write_catalog, task_entry
+from ethevals.trial_rows import results_row, write_rows
+fixture, output = Path(${JSON.stringify(fixture)}), Path(${JSON.stringify(root)})
+write_catalog([fixture / "question"], output)
+metadata = json.loads((fixture / "recorded-trial/board.json").read_text())
+metadata["task_hash"] = task_entry(fixture / "question")["hash"]
+write_rows(output / "rows.jsonl", [results_row(fixture / "recorded-trial", metadata,
+    trajectory_url="https://example.org/trials/oracle/trajectory.json")])
+`;
+  const result = spawnSync("uv", ["run", "python", "-c", script], { cwd: repo, env, encoding: "utf8", timeout: 60_000 });
+  assert.equal(result.status, 0, result.error?.message ?? result.stderr + result.stdout);
+  const { evals } = loadCatalog(path.join(root, "catalog.json"));
+  const rows = parseRows(readFileSync(path.join(root, "rows.jsonl"), "utf8"), "rows.jsonl", evals);
+  assert.deepEqual(rows.map((row) => [row.task_id, row.schema_version, row.status, row.paid_by, row.model_cost_usd]),
+    [["concepts/question", 7, "passed", "free", 0]]);
+  assert.deepEqual(rows[0].checks, { unit: { passed: true, reason: "The final reply matches." } });
+  const data = buildBoard(evals, rows);
+  const agent = data.tables.internet.agents[0];
+  const cell = data.tables.internet.pillars.concepts.evals[0].cells[agentKey(agent)];
+  assert.deepEqual([cell.passed, cell.total], [1, 1]);
+  const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }));
+  assert.ok(html.includes("1 of 1 trials passed"));
+  const drawer = renderToStaticMarkup(createElement(Detail, {
+    data, selection: { agent, evaluation: data.evaluations["concepts/question"], mode: "internet", run: 1 }, onSelect: () => {},
+  }));
+  assert.ok(drawer.includes('href="https://example.org/trials/oracle/trajectory.json" target="_blank" rel="noreferrer">Open trajectory ↗'));
+  assert.ok(drawer.includes("No model spend"));
 });

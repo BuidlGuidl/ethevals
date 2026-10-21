@@ -8,15 +8,15 @@ export const heat = (score: number | null) => score === null ? undefined : { "--
 export const formulas = {
   overall: "Overall = mean of scored pillar scores; pillars without a score are skipped.",
   pillar: "Pillar score = mean of scored eval pass rates; evals without scores are skipped.",
-  eval: "Eval pass rate = passed epochs ÷ scored epochs; errors are excluded.",
-  cost: "$ / pass = model cost of scored epochs ÷ passed epochs; no passes or missing prices show –.",
+  eval: "Eval pass rate = passed trials ÷ scored trials; errors are excluded.",
+  cost: "$ / pass = model cost of scored trials ÷ passed trials; no passes or missing prices show –.",
   lift: "Lift = mean change over evals scored in both modes for the same configuration, in percentage points. Overall averages paired pillar lifts.",
-  tokens: "Tokens per run = median total model and grader tokens across scored epochs.",
+  tokens: "Tokens per run = median total model and grader tokens across scored trials.",
 };
 export function Hint({ text, children }: { text: string; children: React.ReactElement }) {
   return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent className="whitespace-pre-line">{text}</TooltipContent></Tooltip>;
 }
-export function Score({ score, lift, onOpen, label, formula, empty = "No epochs yet", counts }: {
+export function Score({ score, lift, onOpen, label, formula, empty = "No trials yet", counts }: {
   score: number | null; lift?: number | null; onOpen: () => void; label: string;
   formula: string; empty?: string; counts?: string;
 }) {

@@ -1,5 +1,50 @@
 # Harbor tasks
 
+## Board jobs
+
+`inspect-runner/ethevals/job.yaml` holds the board's agents, models, CLI pins, Harbor pin, and time limit.
+Each agent entry names a Harbor agent or Python import path and a model key.
+Its `paid_by` field is `plan`, `api_key`, or `free` for a local stand-in.
+Model effort becomes Harbor's `reasoning_effort`; `kwargs` carries other agent options.
+Only internet mode runs here until the vanilla and skills runners land.
+
+```sh
+uv run ethevals plan --modes internet --trials 1 --budget 100
+uv run ethevals run --modes internet --trials 1 --budget 100 --output results/local
+```
+
+Every missing agent trial requires an explicit `--budget`, including free stand-ins and plan-funded trials.
+API-key trials reserve `cost_limit_usd` for each remaining attempt.
+Plan-funded trials reserve $0 of agent spend.
+The reserve controls admission; Harbor does not enforce a spending cap during execution.
+Planning needs no provider keys or Docker.
+Use `--tasks`, `--agents`, and `--models` to select entries.
+Use `--trial N` with one task, agent, and mode to run one numbered trial.
+Completed passes and failures never repeat for the same task hash, agent, model, effort, mode, and trial number.
+Errors repeat up to `max_attempts`; `--retry-errors` grants one further attempt per selected error.
+
+Run the same command and output directory after an interruption.
+The runner reads saved Harbor trial folders before planning and rebuilds missing rows.
+Each numbered trial has its own Harbor job under `OUTPUT/jobs/`.
+`board.json` records that trial's board identity and payment source beside Harbor's files.
+Rows use schema version 7 and link a trajectory JSON file when one exists.
+Cost comes from Harbor's API-price usage record, regardless of the payment source.
+Unknown cost stays null; free stand-ins cost $0.
+Rows reserve separate judge fields for the criteria runner.
+Agent trials with criteria stop until that runner lands.
+The free check still skips paid criteria.
+
+To open a local job on the board, build from `site/`:
+
+```sh
+ETHEVALS_ROWS=../results/local/rows.jsonl pnpm build
+```
+
+The build copies local trajectories into the static export and links published trajectories directly.
+Paid CI and release publication still need their Harbor migration.
+
+## Free checks
+
 Harbor is pinned to 0.24.0 in `pyproject.toml` and `uv.lock`.
 This version copies declared trajectories into a separate verifier after the agent stops.
 The verifier can read the final reply without changing the instruction or asking for an answer file.

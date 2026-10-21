@@ -45,51 +45,6 @@ def test_pack_changes_repeat_only_skills_epochs_and_eval_changes_repeat_both(fol
         ("internet", 1), ("internet", 2), ("skills", 1), ("skills", 2)]
 
 
-@pytest.mark.parametrize("command", ["plan", "run"])
-@pytest.mark.parametrize("selection,message", [
-    (["--modes", "vanilla", "--agents", "claude-code-opus-5.5"], "--agents requires an internet or skills mode"),
-    (["--modes", "internet", "skills", "--models", "opus-5.5"], "--models requires the vanilla mode"),
-])
-def test_selector_requires_a_matching_mode(command, selection, message):
-    result = eval_cli(command, "--evals", ROOT / "inspect-runner/tests/fixtures/concepts/quiz", *selection)
-    assert result.returncode == 2
-    assert message in result.stderr
-
-
-@pytest.mark.parametrize("selectors,expected", [
-    ([], [("vanilla", 4), ("internet", 4), ("skills", 4)]),
-    (["--models", "opus-5.5"], [("vanilla", 1)]),
-    (["--agents", "claude-code-opus-5.5"], [("internet", 1), ("skills", 1)]),
-    (["--models", "opus-5.5", "--agents", "claude-code-opus-5.5"], [("vanilla", 1), ("internet", 1), ("skills", 1)]),
-])
-def test_plan_derives_modes_from_selectors(tmp_path, selectors, expected):
-    from collections import Counter
-    result = eval_cli("plan", "--evals", ROOT / "inspect-runner/tests/fixtures/concepts/quiz",
-                      "--epochs", 1, "--output", tmp_path, *selectors)
-    assert result.returncode == 0, result.stderr
-    assert list(Counter(row["mode"] for row in json.loads(result.stdout)["missing"]).items()) == expected
-
-
-def test_cli_runs_only_the_selected_epoch(tmp_path):
-    config = small_config()
-    path = tmp_path / "config.json"
-    path.write_text(config.model_dump_json())
-    output = tmp_path / "results"
-    assert main(["run", "--config", str(path), "--evals", str(ROOT / "inspect-runner/tests/fixtures/concepts/quiz"),
-                 "--models", "test", "--modes", "vanilla", "--epoch", "2", "--budget", "4",
-                 "--rows", str(tmp_path / "rows.jsonl"), "--output", str(output)]) == 0
-    assert [(row["epoch"], row["attempt"], row["status"], row["effort"]) for row in read_rows(output / "rows.jsonl")] == [
-        (2, 1, "failed", "high")]
-    assert len(list((output / "logs").glob("*.eval"))) == 1
-
-
-def test_single_epoch_rejects_multiple_actors_before_providers(tmp_path):
-    result = eval_cli("run", "--evals", ROOT / "inspect-runner/tests/fixtures/concepts/quiz", "--modes", "vanilla",
-                      "--epoch", "2", "--budget", "100", "--output", tmp_path)
-    assert result.returncode == 2
-    assert "--epoch requires exactly one eval, actor, and mode" in result.stderr
-
-
 def test_declared_modes_skip_ineligible_evals(folder, tmp_path):
     path = folder / "eval.yaml"
     path.write_text(path.read_text().replace("[vanilla, internet]", "[internet]"))
@@ -155,28 +110,6 @@ def test_budget_stops_before_preparation(tmp_path, monkeypatch):
         run([evaluation], config, tmp_path, budget=1, epochs=1, modes=["vanilla"])
     report = json.loads((tmp_path / "plan.json").read_text())
     assert (report["worst_case_usd"], report["missing_epochs"], report["within_budget"]) == (4, 1, False)
-
-
-def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
-    from support import small_config
-    config = small_config()
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(config.model_dump_json())
-    quiz = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
-    base = {"eval_id": quiz.id, "eval_hash": quiz.hash, "harness": None,
-            "model": "mockllm/test", "effort": "high", "mode": "vanilla"}
-    rows = [{**base, "epoch": 1, "status": "failed", "attempt": 1},
-            {**base, "epoch": 2, "status": "error", "attempt": 1},
-            {**base, "epoch": 3, "status": "error", "attempt": 2}]
-    store = tmp_path / "rows.jsonl"
-    write_rows(store, rows)
-    result = cli("-m", "ethevals.cli", "plan", "--config", config_path, "--output", tmp_path,
-                 "--rows", store, "--evals", quiz.folder, "--modes", "vanilla", "--budget", "1")
-    assert result.returncode == 1, result.stderr
-    report = json.loads(result.stdout)
-    assert [(r["epoch"], r["attempt"], r["remaining_attempts"]) for r in report["missing"]] == [(2, 2, 1)]
-    assert [(r["epoch"], r["attempt"]) for r in report["exhausted_errors"]] == [(3, 2)]
-    assert (report["worst_case_usd"], report["within_budget"]) == (2, False)
 
 
 def test_build_plan_reserves_the_grader_context_window():
