@@ -61,6 +61,6 @@ export default function Page() {
         <li><b>Results stay tied to what made them.</b> Change the task, the model or the agent, and it runs again.</li>
       </ul></div>
     </section>
-    <section id="hw-add" className="how-add"><p>Have an Ethereum task AI should handle? Add it as a task.</p><a className="button" href="https://github.com/BuidlGuidl/ethevals/blob/main/docs/add-an-eval.md">Read the guide →</a></section>
+    <section id="hw-add" className="how-add"><p>Have an Ethereum task AI should handle? Add it as a task.</p><a className="button" href="https://github.com/BuidlGuidl/ethevals/blob/main/docs/add-a-task.md">Read the guide →</a></section>
   </main>;
 }

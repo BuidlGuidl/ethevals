@@ -187,7 +187,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
     </section>
     <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task · {modeNames[evalsMode]}</h2><p>A detailed view of the Leaderboard. See how many trials each agent passed on every task, grouped by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />
-      <a className="button" href={`${repo}/blob/main/docs/add-an-eval.md`} target="_blank" rel="noreferrer">How to add a task ↗</a></div>
+      <a className="button" href={`${repo}/blob/main/docs/add-a-task.md`} target="_blank" rel="noreferrer">How to add a task ↗</a></div>
       <p className="eyebrow">{pillars.reduce((sum, pillar) => sum + matrixTable.pillars[pillar].evals.length, 0)} tasks · {modeNames[evalsMode]}</p>
       <div className="table-shell"><div className="matrix-title">Task matrix · {modeNames[evalsMode]}</div><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Task matrix. Scroll for more configurations.">
         <table className="matrix"><caption className="sr-only">Passed trials / scored trials for each task and configuration</caption><thead><tr><th className="row-label" scope="col">Task</th>
