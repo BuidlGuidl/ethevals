@@ -1,4 +1,0 @@
-chain: anvil
-motivation: Check a native currency transfer on a local chain.
-modes: [internet]
-prompt: Send 2 ether to the recipient in chain.json.

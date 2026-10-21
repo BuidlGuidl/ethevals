@@ -5,13 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "ethevals"
 version = "0.1.0"
-description = "Ethereum evals on Inspect"
+description = "Ethereum tasks on Harbor"
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "harbor==0.24.0",
   "harbor-rewardkit==0.2.3",
-  "inspect-ai==0.3.271",
-  "inspect-swe==0.2.71",
   "anthropic==1.8.0",
   "openai==3.19.2",
   "pydantic==2.13.5",
@@ -25,7 +23,7 @@ ethevals = "ethevals.cli:main"
 dev = ["pytest==9.0.3"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["inspect-runner/ethevals"]
+packages = ["runner/ethevals"]
 
 [tool.pytest.ini_options]
-testpaths = ["inspect-runner/tests"]
+testpaths = ["runner/tests"]

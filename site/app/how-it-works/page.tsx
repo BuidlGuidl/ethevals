@@ -10,16 +10,15 @@ const scope = {
   security: "Vulnerabilities: spotting known bug patterns, triaging an audit, fixing a bug before it ships.",
 };
 const evalFiles = [
-  ["├──", "eval.yaml", "the prompt, why the eval exists, its modes, its chain"],
-  ["├──", "workspace/", "files the agent starts with"],
-  ["├──", "setup/", ""],
-  ["│   └──", "setup.s.sol", "prepares the chain, required with a chain"],
-  ["├──", "scorer/", "at least one of the three"],
-  ["│   ├──", "target.yaml", "the expected answer"],
-  ["│   ├──", "tests/*.t.sol", "Forge tests"],
-  ["│   └──", "rubric.md", "questions for an LLM judge"],
-  ["├──", "solution/", "the reference answer, required with tests or a chain"],
-  ["└──", "compose.yaml", "extra services, like postgres"],
+  ["├──", "task.toml", "settings, motivation, and modes"],
+  ["├──", "instruction.md", "the instruction the agent receives"],
+  ["├──", "environment/", ""],
+  ["│   ├──", "Dockerfile", "the agent's tools and starting files"],
+  ["│   └──", "docker-compose.yaml", "optional sidecars, such as a chain"],
+  ["├──", "tests/", ""],
+  ["│   ├──", "test.sh", "the verifier that writes named checks"],
+  ["│   └──", "criteria.md", "optional questions for a judge"],
+  ["└──", "solution/", "solve.sh, which the oracle runs"],
 ];
 
 export default function Page() {
@@ -39,12 +38,12 @@ export default function Page() {
       </div>
     </section>
     <section id="hw-eval" className="how-section"><div className="how-head"><p className="eyebrow">Inside an eval</p><h2>An eval is a folder</h2>
-      <p>Only <code>eval.yaml</code> and one scorer are required.</p></div>
-      <div className="eval-tree" aria-label="Eval folder contents"><div className="eval-tree-root">evals/&lt;pillar&gt;/&lt;name&gt;/</div>
+      <p>Each Harbor task declares its instruction, environment, verifier, and solution.</p></div>
+      <div className="eval-tree" aria-label="Task folder contents"><div className="eval-tree-root">tasks/&lt;pillar&gt;/&lt;name&gt;/</div>
         <ul>{evalFiles.map(([branch, name, comment]) => <li key={name} className={[
           branch.startsWith("│") ? "eval-tree-child" : "",
           branch.startsWith("│") && branch.includes("└") ? "eval-tree-child-last" : "",
-          name === "setup/" || name === "scorer/" ? "eval-tree-parent" : "",
+          name === "environment/" || name === "tests/" ? "eval-tree-parent" : "",
         ].filter(Boolean).join(" ")}>
           <span className="eval-tree-file"><span className="eval-tree-branch" aria-hidden="true">{branch} </span>{name}</span>
           {comment && <span className="eval-tree-comment"># {comment}</span>}
@@ -56,7 +55,7 @@ export default function Page() {
       <p>Take one Transactions eval: &quot;send 12.5 tokens to the recipient.&quot; Here is what happens.</p></div>
       <figure className="diagram-figure"><RunDiagram /></figure>
       <div className="rules"><h3>Rules every run follows</h3><ul>
-        <li><b>The agent only gets the task.</b> The prompt and its workspace; the scorer runs in its own container the agent can&apos;t reach.</li>
+        <li><b>Tests arrive after the agent stops.</b> Harbor starts a separate verifier, or checks a live sidecar in the agent&apos;s container.</li>
         <li><b>No shortcuts on the chain.</b> Cheat codes, like setting a balance by hand, are blocked, so the agent can&apos;t fake a result.</li>
         <li><b>Judging starts after the agent stops.</b> The scorer and the LLM judge only look once the agent is done.</li>
         <li><b>Results stay tied to what made them.</b> Change the eval, the model or the agent, and it runs again.</li>

@@ -2,7 +2,7 @@
 
 ## Board jobs
 
-`inspect-runner/ethevals/job.yaml` holds the board's agents, models, CLI pins, Harbor pin, and time limit.
+`runner/ethevals/job.yaml` holds the board's agents, models, CLI pins, Harbor pin, and time limit.
 Each agent entry names a Harbor agent or Python import path and a model key.
 Its `paid_by` field is `plan`, `api_key`, or `free` for a local stand-in.
 Model effort becomes Harbor's `reasoning_effort`; `kwargs` carries other agent options.

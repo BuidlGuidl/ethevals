@@ -255,8 +255,8 @@
   .evals-frame { fill: transparent; stroke: var(--color-accent); stroke-width: 1.5; }
   .evals-frame-title { font-size: 18px; }
   .run-band-title { font-size: 13px; }
-  .inspect-frame { fill: transparent; stroke: var(--color-border-strong); }
-  .inspect-title { text-decoration: underline; text-underline-offset: 3px; }
+  .harbor-frame { fill: transparent; stroke: var(--color-border-strong); }
+  .harbor-title { text-decoration: underline; text-underline-offset: 3px; }
   .diagram .diagram-file { fill: var(--color-ink); font-size: 12px; font-family: var(--font-mono); }
   .diagram-dim { fill: var(--color-dim); }
   .edge-label { fill: var(--color-accent); font-size: 13px; }

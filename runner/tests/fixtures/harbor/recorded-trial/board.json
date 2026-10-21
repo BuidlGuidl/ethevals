@@ -1,0 +1,21 @@
+{
+  "task_id": "concepts/question",
+  "task_hash": "041573da55fc3250d002f5dfe4279cece7ece3e673ee27603bd88e43233f08a1",
+  "skills_hash": null,
+  "agent": "oracle",
+  "model": "local/model",
+  "effort": "high",
+  "mode": "internet",
+  "trial": 1,
+  "task_path": "/Users/shivbhonde/.t3/worktrees/ethevals/t3-1b793618/runner/tests/fixtures/harbor/question",
+  "agent_key": "local",
+  "agent_version": "1.0.0",
+  "harbor_version": "0.24.0",
+  "paid_by": "free",
+  "time_limit": 60,
+  "attempt": 1,
+  "remaining_attempts": 2,
+  "agent_reserve_usd": 0.0,
+  "judge_reserve_usd": 0.0,
+  "worst_case_usd": 0.0
+}

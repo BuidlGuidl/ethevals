@@ -6,23 +6,23 @@
   <a href="docs/add-an-eval.md">Add an eval</a>
 </h4>
 
-ETH Evals is an open eval framework built on [Inspect](https://inspect.aisi.org.uk/). It evaluates AI agents and models across four pillars of Ethereum work: concepts, transactions, building, and security.
+ETH Evals is an open eval framework built on [Harbor](https://harborframework.com). It evaluates AI agents and models across four pillars of Ethereum work: concepts, transactions, building, and security.
 
-- **An eval is a folder**: a prompt in YAML, plus Forge tests when it needs a chain.
+- **A task is a Harbor folder**: an instruction, an environment, a verifier, and a solution.
 - **New models on launch day**: adding one is a config change.
 - **Every eval proves itself**: its reference answer must pass and an empty answer must fail.
-- **The agent can't touch its score**: scoring runs where the agent can't reach.
+- **Checks decide each trial**: every named check must pass.
 - **Every run is public**: each result links to its full log.
 
 ```mermaid
 flowchart LR
-	eval["Add or edit an eval<br/>a folder: prompt, files, scoring"] --> pr["PR: validity checks<br/>checked with a mock model"]
-	model["Add a model<br/>one entry in config.yaml"] --> pr
+	eval["Add or edit an eval<br/>a Harbor task folder"] --> pr["PR: validity checks<br/>oracle and nop runs"]
+	model["Add a model<br/>one entry in job.yaml"] --> pr
 	pr --> merge["Merge to main<br/>a maintainer reviews"]
 	merge --> ci["CI runs only what's new<br/>every agent and model"]
 	ci --> results["Results PR<br/>results + logs"]
 	results -- merge --> site["Website<br/>the board updates"]
-	merge --> hf["Hugging Face dataset<br/>model-only evals"]
+	merge --> hf["Hugging Face dataset<br/>Harbor task folders"]
 ```
 
 ## Requirements
@@ -48,6 +48,7 @@ uv sync --frozen
 
 ```sh
 unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
+uv run python scripts/ci.py images
 uv run ethevals free-check --output results/quickstart
 ```
 
@@ -55,19 +56,7 @@ Each task's oracle run must pass, and its nop run must fail.
 Use a fresh output directory each time.
 Read [the Harbor guide](docs/harbor.md) for task inputs and check records.
 
-3. Check the tasks that still use Inspect during the move:
-
-```sh
-uv run ethevals check --output results/inspect-check
-```
-
-4. Read their trajectories in Inspect's viewer, at the URL it prints:
-
-```sh
-uv run inspect view --log-dir results/inspect-check/reference/logs
-```
-
-5. Start the website in a second terminal, then open http://localhost:3000:
+3. Start the website in a second terminal, then open http://localhost:3000:
 
 ```sh
 cd site
@@ -78,7 +67,7 @@ pnpm run dev
 **What's next**
 
 - Write your own eval with the [add-an-eval guide](docs/add-an-eval.md).
-- Add a model or an agent in [`config.yaml`](inspect-runner/ethevals/config.yaml).
-- Look up scoring, limits, budgets, and CI in the [runner reference](inspect-runner/README.md).
+- Add a model or an agent in [`job.yaml`](runner/ethevals/job.yaml).
+- Look up scoring, limits, budgets, and CI in the [runner reference](runner/README.md).
 - Build and check the website with the [site guide](site/README.md).
 - Look up words like mode, harness, and epoch in the [glossary](CONTEXT.md).

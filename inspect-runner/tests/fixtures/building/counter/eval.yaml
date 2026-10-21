@@ -1,3 +1,0 @@
-motivation: Check a submitted contract and its source.
-modes: [internet, skills]
-prompt: Write src/Counter.sol with a Counter contract whose value() returns seven. Use Solidity 0.8.30.

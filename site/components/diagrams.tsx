@@ -30,7 +30,7 @@ function elbow(x1: number, y1: number, middle: number, y2: number, x2: number) {
 function PipelineLayout({ mobile = false }: { mobile?: boolean }) {
   const nodes: Node[] = [
     { id: "eval", x: 20, y: 84, title: "Add or edit an eval", lines: ["a folder: prompt, files, scoring"], icon: FileText },
-    { id: "model", x: 20, y: 246, title: "Add a model", lines: ["one entry in config.yaml"], icon: Cpu },
+    { id: "model", x: 20, y: 246, title: "Add a model", lines: ["one entry in job.yaml"], icon: Cpu },
     { id: "checks", x: 240, y: 165, title: "PR: validity checks", lines: ["checked with a mock model"], icon: ShieldCheck },
     { id: "merge", x: 460, y: 165, title: "Merge to main", lines: ["a maintainer reviews"], icon: GitMerge },
     { id: "ci", x: 680, y: 66, title: "CI runs only what's new", lines: ["every agent and model"], icon: Terminal, kind: "auto" },
@@ -106,7 +106,7 @@ function RunLayout({ mobile = false }: { mobile?: boolean }) {
   const judge = { x: mobile ? 75 : 55, y: mobile ? 920 : 500, width: mobile ? 185 : 280 };
   return <svg className={"diagram run-diagram diagram-" + variant} viewBox={mobile ? "0 0 345 1735" : "0 0 1120 915"} role="img" aria-labelledby={id + "-title " + id + "-desc"}>
     <title id={id + "-title"}>Inside one run</title>
-    <desc id={id + "-desc"}>ETH Evals reads the eval folder, picks the agent, model and mode, and builds the task. Inspect runs three separate containers. The agent sends transactions to the chain. The scorer reads the chain state with Forge tests. An LLM judge answers yes-or-no questions about the transcript. ETH Evals records one result per run and publishes results with logs on the website.</desc>
+    <desc id={id + "-desc"}>ETH Evals reads the eval folder, picks the agent, model and mode, and builds the task. Harbor starts the task environment and its declared sidecars. The agent sends transactions to the chain. The scorer reads the chain state with Forge tests. An LLM judge answers yes-or-no questions about the transcript. ETH Evals records one result per run and publishes results with logs on the website.</desc>
     <Arrows id={id} />
     <rect className="diagram-box evals-frame" x={mobile ? 5 : 10} y="10" width={mobile ? 335 : 1100} height={mobile ? 1705 : 885} rx="12" />
     <text className="diagram-title evals-frame-title" x={mobile ? 25 : 35} y="43">ETH Evals</text>
@@ -117,8 +117,8 @@ function RunLayout({ mobile = false }: { mobile?: boolean }) {
     <Edge d={mobile ? "M167.5 205V242" : "M255 155H362"} id={id} />
     <Edge d={mobile ? "M167.5 345V382" : "M665 155H772"} id={id} />
     <Edge d={mobile ? "M167.5 485V522" : "M920 205V227H120V247"} id={id} />
-    <rect className="diagram-box inspect-frame" x={mobile ? 25 : 35} y={mobile ? 525 : 250} width={mobile ? 295 : 1050} height={mobile ? 890 : 345} rx="10" />
-    <a href="https://inspect.aisi.org.uk/"><text className={mobile ? "diagram-title inspect-title" : "diagram-title evals-frame-title inspect-title"} x={mobile ? 75 : 60} y={mobile ? 557 : 283}>Inspect runs it</text></a>
+    <rect className="diagram-box harbor-frame" x={mobile ? 25 : 35} y={mobile ? 525 : 250} width={mobile ? 295 : 1050} height={mobile ? 890 : 345} rx="10" />
+    <a href="https://harborframework.com/"><text className={mobile ? "diagram-title harbor-title" : "diagram-title evals-frame-title harbor-title"} x={mobile ? 75 : 60} y={mobile ? 557 : 283}>Harbor runs it</text></a>
     <text className="diagram-sub" x={mobile ? 75 : 60} y={mobile ? 581 : 306}>{mobile ? <><tspan x="75">starts the containers, </tspan><tspan x="75" dy="18">records the transcript</tspan></> : "starts the containers, records the transcript"}</text>
     {mobile ? <>
       <Edge d="M75 805H50V1139H72" id={id} />

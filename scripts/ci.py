@@ -196,8 +196,7 @@ def checks(args):
     images(argparse.Namespace(publish=False))
     command(sys.executable, "-m", "ethevals.cli", "free-check", "--output", args.output / "harbor")
     command(sys.executable, "-m", "pytest", "-q")
-    command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
-            "--ignore=inspect-runner/tests/test_agents_docker.py")
+    command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker")
     for task in ("test", "typecheck", "lint", "build"):
         command("pnpm", task, cwd="site")
     return 0
@@ -216,7 +215,7 @@ def hf_tag(sha):
 
 
 def images(args):
-    directory = Path(__file__).resolve().parents[1] / "inspect-runner/ethevals/images"
+    directory = Path(__file__).resolve().parents[1] / "runner/ethevals/images"
     tags = []
     for name, dockerfile in (("quiz", "Quiz.Dockerfile"), ("chain", "Chain.Dockerfile")):
         tag = "ghcr.io/buidlguidl/" + image_tag(directory, name)

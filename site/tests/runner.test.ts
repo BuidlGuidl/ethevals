@@ -16,7 +16,7 @@ for (const withCriteria of [false, true]) test(`a real Harbor row reaches the bo
   const root = mkdtempSync(path.join(scratch, "harbor-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const repo = path.dirname(siteRoot);
-  const fixture = path.join(repo, "inspect-runner/tests/fixtures/harbor");
+  const fixture = path.join(repo, "runner/tests/fixtures/harbor");
   const env = { ...process.env };
   for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY"]) delete env[key];
   const script = `

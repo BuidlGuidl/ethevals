@@ -25,7 +25,7 @@ for (const diagram of ["pipeline", "run"]) {
 }
 const tree = how.slice(how.indexOf('<section id="hw-eval"'), how.indexOf('<section id="hw-run"'));
 assert.ok(tree.includes('class="eval-tree"'));
-for (const file of ["eval.yaml", "workspace/", "setup.s.sol", "target.yaml", "tests/*.t.sol", "rubric.md", "solution/", "compose.yaml"]) assert.ok(tree.includes(file));
+for (const file of ["task.toml", "instruction.md", "environment/", "Dockerfile", "docker-compose.yaml", "tests/", "test.sh", "criteria.md", "solution/", "solve.sh"]) assert.ok(tree.includes(file));
 const run = how.slice(how.indexOf('<section id="hw-run"'), how.indexOf('<section id="hw-add"'));
 const runDiagrams = run.split(/(?=<svg class="diagram run-diagram)/).slice(1)
   .map((fragment) => fragment.slice(0, fragment.lastIndexOf("</svg>") + 6));
@@ -33,7 +33,7 @@ assert.equal(runDiagrams.length, 2);
 for (const svg of runDiagrams) {
   assert.equal((svg.match(/class="container-tag"/g) ?? []).length, 3);
   assert.equal((svg.match(/class="diagram-file"/g) ?? []).length, 2);
-  for (const label of ["ETH Evals", "Inspect runs it", "Decide what to run", "Record it", "One result per run", "LLM as judge", "Forge tests", "Results + logs", "prompt", "workspace/"]) assert.ok(svg.includes(label));
+  for (const label of ["ETH Evals", "Harbor runs it", "Decide what to run", "Record it", "One result per run", "LLM as judge", "Forge tests", "Results + logs", "prompt", "workspace/"]) assert.ok(svg.includes(label));
 }
 assert.ok(!/no route|Grader model|Result row|filtered RPC|grader/i.test(how));
 if (expected === "demo") {
