@@ -401,40 +401,54 @@ The workflow has only content-read and status-write permissions.
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
 It runs the [Harbor free check](../docs/harbor.md).
 No public tasks remain under `evals/`.
-[results.yml](../.github/workflows/results.yml) queues paid runs after `main` changes, excluding results-only changes.
-It uses `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, optional `EXA_API_KEY`, and the `ETHEVALS_BUDGET_USD` repository variable.
-The matrix also receives `MAINNET_RPC_URL` and `BASE_RPC_URL` for fork evals.
-A manual dispatch budget overrides that variable; the fallback budget is zero.
+[results.yml](../.github/workflows/results.yml) queues paid trials after changes to `main`, except results-only changes.
+A manual budget overrides `ETHEVALS_BUDGET_USD`; the fallback is zero.
+A zero budget saves the plan and schedules no trials, including plan-paid trials with no API reserve.
+A positive budget must cover all missing trials' remaining API attempts, including judge costs.
+
+The workflow needs these GitHub secrets:
+
+- `CLAUDE_CODE_OAUTH_TOKEN`: the Claude plan token. `CLAUDE_FORCE_OAUTH=1` keeps the API key out of Claude Code.
+- `CODEX_AUTH_JSON`: the full ChatGPT `auth.json`. Rotate it weekly.
+- `ANTHROPIC_API_KEY`: the judge and Anthropic vanilla trials.
+- `OPENAI_API_KEY` and `OPENROUTER_API_KEY`: vanilla trials for those providers; OpenCode also uses OpenRouter.
+- `EXA_API_KEY`, `MAINNET_RPC_URL`, and `BASE_RPC_URL`: optional search and task-declared fork credentials.
+
 The job graph is `plan → matrix → publish`.
-The plan job calls `ethevals plan` without provider keys and refuses work above the budget.
-It saves the missing epochs, config, and restored results for the matrix jobs.
-The plan checks out current `main`; the matrix and publisher use the SHA that the plan reports.
-CI runs the first 256 missing epochs; a later run picks up the rest.
-Each matrix job selects one epoch and uses a read-only token.
-Each job fetches pinned agent binaries with its token, so the runner never calls GitHub's API unauthenticated.
-Each job builds both stock images with the GitHub Actions cache and loads them locally, without a registry.
-The runner reuses local stock images whose tags match their build inputs.
-Each job allows 240 minutes, including 120 for the agent, 60 for scoring, and 60 for builds, setup, and uploads.
-The run step stops after 190 minutes and uploads available results even after failure.
-A separate publisher holds no model keys and runs after failed or timed-out steps on `main`.
-It downloads artifacts from every attempt of the workflow run. The next run resumes missing epochs.
-For recovery, use "Re-run all jobs" instead of "Re-run failed jobs".
+The plan reads current `main`; later jobs check out its saved SHA.
+`scripts/ci.py plan-trials` folds current and pending results, saves the Harbor job config, and emits the admitted matrix.
+CI schedules at most 256 trials, with at most 100 per plan group to fit GitHub's pending-job limit.
+Later runs pick up deferred trials.
+Plan groups use the configured agent name, so models and modes using the same plan share one queue.
+Key-paid trials have separate groups and can run in parallel.
 
-`scripts/ci.py plan-epochs` restores pending results, checks the budget, and emits the matrix.
-Each matrix job calls `ethevals run --epoch N` with its row's selectors and the saved config and results.
-`publish-results` rebuilds every artifact's rows and combines its logs into one release for the workflow run.
-It writes one results commit with the planned log URLs before the upload starts.
-If an upload stops, the rows remain recorded; the log URLs work after a successful upload retry.
-It folds `origin/main`, `origin/ci/results`, and artifact rows onto current `main`.
-The publisher updates the results pull request without a force push.
-A retry can reopen a missing pull request without repeating a successful push.
-If publication fails, rerun the workflow before starting another paid run to avoid paying for missing rows again.
-Exhausted error epochs remain visible in the plan; a completed no-op succeeds.
+`scripts/ci.py run-trial` selects one saved trial and calls the Harbor CLI path with its reserved budget.
+Harbor builds each task's environment and starts its declared sidecars.
+Codex credentials use a temporary mode-0600 file outside the artifact directory; the step removes it afterward.
+Harbor receives `CODEX_AUTH_JSON_PATH` and uploads the file itself.
+`CODEX_FORCE_AUTH_JSON=1` prevents an absent plan secret from falling back to the OpenAI key.
+The judge key stays on the host while Claude Code uses its plan token.
+The run step allows 190 minutes; the job allows 240 minutes for setup, builds, and uploads too.
+Each job uploads saved trials after success or failure.
 
-`ethevals publish-logs --output DIR --repo OWNER/REPO --run-id ID --commit SHA` previews a log release.
-Adding `--publish` uploads through `gh` and writes `DIR/published/results-ID.jsonl` after success.
-It skips linked logs and non-final errors. The preview writes nothing.
-CI tags the release at the workflow's source commit.
+The publisher has no model keys and runs after failed matrix jobs on `main`.
+It downloads every attempt's artifacts and rebuilds rows from saved Harbor trials at their downloaded paths.
+It folds attempts before staging one trajectory JSON and one verifier archive per trial.
+The archive includes check records, reasons, and any `judge.json`.
+Errors also keep their available output.
+
+`publish-results` writes `combined/rows.jsonl`, `combined/release.json`, and `combined/assets/` locally.
+Without `--publish`, it performs no remote writes.
+With `--publish`, it records rows and release URLs on `ci/results` before uploading assets.
+It folds `origin/main`, `origin/ci/results`, and artifact rows onto current `main`, without a force push.
+The results pull request contains only the rows change.
+The release uses the source commit and the workflow run ID; retries replace assets on that release.
+If an upload fails, recorded rows keep the next plan from repeating completed trials.
+Use "Re-run all jobs" to retry publication from every workflow attempt.
+A retry also reopens a missing results pull request without another push.
+
+`ethevals publish-logs --output DIR --repo OWNER/REPO --run-id ID --commit SHA` stages a trial release locally.
+Adding `--publish` uploads it through `gh` and saves a receipt under `DIR/published/`.
 
 `ethevals export-hf --output DIR` writes vanilla quizzes to an empty directory.
 It selects evals with `target.yaml`, vanilla mode, and no rubric.
