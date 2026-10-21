@@ -28,6 +28,7 @@ class AgentSettings(Declaration):
     model: str
     paid_by: Literal["plan", "api_key", "free"]
     cost_limit_usd: float = Field(ge=0, allow_inf_nan=False)
+    modes: list[Literal["vanilla", "internet", "skills"]] = Field(default_factory=lambda: ["internet"])
     kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -96,8 +97,8 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
     modes = modes or config.modes
     if set(modes) - set(config.modes):
         raise ValueError("Selected modes must be listed in the job config")
-    if modes != ["internet"]:
-        raise ValueError("Only internet mode is available in this runner")
+    if "skills" in modes:
+        raise ValueError("Skills mode requires the skills runner")
     for selected, available, label in [(agents, config.agents, "agent"), (models, config.models, "model")]:
         if selected and set(selected) - available.keys():
             raise ValueError(f"Unknown {label}: {', '.join(sorted(set(selected) - available.keys()))}")
@@ -115,12 +116,12 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                 continue
             model = config.models[agent.model]
             for mode in modes:
-                if mode not in task["modes"]:
+                if mode not in task["modes"] or mode not in agent.modes:
                     continue
                 combinations += 1
                 for number in [trial] if trial is not None else range(1, (trials or config.trials) + 1):
                     metadata = {"task_id": task["id"], "task_hash": task["hash"], "skills_hash": None,
-                                "agent": agent.name, "model": model.name, "effort": model.effort,
+                                "agent": None if mode == "vanilla" else agent.name, "model": model.name, "effort": model.effort,
                                 "mode": mode, "trial": number}
                     identity = trial_identity(metadata)
                     if identity in selected:

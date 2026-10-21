@@ -47,6 +47,35 @@ def test_plan_reserves_no_agent_spend_for_a_plan_but_run_requires_budget(tmp_pat
     assert not (tmp_path / "out/jobs").exists()
 
 
+def test_vanilla_plans_only_declared_tasks_and_configured_models(tmp_path):
+    config, task = job_config(tmp_path, "api_key"), task_folder(tmp_path)
+    data = json.loads(config.read_text())
+    data["modes"] = ["vanilla", "internet"]
+    data["agents"]["bare"] = {**data["agents"]["local"],
+                              "name": "ethevals.vanilla:VanillaAgent", "modes": ["vanilla"]}
+    config.write_text(json.dumps(data))
+    quiz = tmp_path / "tasks/concepts/quiz"
+    import shutil
+    shutil.copytree(task, quiz)
+    settings = quiz / "task.toml"
+    settings.write_text(settings.read_text().replace('["internet"]', '["vanilla", "internet"]'))
+    args = ["--config", config, "--tasks", task, quiz, "--trials", 1,
+            "--output", tmp_path / "out", "--rows", tmp_path / "none"]
+    result = cli("-m", "ethevals.cli", "plan", *args)
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert [(row["task_id"], row["agent_key"], row["mode"], row["model"])
+            for row in report["missing"]] == [
+        ("concepts/question", "local", "internet", "local/model"),
+        ("concepts/quiz", "local", "internet", "local/model"),
+        ("concepts/quiz", "bare", "vanilla", "local/model")]
+    assert report["worst_case_usd"] == 18
+    selected = cli("-m", "ethevals.cli", "plan", *args, "--agents", "bare", "--modes", "vanilla")
+    assert selected.returncode == 0, selected.stderr
+    assert [(row["task_id"], row["paid_by"]) for row in json.loads(selected.stdout)["missing"]] == [
+        ("concepts/quiz", "api_key")]
+
+
 def test_row_builder_reads_a_recorded_real_trial(tmp_path):
     from ethevals.trial_rows import results_row
 

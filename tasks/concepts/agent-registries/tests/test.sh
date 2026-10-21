@@ -1,3 +1,3 @@
 #!/bin/sh
 set -eu
-python3 /tests/check.py
+python3 /opt/target_checks.py /tests/target.json

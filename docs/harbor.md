@@ -6,12 +6,22 @@
 Each agent entry names a Harbor agent or Python import path and a model key.
 Its `paid_by` field is `plan`, `api_key`, or `free` for a local stand-in.
 Model effort becomes Harbor's `reasoning_effort`; `kwargs` carries other agent options.
-Only internet mode runs here until the vanilla and skills runners land.
+An entry's `modes` defaults to `[internet]`.
+The planner intersects those modes with the job selection and each task's modes.
+Skills mode requires the skills runner.
 
 ```sh
 uv run ethevals plan --modes internet --trials 1 --budget 100
 uv run ethevals run --modes internet --trials 1 --budget 100 --output results/local
 ```
+
+Vanilla entries use `ethevals.vanilla:VanillaAgent` and declare `modes: [vanilla]`.
+They use API keys, regardless of how an internet entry pays for the same model.
+The agent sends the instruction in one API call through Harbor's LiteLLM dependency, with no tools or environment access.
+It disables request retries; the job's attempt limit still applies.
+Its `kwargs.completion` accepts provider options such as `api_base` and `max_tokens`.
+Model names and effort come from the same model settings as internet entries.
+Vanilla rows have `agent: null` and appear in the knowledge table.
 
 Every missing agent trial requires an explicit `--budget`, including free stand-ins and plan-funded trials.
 API-key trials reserve `cost_limit_usd` for each remaining attempt.
@@ -78,6 +88,12 @@ Quiz verifiers read the last assistant message in `/logs/agent/trajectory.json`,
 The task declares that path in `artifacts` so the separate verifier receives it.
 The solution writes a stand-in trajectory for Harbor's oracle agent.
 The nop agent leaves no reply.
+The shared quiz image ships `/opt/target_checks.py`.
+Call it with `/tests/target.json` from `tests/test.sh`.
+The JSON holds `name` and `target`, which accepts one string or a list of accepted strings.
+`location` accepts `exact`, `begin`, `end`, or `any`; it defaults to `exact`.
+The helper trims punctuation around the reply and ignores case unless `ignore_case` is false.
+It writes the named check and reward, without copying a reply reader into each task.
 
 Tasks declare sidecars in `environment/docker-compose.yaml`.
 The shared chain image runs setup before its healthcheck releases the agent.
