@@ -7,15 +7,16 @@ import re
 from harbor.models.task.task import Task
 import yaml
 
-from .checks import read_checks
+from .checks import validate_checks
 from .images.tag import BUILD_INPUTS, image_tag
+from .job_config import JobSettings, load_job
 
 AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)
 SERVICE_KEYS = {"image", "build", "init", "command", "entrypoint", "working_dir", "user",
                 "environment", "networks", "volumes", "depends_on", "healthcheck", "mem_limit", "cpus"}
 
 
-def lint_task(path: Path) -> None:
+def lint_task(path: Path, config: JobSettings | None = None) -> None:
     for item in path.rglob("*"):
         if item.is_symlink():
             raise ValueError(f"{item}: symlinks are forbidden in task folders")
@@ -30,6 +31,10 @@ def lint_task(path: Path) -> None:
         not isinstance(name, str) or not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name) for name in required
     ):
         raise ValueError(f"{path / 'task.toml'}: metadata.required_env must list environment variable names")
+    credentials = (config or load_job()).credential_names()
+    for name in required:
+        if name in credentials:
+            raise ValueError(f"{path / 'task.toml'}: {name} is a job credential; tasks cannot request it")
     visible = [path / "instruction.md", *(path / "environment").rglob("*")]
     for item in visible:
         if not item.is_file():
@@ -144,7 +149,10 @@ async def free_check(paths: list[Path], output: Path) -> None:
             if result.get("exception_info"):
                 raise ValueError(f"{result_path}: {result['exception_info']['exception_message']}")
             checks_path = result_path.parent / "verifier/checks.json"
-            checks = read_checks(checks_path)
+            try:
+                checks = validate_checks(json.loads(checks_path.read_text()))
+            except (ValueError, OSError) as error:
+                raise ValueError(f"{checks_path}: {error}") from error
             path = Path(result["config"]["task"]["path"]).resolve()
             if expected:
                 names[path] = set(checks)

@@ -12,10 +12,76 @@ from test_jobs import job_config, task_folder
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_paid_workflow_plans_and_runs_with_one_secret_list():
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/results.yml").read_text())
+    selected = []
+    for job_name, step_name in [("plan", "Check the budget and emit the matrix"),
+                                ("matrix", "Run one planned trial")]:
+        job = workflow["jobs"][job_name]
+        step = next(step for step in job["steps"] if step.get("name") == step_name)
+        environment = {**workflow.get("env", {}), **job.get("env", {}), **step.get("env", {})}
+        selected.append({key: value for key, value in environment.items() if "secrets." in value})
+    assert selected[0] == selected[1]
+    assert selected[0]["EXA_API_KEY"] == "${{ secrets.EXA_API_KEY }}"
+    assert selected[0]["BASE_RPC_URL"] == "${{ secrets.BASE_RPC_URL }}"
+
+
+def test_ci_plan_carries_local_rejudge_evidence_to_a_fresh_runner(tmp_path, monkeypatch):
+    import argparse
+    import litellm
+    from harbor.job import Job
+    from ethevals.job_config import load_job
+    from ethevals.jobs import plan
+    from ethevals.trial_rows import recover_rows, write_rows
+    from test_ci import ci
+
+    config_path, task = job_config(tmp_path, "free"), task_folder(tmp_path)
+    (task / "tests/criteria.md").write_text("## explained\nDid it explain the unit?\n")
+    config = load_job(config_path)
+    config.agents["local"].name = "oracle"
+    config.judge.model, config.judge.paid_by = "openai/gpt-5", "free"
+    config_path.write_text(config.model_dump_json())
+    item = plan([task], config, [], trials=1)["missing"][0]
+    folder = tmp_path / "old/jobs/saved/trial"
+    shutil.copytree(ROOT / "runner/tests/fixtures/harbor/recorded-trial", folder)
+    (folder.parent / "board.json").write_text(json.dumps(item))
+    previous = tmp_path / "previous.jsonl"
+    write_rows(previous, recover_rows(tmp_path / "old"))
+    saved = tmp_path / "plan"
+    result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config_path, "--tasks", task,
+                 "--budget", 1, "--trials", 1, "--rows", previous, "--output", saved)
+    assert result.returncode == 0, result.stdout + result.stderr
+    admitted = json.loads((saved / "trials.json").read_text())
+    assert len(admitted) == 1
+    assert admitted[0]["missing"] == []
+    assert admitted[0]["rejudge"][0]["attempt"] == 1
+    shutil.rmtree(tmp_path / "old")
+    downloaded = tmp_path / "downloaded-plan"
+    shutil.move(str(saved), downloaded)
+
+    async def refuse(*args, **kwargs):
+        raise AssertionError("A judge-only trial cannot start an agent.")
+
+    async def completion(**kwargs):
+        return litellm.ModelResponse(choices=[{"message": {"role": "assistant", "content":
+            '{"score":"yes","reasoning":"It explains it."}'}}])
+
+    monkeypatch.setattr(Job, "create", refuse)
+    monkeypatch.setattr(litellm, "acompletion", completion)
+    output = tmp_path / "out"
+    assert ci.run_trial(argparse.Namespace(plan=downloaded, index=0, output=output)) == 0
+    row = json.loads((output / "rows.jsonl").read_text())
+    assert (row["attempt"], row["judge_attempts"], row["status"]) == (1, 1, "passed")
+    assert recover_rows(output) == [row]
+
+
 def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, monkeypatch):
     import argparse
     from harbor.job import Job
-    from ethevals.jobs import load_job, plan
+    from ethevals.job_config import load_job
+    from ethevals.jobs import plan
     from ethevals.trial_rows import write_rows
     from test_ci import ci
 
@@ -31,7 +97,7 @@ def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, 
                  "--tasks", task, "--budget", 1, "--trials", 1, "--retry-errors",
                  "--rows", rows, "--output", saved)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert json.loads((saved / "trials.json").read_text())[0]["attempt"] == 3
+    assert json.loads((saved / "trials.json").read_text())[0]["missing"][0]["attempt"] == 3
     calls = []
 
     async def saved_result(job):
@@ -119,7 +185,8 @@ def test_ci_plan_groups_plan_trials_and_keeps_key_trials_independent(tmp_path):
         ("other-model", 1, "nop"), ("other-model", 2, "nop"),
         ("key", 1, ""), ("key", 2, "")]
     assert emitted["scheduled_trials"] == "6"
-    assert all(not Path(row["task_path"]).is_absolute() for row in json.loads((output / "trials.json").read_text()))
+    assert all(not Path(row["task_path"]).is_absolute()
+               for report in json.loads((output / "trials.json").read_text()) for row in report["missing"])
 
 
 def test_ci_defers_plan_trials_beyond_github_queue_capacity(tmp_path):
@@ -159,7 +226,8 @@ def test_ci_oracle_trial_survives_artifact_download_and_publishes_locally(tmp_pa
     plan = tmp_path / "plan"
     previous = tmp_path / "previous.jsonl"
     if retry:
-        from ethevals.jobs import load_job, plan as plan_job
+        from ethevals.job_config import load_job
+        from ethevals.jobs import plan as plan_job
         from ethevals.trial_rows import write_rows
         item = plan_job([ROOT / "runner/tests/fixtures/harbor/concepts/question"], load_job(config), [], trials=1)["missing"][0]
         write_rows(previous, [{**item, "schema_version": 7, "attempt": 2, "status": "error"}])

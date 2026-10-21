@@ -5,7 +5,7 @@ from pathlib import Path
 
 from harbor.models.trial.result import TrialResult
 
-from .checks import read_checks
+from .checks import validate_checks
 
 SCHEMA_VERSION = 7
 
@@ -25,9 +25,9 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
     checks_path = folder / "verifier/checks.json"
     if checks_path.exists():
         try:
-            checks = read_checks(checks_path)
+            checks = validate_checks(json.loads(checks_path.read_text()))
         except (ValueError, OSError) as exc:
-            kind, reason = "verification", str(exc)
+            kind, reason = "verification", f"{checks_path}: {exc}"
     if result.finished_at is None:
         kind, reason = "execution", "The trial did not finish."
     if result.agent_info.version != metadata["agent_version"]:
@@ -39,22 +39,26 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
     judge = metadata.get("judge")
     judge_attempts = 0
     judge_cost, judge_paid_by = (None if judge else 0.0), None
+    if judge and set(metadata["criteria_names"]) & set(checks) and not reason:
+        kind, reason = "verification", "Criteria headings must differ from test check names."
     if judge:
+        judge_path = folder / "verifier/judge.json"
         try:
-            judged = json.loads((folder / "verifier/judge.json").read_text())
+            judged = json.loads(judge_path.read_text())
             judge_attempts = judged.get("attempts", 1)
             judge_paid_by, judge_cost = judged["paid_by"], judged["cost_usd"]
             if judged["judge"] != judge:
                 raise ValueError("The saved judge differs from the planned judge.")
             if judged["error"]:
                 raise ValueError(judged["error"])
-            extra = read_checks(folder / "verifier/judge.json", field="checks")
-            if set(extra) != set(metadata["criteria_names"]) or set(extra) & set(checks):
+            extra = validate_checks(judged["checks"])
+            if set(extra) != set(metadata["criteria_names"]):
                 raise ValueError("The judge must return each criteria check with a boolean and a one-line reason.")
-            checks.update(extra)
+            if not set(extra) & set(checks):
+                checks.update(extra)
         except (ValueError, OSError, KeyError, TypeError, AttributeError) as exc:
             if not reason:
-                kind, reason = "judge", f"Cannot judge criteria: {exc}"
+                kind, reason = "judge", f"Cannot judge criteria: {judge_path}: {exc}"
     n_input, _, n_output, cost = result.compute_token_cost_totals()
     if metadata["paid_by"] == "free":
         cost = 0.0

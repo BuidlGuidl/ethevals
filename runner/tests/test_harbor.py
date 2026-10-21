@@ -60,8 +60,9 @@ def test_free_check_rejects_blank_check_names_like_board_rows(harbor_task, tmp_p
         assert json.loads((tmp_path / "out/nop/trial/verifier/checks.json").read_text()) == {
             "unit": {"passed": False, "reason": "Matches."}}
     else:
-        with pytest.raises(ValueError, match="Each check needs a name, boolean passed, and one-line reason."):
+        with pytest.raises(ValueError, match="Each check needs a name, boolean passed, and one-line reason.") as error:
             asyncio.run(free_check([harbor_task], tmp_path / "out"))
+        assert str(tmp_path / "out/oracle/trial/verifier/checks.json") in str(error.value)
 
 
 @pytest.mark.parametrize("volume", [
@@ -167,6 +168,44 @@ def test_task_lint_accepts_all_real_tasks(capsys):
     paths = sorted((Path(__file__).resolve().parents[2] / "tasks").glob("*/*/task.toml"))
     assert main(["lint", "--tasks", *(str(path.parent) for path in paths)]) == 0
     assert capsys.readouterr().out == "".join(f"{path.parent}: lint passed\n" for path in paths)
+
+
+@pytest.mark.parametrize("credential", ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CODEX_AUTH_JSON", "CUSTOM_PROVIDER_KEY", "CUSTOM_JUDGE_KEY"])
+def test_task_cannot_declare_a_job_credential_as_required_env(harbor_task, tmp_path, capsys, credential):
+    from ethevals.cli import main
+    from ethevals.job_config import load_job
+
+    config = load_job().model_dump()
+    config["agents"]["codex-gpt-6"]["env"]["CUSTOM_PROVIDER_KEY"] = "${CUSTOM_PROVIDER_KEY:-}"
+    config["judge"]["key_env"] = "CUSTOM_JUDGE_KEY"
+    job = tmp_path / "job.json"
+    import json
+    job.write_text(json.dumps(config))
+    settings = harbor_task / "task.toml"
+    settings.write_text(f'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["{credential}"]\n')
+    (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
+        "services": {"browser": {"environment": {"LEAK": "${" + credential + "}"}}}}))
+    with pytest.raises(SystemExit) as error:
+        main(["lint", "--tasks", str(harbor_task), "--config", str(job)])
+    assert error.value.code == 2
+    assert f"{credential} is a job credential" in capsys.readouterr().err
+    # The job config, rather than a fixed denylist, owns credential names.
+    config["agents"]["codex-gpt-6"]["env"].pop("CUSTOM_PROVIDER_KEY")
+    config["judge"]["key_env"] = "OTHER_JUDGE_KEY"
+    job.write_text(json.dumps(config))
+    if credential.startswith("CUSTOM_"):
+        assert main(["lint", "--tasks", str(harbor_task), "--config", str(job)]) == 0
+
+
+def test_task_cannot_declare_the_default_judge_key(harbor_task, capsys):
+    from ethevals.cli import main
+
+    (harbor_task / "task.toml").write_text(
+        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ANTHROPIC_API_KEY"]\n')
+    with pytest.raises(SystemExit) as error:
+        main(["lint", "--tasks", str(harbor_task)])
+    assert error.value.code == 2
+    assert "ANTHROPIC_API_KEY is a job credential" in capsys.readouterr().err
 
 
 def test_task_lint_requires_the_declared_pillar_to_match_the_folder(tmp_path):

@@ -7,13 +7,15 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 from urllib.request import Request, urlopen
 
 from ethevals.cli import main as ethevals, parse_args
-from ethevals.jobs import budget_check, load_job, run
+from ethevals.job_config import load_job
+from ethevals.jobs import budget_check, run
 from ethevals.hf import DEFAULT_REPO, write_hf
 from ethevals.images.tag import BUILD_INPUTS, image_tag
 from ethevals.publish import publish_logs
@@ -68,29 +70,38 @@ def plan_trials(args, run_args):
     report = json.loads(captured.getvalue())
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     # A zero CI budget disables even plan-paid trials whose API reserve is zero.
-    missing, plan_counts = [], {}
+    scheduled, matrix, plan_counts = [], [], {}
     if report["within_budget"] and options.budget and options.budget > 0:
-        for row in report["missing"]:
-            group = config.agents[row["agent_key"]].name if row["paid_by"] == "plan" else None
-            # GitHub accepts at most 100 pending jobs per concurrency group.
-            if len(missing) == 256 or group and plan_counts.get(group, 0) == 100:
-                continue
-            missing.append(row)
-            if group:
-                plan_counts[group] = plan_counts.get(group, 0) + 1
-    matrix = {"include": [{"index": index, "task_id": row["task_id"], "agent_key": row["agent_key"],
-                           "mode": row["mode"], "trial": row["trial"],
-                           "plan_group": config.agents[row["agent_key"]].name if row["paid_by"] == "plan" else ""}
-                          for index, row in enumerate(missing)]}
-    # Trial paths in a plan cross runner checkouts; absolute host paths cannot.
-    scheduled = [{**row, "task_path": os.path.relpath(row["task_path"])} for row in missing]
+        for kind in ("rejudge", "missing"):
+            for row in report[kind]:
+                group = config.agents[row["agent_key"]].name if kind == "missing" and row["paid_by"] == "plan" else ""
+                # GitHub accepts at most 100 pending jobs per concurrency group.
+                if len(scheduled) == 256 or group and plan_counts.get(group, 0) == 100:
+                    continue
+                index = len(scheduled)
+                item = {**row, "task_path": os.path.relpath(row["task_path"])}
+                if kind == "rejudge":
+                    folder = Path(row["trial_path"])
+                    relative = Path("rejudge") / str(index) / "trial"
+                    shutil.copytree(folder, args.output / relative)
+                    shutil.copyfile(folder.parent / "board.json", args.output / relative.parent / "board.json")
+                    item["trial_path"] = str(relative)
+                single = {"missing": [], "rejudge": [], "selected": [trial_identity(row)],
+                          "missing_trials": int(kind == "missing"), "worst_case_usd": row["worst_case_usd"]}
+                single[kind].append(item)
+                scheduled.append(single)
+                matrix.append({"index": index, "task_id": row["task_id"], "agent_key": row["agent_key"],
+                               "mode": row["mode"], "trial": row["trial"], "plan_group": group})
+                if group:
+                    plan_counts[group] = plan_counts.get(group, 0) + 1
     (args.output / "trials.json").write_text(json.dumps(scheduled, indent=2) + "\n")
-    if len(report["missing"]) > len(missing):
-        print(f"Deferred {len(report['missing']) - len(missing)} trials to a later run.", file=sys.stderr)
+    deferred = len(report["missing"]) + len(report["rejudge"]) - len(scheduled)
+    if deferred:
+        print(f"Deferred {deferred} trials to a later run.", file=sys.stderr)
     if args.github_output:
         with args.github_output.open("a") as output:
-            output.write(f"matrix={json.dumps(matrix, separators=(',', ':'))}\n")
-            output.write(f"scheduled_trials={len(missing)}\n")
+            output.write(f"matrix={json.dumps({'include': matrix}, separators=(',', ':'))}\n")
+            output.write(f"scheduled_trials={len(scheduled)}\n")
     return status if options.budget else 0
 
 
@@ -98,12 +109,18 @@ def run_trial(args):
     scheduled = json.loads((args.plan / "trials.json").read_text())
     if not 0 <= args.index < len(scheduled):
         raise ValueError("Trial index is outside the admitted plan")
-    item = scheduled[args.index]
-    item["task_path"] = str(Path(item["task_path"]).resolve())
+    report = scheduled[args.index]
+    for item in [*report["rejudge"], *report["missing"]]:
+        item["task_path"] = str(Path(item["task_path"]).resolve())
+    for item in report["rejudge"]:
+        source = args.plan / item["trial_path"]
+        folder = args.output / "jobs" / f"rejudge-{args.index}" / "trial"
+        if not folder.exists():
+            shutil.copytree(source, folder)
+            shutil.copyfile(source.parent / "board.json", folder.parent / "board.json")
+        item["trial_path"] = str(folder.resolve())
     config = load_job(args.plan / "config.json")
-    report = budget_check({"missing": [item], "missing_trials": 1,
-                           "selected": [trial_identity(item)], "worst_case_usd": item["worst_case_usd"]},
-                          item["worst_case_usd"], required=True)
+    report = budget_check(report, report["worst_case_usd"], required=True)
     previous = previous_rows(args.output, args.plan / "rows.jsonl")
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
@@ -113,9 +130,6 @@ def run_trial(args):
         old_path = os.environ.get("CODEX_AUTH_JSON_PATH")
         try:
             if auth:
-                parsed = json.loads(auth)
-                if not isinstance(parsed, dict) or not parsed.get("tokens"):
-                    raise ValueError("CODEX_AUTH_JSON must contain a ChatGPT auth.json with tokens")
                 path = Path(directory) / "auth.json"
                 path.touch(mode=0o600)
                 path.write_text(auth)

@@ -12,7 +12,8 @@ from harbor.environments.base import ExecResult
 from harbor.agents.factory import AgentFactory
 from harbor.job import Job
 
-from ethevals.jobs import budget_check, load_job, plan, run
+from ethevals.job_config import load_job
+from ethevals.jobs import budget_check, plan, run
 from test_jobs import task_folder
 
 
@@ -20,10 +21,11 @@ class Captured(Exception):
     pass
 
 
-@pytest.mark.parametrize("key,default_auth", [
-    ("claude-code-opus-5.5", False), ("codex-gpt-6", False), ("codex-gpt-6", True),
+@pytest.mark.parametrize("key,default_auth,paid_by", [
+    ("claude-code-opus-5.5", False, "plan"), ("claude-code-opus-5.5", False, "api_key"),
+    ("codex-gpt-6", False, "plan"), ("codex-gpt-6", True, "plan"),
 ])
-def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, monkeypatch, key, default_auth):
+def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, monkeypatch, key, default_auth, paid_by):
     config, task = load_job(), task_folder(tmp_path)
     monkeypatch.delenv("CLAUDE_FORCE_OAUTH", raising=False)
     monkeypatch.delenv("CODEX_FORCE_AUTH_JSON", raising=False)
@@ -54,19 +56,28 @@ def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, 
     # Entry keys carry no semantics; retain the shipped entry under another key.
     config.agents = {"selected": config.agents[key]}
     config.agents["selected"].cost_limit_usd = 7.25
-    if key == "claude-code-opus-5.5":
-        config.agents["selected"].kwargs["max_budget_usd"] = "999"
-    report = budget_check(plan([task], config, [], modes=["internet"], trials=1), 0, required=True)
+    config.agents["selected"].paid_by = paid_by
+    if paid_by == "api_key":
+        config.agents["selected"].env = {}
+        config.agents["selected"].required_env = []
+        monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN")
+    report = budget_check(plan([task], config, [], modes=["internet"], trials=1), 20, required=True)
     with pytest.raises(Captured):
         asyncio.run(run(report, config, tmp_path / "out", []))
     if key == "claude-code-opus-5.5":
         env, credentials, budget, flags = captured[0]
-        assert env == {"CLAUDE_FORCE_OAUTH": "1"}
-        assert credentials == {"CLAUDE_CODE_OAUTH_TOKEN": "offline-plan-token"}
-        assert budget == "7.25"
-        assert "--max-budget-usd 7.25" in flags
+        if paid_by == "api_key":
+            assert env == {}
+            assert credentials == {"ANTHROPIC_API_KEY": "offline-api-key"}
+            assert budget == "7.25"
+            assert "--max-budget-usd 7.25" in flags
+        else:
+            assert env == {"CLAUDE_FORCE_OAUTH": "1"}
+            assert credentials == {"CLAUDE_CODE_OAUTH_TOKEN": "offline-plan-token"}
+            assert budget is None
+            assert "--max-budget-usd" not in flags
     else:
-        assert captured == [({"CODEX_FORCE_AUTH_JSON": "1"}, auth)]
+        assert captured == [({"CODEX_FORCE_AUTH_JSON": "1", "CODEX_AUTH_JSON": ""}, auth)]
 
 
 @pytest.mark.parametrize("key,empty", [
@@ -143,3 +154,56 @@ def test_codex_uploads_chatgpt_auth_file_instead_of_an_api_key(tmp_path, monkeyp
         asyncio.run(agent.run("Name a unit.", Container(), AgentContext()))
     assert uploads == [(auth.read_text(), "/tmp/codex-secrets/auth.json")]
     assert requests[0]["env"] == {"CODEX_HOME": "/tmp/codex-home"}
+
+
+@pytest.mark.parametrize("through_ci", [False, True, "json"])
+def test_api_key_only_auth_file_is_refused_for_a_codex_plan(tmp_path, monkeypatch, through_ci):
+    import argparse
+    from test_ci import ci
+
+    config, task = load_job(), task_folder(tmp_path)
+    config.agents = {"selected": config.agents["codex-gpt-6"]}
+    auth = tmp_path / "auth.json"
+    auth.write_text('{"OPENAI_API_KEY":"offline-key-only"}')
+    monkeypatch.setenv("CODEX_AUTH_JSON_PATH", str(auth))
+    monkeypatch.delenv("CODEX_AUTH_JSON", raising=False)
+    if through_ci == "json":
+        monkeypatch.setenv("CODEX_AUTH_JSON", auth.read_text())
+    item = plan([task], config, [], modes=["internet"], trials=1)["missing"][0]
+    assert (item["paid_by"], item["worst_case_usd"]) == ("plan", 0)
+
+    async def refuse(*args, **kwargs):
+        raise AssertionError("An API key cannot start a plan-funded trial.")
+
+    monkeypatch.setattr(Job, "create", refuse)
+    output = tmp_path / "out"
+    with pytest.raises(ValueError, match="plan tokens"):
+        if through_ci:
+            saved = tmp_path / "plan"
+            saved.mkdir()
+            (saved / "trials.json").write_text(json.dumps([{
+                "missing": [item], "rejudge": [], "selected": [], "worst_case_usd": 0}]))
+            (saved / "config.json").write_text(config.model_dump_json())
+            ci.run_trial(argparse.Namespace(plan=saved, index=0, output=output))
+        else:
+            asyncio.run(run(budget_check(plan([task], config, [], modes=["internet"], trials=1), 0),
+                            config, output, []))
+    assert not (output / "jobs").exists()
+
+
+@pytest.mark.parametrize("field", ["missing_credential", "agent_budget", "model_budget"])
+def test_job_load_rejects_missing_plan_credentials_and_duplicate_budget_settings(tmp_path, field):
+    from test_jobs import job_config
+
+    path = job_config(tmp_path, "api_key")
+    data = json.loads(path.read_text())
+    if field == "missing_credential":
+        data["agents"]["local"]["paid_by"] = "plan"
+        message = "plan.*credential requirement"
+    else:
+        owner = data["agents"]["local"] if field == "agent_budget" else data["models"]["local"]
+        owner["kwargs"] = {"max_budget_usd": "999"}
+        message = "cost_limit_usd"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match=message):
+        load_job(path)

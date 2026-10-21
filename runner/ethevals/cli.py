@@ -20,6 +20,7 @@ def parse_args(argv=None):
     for name in ("lint", "free-check"):
         parsers[name] = commands.add_parser(name, help="Check Harbor task folders.")
         parsers[name].add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
+        parsers[name].add_argument("--config", type=Path, help="Board-wide Harbor job settings.")
     parsers["free-check"].add_argument("--output", type=Path, default=Path("results/free-check"))
     for name in ("run", "plan", "catalog"):
         command = parsers[name]
@@ -57,6 +58,7 @@ def main(argv=None) -> int:
     try:
         if args.command in {"plan", "run", "catalog"}:
             from . import jobs
+            from .job_config import load_job
             from .trial_rows import previous_rows, write_rows
 
             paths = args.tasks or sorted(path.parent for path in Path("tasks").rglob("task.toml"))
@@ -65,7 +67,7 @@ def main(argv=None) -> int:
                 return 0
             if not paths:
                 raise ValueError("No task folders found. Use --tasks or start from the repository root.")
-            config = jobs.load_job(args.config)
+            config = load_job(args.config)
             skills_pack = jobs.pack_skills() if "skills" in (args.modes or config.modes) else None
             previous = previous_rows(args.output, args.rows)
             report = jobs.budget_check(jobs.plan(
@@ -91,11 +93,13 @@ def main(argv=None) -> int:
             return 0
         if args.command in {"lint", "free-check"}:
             from .harbor_tasks import lint_task
+            from .job_config import load_job
+            config = load_job(args.config)
             paths = args.tasks or sorted(path.parent for path in Path("tasks").rglob("task.toml"))
             if not paths:
                 raise ValueError("No task folders found. Use --tasks or start from the repository root.")
             for path in paths:
-                lint_task(path)
+                lint_task(path, config)
                 print(f"{path}: lint passed")
             if args.command == "free-check":
                 from .harbor_tasks import free_check

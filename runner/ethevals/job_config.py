@@ -1,0 +1,101 @@
+"""Load job settings and check their declared credentials before Harbor starts."""
+from importlib.metadata import version
+import json
+import os
+from pathlib import Path
+from typing import Any, Literal
+
+from harbor.utils.env import resolve_env_vars
+from pydantic import Field, model_validator
+
+from .config import Declaration, parse_file
+from .judge import JudgeSettings
+
+
+class ModelSettings(Declaration):
+    name: str
+    effort: str | None = None
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
+class FileCredential(Declaration):
+    path: str
+    policy: Literal["plan_tokens"]
+
+
+class AgentSettings(Declaration):
+    name: str
+    version: str = Field(min_length=1, pattern=r"^\d+\.\d+\.\d+[^\s]*$")
+    model: str
+    paid_by: Literal["plan", "api_key", "free"]
+    cost_limit_usd: float = Field(ge=0, allow_inf_nan=False)
+    modes: list[Literal["vanilla", "internet", "skills"]] = Field(default_factory=lambda: ["internet"])
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    env: dict[str, str] = Field(default_factory=dict)
+    required_env: list[str] = Field(default_factory=list)
+    required_files: list[FileCredential] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_plan_credential(self):
+        if self.paid_by == "plan" and not (self.required_env or self.required_files):
+            raise ValueError("A plan entry must declare a credential requirement")
+        return self
+
+
+class JobSettings(Declaration):
+    harbor_version: str
+    time_limit: int = Field(gt=0)
+    trials: int = Field(default=3, gt=0)
+    max_attempts: int = Field(default=2, gt=0)
+    modes: list[Literal["vanilla", "internet", "skills"]]
+    models: dict[str, ModelSettings]
+    agents: dict[str, AgentSettings]
+    judge: JudgeSettings = Field(default_factory=JudgeSettings)
+
+    @model_validator(mode="after")
+    def check_references(self):
+        for key, agent in self.agents.items():
+            if agent.model not in self.models:
+                raise ValueError(f"agents.{key}.model: unknown model {agent.model!r}")
+        for label, entries in (("agents", self.agents), ("models", self.models)):
+            for key, entry in entries.items():
+                if {"version", "model_name", "reasoning_effort"} & entry.kwargs.keys():
+                    raise ValueError(f"{label}.{key}: set version, model, and effort outside kwargs")
+                if "max_budget_usd" in entry.kwargs:
+                    raise ValueError(f"{label}.{key}: use cost_limit_usd instead of kwargs.max_budget_usd")
+        return self
+
+    def credential_names(self) -> set[str]:
+        return {self.judge.key_env} | {name for agent in self.agents.values()
+                                      for name in [*agent.required_env, *agent.env]}
+
+
+def load_job(path: Path | None = None) -> JobSettings:
+    config = parse_file(JobSettings, path or Path(__file__).with_name("job.yaml"))
+    if config.harbor_version != version("harbor"):
+        raise ValueError(f"Job requires Harbor {config.harbor_version}; installed version is {version('harbor')}")
+    return config
+
+
+def check_credentials(agent: AgentSettings, key: str) -> None:
+    environment = {**os.environ, **resolve_env_vars(agent.env)}
+    for variable in agent.required_env:
+        if not environment.get(variable, "").strip():
+            raise ValueError(f"{key}: missing {variable}")
+    for credential in agent.required_files:
+        filename = resolve_env_vars({"path": credential.path})["path"]
+        # Match Harbor's default credential directory without changing HOME.
+        path = Path.home() / filename[2:] if filename.startswith("~/") else Path(filename)
+        if not path.is_file():
+            raise ValueError(f"{key}: missing credential file {path}")
+        try:
+            parsed = json.loads(path.read_text())
+        except (ValueError, OSError) as error:
+            raise ValueError(f"{key}: {path}: credential must contain plan tokens") from error
+        if credential.policy == "plan_tokens" and (
+            not isinstance(parsed, dict) or parsed.get("OPENAI_API_KEY")
+            or not isinstance(parsed.get("tokens"), dict)
+            or not isinstance(parsed["tokens"].get("access_token"), str)
+            or not parsed["tokens"]["access_token"].strip()
+        ):
+            raise ValueError(f"{key}: {path}: credential must contain plan tokens without an API key")

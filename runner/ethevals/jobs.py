@@ -1,80 +1,28 @@
 """Plan missing trials and run them through Harbor."""
 import hashlib
-from importlib.metadata import version
 import json
 import math
 import os
 import sys
 from pathlib import Path
-from typing import Any, Literal
 
 from harbor.job import Job
 from harbor.models.job.config import JobConfig
 from harbor.models.task.task import Task
 from harbor.agents.factory import AgentFactory
 from harbor.models.trial.config import AgentConfig
-from harbor.utils.env import resolve_env_vars
-from pydantic import Field, ValidationError, model_validator
+from pydantic import ValidationError
 
-from .config import Declaration, parse_file
+from .job_config import JobSettings, check_credentials
 from .files import content_hash
 from .harbor_tasks import lint_task
-from .judge import MAX_JUDGE_ATTEMPTS, JudgeSettings, check_judge_key, judge_trial, read_criteria
+from .judge import MAX_JUDGE_ATTEMPTS, check_judge_key, judge_trial, read_criteria
 from .skills import SkillsPack, pack_skills
 from .trial_rows import fold_rows, recover_rows, results_row, trial_identity, write_rows
 
 
-class ModelSettings(Declaration):
-    name: str
-    effort: str | None = None
-    kwargs: dict[str, Any] = Field(default_factory=dict)
-
-
-class AgentSettings(Declaration):
-    name: str
-    version: str = Field(min_length=1, pattern=r"^\d+\.\d+\.\d+[^\s]*$")
-    model: str
-    paid_by: Literal["plan", "api_key", "free"]
-    cost_limit_usd: float = Field(ge=0, allow_inf_nan=False)
-    modes: list[Literal["vanilla", "internet", "skills"]] = Field(default_factory=lambda: ["internet"])
-    kwargs: dict[str, Any] = Field(default_factory=dict)
-    env: dict[str, str] = Field(default_factory=dict)
-    required_env: list[str] = Field(default_factory=list)
-    required_files: list[str] = Field(default_factory=list)
-
-
-class JobSettings(Declaration):
-    harbor_version: str
-    time_limit: int = Field(gt=0)
-    trials: int = Field(default=3, gt=0)
-    max_attempts: int = Field(default=2, gt=0)
-    modes: list[Literal["vanilla", "internet", "skills"]]
-    models: dict[str, ModelSettings]
-    agents: dict[str, AgentSettings]
-    judge: JudgeSettings = Field(default_factory=JudgeSettings)
-
-    @model_validator(mode="after")
-    def check_references(self):
-        for key, agent in self.agents.items():
-            if agent.model not in self.models:
-                raise ValueError(f"agents.{key}.model: unknown model {agent.model!r}")
-            if {"version", "model_name", "reasoning_effort"} & agent.kwargs.keys():
-                raise ValueError(f"agents.{key}: set version, model, and effort outside kwargs")
-        for key, model in self.models.items():
-            if {"version", "model_name", "reasoning_effort"} & model.kwargs.keys():
-                raise ValueError(f"models.{key}: set version, model, and effort outside kwargs")
-        return self
-
-
-def load_job(path: Path | None = None) -> JobSettings:
-    config = parse_file(JobSettings, path or Path(__file__).with_name("job.yaml"))
-    if config.harbor_version != version("harbor"):
-        raise ValueError(f"Job requires Harbor {config.harbor_version}; installed version is {version('harbor')}")
-    return config
-
-
-def task_entry(path: Path) -> dict:
-    lint_task(path)
+def task_entry(path: Path, config: JobSettings | None = None) -> dict:
+    lint_task(path, config)
     task = Task(path)
     metadata = task.config.metadata
     pillar = metadata.get("pillar")
@@ -112,11 +60,11 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         if selected and set(selected) - available.keys():
             raise ValueError(f"Unknown {label}: {', '.join(sorted(set(selected) - available.keys()))}")
     prior = {trial_identity(row): row for row in previous}
-    missing, exhausted, selected, deferred = [], [], [], []
+    missing, rejudge, exhausted, selected, deferred = [], [], [], [], []
     ids = set()
     combinations = 0
     for path in paths:
-        task = task_entry(path)
+        task = task_entry(path, config)
         criteria = read_criteria(path)
         if task["id"] in ids:
             raise ValueError(f"Duplicate task ID: {task['id']}")
@@ -145,48 +93,57 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     attempt = row.get("attempt", 0)
                     if row.get("status") in {"passed", "failed"}:
                         continue
-                    saved_trial = None
-                    judge_attempts = MAX_JUDGE_ATTEMPTS
+                    judge = {"model": config.judge.model, "effort": config.judge.effort} if criteria else None
+                    item = {**metadata, "task_path": str(path.resolve()), "agent_key": key,
+                            "agent_version": agent.version, "harbor_version": config.harbor_version,
+                            "paid_by": agent.paid_by, "time_limit": config.time_limit,
+                            "judge": judge, "criteria_names": list(criteria)}
                     if row.get("error_kind") == "judge":
-                        saved_trial = Path(row["verifier_files"]).parent if row.get("verifier_files") else None
-                        judge_attempts -= row.get("judge_attempts", 0)
-                        if not saved_trial or not (saved_trial / "result.json").is_file() or judge_attempts <= 0:
-                            exhausted.append(row)
-                            continue
-                    elif attempt >= config.max_attempts and not retry_errors:
+                        folder = Path(row["verifier_files"]).parent if row.get("verifier_files") else None
+                        remaining_judge = MAX_JUDGE_ATTEMPTS - row.get("judge_attempts", 0)
+                        if folder and (folder / "result.json").is_file() and judge and remaining_judge > 0:
+                            try:
+                                board = json.loads((folder.parent / "board.json").read_text())
+                                judge_path = folder / "verifier/judge.json"
+                                saved = json.loads(judge_path.read_text()) if judge_path.exists() else None
+                                eligible = (trial_identity(board) == identity and board["judge"] == judge
+                                            and (saved is None or saved["error"] and saved["judge"] == judge))
+                            except (OSError, ValueError, KeyError, TypeError):
+                                eligible = False
+                            if eligible:
+                                reserve = config.judge.cost_limit_usd * remaining_judge if config.judge.paid_by == "api_key" else 0.0
+                                rejudge.append({**item, "trial_path": str(folder.resolve()), "attempt": attempt,
+                                                "remaining_attempts": 1, "agent_reserve_usd": 0.0,
+                                                "judge_reserve_usd": reserve, "worst_case_usd": reserve})
+                                continue
+                    if attempt >= config.max_attempts and not retry_errors:
                         exhausted.append(row)
                         continue
-                    if missing_env and not saved_trial:
+                    if missing_env:
                         deferred.append({**metadata, "task_path": str(path.resolve()), "agent_key": key,
                                          "missing_env": missing_env})
                         continue
-                    reserve = agent.cost_limit_usd if agent.paid_by == "api_key" and not saved_trial else 0.0
-                    judge_reserve = config.judge.cost_limit_usd * judge_attempts if criteria and config.judge.paid_by == "api_key" else 0.0
-                    remaining = 1 if saved_trial else max(1, config.max_attempts - attempt)
-                    missing.append({**metadata, "task_path": str(path.resolve()), "agent_key": key,
-                                    "agent_version": agent.version, "harbor_version": config.harbor_version,
-                                    "paid_by": agent.paid_by, "time_limit": config.time_limit,
-                                    "attempt": attempt if saved_trial else attempt + 1, "remaining_attempts": remaining,
-                                    "saved_trial": str(saved_trial.resolve()) if saved_trial else None,
+                    reserve = agent.cost_limit_usd if agent.paid_by == "api_key" else 0.0
+                    judge_reserve = config.judge.cost_limit_usd * MAX_JUDGE_ATTEMPTS if criteria and config.judge.paid_by == "api_key" else 0.0
+                    remaining = max(1, config.max_attempts - attempt)
+                    missing.append({**item, "attempt": attempt + 1, "remaining_attempts": remaining,
                                     "agent_reserve_usd": reserve, "judge_reserve_usd": judge_reserve,
-                                    "judge": {"model": config.judge.model, "effort": config.judge.effort} if criteria else None,
-                                    "criteria_names": list(criteria),
                                     "worst_case_usd": (reserve + judge_reserve) * remaining})
     if not selected:
         raise ValueError("No tasks declare a selected mode and agent")
     if trial is not None and combinations != 1:
         raise ValueError("--trial requires exactly one task, agent, and mode")
     deferred_ids = {trial_identity(row) for row in deferred}
-    return {"missing": missing, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
-            "worst_case_usd": round(sum(row["worst_case_usd"] for row in missing), 8),
+    return {"missing": missing, "rejudge": rejudge, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
+            "worst_case_usd": round(sum(row["worst_case_usd"] for row in [*missing, *rejudge]), 8),
             "selected": [identity for identity in selected if identity not in deferred_ids]}
 
 
 def budget_check(report: dict, budget: float | None, *, required=False) -> dict:
     if budget is not None and (not math.isfinite(budget) or budget < 0):
         raise ValueError("Budget must be a finite, nonnegative USD amount")
-    if required and report["missing"] and budget is None:
-        raise ValueError("An agent trial requires --budget before Harbor starts")
+    if required and (report["missing"] or report["rejudge"]) and budget is None:
+        raise ValueError("A trial or judge re-run requires --budget before Harbor starts")
     report.update(budget_usd=budget, within_budget=budget is None or report["worst_case_usd"] <= budget)
     return report
 
@@ -205,55 +162,45 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             path = skills_path / name.removeprefix("/skills/")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-    for item in report["missing"]:
+    for item in [*report["rejudge"], *report["missing"]]:
         path = Path(item["task_path"])
-        if task_entry(path)["hash"] != item["task_hash"]:
+        if task_entry(path, config)["hash"] != item["task_hash"]:
             raise ValueError("The task differs from the plan; plan the trials again")
-        missing = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
-        if missing and not item.get("saved_trial"):
-            raise ValueError(f"{path}: missing {', '.join(missing)}")
         if item["judge"]:
             check_judge_key(config.judge)
     prepared = []
     for item in report["missing"]:
-        if item.get("saved_trial"):
-            prepared.append((item, None))
-            continue
+        path = Path(item["task_path"])
+        missing = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
+        if missing:
+            raise ValueError(f"{path}: missing {', '.join(missing)}")
         agent = config.agents[item["agent_key"]]
         model = config.models[agent.model]
-        environment = {**os.environ, **resolve_env_vars(agent.env)}
-        for variable in agent.required_env:
-            if not environment.get(variable, "").strip():
-                raise ValueError(f"{item['agent_key']}: missing {variable}")
-        for template in agent.required_files:
-            filename = resolve_env_vars({"path": template})["path"]
-            # Match Harbor's default credential directory without changing HOME.
-            path = Path.home() / filename[2:] if filename.startswith("~/") else Path(filename)
-            if not path.is_file():
-                raise ValueError(f"{item['agent_key']}: missing credential file {path}")
+        check_credentials(agent, item["agent_key"])
         kwargs = {**model.kwargs, **agent.kwargs, "version": agent.version}
         if model.effort is not None:
             kwargs["reasoning_effort"] = model.effort
         harbor = AgentConfig(name=agent.name, model_name=model.name, kwargs=kwargs,
                              env=agent.env, override_timeout_sec=config.time_limit)
         options = AgentFactory.get_agent_class_from_config(harbor).options_model
-        if options is not None and "max_budget_usd" in options.model_fields:
+        if agent.paid_by == "api_key" and options is not None and "max_budget_usd" in options.model_fields:
             harbor.kwargs["max_budget_usd"] = str(agent.cost_limit_usd)
         if item["mode"] == "skills":
             harbor.skills = [str(skills_path)]
         prepared.append((item, harbor))
     rows = previous
-    for item, harbor in prepared:
-        judged_rows = []
+    for item in report["rejudge"]:
+        folder = Path(item["trial_path"])
+        metadata = json.loads((folder.parent / "board.json").read_text())
+        if trial_identity(metadata) != trial_identity(item) or metadata["judge"] != item["judge"]:
+            raise ValueError("The saved trial differs from the plan")
         try:
-            if item.get("saved_trial"):
-                folder = Path(item["saved_trial"])
-                metadata = json.loads((folder.parent / "board.json").read_text())
-                if trial_identity(metadata) != trial_identity(item) or metadata["judge"] != item["judge"]:
-                    raise ValueError("The saved trial differs from the plan")
-                await judge_trial(folder, Path(item["task_path"]), config.judge)
-                judged_rows.append(results_row(folder, metadata))
-                continue
+            await judge_trial(folder, Path(item["task_path"]), config.judge)
+        finally:
+            rows = fold_rows(rows, [results_row(folder, metadata)])
+            write_rows(output / "rows.jsonl", rows)
+    for item, harbor in prepared:
+        try:
             name = hashlib.sha256(json.dumps([item, harbor.model_dump(mode="json")], sort_keys=True).encode()).hexdigest()[:24]
             destination = output / "jobs" / name
             destination.mkdir(parents=True, exist_ok=True)
@@ -280,7 +227,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
                     if saved.get("finished_at") and (not error or error["exception_type"] == "AgentTimeoutError"):
                         await judge_trial(result_path.parent, Path(item["task_path"]), config.judge)
         finally:
-            rows = fold_rows(rows, recover_rows(output), judged_rows)
+            rows = fold_rows(rows, recover_rows(output))
             write_rows(output / "rows.jsonl", rows)
     selected = {tuple(identity) for identity in report["selected"]}
     observed = {trial_identity(row): row for row in rows if trial_identity(row) in selected}

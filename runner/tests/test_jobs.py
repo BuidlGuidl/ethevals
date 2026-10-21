@@ -12,7 +12,9 @@ def job_config(tmp_path, paid_by="plan"):
         "modes": ["internet"],
         "models": {"local": {"name": "local/model", "effort": "high"}},
         "agents": {"local": {"name": "nop", "version": "1.0.0", "model": "local",
-                              "paid_by": paid_by, "cost_limit_usd": 3}},
+                              "paid_by": paid_by, "cost_limit_usd": 3,
+                              **({"required_env": ["OFFLINE_PLAN_TOKEN"],
+                                  "env": {"OFFLINE_PLAN_TOKEN": "offline-plan-token"}} if paid_by == "plan" else {})}},
     }))
     return path
 
@@ -91,7 +93,8 @@ def test_row_builder_reads_a_recorded_real_trial(tmp_path):
 
 def test_skill_edits_repeat_only_skills_trials(tmp_path, monkeypatch):
     import asyncio
-    from ethevals.jobs import budget_check, load_job, plan, run
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
 
     config, task = load_job(job_config(tmp_path, "free")), task_folder(tmp_path)
     config.modes = ["vanilla", "internet", "skills"]
@@ -133,7 +136,8 @@ def test_published_trajectory_enriches_the_same_attempt_and_a_later_error_stays_
 
 def test_planner_recovers_finished_trials_and_repeats_changed_tasks(tmp_path):
     import shutil
-    from ethevals.jobs import load_job, plan, task_entry
+    from ethevals.job_config import load_job
+    from ethevals.jobs import plan, task_entry
     from ethevals.trial_rows import previous_rows
 
     config, task = load_job(job_config(tmp_path, "free")), task_folder(tmp_path)
@@ -152,7 +156,8 @@ def test_planner_recovers_finished_trials_and_repeats_changed_tasks(tmp_path):
 
 
 def test_api_key_budget_reserves_remaining_attempts_and_retains_exhausted_errors(tmp_path):
-    from ethevals.jobs import budget_check, load_job, plan
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan
 
     config, task = load_job(job_config(tmp_path, "api_key")), task_folder(tmp_path)
     missing = plan([task], config, [])["missing"]
@@ -172,7 +177,8 @@ def test_recovery_restarts_a_job_interrupted_during_its_first_config_write(tmp_p
     import asyncio
     import shutil
     from harbor.job import Job
-    from ethevals.jobs import budget_check, load_job, plan, run
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
 
     config = load_job(job_config(tmp_path, "free"))
     task = tmp_path / "concepts/question"
@@ -204,7 +210,8 @@ def test_recovery_restarts_a_job_interrupted_during_its_first_config_write(tmp_p
 
 def test_execution_rejects_task_edits_after_admission(tmp_path):
     import asyncio
-    from ethevals.jobs import budget_check, load_job, plan, run
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
 
     config, task = load_job(job_config(tmp_path, "free")), task_folder(tmp_path)
     report = budget_check(plan([task], config, [], trials=1), 0)
@@ -283,7 +290,8 @@ def test_invalid_check_records_become_retryable_verification_errors(tmp_path, ch
     (tmp_path / "trial/verifier/checks.json").write_text(json.dumps(checks))
     row = results_row(tmp_path / "trial", metadata)
     assert (row["status"], row["error_kind"], row["error_reason"], row["checks"]) == (
-        "error", "verification", "Each check needs a name, boolean passed, and one-line reason.", {})
+        "error", "verification",
+        f"{tmp_path / 'trial/verifier/checks.json'}: Each check needs a name, boolean passed, and one-line reason.", {})
 
 
 @pytest.mark.docker
@@ -317,7 +325,8 @@ def test_any_configured_agent_keeps_api_price_cost_when_a_plan_or_key_pays(tmp_p
 def test_skills_trial_loads_captured_pack_through_harbor(tmp_path, monkeypatch, skills_dir):
     import asyncio
     import shutil
-    from ethevals.jobs import budget_check, load_job, plan, run
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
     from ethevals.skills import pack_skills
     from ethevals.trial_rows import previous_rows
 

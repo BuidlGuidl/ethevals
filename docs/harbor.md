@@ -8,7 +8,10 @@ Its `paid_by` field is `plan`, `api_key`, or `free` for a local stand-in.
 Model effort becomes Harbor's `reasoning_effort`; `kwargs` carries other agent options.
 Each entry's `env` passes through Harbor's agent environment.
 The shipped plan entries set their force flags there, so local and CI trials select the same payment source.
-`required_env` lists nonempty credential variables; `required_files` lists credential paths, with Harbor's `${VAR:-default}` substitution.
+`required_env` lists nonempty credential variables.
+Each `required_files` entry declares a `path` and a `policy`, with Harbor's `${VAR:-default}` substitution in the path.
+The `plan_tokens` policy requires JSON with `tokens.access_token` and refuses an API key.
+Every plan entry must declare a credential requirement.
 The runner checks these requirements before creating any Harbor job.
 An entry's `modes` defaults to `[internet]`.
 The planner intersects those modes with the job selection and each task's modes.
@@ -34,7 +37,9 @@ Every missing agent trial requires an explicit `--budget`, including free stand-
 API-key trials reserve `cost_limit_usd` for each remaining attempt.
 Plan-funded trials reserve $0 of agent spend.
 The reserve controls admission.
-For agents whose Harbor options include `max_budget_usd`, the runner sets that cap from `cost_limit_usd`.
+For API-key entries whose Harbor options include `max_budget_usd`, the runner sets that cap from `cost_limit_usd`.
+Plan entries use the time limit alone.
+Set `cost_limit_usd` outside `kwargs`; the config rejects `kwargs.max_budget_usd` on agents and models.
 Claude Code exposes this flag; other agents have no runtime spending cap.
 Planning needs no provider keys or Docker.
 Use `--tasks`, `--agents`, and `--models` to select entries.
@@ -43,6 +48,11 @@ Completed passes and failures never repeat for the same task hash, agent, model,
 Skills trials also include the skills hash in their identity.
 Internet and vanilla trials record `skills_hash: null`, so a skill edit repeats only skills trials.
 Agent errors repeat up to `max_attempts`; `--retry-errors` grants one further agent attempt per selected error.
+The plan lists agent trials under `missing` and judge-only re-runs under `rejudge`; both count toward the budget.
+The runner judges saved folders before starting agent trials.
+A saved folder qualifies only with remaining judge attempts, matching judge settings, and missing or failed judge output.
+Without that folder, or after the judge settings change, the agent retry rules apply.
+Criteria headings that match test check names cause a verification error.
 
 Run the same command and output directory after an interruption.
 The runner reads saved Harbor trial folders before planning and rebuilds missing rows.
@@ -124,6 +134,8 @@ If a variable is unset, the free check lints the task and skips its runs.
 The planner defers its pending trials and excludes them from the budget and CI matrix.
 Both commands print the missing variable's name.
 Compose interpolation accepts only declared variable names.
+Tasks cannot request credential names from the job's agent requirements, agent environment, or judge key.
+Use `--config` with lint or free-check to check against another job config.
 Compose service keys use an allowlist; host namespaces, extra capabilities, and implicit host environment values are forbidden.
 The task's compose file passes each secret only to the sidecar that needs it.
 A fork's sidecar sets `FORK_RPC_URL` and `FORK_BLOCK_NUMBER` for Anvil.

@@ -20,6 +20,7 @@ class JudgeSettings(Declaration):
     time_limit: int = Field(default=300, gt=0)
     cost_limit_usd: float = Field(default=2.0, ge=0, allow_inf_nan=False)
     paid_by: Literal["api_key", "free"] = "api_key"
+    key_env: str = "ANTHROPIC_API_KEY"
 
 
 def read_criteria(task: Path) -> dict[str, str]:
@@ -41,9 +42,9 @@ def check_judge_key(settings: JudgeSettings) -> None:
     if settings.paid_by == "free":
         return
     if settings.model.startswith("anthropic/") or settings.model.startswith("claude-"):
-        key = os.environ.get("ANTHROPIC_API_KEY", "")
+        key = os.environ.get(settings.key_env, "")
         if not key or key.startswith("sk-ant-oat") or os.environ.get("REWARDKIT_FORCE_SUBSCRIPTION", "").strip().lower() in {"1", "true", "yes"}:
-            raise ValueError("The judge requires ANTHROPIC_API_KEY and cannot use a plan token.")
+            raise ValueError(f"The judge requires {settings.key_env} and cannot use a plan token.")
 
 
 async def judge_trial(folder: Path, task: Path, settings: JudgeSettings) -> None:
@@ -58,6 +59,8 @@ async def judge_trial(folder: Path, task: Path, settings: JudgeSettings) -> None
     total_cost = previous.get("cost_usd", 0.0)
     temporary = path.with_suffix(".tmp")
     while attempts < MAX_JUDGE_ATTEMPTS:
+        if attempts:
+            await asyncio.sleep(2 ** attempts)
         attempts += 1
         record = {"judge": {"model": settings.model, "effort": settings.effort},
                   "paid_by": settings.paid_by, "cost_usd": 0.0 if settings.paid_by == "free" else None,

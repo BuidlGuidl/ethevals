@@ -16,6 +16,100 @@ def recorded_trial(tmp_path):
     return trial, json.loads((fixture / "board.json").read_text())
 
 
+@pytest.mark.parametrize("attempt,judge_attempts,retry_errors,expected", [
+    (1, 2, False, 2), (1, 0, False, 2), (2, 2, False, None), (2, 0, True, 3),
+])
+def test_ci_judge_error_without_a_local_folder_uses_agent_retry_rules(
+    tmp_path, attempt, judge_attempts, retry_errors, expected,
+):
+    from ethevals.job_config import load_job
+    from ethevals.jobs import plan
+
+    task = task_folder(tmp_path)
+    (task / "tests/criteria.md").write_text("## explained\nDid it explain the unit?\n")
+    config = load_job(job_config(tmp_path, "api_key"))
+    item = plan([task], config, [], trials=1)["missing"][0]
+    row = {**item, "status": "error", "error_kind": "judge", "attempt": attempt,
+           "judge_attempts": judge_attempts, "verifier_files": "/home/runner/work/old/trial/verifier"}
+    report = plan([task], config, [row], trials=1, retry_errors=retry_errors)
+    assert [entry["attempt"] for entry in report["missing"]] == ([] if expected is None else [expected])
+    if expected:
+        assert report["missing"][0]["agent_reserve_usd"] == 3
+    else:
+        assert [entry["attempt"] for entry in report["exhausted_errors"]] == [2]
+
+
+def test_published_interrupted_judge_retries_agent_after_artifact_moves(tmp_path):
+    from ethevals.job_config import load_job
+    from ethevals.jobs import plan
+    from ethevals.publish import publish_logs
+    from ethevals.trial_rows import recover_rows
+
+    task = task_folder(tmp_path)
+    (task / "tests/criteria.md").write_text("## explained\nDid it explain the unit?\n")
+    config = load_job(job_config(tmp_path, "api_key"))
+    item = plan([task], config, [], trials=1)["missing"][0]
+    folder = tmp_path / "out/jobs/saved/trial"
+    shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", folder)
+    (folder.parent / "board.json").write_text(json.dumps(item))
+    rows = recover_rows(tmp_path / "out")
+    assert (rows[0]["error_kind"], rows[0]["judge_attempts"]) == ("judge", 0)
+    published = publish_logs(tmp_path / "release", "owner/repo", "16", "a" * 40, rows=rows)
+    shutil.move(str(tmp_path / "out"), tmp_path / "downloaded")
+    report = plan([task], config, published["rows"], trials=1, retry_errors=True)
+    assert [(entry["attempt"], entry["agent_reserve_usd"]) for entry in report["missing"]] == [(2, 3)]
+    assert len(published["assets"]) == 2
+
+
+@pytest.mark.parametrize("changed", ["judge", "collision"])
+def test_changed_judge_and_colliding_check_do_not_abort_or_loop_the_plan(tmp_path, monkeypatch, changed):
+    from harbor.job import Job
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
+    from ethevals.judge import JudgeSettings
+    from ethevals.trial_rows import recover_rows
+
+    task = task_folder(tmp_path)
+    heading = "unit" if changed == "collision" else "explained"
+    (task / "tests/criteria.md").write_text(f"## {heading}\nDid it explain the unit?\n")
+    config = load_job(job_config(tmp_path, "free"))
+    config.agents["local"].name = "oracle"
+    config.judge = JudgeSettings(model="openai/gpt-5", paid_by="free")
+    item = plan([task], config, [], trials=1)["missing"][0]
+    folder = tmp_path / "old/jobs/saved/trial"
+    fixture = Path(__file__).parent / "fixtures/harbor/recorded-trial"
+    shutil.copytree(fixture, folder)
+    (folder.parent / "board.json").write_text(json.dumps(item))
+    (folder / "verifier/judge.json").write_text(json.dumps({
+        "judge": item["judge"], "paid_by": "free", "cost_usd": 0, "attempts": 1,
+        "error": None if changed == "collision" else "Try again.",
+        "checks": {heading: {"passed": True, "reason": "The reply explains it."}}}))
+    rows = recover_rows(tmp_path / "old")
+    if changed == "collision":
+        assert rows[0]["error_kind"] == "verification"
+    else:
+        config.judge.effort = "low"
+    calls = []
+
+    async def finished(job):
+        calls.append(job.config.tasks[0].path)
+        shutil.copytree(fixture, job.job_dir / "trial")
+
+    async def completion(**kwargs):
+        return litellm.ModelResponse(choices=[{"message": {"role": "assistant", "content":
+            '{"score":"yes","reasoning":"The reply explains it."}'}}])
+
+    monkeypatch.setattr(Job, "run", finished)
+    monkeypatch.setattr(litellm, "acompletion", completion)
+    report = budget_check(plan([task], config, rows, trials=2), 0)
+    assert [(entry["trial"], entry["attempt"]) for entry in report["missing"]] == [(1, 2), (2, 1)]
+    asyncio.run(run(report, config, tmp_path / "new", rows))
+    assert calls == [task.resolve(), task.resolve()]
+    next_plan = plan([task], config, recover_rows(tmp_path / "new"), trials=1)
+    assert next_plan["missing"] == []
+    assert len(next_plan["exhausted_errors"]) == int(changed == "collision")
+
+
 def test_recorded_trial_criteria_reach_rows_with_reason_and_judge(tmp_path, monkeypatch):
     from ethevals.judge import JudgeSettings, judge_trial
     from ethevals.trial_rows import results_row
@@ -66,7 +160,8 @@ def test_recorded_trial_criteria_reach_rows_with_reason_and_judge(tmp_path, monk
                                    '{"score":"yes"}'])
 def test_judge_errors_retry_only_judging_and_stop_at_the_judge_limit(tmp_path, monkeypatch, reply):
     from ethevals.judge import JudgeSettings, judge_trial
-    from ethevals.jobs import budget_check, load_job, plan, task_entry
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, task_entry
     from ethevals.trial_rows import previous_rows
 
     trial, metadata = recorded_trial(tmp_path)
@@ -95,8 +190,8 @@ def test_judge_errors_retry_only_judging_and_stop_at_the_judge_limit(tmp_path, m
         "error", "judge", {"unit": {"passed": True, "reason": "The final reply matches."}})
     assert rows[0]["error_reason"].startswith("Cannot judge criteria:")
     again = budget_check(plan([task], config, rows, trials=1), 0)
-    assert again["missing"] == []
-    assert [(row["trial"], row["attempt"]) for row in again["exhausted_errors"]] == [(1, 1)]
+    assert [(row["trial"], row["attempt"]) for row in again["missing"]] == [(1, 2)]
+    assert again["rejudge"] == []
     assert json.loads((trial / "verifier/judge.json").read_text())["attempts"] == 2
 
 
@@ -104,7 +199,8 @@ def test_judge_errors_retry_only_judging_and_stop_at_the_judge_limit(tmp_path, m
 @pytest.mark.parametrize("separate_output", [False, True])
 def test_saved_trial_retries_judge_and_reaches_board_without_an_agent_run(tmp_path, monkeypatch, interrupted, separate_output):
     from harbor.job import Job
-    from ethevals.jobs import budget_check, load_job, plan, run
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
     from ethevals.judge import JudgeSettings
     from ethevals.trial_rows import previous_rows
 
@@ -140,7 +236,8 @@ def test_saved_trial_retries_judge_and_reaches_board_without_an_agent_run(tmp_pa
             asyncio.run(judge_trial(folder, task, config.judge))
     rows = previous_rows(tmp_path / "out", tmp_path / "none")
     report = budget_check(plan([task], config, rows, trials=1), 0, required=True)
-    assert [(entry["attempt"], entry["agent_reserve_usd"]) for entry in report["missing"]] == [(1, 0)]
+    assert report["missing"] == []
+    assert [(entry["attempt"], entry["agent_reserve_usd"]) for entry in report["rejudge"]] == [(1, 0)]
     output = tmp_path / "new-out" if separate_output else tmp_path / "out"
     assert asyncio.run(run(report, config, output, rows)) is True
     row = json.loads((output / "rows.jsonl").read_text())
@@ -179,18 +276,48 @@ def test_judge_retry_costs_add_on_the_same_trial(tmp_path, monkeypatch):
     assert len(requests) == 2
 
 
+def test_judge_waits_before_its_second_attempt(tmp_path, monkeypatch):
+    from ethevals.judge import JudgeSettings, judge_trial
+    from ethevals.trial_rows import results_row
+
+    folder, metadata = recorded_trial(tmp_path)
+    task = task_folder(tmp_path)
+    (task / "tests/criteria.md").write_text("## explained\nDid it explain the unit?\n")
+    metadata.update(judge={"model": "openai/gpt-5", "effort": "high"}, criteria_names=["explained"])
+    events = []
+
+    async def wait(delay):
+        events.append(("wait", delay))
+
+    async def completion(**kwargs):
+        events.append("call")
+        if len(events) == 1:
+            raise litellm.ServiceUnavailableError(message="Try again.", model="gpt-5", llm_provider="openai")
+        return litellm.ModelResponse(choices=[{"message": {"role": "assistant", "content":
+            '{"score":"yes","reasoning":"It explains it."}'}}])
+
+    monkeypatch.setattr(asyncio, "sleep", wait)
+    monkeypatch.setattr(litellm, "acompletion", completion)
+    asyncio.run(judge_trial(folder, task, JudgeSettings(model="openai/gpt-5", paid_by="free")))
+    assert events == ["call", ("wait", 2), "call"]
+    assert results_row(folder, metadata)["status"] == "passed"
+
+
 def test_saved_judge_reserves_only_its_remaining_attempt(tmp_path):
-    from ethevals.jobs import budget_check, load_job, plan
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan
 
     folder, _ = recorded_trial(tmp_path)
     task = task_folder(tmp_path)
     (task / "tests/criteria.md").write_text("## explained\nDid the reply explain the unit?\n")
     config = load_job(job_config(tmp_path, "api_key"))
     item = plan([task], config, [], trials=1)["missing"][0]
+    (folder.parent / "board.json").write_text(json.dumps(item))
     row = {**item, "status": "error", "error_kind": "judge", "attempt": 2,
            "judge_attempts": 1, "verifier_files": str(folder / "verifier")}
     report = budget_check(plan([task], config, [row], trials=1), 2, required=True)
-    saved = report["missing"][0]
+    assert report["missing"] == []
+    saved = report["rejudge"][0]
     assert (saved["attempt"], saved["agent_reserve_usd"], saved["judge_reserve_usd"], report["worst_case_usd"], report["within_budget"]) == (
         2, 0, 2, 2, True)
 
@@ -206,11 +333,47 @@ def test_judge_checks_reject_blank_names_like_test_checks(tmp_path):
         "checks": {" ": {"passed": True, "reason": "Matches."}}}))
     row = results_row(folder, metadata)
     assert (row["status"], row["error_kind"], row["error_reason"]) == (
-        "error", "judge", "Cannot judge criteria: Each check needs a name, boolean passed, and one-line reason.")
+        "error", "judge", f"Cannot judge criteria: {folder / 'verifier/judge.json'}: Each check needs a name, boolean passed, and one-line reason.")
+
+
+def test_row_parses_judge_json_once_and_keeps_its_checks(tmp_path, monkeypatch):
+    from ethevals.trial_rows import results_row
+
+    folder, metadata = recorded_trial(tmp_path)
+    judge_path = folder / "verifier/judge.json"
+    judge = {"model": "openai/gpt-5", "effort": "high"}
+    metadata.update(judge=judge, criteria_names=["explained"])
+    judge_path.write_text(json.dumps({"judge": judge, "paid_by": "free", "cost_usd": 0,
+        "attempts": 1, "error": None, "checks": {"explained": {"passed": True, "reason": "It explains it."}}}))
+    original = Path.read_text
+    reads = []
+
+    def read(path, *args, **kwargs):
+        if path == judge_path:
+            reads.append(path)
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read)
+    row = results_row(folder, metadata)
+    assert (row["status"], row["checks"]["explained"]) == ("passed", {"passed": True, "reason": "It explains it."})
+    assert reads == [judge_path]
+
+
+@pytest.mark.parametrize("content", ['{" ": {"passed": true, "reason": "Matches."}}', '{"unit":'])
+def test_check_errors_include_the_source_file(tmp_path, content):
+    from ethevals.trial_rows import results_row
+
+    folder, metadata = recorded_trial(tmp_path)
+    path = folder / "verifier/checks.json"
+    path.write_text(content)
+    row = results_row(folder, metadata)
+    assert (row["status"], row["error_kind"]) == ("error", "verification")
+    assert str(path) in row["error_reason"]
 
 
 def test_criteria_judge_reserves_api_spend_for_a_plan_funded_agent(tmp_path, monkeypatch):
-    from ethevals.jobs import budget_check, load_job, plan, run
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
 
     task = task_folder(tmp_path)
     (task / "tests/criteria.md").write_text("## explained\nDid the reply explain the unit?\n")
@@ -271,7 +434,8 @@ def test_missing_judge_result_is_a_retryable_error(tmp_path):
 
 @pytest.mark.parametrize("key,forced", [("", ""), ("sk-ant-oat-stand-in", ""), ("stand-in-api-key", " true ")])
 def test_live_judge_refuses_missing_keys_and_plan_tokens_before_calls(tmp_path, monkeypatch, key, forced):
-    from ethevals.jobs import budget_check, load_job, plan, run
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
 
     task = task_folder(tmp_path)
     (task / "tests/criteria.md").write_text("## explained\nDid the reply explain the unit?\n")
@@ -285,7 +449,8 @@ def test_live_judge_refuses_missing_keys_and_plan_tokens_before_calls(tmp_path, 
 
 @pytest.mark.docker
 def test_job_runs_rewardkit_with_a_local_http_judge_and_recovers_criteria(tmp_path, monkeypatch):
-    from ethevals.jobs import budget_check, load_job, plan, run
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
     from support import cli
     from test_vanilla import stand_in
 
