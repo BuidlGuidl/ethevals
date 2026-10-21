@@ -46,7 +46,7 @@ A positive budget must cover all missing trials' remaining API attempts, includi
 
 The workflow needs these GitHub secrets:
 
-- `CLAUDE_CODE_OAUTH_TOKEN`: the Claude plan token. `CLAUDE_FORCE_OAUTH=1` keeps the API key out of Claude Code.
+- `CLAUDE_CODE_OAUTH_TOKEN`: the Claude plan token. The job config forces plan payment and requires this token.
 - `CODEX_AUTH_JSON`: the full ChatGPT `auth.json`. Rotate it weekly.
 - `ANTHROPIC_API_KEY`: the judge and Anthropic vanilla trials.
 - `OPENAI_API_KEY` and `OPENROUTER_API_KEY`: vanilla trials for those providers; OpenCode also uses OpenRouter.
@@ -64,7 +64,7 @@ Key-paid trials have separate groups and can run in parallel.
 Harbor builds each task's environment and starts its declared sidecars.
 Codex credentials use a temporary mode-0600 file outside the artifact directory; the step removes it afterward.
 Harbor receives `CODEX_AUTH_JSON_PATH` and uploads the file itself.
-`CODEX_FORCE_AUTH_JSON=1` prevents an absent plan secret from falling back to the OpenAI key.
+The job config forces Codex plan payment and requires its credential file before Harbor starts.
 The judge key stays on the host while Claude Code uses its plan token.
 The run step allows 190 minutes; the job allows 240 minutes for setup, builds, and uploads too.
 Each job uploads saved trials after success or failure.

@@ -6,6 +6,10 @@
 Each agent entry names a Harbor agent or Python import path and a model key.
 Its `paid_by` field is `plan`, `api_key`, or `free` for a local stand-in.
 Model effort becomes Harbor's `reasoning_effort`; `kwargs` carries other agent options.
+Each entry's `env` passes through Harbor's agent environment.
+The shipped plan entries set their force flags there, so local and CI trials select the same payment source.
+`required_env` lists nonempty credential variables; `required_files` lists credential paths, with Harbor's `${VAR:-default}` substitution.
+The runner checks these requirements before creating any Harbor job.
 An entry's `modes` defaults to `[internet]`.
 The planner intersects those modes with the job selection and each task's modes.
 Skills mode uploads the repo's captured skills pack through Harbor.
@@ -29,7 +33,9 @@ Vanilla rows have `agent: null` and appear in the knowledge table.
 Every missing agent trial requires an explicit `--budget`, including free stand-ins and plan-funded trials.
 API-key trials reserve `cost_limit_usd` for each remaining attempt.
 Plan-funded trials reserve $0 of agent spend.
-The reserve controls admission; Harbor does not enforce a spending cap during execution.
+The reserve controls admission.
+For agents whose Harbor options include `max_budget_usd`, the runner sets that cap from `cost_limit_usd`.
+Claude Code exposes this flag; other agents have no runtime spending cap.
 Planning needs no provider keys or Docker.
 Use `--tasks`, `--agents`, and `--models` to select entries.
 Use `--trial N` with one task, agent, and mode to run one numbered trial.
@@ -115,7 +121,10 @@ Only the filtered RPC listens outside the sidecar's loopback interface.
 
 Tasks list required secret variable names in `metadata.required_env` in `task.toml`.
 If a variable is unset, the free check lints the task and skips its runs.
-It prints the missing variable's name.
+The planner defers its pending trials and excludes them from the budget and CI matrix.
+Both commands print the missing variable's name.
+Compose interpolation accepts only declared variable names.
+Compose service keys use an allowlist; host namespaces, extra capabilities, and implicit host environment values are forbidden.
 The task's compose file passes each secret only to the sidecar that needs it.
 A fork's sidecar sets `FORK_RPC_URL` and `FORK_BLOCK_NUMBER` for Anvil.
 Setup and the agent receive no upstream URL.

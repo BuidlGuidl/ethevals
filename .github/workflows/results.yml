@@ -39,6 +39,8 @@ jobs:
         id: plan
         env:
           RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
         run: |
           uv run python scripts/ci.py plan-trials --modes vanilla internet skills --budget "$RUN_BUDGET" --restore-results --output results/ci-plan --github-output "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -82,9 +84,7 @@ jobs:
         env:
           TRIAL_INDEX: ${{ matrix.index }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          CLAUDE_FORCE_OAUTH: '1'
           CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
-          CODEX_FORCE_AUTH_JSON: '1'
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

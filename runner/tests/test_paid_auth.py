@@ -9,10 +9,90 @@ from harbor.agents.installed.claude_code import ClaudeCode
 from harbor.agents.installed.codex import Codex
 from harbor.models.agent.context import AgentContext
 from harbor.environments.base import ExecResult
+from harbor.agents.factory import AgentFactory
+from harbor.job import Job
+
+from ethevals.jobs import budget_check, load_job, plan, run
+from test_jobs import task_folder
 
 
 class Captured(Exception):
     pass
+
+
+@pytest.mark.parametrize("key,default_auth", [
+    ("claude-code-opus-5.5", False), ("codex-gpt-6", False), ("codex-gpt-6", True),
+])
+def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, monkeypatch, key, default_auth):
+    config, task = load_job(), task_folder(tmp_path)
+    monkeypatch.delenv("CLAUDE_FORCE_OAUTH", raising=False)
+    monkeypatch.delenv("CODEX_FORCE_AUTH_JSON", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-api-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "offline-api-key")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "offline-plan-token")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    auth = tmp_path / ".codex/auth.json"
+    auth.parent.mkdir()
+    auth.write_text('{"tokens":{"access_token":"offline-plan-token"}}')
+    if default_auth:
+        monkeypatch.delenv("CODEX_AUTH_JSON_PATH", raising=False)
+    else:
+        monkeypatch.setenv("CODEX_AUTH_JSON_PATH", str(auth))
+    captured = []
+
+    async def capture(job_config):
+        agent_config = job_config.agents[0]
+        agent = AgentFactory.create_agent_from_config(agent_config, logs_dir=tmp_path / "agent")
+        if key == "claude-code-opus-5.5":
+            captured.append((agent_config.env, agent._resolve_auth_env(), agent.options.max_budget_usd,
+                             agent.build_cli_flags()))
+        else:
+            captured.append((agent_config.env, agent._resolve_auth_json_path()))
+        raise Captured
+
+    monkeypatch.setattr(Job, "create", capture)
+    # Entry keys carry no semantics; retain the shipped entry under another key.
+    config.agents = {"selected": config.agents[key]}
+    config.agents["selected"].cost_limit_usd = 7.25
+    if key == "claude-code-opus-5.5":
+        config.agents["selected"].kwargs["max_budget_usd"] = "999"
+    report = budget_check(plan([task], config, [], modes=["internet"], trials=1), 0, required=True)
+    with pytest.raises(Captured):
+        asyncio.run(run(report, config, tmp_path / "out", []))
+    if key == "claude-code-opus-5.5":
+        env, credentials, budget, flags = captured[0]
+        assert env == {"CLAUDE_FORCE_OAUTH": "1"}
+        assert credentials == {"CLAUDE_CODE_OAUTH_TOKEN": "offline-plan-token"}
+        assert budget == "7.25"
+        assert "--max-budget-usd 7.25" in flags
+    else:
+        assert captured == [({"CODEX_FORCE_AUTH_JSON": "1"}, auth)]
+
+
+@pytest.mark.parametrize("key,empty", [
+    ("claude-code-opus-5.5", False), ("claude-code-opus-5.5", True),
+    ("codex-gpt-6", False), ("codex-gpt-6", True),
+])
+def test_missing_plan_credential_refuses_before_harbor(tmp_path, monkeypatch, key, empty):
+    config, task = load_job(), task_folder(tmp_path)
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    monkeypatch.delenv("CODEX_AUTH_JSON_PATH", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "no-home")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-api-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "offline-api-key")
+    if empty:
+        variable = "CLAUDE_CODE_OAUTH_TOKEN" if key == "claude-code-opus-5.5" else "CODEX_AUTH_JSON_PATH"
+        monkeypatch.setenv(variable, "")
+
+    async def refuse(*args, **kwargs):
+        raise AssertionError("Harbor cannot start without the plan credential.")
+
+    monkeypatch.setattr(Job, "create", refuse)
+    config.agents = {"selected": config.agents[key]}
+    report = budget_check(plan([task], config, [], modes=["internet"], trials=1), 0, required=True)
+    with pytest.raises(ValueError, match="selected: missing"):
+        asyncio.run(run(report, config, tmp_path / "out", []))
+    assert not (tmp_path / "out/jobs").exists()
 
 
 def test_claude_plan_token_reaches_container_while_judge_key_stays_on_host(tmp_path, monkeypatch):

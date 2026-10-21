@@ -4,10 +4,14 @@ from importlib.metadata import version
 import json
 import math
 import os
+import sys
 from pathlib import Path
 from typing import Any, Literal
 
 from harbor.models.task.task import Task
+from harbor.agents.factory import AgentFactory
+from harbor.models.trial.config import AgentConfig
+from harbor.utils.env import resolve_env_vars
 from pydantic import Field, model_validator
 
 from .config import Declaration, parse_file
@@ -32,6 +36,9 @@ class AgentSettings(Declaration):
     cost_limit_usd: float = Field(ge=0, allow_inf_nan=False)
     modes: list[Literal["vanilla", "internet", "skills"]] = Field(default_factory=lambda: ["internet"])
     kwargs: dict[str, Any] = Field(default_factory=dict)
+    env: dict[str, str] = Field(default_factory=dict)
+    required_env: list[str] = Field(default_factory=list)
+    required_files: list[str] = Field(default_factory=list)
 
 
 class JobSettings(Declaration):
@@ -105,7 +112,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         if selected and set(selected) - available.keys():
             raise ValueError(f"Unknown {label}: {', '.join(sorted(set(selected) - available.keys()))}")
     prior = {trial_identity(row): row for row in previous}
-    missing, exhausted, selected = [], [], []
+    missing, exhausted, selected, deferred = [], [], [], []
     ids = set()
     combinations = 0
     for path in paths:
@@ -114,6 +121,9 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         if task["id"] in ids:
             raise ValueError(f"Duplicate task ID: {task['id']}")
         ids.add(task["id"])
+        missing_env = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
+        if missing_env:
+            print(f"{path}: deferred trials because {', '.join(missing_env)} is unset.", file=sys.stderr, flush=True)
         for key, agent in config.agents.items():
             if agents and key not in agents or models and agent.model not in models:
                 continue
@@ -138,6 +148,10 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     if attempt >= config.max_attempts and not retry_errors:
                         exhausted.append(row)
                         continue
+                    if missing_env:
+                        deferred.append({**metadata, "task_path": str(path.resolve()), "agent_key": key,
+                                         "missing_env": missing_env})
+                        continue
                     reserve = agent.cost_limit_usd if agent.paid_by == "api_key" else 0.0
                     judge_reserve = config.judge.cost_limit_usd if criteria and config.judge.paid_by == "api_key" else 0.0
                     remaining = max(1, config.max_attempts - attempt)
@@ -153,8 +167,10 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         raise ValueError("No tasks declare a selected mode and agent")
     if trial is not None and combinations != 1:
         raise ValueError("--trial requires exactly one task, agent, and mode")
-    return {"missing": missing, "missing_trials": len(missing), "exhausted_errors": exhausted,
-            "worst_case_usd": round(sum(row["worst_case_usd"] for row in missing), 8), "selected": selected}
+    deferred_ids = {trial_identity(row) for row in deferred}
+    return {"missing": missing, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
+            "worst_case_usd": round(sum(row["worst_case_usd"] for row in missing), 8),
+            "selected": [identity for identity in selected if identity not in deferred_ids]}
 
 
 def budget_check(report: dict, budget: float | None, *, required=False) -> dict:
@@ -191,18 +207,34 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             raise ValueError(f"{path}: missing {', '.join(missing)}")
         if item["judge"]:
             check_judge_key(config.judge)
+    prepared = []
+    for item in report["missing"]:
+        agent = config.agents[item["agent_key"]]
+        model = config.models[agent.model]
+        environment = {**os.environ, **resolve_env_vars(agent.env)}
+        for variable in agent.required_env:
+            if not environment.get(variable, "").strip():
+                raise ValueError(f"{item['agent_key']}: missing {variable}")
+        for template in agent.required_files:
+            filename = resolve_env_vars({"path": template})["path"]
+            # Match Harbor's default credential directory without changing HOME.
+            path = Path.home() / filename[2:] if filename.startswith("~/") else Path(filename)
+            if not path.is_file():
+                raise ValueError(f"{item['agent_key']}: missing credential file {path}")
+        kwargs = {**model.kwargs, **agent.kwargs, "version": agent.version}
+        if model.effort is not None:
+            kwargs["reasoning_effort"] = model.effort
+        harbor = AgentConfig(name=agent.name, model_name=model.name, kwargs=kwargs,
+                             env=agent.env, override_timeout_sec=config.time_limit)
+        options = AgentFactory.get_agent_class_from_config(harbor).options_model
+        if options is not None and "max_budget_usd" in options.model_fields:
+            harbor.kwargs["max_budget_usd"] = str(agent.cost_limit_usd)
+        if item["mode"] == "skills":
+            harbor.skills = [str(skills_path)]
+        prepared.append((item, harbor))
     try:
-        for item in report["missing"]:
-            agent = config.agents[item["agent_key"]]
-            model = config.models[agent.model]
-            kwargs = {**model.kwargs, **agent.kwargs, "version": agent.version}
-            if model.effort is not None:
-                kwargs["reasoning_effort"] = model.effort
-            harbor = {"name": agent.name, "model_name": model.name, "kwargs": kwargs,
-                      "override_timeout_sec": config.time_limit}
-            if item["mode"] == "skills":
-                harbor["skills"] = [str(skills_path)]
-            name = hashlib.sha256(json.dumps([item, harbor], sort_keys=True).encode()).hexdigest()[:24]
+        for item, harbor in prepared:
+            name = hashlib.sha256(json.dumps([item, harbor.model_dump(mode="json")], sort_keys=True).encode()).hexdigest()[:24]
             destination = output / "jobs" / name
             destination.mkdir(parents=True, exist_ok=True)
             (destination / "board.json").write_text(json.dumps(item, indent=2) + "\n")

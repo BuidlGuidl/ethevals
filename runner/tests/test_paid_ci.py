@@ -12,6 +12,47 @@ from test_jobs import job_config, task_folder
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_ci_plan_defers_tasks_with_missing_required_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("ARCHIVE_RPC_URL", raising=False)
+    config, task = job_config(tmp_path, "api_key"), task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text() + 'required_env = ["ARCHIVE_RPC_URL"]\n')
+    output, github_output = tmp_path / "plan", tmp_path / "github-output"
+    result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config,
+                 "--tasks", task, "--budget", 1, "--rows", tmp_path / "none",
+                 "--output", output, "--github-output", github_output)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads((output / "plan.json").read_text())
+    assert (report["missing_trials"], report["worst_case_usd"], report["within_budget"]) == (0, 0, True)
+    assert [(row["task_id"], row["trial"], row["missing_env"]) for row in report["deferred"]] == [
+        ("concepts/question", 1, ["ARCHIVE_RPC_URL"]), ("concepts/question", 2, ["ARCHIVE_RPC_URL"])]
+    assert "deferred trials because ARCHIVE_RPC_URL is unset" in result.stderr
+    emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
+    assert emitted == {"matrix": '{"include":[]}', "scheduled_trials": "0"}
+    assert json.loads((output / "trials.json").read_text()) == []
+    # The same task becomes eligible as soon as its declared input exists.
+    monkeypatch.setenv("ARCHIVE_RPC_URL", "https://archive.example/offline")
+    result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config,
+                 "--tasks", task, "--budget", 12, "--rows", tmp_path / "none",
+                 "--output", tmp_path / "available")
+    assert result.returncode == 0, result.stdout + result.stderr
+    available = json.loads((tmp_path / "available/plan.json").read_text())
+    assert (available["missing_trials"], available["deferred"]) == (2, [])
+
+
+def test_local_run_defers_unavailable_task_and_succeeds_without_harbor(tmp_path, monkeypatch):
+    monkeypatch.delenv("ARCHIVE_RPC_URL", raising=False)
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text() + 'required_env = ["ARCHIVE_RPC_URL"]\n')
+    result = cli("-m", "ethevals.cli", "run", "--config", job_config(tmp_path),
+                 "--tasks", task, "--budget", 0, "--rows", tmp_path / "none",
+                 "--output", tmp_path / "out")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "deferred trials because ARCHIVE_RPC_URL is unset" in result.stderr
+    assert not (tmp_path / "out/jobs").exists()
+
+
 def test_zero_ci_budget_saves_plan_and_emits_no_jobs_even_for_a_plan(tmp_path):
     output, github_output = tmp_path / "plan", tmp_path / "github-output"
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", job_config(tmp_path),

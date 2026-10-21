@@ -56,6 +56,9 @@ agents:
     modes: [internet, skills]
     paid_by: plan
     cost_limit_usd: 20.0
+    env:
+      CLAUDE_FORCE_OAUTH: "1"
+    required_env: [CLAUDE_CODE_OAUTH_TOKEN]
   codex-gpt-6:
     name: codex
     version: 0.159.0
@@ -63,6 +66,9 @@ agents:
     modes: [internet, skills]
     paid_by: plan
     cost_limit_usd: 20.0
+    env:
+      CODEX_FORCE_AUTH_JSON: "1"
+    required_files: ['${CODEX_AUTH_JSON_PATH:-~/.codex/auth.json}']
   opencode-kimi-k3:
     name: opencode
     version: 1.18.33

@@ -10,6 +10,8 @@ import yaml
 from .images.tag import image_tag
 
 AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)
+SERVICE_KEYS = {"image", "build", "init", "command", "entrypoint", "working_dir", "user",
+                "environment", "networks", "volumes", "depends_on", "healthcheck", "mem_limit", "cpus"}
 
 
 def lint_task(path: Path) -> None:
@@ -41,27 +43,58 @@ def lint_task(path: Path) -> None:
                 raise ValueError(f"{item}: shared image pin {image} differs from its build inputs; update the task pin")
     for compose in path.rglob("*compose.y*ml"):
         document = yaml.safe_load(compose.read_text())
+
+        def check_interpolation(value):
+            if isinstance(value, str):
+                for variable in re.findall(r"\$(?:\{)?([A-Za-z_][A-Za-z0-9_]*)", value.replace("$$", "")):
+                    if variable not in required:
+                        raise ValueError(f"{compose}: {variable}: host interpolation requires metadata.required_env")
+            elif isinstance(value, dict):
+                for key, child in value.items():
+                    check_interpolation(key)
+                    check_interpolation(child)
+            elif isinstance(value, list):
+                for child in value:
+                    check_interpolation(child)
+
+        check_interpolation(document)
         if not isinstance(document, dict) or set(document) - {"services", "volumes", "networks", "name"}:
             raise ValueError(f"{compose}: only services, volumes, networks, and name are allowed")
         volumes = document.get("volumes") or {}
         for name, volume in volumes.items():
             if volume not in ({}, None):
                 raise ValueError(f"{compose}: volume {name}: host mounts are forbidden; use a plain named volume")
+        for name, network in (document.get("networks") or {}).items():
+            network = network or {}
+            if (set(network) - {"internal", "external", "name"}
+                    or type(network.get("external", False)) is not bool
+                    or network.get("name", name) == "host" or "$" in network.get("name", name)):
+                raise ValueError(f"{compose}: network {name}: host networks and network driver options are forbidden")
         for name, service in document.get("services", {}).items():
+            if not isinstance(service, dict):
+                raise ValueError(f"{compose}: service {name}: must be a mapping")
+            if extra := set(service) - SERVICE_KEYS:
+                raise ValueError(f"{compose}: service {name}: forbidden options {sorted(extra)}; privileged containers and host mounts are forbidden")
+            environment = service.get("environment", {})
+            if not isinstance(environment, dict) or any(value is None for value in environment.values()):
+                raise ValueError(f"{compose}: service {name}: use explicit values for the environment")
             build = service.get("build")
             if build:
                 build = {"context": build} if isinstance(build, str) else build
+                if extra := set(build) - {"context", "dockerfile", "additional_contexts", "args", "target"}:
+                    raise ValueError(f"{compose}: service {name}: forbidden build options {sorted(extra)}")
+                arguments = build.get("args", {})
+                if not isinstance(arguments, dict) or any(value is None for value in arguments.values()):
+                    raise ValueError(f"{compose}: service {name}: use explicit values for build arguments")
                 context = (compose.parent / build.get("context", ".")).resolve()
                 inputs = [context, context / build.get("dockerfile", "Dockerfile")]
                 extra = build.get("additional_contexts", {})
                 extra = dict(item.split("=", 1) for item in extra) if isinstance(extra, list) else extra
                 inputs.extend((compose.parent / value).resolve() for value in extra.values())
+                if any("$" in str(item) for item in inputs):
+                    raise ValueError(f"{compose}: service {name}: build paths must be literal and stay inside the task folder")
                 if any(not item.resolve().is_relative_to(path.resolve()) for item in inputs):
                     raise ValueError(f"{compose}: service {name}: build inputs must stay inside the task folder")
-            if service.get("privileged", False) is not False:
-                raise ValueError(f"{compose}: service {name}: privileged containers are forbidden")
-            if "extends" in service or "volumes_from" in service:
-                raise ValueError(f"{compose}: service {name}: inherited containers and mounts are forbidden")
             for volume in service.get("volumes", []):
                 source = volume.split(":")[0] if isinstance(volume, str) else volume.get("source")
                 kind = "volume" if isinstance(volume, str) else volume.get("type")

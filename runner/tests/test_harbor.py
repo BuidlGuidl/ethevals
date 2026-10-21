@@ -50,7 +50,90 @@ def test_task_lint_rejects_privileged_container(harbor_task):
     )
     result = cli("-m", "ethevals.cli", "lint", "--tasks", harbor_task)
     assert result.returncode == 2
-    assert "service browser: privileged containers are forbidden" in result.stderr
+    assert "service browser: forbidden options ['privileged']" in result.stderr
+
+
+@pytest.mark.parametrize("key,value", [
+    ("pid", "host"), ("network_mode", "host"), ("ipc", "host"),
+    ("cap_add", ["SYS_PTRACE"]), ("devices", ["/dev/mem"]),
+    ("security_opt", ["apparmor:unconfined"]), ("userns_mode", "host"),
+    ("extends", "other.yaml"), ("volumes_from", ["other"]),
+    ("env_file", "/etc/environment"), ("future_option", True),
+])
+def test_task_lint_rejects_service_options_outside_allowlist(harbor_task, key, value):
+    from ethevals.harbor_tasks import lint_task
+
+    (harbor_task / "environment/docker-compose.yaml").write_text(
+        yaml.safe_dump({"services": {"browser": {"image": "debian:bookworm-slim", key: value}}}))
+    with pytest.raises(ValueError, match=f"service browser: forbidden options .*{key}"):
+        lint_task(harbor_task)
+
+
+@pytest.mark.parametrize("value", [
+    "${HOST_SECRET}", "$HOST_SECRET", "${ARCHIVE_RPC_URL:-${HOST_SECRET}}",
+])
+def test_task_lint_rejects_undeclared_interpolation(harbor_task, value):
+    from ethevals.harbor_tasks import lint_task
+
+    (harbor_task / "task.toml").write_text(
+        'schema_version = "1.3"\n[metadata]\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+    (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
+        "services": {"browser": {"environment": {"URL": value}}}}))
+    with pytest.raises(ValueError, match="HOST_SECRET.*metadata.required_env"):
+        lint_task(harbor_task)
+
+
+def test_task_lint_accepts_declared_interpolation_and_container_dollars(harbor_task):
+    from ethevals.cli import main
+
+    (harbor_task / "task.toml").write_text(
+        'schema_version = "1.3"\n[metadata]\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+    (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({"services": {
+        "browser": {"build": ".", "environment": {"URL": "${ARCHIVE_RPC_URL:?required}"},
+                    "command": "echo $$CONTAINER_VAR"}}}))
+    assert main(["lint", "--tasks", str(harbor_task)]) == 0
+
+
+@pytest.mark.parametrize("environment", [["HOST_SECRET"], {"HOST_SECRET": None}])
+def test_task_lint_rejects_implicit_host_environment(harbor_task, environment):
+    from ethevals.harbor_tasks import lint_task
+
+    (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
+        "services": {"browser": {"environment": environment}}}))
+    with pytest.raises(ValueError, match="explicit.*environment"):
+        lint_task(harbor_task)
+
+
+@pytest.mark.parametrize("network", [
+    {"external": True, "name": "host"}, {"driver": "host"},
+    {"external": True, "name": "${NETWORK_NAME}"},
+])
+def test_task_lint_rejects_host_network_definitions(harbor_task, network):
+    from ethevals.harbor_tasks import lint_task
+
+    (harbor_task / "task.toml").write_text(
+        'schema_version = "1.3"\n[metadata]\nrequired_env = ["NETWORK_NAME"]\n')
+    (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
+        "services": {"browser": {"networks": ["outside"]}}, "networks": {"outside": network}}))
+    with pytest.raises(ValueError, match="network outside: host networks and network driver options are forbidden"):
+        lint_task(harbor_task)
+
+
+def test_task_lint_accepts_an_external_bridge(harbor_task):
+    from ethevals.cli import main
+
+    (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
+        "services": {"browser": {"networks": ["upstream"]}},
+        "networks": {"upstream": {"external": True, "name": "task-upstream"}}}))
+    assert main(["lint", "--tasks", str(harbor_task)]) == 0
+
+
+def test_task_lint_accepts_all_real_tasks(capsys):
+    from ethevals.cli import main
+
+    paths = sorted((Path(__file__).resolve().parents[2] / "tasks").glob("*/*/task.toml"))
+    assert main(["lint", "--tasks", *(str(path.parent) for path in paths)]) == 0
+    assert capsys.readouterr().out == "".join(f"{path.parent}: lint passed\n" for path in paths)
 
 
 @pytest.mark.parametrize("build", [
@@ -68,6 +151,41 @@ def test_task_lint_keeps_build_inputs_inside_the_folder(harbor_task, build):
     compose.write_text("services:\n  main:\n    build: .\n")
     result = cli("-m", "ethevals.cli", "lint", "--tasks", harbor_task)
     assert (result.returncode, result.stdout) == (0, f"{harbor_task}: lint passed\n")
+
+
+@pytest.mark.parametrize("options", [
+    {"privileged": True}, {"network": "host"}, {"entitlements": ["security.insecure"]},
+    {"ssh": ["default"]}, {"secrets": ["host-secret"]},
+])
+def test_task_lint_rejects_build_options_that_expose_the_host(harbor_task, options):
+    from ethevals.harbor_tasks import lint_task
+
+    (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
+        "services": {"browser": {"build": {"context": ".", **options}}}}))
+    with pytest.raises(ValueError, match="forbidden build options"):
+        lint_task(harbor_task)
+
+
+@pytest.mark.parametrize("arguments", [["HOST_SECRET"], {"HOST_SECRET": None}])
+def test_task_lint_rejects_implicit_host_build_arguments(harbor_task, arguments):
+    from ethevals.harbor_tasks import lint_task
+
+    (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
+        "services": {"browser": {"build": {"context": ".", "args": arguments}}}}))
+    with pytest.raises(ValueError, match="explicit values for build arguments"):
+        lint_task(harbor_task)
+
+
+def test_task_lint_rejects_interpolation_in_build_paths(harbor_task, monkeypatch):
+    from ethevals.harbor_tasks import lint_task
+
+    (harbor_task / "task.toml").write_text(
+        'schema_version = "1.3"\n[metadata]\nrequired_env = ["BUILD_ROOT"]\n')
+    monkeypatch.setenv("BUILD_ROOT", "/")
+    (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
+        "services": {"browser": {"build": {"context": "${BUILD_ROOT}"}}}}))
+    with pytest.raises(ValueError, match="build paths must be literal"):
+        lint_task(harbor_task)
 
 
 @pytest.mark.parametrize("name", ["instruction.md", "environment/README.md"])
