@@ -42,7 +42,7 @@ Use `--trial N` with one task, agent, and mode to run one numbered trial.
 Completed passes and failures never repeat for the same task hash, agent, model, effort, mode, and trial number.
 Skills trials also include the skills hash in their identity.
 Internet and vanilla trials record `skills_hash: null`, so a skill edit repeats only skills trials.
-Errors repeat up to `max_attempts`; `--retry-errors` grants one further attempt per selected error.
+Agent errors repeat up to `max_attempts`; `--retry-errors` grants one further agent attempt per selected error.
 
 Run the same command and output directory after an interruption.
 The runner reads saved Harbor trial folders before planning and rebuilds missing rows.
@@ -148,11 +148,15 @@ The board combines test checks and criteria checks; every check must pass.
 Criteria headings must differ from test check names.
 The judge's model, effort, time limit, payment source, and admission reserve come from the job config's `judge` settings.
 The default judge uses Opus 5.5 through `ANTHROPIC_API_KEY`; it refuses plan tokens.
-Each remaining attempt reserves the judge's `cost_limit_usd`, even when a plan pays for the agent.
+Each agent attempt reserves two judge attempts at `cost_limit_usd` each, even when a plan pays for the agent.
 RewardKit is pinned to 0.2.3, which supports Harbor's ATIF trajectory input and per-question reasons.
 `verifier/judge.json` preserves its output, usage, reasons, and errors beside Harbor's test records.
 Row recovery reads that file without another judge call.
-An interrupted or failed judge produces a trial error; the planner selects another attempt within `max_attempts`.
+Judging retries on the saved trial folder, up to two attempts, without another agent run.
+`judge.json` counts attempts before starting them, including an interrupted attempt, and adds their known costs.
+After an interruption, the next run reserves only the remaining judge attempts and keeps the agent attempt number.
+Two unsuccessful attempts leave a judge error on the board.
+An exhausted judge or an unavailable saved folder cannot start another agent attempt.
 Timeouts, invalid answers, and missing reasons count as judge errors, so they never become failed checks.
 Local stand-ins set `judge.paid_by: free` and use a local model endpoint.
 The free check prints a skip note because the judge needs a paid API call.

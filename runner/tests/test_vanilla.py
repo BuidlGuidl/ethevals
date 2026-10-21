@@ -55,7 +55,7 @@ def test_bare_model_gets_one_instruction_without_tools_or_environment(tmp_path, 
     with stand_in() as (completion, requests):
         agent = AgentFactory.create_agent_from_config(AgentConfig(
             name="ethevals.vanilla:VanillaAgent", model_name=model,
-            kwargs={"version": "0.1.0", "reasoning_effort": "high", "completion": completion}), logs_dir=tmp_path)
+            kwargs={"version": "9.8.7", "reasoning_effort": "high", "completion": completion}), logs_dir=tmp_path)
         context = AgentContext()
         # Any environment access fails because this object has no environment methods.
         asyncio.run(agent.setup(object()))
@@ -65,6 +65,7 @@ def test_bare_model_gets_one_instruction_without_tools_or_environment(tmp_path, 
     trajectory = Trajectory.model_validate_json((tmp_path / "trajectory.json").read_text())
     assert [(step.source, step.message) for step in trajectory.steps] == [("user", "Name a unit."), ("agent", "metre")]
     assert (trajectory.agent.model_name, trajectory.agent.tool_definitions) == (model, [])
+    assert (agent.version(), trajectory.agent.version) == ("9.8.7", "9.8.7")
     assert (context.n_input_tokens, context.n_cache_tokens, context.n_output_tokens, context.cost_usd) == (100, 40, 10, None)
 
 

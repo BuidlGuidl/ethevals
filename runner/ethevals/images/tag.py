@@ -9,12 +9,12 @@ BUILD_INPUTS = {
 }
 
 
-def image_tag(directory=Path(__file__).parent, image="chain"):
+def image_tag(directory=None, image="chain"):
+    directory = directory or Path(__file__).parent
     digest = hashlib.sha256()
     for name in BUILD_INPUTS[image]:
         digest.update(name.encode() + b"\0" + (directory / name).read_bytes() + b"\0")
-    repository = {"chain": "ethevals-chain", "quiz": "ethevals-quiz"}[image]
-    return repository + ":inputs-" + digest.hexdigest()[:16]
+    return f"ethevals-{image}:inputs-" + digest.hexdigest()[:16]
 
 
 if __name__ == "__main__":

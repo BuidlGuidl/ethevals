@@ -8,11 +8,11 @@ from support import cli
 
 @pytest.fixture
 def harbor_task(tmp_path):
-    task = tmp_path / "question"
+    task = tmp_path / "concepts/question"
     (task / "environment").mkdir(parents=True)
     (task / "tests").mkdir()
     (task / "solution").mkdir()
-    (task / "task.toml").write_text('schema_version = "1.3"\n')
+    (task / "task.toml").write_text('schema_version = "1.3"\n[metadata]\npillar = "concepts"\n')
     (task / "instruction.md").write_text("What is the unit?\n")
     (task / "environment/Dockerfile").write_text("FROM debian:bookworm-slim\n")
     (task / "tests/test.sh").write_text("#!/bin/sh\nexit 0\n")
@@ -29,6 +29,39 @@ def test_task_lint_rejects_host_mount(harbor_task):
     compose.write_text('services:\n  main:\n    volumes: ["data:/data"]\nvolumes:\n  data: {}\n')
     result = cli("-m", "ethevals.cli", "lint", "--tasks", harbor_task)
     assert (result.returncode, result.stdout) == (0, f"{harbor_task}: lint passed\n")
+
+
+@pytest.mark.parametrize("name", ["unit", " "])
+def test_free_check_rejects_blank_check_names_like_board_rows(harbor_task, tmp_path, monkeypatch, name):
+    import asyncio
+    import json
+    from harbor.job import Job
+    from ethevals.harbor_tasks import free_check
+
+    class SavedJob:
+        def __init__(self, config):
+            self.agent = config.job_name
+
+        async def run(self):
+            folder = tmp_path / "out" / self.agent / "trial"
+            (folder / "verifier").mkdir(parents=True)
+            (folder / "result.json").write_text(json.dumps({
+                "config": {"task": {"path": str(harbor_task)}},
+                "verifier_result": {"rewards": {"reward": int(self.agent == "oracle")}}}))
+            (folder / "verifier/checks.json").write_text(json.dumps({
+                name: {"passed": self.agent == "oracle", "reason": "Matches."}}))
+
+    async def create(config):
+        return SavedJob(config)
+
+    monkeypatch.setattr(Job, "create", create)
+    if name.strip():
+        asyncio.run(free_check([harbor_task], tmp_path / "out"))
+        assert json.loads((tmp_path / "out/nop/trial/verifier/checks.json").read_text()) == {
+            "unit": {"passed": False, "reason": "Matches."}}
+    else:
+        with pytest.raises(ValueError, match="Each check needs a name, boolean passed, and one-line reason."):
+            asyncio.run(free_check([harbor_task], tmp_path / "out"))
 
 
 @pytest.mark.parametrize("volume", [
@@ -76,7 +109,7 @@ def test_task_lint_rejects_undeclared_interpolation(harbor_task, value):
     from ethevals.harbor_tasks import lint_task
 
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
         "services": {"browser": {"environment": {"URL": value}}}}))
     with pytest.raises(ValueError, match="HOST_SECRET.*metadata.required_env"):
@@ -87,7 +120,7 @@ def test_task_lint_accepts_declared_interpolation_and_container_dollars(harbor_t
     from ethevals.cli import main
 
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({"services": {
         "browser": {"build": ".", "environment": {"URL": "${ARCHIVE_RPC_URL:?required}"},
                     "command": "echo $$CONTAINER_VAR"}}}))
@@ -112,7 +145,7 @@ def test_task_lint_rejects_host_network_definitions(harbor_task, network):
     from ethevals.harbor_tasks import lint_task
 
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\nrequired_env = ["NETWORK_NAME"]\n')
+        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["NETWORK_NAME"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
         "services": {"browser": {"networks": ["outside"]}}, "networks": {"outside": network}}))
     with pytest.raises(ValueError, match="network outside: host networks and network driver options are forbidden"):
@@ -134,6 +167,20 @@ def test_task_lint_accepts_all_real_tasks(capsys):
     paths = sorted((Path(__file__).resolve().parents[2] / "tasks").glob("*/*/task.toml"))
     assert main(["lint", "--tasks", *(str(path.parent) for path in paths)]) == 0
     assert capsys.readouterr().out == "".join(f"{path.parent}: lint passed\n" for path in paths)
+
+
+def test_task_lint_requires_the_declared_pillar_to_match_the_folder(tmp_path):
+    from ethevals.cli import main
+    from test_jobs import task_folder
+
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "building"'))
+    with pytest.raises(SystemExit) as error:
+        main(["lint", "--tasks", str(task)])
+    assert error.value.code == 2
+    settings.write_text(settings.read_text().replace('pillar = "building"', 'pillar = "concepts"'))
+    assert main(["lint", "--tasks", str(task)]) == 0
 
 
 @pytest.mark.parametrize("build", [
@@ -180,7 +227,7 @@ def test_task_lint_rejects_interpolation_in_build_paths(harbor_task, monkeypatch
     from ethevals.harbor_tasks import lint_task
 
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\nrequired_env = ["BUILD_ROOT"]\n')
+        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["BUILD_ROOT"]\n')
     monkeypatch.setenv("BUILD_ROOT", "/")
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
         "services": {"browser": {"build": {"context": "${BUILD_ROOT}"}}}}))
@@ -206,7 +253,7 @@ def test_free_check_validates_and_skips_a_task_without_required_env(harbor_task,
     monkeypatch.setattr(Job, "create", refuse_job)
     monkeypatch.delenv("ARCHIVE_RPC_URL", raising=False)
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     output = tmp_path / "job"
     assert main(["free-check", "--tasks", str(harbor_task), "--output", str(output)]) == 0
     assert capsys.readouterr().out == (
@@ -223,7 +270,7 @@ def test_free_check_validates_and_skips_a_task_without_required_env(harbor_task,
 @pytest.mark.parametrize("value", ['"ARCHIVE_RPC_URL"', '["not a variable"]'])
 def test_task_lint_rejects_invalid_required_env(harbor_task, value):
     (harbor_task / "task.toml").write_text(
-        f'schema_version = "1.3"\n[metadata]\nrequired_env = {value}\n')
+        f'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = {value}\n')
     result = cli("-m", "ethevals.cli", "lint", "--tasks", harbor_task)
     assert result.returncode == 2
     assert "metadata.required_env must list environment variable names" in result.stderr
@@ -238,7 +285,7 @@ def test_manual_workflow_requires_secrets_and_selects_declared_tasks(harbor_task
                 if step.get("name") == "Run the fork oracle and nop runs")
     script = step["run"].split("\n", 1)[1].rsplit("\nPY", 1)[0]
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     task = tmp_path / "tasks/question"
     task.parent.mkdir()
     harbor_task.rename(task)

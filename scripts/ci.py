@@ -1,5 +1,6 @@
 """Local entry points for the workflows. Remote writes require --publish."""
 import argparse
+import asyncio
 import base64
 from contextlib import redirect_stdout
 import io
@@ -12,11 +13,11 @@ import tempfile
 from urllib.request import Request, urlopen
 
 from ethevals.cli import main as ethevals, parse_args
-from ethevals.jobs import load_job
+from ethevals.jobs import budget_check, load_job, run
 from ethevals.hf import DEFAULT_REPO, write_hf
-from ethevals.images.tag import image_tag
+from ethevals.images.tag import BUILD_INPUTS, image_tag
 from ethevals.publish import publish_logs
-from ethevals.trial_rows import SCHEMA_VERSION, fold_rows, read_rows, write_rows, recover_rows
+from ethevals.trial_rows import SCHEMA_VERSION, fold_rows, previous_rows, read_rows, write_rows, recover_rows, trial_identity
 
 BASE_BRANCH = "main"
 RESULTS_BRANCH = "ci/results"
@@ -98,6 +99,14 @@ def run_trial(args):
     if not 0 <= args.index < len(scheduled):
         raise ValueError("Trial index is outside the admitted plan")
     item = scheduled[args.index]
+    item["task_path"] = str(Path(item["task_path"]).resolve())
+    config = load_job(args.plan / "config.json")
+    report = budget_check({"missing": [item], "missing_trials": 1,
+                           "selected": [trial_identity(item)], "worst_case_usd": item["worst_case_usd"]},
+                          item["worst_case_usd"], required=True)
+    previous = previous_rows(args.output, args.plan / "rows.jsonl")
+    args.output.mkdir(parents=True, exist_ok=True)
+    (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     # Harbor uploads this file itself; it must stay outside the artifact directory.
     with tempfile.TemporaryDirectory(prefix="ethevals-auth-") as directory:
         auth = os.environ.pop("CODEX_AUTH_JSON", None)
@@ -111,11 +120,9 @@ def run_trial(args):
                 path.touch(mode=0o600)
                 path.write_text(auth)
                 os.environ["CODEX_AUTH_JSON_PATH"] = str(path)
-            return ethevals(["run", "--config", str(args.plan / "config.json"),
-                             "--rows", str(args.plan / "rows.jsonl"), "--output", str(args.output),
-                             "--tasks", item["task_path"], "--agents", item["agent_key"],
-                             "--modes", item["mode"], "--trial", str(item["trial"]),
-                             "--budget", str(item["worst_case_usd"])])
+            success = asyncio.run(run(report, config, args.output, previous))
+            print(f"Results rows: {args.output / 'rows.jsonl'}")
+            return 0 if success else 1
         finally:
             if old_path is None:
                 os.environ.pop("CODEX_AUTH_JSON_PATH", None)
@@ -217,7 +224,8 @@ def hf_tag(sha):
 def images(args):
     directory = Path(__file__).resolve().parents[1] / "runner/ethevals/images"
     tags = []
-    for name, dockerfile in (("quiz", "Quiz.Dockerfile"), ("chain", "Chain.Dockerfile")):
+    for name, inputs in BUILD_INPUTS.items():
+        dockerfile = inputs[0]
         tag = "ghcr.io/buidlguidl/" + image_tag(directory, name)
         tags.append(tag)
         if args.publish:

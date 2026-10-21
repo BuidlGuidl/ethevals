@@ -17,7 +17,7 @@ def test_sidecar_controls_and_context_access_before_verification(tmp_path):
                   if "chain" in yaml.safe_load(path.read_text())["services"]
                   and not tomllib.loads((path.parent.parent / "task.toml").read_text())
                   .get("metadata", {}).get("required_env"))
-    task = tmp_path / "transfer"
+    task = tmp_path / source.parent.name / "transfer"
     shutil.copytree(source, task)
     probe = '''import json
 from pathlib import Path

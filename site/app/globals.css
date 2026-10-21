@@ -160,7 +160,6 @@
   .checks li:last-child { border-bottom: 0; }
   .checks p { @apply mt-1 text-xs text-muted; }
   .prompt-disclosure summary { @apply cursor-pointer py-3 font-semibold; }
-  .prompt-choices { @apply mt-3 space-y-2 pl-8; list-style-type: upper-alpha; }
   .runs-table { min-width: 540px; }
   .runs-table td { @apply px-3 py-3 text-xs; }
   .runs-table tbody tr { position: relative; cursor: pointer; }

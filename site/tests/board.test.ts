@@ -10,7 +10,7 @@ import { Configuration } from "../components/configuration";
 
 const evaluation: Eval = {
   id: "concepts/units", hash: "current", title: "Units", pillar: "concepts",
-  motivation: "Check units.", prompt: "How many wei equal one ether?", choices: [], modes: ["internet", "vanilla"],
+  motivation: "Check units.", instruction: "How many wei equal one ether?", modes: ["internet", "vanilla"],
 };
 const agent = { model: "model-a", agent: "agent-a", effort: "high" };
 function row(overrides: Partial<Row> = {}): Row {
@@ -173,14 +173,14 @@ test("list rows have one task button and Overall groups them under pillar headin
 });
 
 test("task details open the instruction and list one button per trial with compact counts", () => {
-  const quiz = { ...evaluation, choices: ["Wei", "Gwei"] };
+  const quiz = evaluation;
   const data = buildBoard([quiz], [row(), row({ trial: 2, ...failure, total_tokens: 7000, checks: {
     good: { passed: true, reason: "The units match." }, bad: { passed: false, reason: "The answer differs." },
   } }), row({ trial: 3, ...error })]);
   const selection = { evaluation: quiz, agent, mode: "internet" as const, pillar: "concepts" as const };
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
   assert.ok(panel.includes('<details class="prompt-disclosure" open=""><summary>Instruction</summary>'));
-  assert.ok(panel.includes('<ol class="prompt-choices" type="A"><li>Wei</li><li>Gwei</li></ol>'));
+  assert.ok(panel.includes('<pre>How many wei equal one ether?</pre>'));
   assert.ok(panel.includes('<table class="runs-table">'));
   for (const label of ["Trial", "Result", "Checks", "Time", "Tokens", "Cost"]) assert.ok(panel.includes(`<th scope="col">${label}</th>`));
   assert.equal((panel.match(/class="run-open"/g) ?? []).length, 3);

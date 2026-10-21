@@ -28,8 +28,8 @@ test("lift is the signed skills minus Internet score in percentage points", () =
 
 test("the board publishes summaries, costs and paired lifts for each configuration", () => {
   const evals: Eval[] = [
-    { id: "concepts/a", hash: "a", title: "A", pillar: "concepts", motivation: "Check A.", prompt: "A?", choices: [], modes: ["internet", "skills"] },
-    { id: "building/b", hash: "b", title: "B", pillar: "building", motivation: "Check B.", prompt: "B?", choices: [], modes: ["internet", "skills"] },
+    { id: "concepts/a", hash: "a", title: "A", pillar: "concepts", motivation: "Check A.", instruction: "A?", modes: ["internet", "skills"] },
+    { id: "building/b", hash: "b", title: "B", pillar: "building", motivation: "Check B.", instruction: "B?", modes: ["internet", "skills"] },
   ];
   const base: Row = { schema_version: 7, task_id: "concepts/a", task_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
     mode: "internet", trial: 1, status: "passed", checks: {}, error_kind: null, error_reason: null, limit: null,
@@ -45,7 +45,7 @@ test("the board publishes summaries, costs and paired lifts for each configurati
 });
 
 test("lift pairs tasks when skills covers a strict subset of Internet results", () => {
-  const evaluation: Eval = { id: "concepts/a", hash: "a", title: "A", pillar: "concepts", motivation: "Check A.", prompt: "A?", choices: [], modes: ["internet", "skills"] };
+  const evaluation: Eval = { id: "concepts/a", hash: "a", title: "A", pillar: "concepts", motivation: "Check A.", instruction: "A?", modes: ["internet", "skills"] };
   const evals: Eval[] = [evaluation, { ...evaluation, id: "concepts/b" }, { ...evaluation, id: "building/c", pillar: "building" }];
   const base: Row = { schema_version: 7, task_id: "concepts/a", task_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
     mode: "internet", trial: 1, status: "failed", checks: {}, error_kind: null, error_reason: null, limit: null,

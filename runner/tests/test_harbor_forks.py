@@ -52,7 +52,7 @@ def test_pinned_fork_keeps_its_secret_out_of_setup_agent_and_logs(tmp_path, monk
                       if "chain" in yaml.safe_load(path.read_text())["services"]
                       and not tomllib.loads((path.parent.parent / "task.toml").read_text())
                       .get("metadata", {}).get("required_env"))
-        task = tmp_path / "fork"
+        task = tmp_path / source.parent.name / "fork"
         shutil.copytree(source, task)
         settings = task / "task.toml"
         settings.write_text(settings.read_text().replace(

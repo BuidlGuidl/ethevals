@@ -12,6 +12,40 @@ from test_jobs import job_config, task_folder
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, monkeypatch):
+    import argparse
+    from harbor.job import Job
+    from ethevals.jobs import load_job, plan
+    from ethevals.trial_rows import write_rows
+    from test_ci import ci
+
+    config_path, task = job_config(tmp_path, "free"), task_folder(tmp_path)
+    data = json.loads(config_path.read_text())
+    data["agents"]["local"]["name"] = "oracle"
+    config_path.write_text(json.dumps(data))
+    item = plan([task], load_job(config_path), [], trials=1)["missing"][0]
+    rows = tmp_path / "previous.jsonl"
+    write_rows(rows, [{**item, "schema_version": 7, "attempt": 2, "status": "error"}])
+    saved = tmp_path / "plan"
+    result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config_path,
+                 "--tasks", task, "--budget", 1, "--trials", 1, "--retry-errors",
+                 "--rows", rows, "--output", saved)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads((saved / "trials.json").read_text())[0]["attempt"] == 3
+    calls = []
+
+    async def saved_result(job):
+        calls.append(job.config.tasks[0].path)
+        shutil.copytree(ROOT / "runner/tests/fixtures/harbor/recorded-trial", job.job_dir / "trial")
+
+    monkeypatch.setattr(Job, "run", saved_result)
+    output = tmp_path / "out"
+    assert ci.run_trial(argparse.Namespace(plan=saved, index=0, output=output)) == 0
+    row = json.loads((output / "rows.jsonl").read_text())
+    assert (row["trial"], row["attempt"], row["status"]) == (1, 3, "passed")
+    assert calls == [task.resolve()]
+
+
 def test_ci_plan_defers_tasks_with_missing_required_env(tmp_path, monkeypatch):
     monkeypatch.delenv("ARCHIVE_RPC_URL", raising=False)
     config, task = job_config(tmp_path, "api_key"), task_folder(tmp_path)
@@ -112,7 +146,8 @@ def test_ci_refuses_an_insufficient_positive_budget(tmp_path):
 
 
 @pytest.mark.docker
-def test_ci_oracle_trial_survives_artifact_download_and_publishes_locally(tmp_path, monkeypatch):
+@pytest.mark.parametrize("retry", [False, True])
+def test_ci_oracle_trial_survives_artifact_download_and_publishes_locally(tmp_path, monkeypatch, retry):
     private = tmp_path / "private"
     private.mkdir()
     monkeypatch.setenv("TMPDIR", str(private))
@@ -122,15 +157,22 @@ def test_ci_oracle_trial_survives_artifact_download_and_publishes_locally(tmp_pa
     data["agents"]["local"]["name"] = "oracle"
     config.write_text(json.dumps(data))
     plan = tmp_path / "plan"
+    previous = tmp_path / "previous.jsonl"
+    if retry:
+        from ethevals.jobs import load_job, plan as plan_job
+        from ethevals.trial_rows import write_rows
+        item = plan_job([ROOT / "runner/tests/fixtures/harbor/concepts/question"], load_job(config), [], trials=1)["missing"][0]
+        write_rows(previous, [{**item, "schema_version": 7, "attempt": 2, "status": "error"}])
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config,
-                 "--tasks", ROOT / "runner/tests/fixtures/harbor/question",
-                 "--budget", 1, "--trials", 1, "--rows", tmp_path / "none", "--output", plan)
+                 "--tasks", ROOT / "runner/tests/fixtures/harbor/concepts/question",
+                 "--budget", 1, "--trials", 1, "--rows", previous, "--output", plan,
+                 *(["--retry-errors"] if retry else []))
     assert result.returncode == 0, result.stdout + result.stderr
     output = tmp_path / "original"
     ran = cli(ROOT / "scripts/ci.py", "run-trial", "--plan", plan, "--index", 0, "--output", output)
     assert ran.returncode == 0, ran.stdout + ran.stderr
     row = json.loads((output / "rows.jsonl").read_text())
-    assert (row["trial"], row["attempt"], row["status"], row["paid_by"]) == (1, 1, "passed", "free")
+    assert (row["trial"], row["attempt"], row["status"], row["paid_by"]) == (1, 3 if retry else 1, "passed", "free")
     assert list(private.glob("ethevals-auth-*")) == []
     assert all(b"offline-private-plan-token" not in file.read_bytes()
                for file in output.rglob("*") if file.is_file())

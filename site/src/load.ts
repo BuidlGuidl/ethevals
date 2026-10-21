@@ -22,7 +22,7 @@ export function loadCatalog(filename: string): { evals: Eval[]; skills_hash: str
       skills_hash: catalog.skills_hash,
       evals: catalog.tasks.map((entry) => {
         const name = entry.id.split("/").at(-1)!.replace(/[-_]/g, " ");
-        return { ...entry, prompt: entry.instruction, choices: [], title: name.charAt(0).toUpperCase() + name.slice(1) };
+        return { ...entry, title: name.charAt(0).toUpperCase() + name.slice(1) };
       }),
     };
   } catch (error) {
@@ -55,6 +55,12 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
   });
 }
 
+export function currentRows(rows: Row[], catalog: ReturnType<typeof loadCatalog>): Row[] {
+  const current = new Map(catalog.evals.map((task) => [task.id, task.hash]));
+  return rows.filter((row) => current.get(row.task_id) === row.task_hash
+    && (row.mode !== "skills" || row.skills_hash === catalog.skills_hash));
+}
+
 export function loadBoard(env: Record<string, string | undefined> = process.env, root = siteRoot): BoardData {
   if (env.ETHEVALS_DEMO && !["0", "1"].includes(env.ETHEVALS_DEMO)) {
     throw new Error("ETHEVALS_DEMO must be 0 or 1.");
@@ -71,9 +77,7 @@ export function loadBoard(env: Record<string, string | undefined> = process.env,
   const exists = existsSync(filename);
   if ((demo || env.ETHEVALS_ROWS) && !exists) throw new Error(`${filename}: results file does not exist.`);
   const rows = exists ? parseRows(readFileSync(filename, "utf8"), filename, evaluations) : [];
-  const current = new Map(evaluations.map((evaluation) => [evaluation.id, evaluation.hash]));
-  const shown = rows.filter((row) => current.get(row.task_id) === row.task_hash
-    && (row.mode !== "skills" || row.skills_hash === catalog.skills_hash));
+  const shown = currentRows(rows, catalog);
   console.log(`${filename}${exists ? "" : " (missing; empty board)"}: ${rows.length} read, ${shown.length} current, ${rows.length - shown.length} stale.`);
   return buildBoard(evaluations, shown, demo);
 }

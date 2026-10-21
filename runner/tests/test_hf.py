@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_export_copies_a_complete_task_and_writes_a_harbor_registry(tmp_path, capsys):
     task = tmp_path / "concepts/question"
-    shutil.copytree(ROOT / "runner/tests/fixtures/harbor/question", task)
+    shutil.copytree(ROOT / "runner/tests/fixtures/harbor/concepts/question", task)
     output = tmp_path / "dataset"
     assert main(["export-hf", "--tasks", str(task), "--output", str(output),
                  "--hf-repo", "example/tasks", "--license", "mit"]) == 0
@@ -39,7 +39,7 @@ def test_export_copies_a_complete_task_and_writes_a_harbor_registry(tmp_path, ca
 
 def test_export_rejects_a_task_with_an_external_build_context_before_copying(tmp_path):
     task = tmp_path / "concepts/question"
-    shutil.copytree(ROOT / "runner/tests/fixtures/harbor/question", task)
+    shutil.copytree(ROOT / "runner/tests/fixtures/harbor/concepts/question", task)
     (task / "environment/docker-compose.yaml").write_text(
         "services:\n  main:\n    build: ../../shared\n")
     output = tmp_path / "dataset"

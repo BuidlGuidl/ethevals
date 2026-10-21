@@ -50,8 +50,7 @@ function EvalList({ table, evaluations, agent, pillar, onEval }: {
 function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Trial[]; onRun: (run: number) => void }) {
   return <>
     <p className="why">{evaluation.motivation}</p>
-    <details className="prompt-disclosure" open><summary>Instruction</summary><pre>{unwrapPrompt(evaluation.prompt)}</pre>
-      {evaluation.choices.length > 0 && <ol className="prompt-choices" type="A">{evaluation.choices.map((choice, index) => <li key={index}>{choice}</li>)}</ol>}
+    <details className="prompt-disclosure" open><summary>Instruction</summary><pre>{unwrapPrompt(evaluation.instruction)}</pre>
     </details>
     <section className="detail-section"><h3>Trials</h3>{trials.length ?
       <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Trials. Scroll horizontally for all columns.">

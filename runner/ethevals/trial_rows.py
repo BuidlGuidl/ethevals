@@ -5,6 +5,7 @@ from pathlib import Path
 
 from harbor.models.trial.result import TrialResult
 
+from .checks import read_checks
 
 SCHEMA_VERSION = 7
 
@@ -24,17 +25,9 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
     checks_path = folder / "verifier/checks.json"
     if checks_path.exists():
         try:
-            checks = json.loads(checks_path.read_text())
+            checks = read_checks(checks_path)
         except (ValueError, OSError) as exc:
-            kind, reason = "verification", f"Cannot read checks: {exc}"
-        if not isinstance(checks, dict) or any(
-            not isinstance(name, str) or not name.strip() or not isinstance(check, dict)
-            or type(check.get("passed")) is not bool or not isinstance(check.get("reason"), str)
-            or not check["reason"].strip() or len(check["reason"].splitlines()) != 1
-            for name, check in checks.items()
-        ):
-            kind, reason = "verification", "Each check needs a name, boolean passed, and one-line reason."
-            checks = {}
+            kind, reason = "verification", str(exc)
     if result.finished_at is None:
         kind, reason = "execution", "The trial did not finish."
     if result.agent_info.version != metadata["agent_version"]:
@@ -44,21 +37,19 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
         if not checks or reward != {"reward": int(all(check["passed"] for check in checks.values()))}:
             kind, reason = "verification", "Missing checks or reward disagrees with checks."
     judge = metadata.get("judge")
+    judge_attempts = 0
     judge_cost, judge_paid_by = (None if judge else 0.0), None
     if judge:
         try:
             judged = json.loads((folder / "verifier/judge.json").read_text())
+            judge_attempts = judged.get("attempts", 1)
             judge_paid_by, judge_cost = judged["paid_by"], judged["cost_usd"]
             if judged["judge"] != judge:
                 raise ValueError("The saved judge differs from the planned judge.")
             if judged["error"]:
                 raise ValueError(judged["error"])
-            extra = judged["checks"]
-            if set(extra) != set(metadata["criteria_names"]) or set(extra) & set(checks) or any(
-                type(check.get("passed")) is not bool or not isinstance(check.get("reason"), str)
-                or not check["reason"].strip() or len(check["reason"].splitlines()) != 1
-                for check in extra.values()
-            ):
+            extra = read_checks(folder / "verifier/judge.json", field="checks")
+            if set(extra) != set(metadata["criteria_names"]) or set(extra) & set(checks):
                 raise ValueError("The judge must return each criteria check with a boolean and a one-line reason.")
             checks.update(extra)
         except (ValueError, OSError, KeyError, TypeError, AttributeError) as exc:
@@ -82,6 +73,7 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
         "limit": {"type": "time", "limit": metadata["time_limit"], "reason": error.exception_message} if timed_out else None,
         "total_tokens": (n_input or 0) + (n_output or 0),
         "model_cost_usd": cost, "judge_cost_usd": judge_cost, "judge": judge, "judge_paid_by": judge_paid_by,
+        "judge_attempts": judge_attempts,
         "cost_source": "free" if metadata["paid_by"] == "free" else "harbor" if cost is not None else "unavailable",
         "total_seconds": elapsed, "working_seconds": working,
         "trajectory_file": str(trajectory.resolve()) if trajectory.is_file() else None,
@@ -101,8 +93,8 @@ def fold_rows(*groups: list[dict]) -> list[dict]:
         for row in group:
             identity = trial_identity(row)
             old = latest.get(identity)
-            if old is None or (row["attempt"], row.get("completed_at") or "", (row.get("trajectory_url") or "").startswith("https://")) > (
-                old["attempt"], old.get("completed_at") or "", (old.get("trajectory_url") or "").startswith("https://")):
+            if old is None or (row["attempt"], row.get("completed_at") or "", row.get("judge_attempts", 0), (row.get("trajectory_url") or "").startswith("https://")) > (
+                old["attempt"], old.get("completed_at") or "", old.get("judge_attempts", 0), (old.get("trajectory_url") or "").startswith("https://")):
                 latest[identity] = row
     return sorted(latest.values(), key=lambda row: tuple(str(value or "") for value in trial_identity(row)[:-1]) + (row["trial"],))
 

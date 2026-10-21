@@ -11,8 +11,7 @@ export interface Eval {
   title: string;
   pillar: Pillar;
   motivation: string;
-  prompt: string;
-  choices: string[];
+  instruction: string;
   modes: Mode[];
 }
 export type DisplayEval = Omit<Eval, "hash">;
@@ -200,7 +199,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
     demo, tables, lifts, counts: { evals: evaluations.length, agents: configurations.size, runs: rows.length },
     evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {
       id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar,
-      motivation: evaluation.motivation, prompt: evaluation.prompt, choices: evaluation.choices, modes: evaluation.modes,
+      motivation: evaluation.motivation, instruction: evaluation.instruction, modes: evaluation.modes,
     }])),
   };
 }

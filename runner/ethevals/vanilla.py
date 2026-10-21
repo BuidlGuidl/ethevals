@@ -1,5 +1,4 @@
 """Answer an instruction with one model call and no tools."""
-from importlib.metadata import version
 from typing import Any
 
 from harbor.agents.base import BaseAgent
@@ -9,9 +8,10 @@ from harbor.models.trajectories import Agent, Metrics, Step, Trajectory
 import litellm
 from pydantic import Field, field_validator
 
+VERSION = "0.1.0"
 
 class VanillaOptions(AgentOptions):
-    version: str | None = None
+    version: str = VERSION
     reasoning_effort: str | None = None
     completion: dict[str, Any] = Field(default_factory=dict)
 
@@ -34,7 +34,7 @@ class VanillaAgent(BaseAgent):
         return "vanilla"
 
     def version(self):
-        return version("ethevals")
+        return self.options.version
 
     async def setup(self, environment):
         pass

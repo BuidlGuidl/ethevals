@@ -8,7 +8,7 @@ import sys
 import pytest
 
 from ethevals.trial_rows import fold_rows, read_rows, write_rows
-from ethevals.images.tag import image_tag
+from ethevals.images.tag import BUILD_INPUTS, image_tag
 from test_publish import recorded_row
 
 
@@ -26,7 +26,7 @@ def test_pr_checks_run_harbor_without_the_removed_public_tasks(tmp_path, monkeyp
     assert calls == [
         *((('docker', 'build', '--file', ROOT / 'runner/ethevals/images' / dockerfile,
             '--tag', 'ghcr.io/buidlguidl/' + image_tag(image=name), ROOT / 'runner/ethevals/images'), {})
-          for name, dockerfile in (("quiz", "Quiz.Dockerfile"), ("chain", "Chain.Dockerfile"))),
+          for name, (dockerfile, *_) in BUILD_INPUTS.items()),
         ((sys.executable, "-m", "ethevals.cli", "free-check", "--output", tmp_path / "harbor"), {}),
         ((sys.executable, "-m", "pytest", "-q"), {}),
         ((sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker"), {}),
@@ -35,7 +35,7 @@ def test_pr_checks_run_harbor_without_the_removed_public_tasks(tmp_path, monkeyp
 
 
 def test_release_dry_run_stages_tasks_without_remote_writes(tmp_path, monkeypatch, capsys):
-    source = ROOT / "runner/tests/fixtures/harbor/question"
+    source = ROOT / "runner/tests/fixtures/harbor/concepts/question"
     shutil.copytree(source, tmp_path / "tasks/concepts/question")
     monkeypatch.chdir(tmp_path)
     calls = []
@@ -68,18 +68,53 @@ def test_image_publication_uses_the_same_tags_as_local_builds(monkeypatch):
         assert pull[:2] == ("docker", "--config")
         assert pull[3:] == ("manifest", "inspect", push[push.index("--tag") + 1])
         assert not Path(pull[2]).exists()
-    # Every source task uses the tags that both build paths produce.
-    pins = {args[args.index("--tag") + 1] for args in pushes}
-    references = set()
-    for path in (ROOT / "tasks").rglob("*Dockerfile"):
-        references.add(path.read_text().splitlines()[0].removeprefix("FROM "))
-    assert references == pins
+
+
+def test_one_build_input_entry_adds_an_image_to_builds_and_lint(tmp_path, monkeypatch):
+    import argparse
+    from ethevals.images import tag
+    from ethevals.cli import main
+    from test_jobs import task_folder
+
+    directory = tmp_path / "runner/ethevals/images"
+    shutil.copytree(ROOT / "runner/ethevals/images", directory)
+    (directory / "Browser.Dockerfile").write_text("FROM debian:bookworm-slim\n")
+    monkeypatch.setitem(tag.BUILD_INPUTS, "browser", ("Browser.Dockerfile",))
+    monkeypatch.setattr(tag, "__file__", str(directory / "tag.py"))
+    monkeypatch.setattr(ci, "__file__", str(tmp_path / "scripts/ci.py"))
+    calls = []
+    monkeypatch.setattr(ci, "command", lambda *args, **kwargs: calls.append(args))
+    assert ci.images(argparse.Namespace(publish=False)) == 0
+    pin = "ghcr.io/buidlguidl/" + tag.image_tag(image="browser")
+    assert len(calls) == len(BUILD_INPUTS)
+    assert calls[-1] == ("docker", "build", "--file", directory / "Browser.Dockerfile", "--tag", pin, directory)
+    task = task_folder(tmp_path)
+    dockerfile = task / "environment/Dockerfile"
+    dockerfile.write_text(f"# Task image\nFROM {pin}\n")
+    assert main(["lint", "--tasks", str(task)]) == 0
+    dockerfile.write_text("FROM ghcr.io/buidlguidl/ethevals-browser:stale\n")
+    with pytest.raises(SystemExit) as error:
+        main(["lint", "--tasks", str(task)])
+    assert error.value.code == 2
+
+
+@pytest.mark.parametrize("image", ["redis:7-alpine", "ghcr.io/buidlguidl/ethevals-task-owned:latest"])
+def test_task_owned_image_passes_ci_image_checks_and_lint(tmp_path, monkeypatch, image):
+    import argparse
+    from ethevals.cli import main
+    from test_jobs import task_folder
+
+    task = task_folder(tmp_path)
+    (task / "environment/Dockerfile").write_text(f"FROM {image}\n")
+    monkeypatch.setattr(ci, "command", lambda *args, **kwargs: None)
+    assert ci.images(argparse.Namespace(publish=False)) == 0
+    assert main(["lint", "--tasks", str(task)]) == 0
 
 
 def test_release_uploads_the_staged_tree_and_tags_its_hf_commit(tmp_path, monkeypatch):
     import argparse
 
-    shutil.copytree(ROOT / "runner/tests/fixtures/harbor/question", tmp_path / "tasks/concepts/question")
+    shutil.copytree(ROOT / "runner/tests/fixtures/harbor/concepts/question", tmp_path / "tasks/concepts/question")
     monkeypatch.chdir(tmp_path)
     calls = []
     commit = "a" * 40
@@ -102,7 +137,7 @@ def test_release_uploads_the_staged_tree_and_tags_its_hf_commit(tmp_path, monkey
          "--revision", "hf-commit"),
     ]
     assert (tmp_path / "dataset/tasks/concepts--question/solution/solve.sh").read_bytes() == (
-        ROOT / "runner/tests/fixtures/harbor/question/solution/solve.sh").read_bytes()
+        ROOT / "runner/tests/fixtures/harbor/concepts/question/solution/solve.sh").read_bytes()
 
 
 def test_private_images_fail_publication_before_it_can_continue(monkeypatch):
@@ -120,8 +155,8 @@ def test_private_images_fail_publication_before_it_can_continue(monkeypatch):
     monkeypatch.setattr(ci, "command", external)
     with pytest.raises(subprocess.CalledProcessError):
         ci.images(argparse.Namespace(publish=True))
-    assert [args[:3] for args in calls[:2]] == [("docker", "buildx", "build")] * 2
-    assert len(calls) == 3
+    assert [args[:3] for args in calls[:len(BUILD_INPUTS)]] == [("docker", "buildx", "build")] * len(BUILD_INPUTS)
+    assert len(calls) == len(BUILD_INPUTS) + 1
 
 
 def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, monkeypatch):

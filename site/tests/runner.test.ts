@@ -29,8 +29,8 @@ from ethevals.judge import JudgeSettings, judge_trial
 from ethevals.jobs import write_catalog, task_entry
 from ethevals.trial_rows import results_row, write_rows
 fixture, output = Path(${JSON.stringify(fixture)}), Path(${JSON.stringify(root)})
-task, trial = output / "question", output / "trial"
-shutil.copytree(fixture / "question", task)
+task, trial = output / "concepts/question", output / "trial"
+shutil.copytree(fixture / "concepts/question", task)
 shutil.copytree(fixture / "recorded-trial", trial)
 metadata = json.loads((fixture / "recorded-trial/board.json").read_text())
 if ${withCriteria ? "True" : "False"}:
@@ -39,11 +39,17 @@ if ${withCriteria ? "True" : "False"}:
     shutil.copyfile(trial / "agent/trajectory.json", trial / "artifacts/logs/agent/trajectory.json")
     settings = JudgeSettings(model="openai/gpt-5", paid_by="free")
     metadata.update(judge={"model": settings.model, "effort": settings.effort}, criteria_names=["named_unit"])
+    judge_calls = 0
     async def completion(**kwargs):
+        global judge_calls
+        judge_calls += 1
+        if judge_calls == 1:
+            raise RuntimeError("The stand-in judge failed once.")
         return litellm.ModelResponse(choices=[{"message": {"role": "assistant", "content":
             '{"score":"yes","reasoning":"The reply names the unit metre."}'}}])
     litellm.acompletion = completion
     asyncio.run(judge_trial(trial, task, settings))
+    assert judge_calls == 2
 write_catalog([task], output)
 metadata["task_hash"] = task_entry(task)["hash"]
 write_rows(output / "rows.jsonl", [results_row(trial, metadata,

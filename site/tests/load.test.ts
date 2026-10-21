@@ -104,7 +104,7 @@ test("missing default rows give an explicit empty state, while an override is re
   t.mock.method(console, "log", (message: string) => messages.push(message));
   const empty = loadBoard({}, f.site);
   assert.deepEqual([empty.tables.internet.agents.length, empty.tables.vanilla.agents.length,
-    empty.evaluations["concepts/units"].prompt], [0, 0, "How many wei?"]);
+    empty.evaluations["concepts/units"].instruction], [0, 0, "How many wei?"]);
   assert.equal(messages[0], `${f.rows} (missing; empty board): 0 read, 0 current, 0 stale.`);
   assert.throws(() => loadBoard({ ETHEVALS_ROWS: "../results/typo.jsonl" }, f.site), /typo.jsonl: results file does not exist/);
   f.write([{}]);

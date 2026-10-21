@@ -60,7 +60,8 @@ Later runs pick up deferred trials.
 Plan groups use the configured agent name, so models and modes using the same plan share one queue.
 Key-paid trials have separate groups and can run in parallel.
 
-`scripts/ci.py run-trial` selects one saved trial and calls the Harbor CLI path with its reserved budget.
+`scripts/ci.py run-trial` executes one saved plan item with its reserved budget.
+It checks task and skills hashes before Harbor starts.
 Harbor builds each task's environment and starts its declared sidecars.
 Codex credentials use a temporary mode-0600 file outside the artifact directory; the step removes it afterward.
 Harbor receives `CODEX_AUTH_JSON_PATH` and uploads the file itself.

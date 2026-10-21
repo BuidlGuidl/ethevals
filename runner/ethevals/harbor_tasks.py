@@ -7,7 +7,8 @@ import re
 from harbor.models.task.task import Task
 import yaml
 
-from .images.tag import image_tag
+from .checks import read_checks
+from .images.tag import BUILD_INPUTS, image_tag
 
 AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)
 SERVICE_KEYS = {"image", "build", "init", "command", "entrypoint", "working_dir", "user",
@@ -22,6 +23,8 @@ def lint_task(path: Path) -> None:
         if not (path / name).is_file():
             raise ValueError(f"{path / name}: required file is missing")
     task = Task(path)
+    if task.config.metadata.get("pillar") != path.parent.name:
+        raise ValueError(f"{path / 'task.toml'}: metadata.pillar must match the parent folder {path.parent.name!r}")
     required = task.config.metadata.get("required_env", [])
     if not isinstance(required, list) or any(
         not isinstance(name, str) or not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name) for name in required
@@ -38,8 +41,9 @@ def lint_task(path: Path) -> None:
         if match := AGENT_WORDS.search(text):
             raise ValueError(f"{item}: agent-visible text contains forbidden word {match.group()!r}")
         for image in re.findall(r"ghcr\.io/buidlguidl/ethevals-[\w:.-]+", text):
-            pins = {"ghcr.io/buidlguidl/" + image_tag(image=name) for name in ("chain", "quiz")}
-            if image not in pins:
+            pins = {"ghcr.io/buidlguidl/" + image_tag(image=name) for name in BUILD_INPUTS}
+            repositories = {pin.split(":")[0] for pin in pins}
+            if image.split(":")[0] in repositories and image not in pins:
                 raise ValueError(f"{item}: shared image pin {image} differs from its build inputs; update the task pin")
     for compose in path.rglob("*compose.y*ml"):
         document = yaml.safe_load(compose.read_text())
@@ -140,15 +144,7 @@ async def free_check(paths: list[Path], output: Path) -> None:
             if result.get("exception_info"):
                 raise ValueError(f"{result_path}: {result['exception_info']['exception_message']}")
             checks_path = result_path.parent / "verifier/checks.json"
-            checks = json.loads(checks_path.read_text())
-            if not isinstance(checks, dict) or not checks:
-                raise ValueError(f"{checks_path}: write at least one named check")
-            for name, check in checks.items():
-                if not name or not isinstance(check, dict) or type(check.get("passed")) is not bool:
-                    raise ValueError(f"{checks_path}: each named check needs a boolean passed field")
-                reason = check.get("reason")
-                if not isinstance(reason, str) or not reason.strip() or len(reason.splitlines()) != 1:
-                    raise ValueError(f"{checks_path}: check {name}: write a one-line reason")
+            checks = read_checks(checks_path)
             path = Path(result["config"]["task"]["path"]).resolve()
             if expected:
                 names[path] = set(checks)

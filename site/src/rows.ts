@@ -28,6 +28,7 @@ export const rowSchema = z.object({
   judge: z.object({ model: z.string(), effort: z.string().nullable() }).nullable(),
   judge_paid_by: z.enum(["plan", "api_key", "free"]).nullable(),
   trajectory_url: z.string().regex(/^(https?:\/\/|\/(?!\/))/).nullable(),
+  trajectory_file: z.string().nullable().optional(),
 }).refine((row) => row.mode === "skills" ? row.skills_hash !== null : row.skills_hash === null,
   { message: "Skills rows require a pack hash; other modes require null." });
 

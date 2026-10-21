@@ -166,6 +166,54 @@ def test_api_key_budget_reserves_remaining_attempts_and_retains_exhausted_errors
     assert [(row["trial"], row["attempt"]) for row in retried["missing"]] == [(1, 2), (2, 3)]
 
 
+@pytest.mark.parametrize("partial", ["", '{"job_name":'])
+@pytest.mark.parametrize("real_trial", [False, pytest.param(True, marks=pytest.mark.docker)])
+def test_recovery_restarts_a_job_interrupted_during_its_first_config_write(tmp_path, monkeypatch, partial, real_trial):
+    import asyncio
+    import shutil
+    from harbor.job import Job
+    from ethevals.jobs import budget_check, load_job, plan, run
+
+    config = load_job(job_config(tmp_path, "free"))
+    task = tmp_path / "concepts/question"
+    shutil.copytree(Path(__file__).parent / "fixtures/harbor/concepts/question", task)
+    config.agents["local"].name = "oracle"
+    report = budget_check(plan([task], config, [], trials=1), 0)
+    output = tmp_path / "out"
+
+    async def interrupted(job):
+        (job.job_dir / "config.json").write_text(partial)
+        raise RuntimeError("Stopped during the first config write.")
+
+    original_run = Job.run
+    monkeypatch.setattr(Job, "run", interrupted)
+    with pytest.raises(RuntimeError, match="Stopped during the first config write"):
+        asyncio.run(run(report, config, output, []))
+    job_folder = next((output / "jobs").iterdir())
+    assert (job_folder / "config.json").read_text() == partial
+
+    async def finished(job):
+        shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", job.job_dir / "trial")
+
+    monkeypatch.setattr(Job, "run", original_run if real_trial else finished)
+    assert asyncio.run(run(report, config, output, [])) is True
+    row = json.loads((output / "rows.jsonl").read_text())
+    assert (row["trial"], row["attempt"], row["status"]) == (1, 1, "passed")
+    assert len(list((output / "jobs").glob("*/*/result.json"))) == 1
+
+
+def test_execution_rejects_task_edits_after_admission(tmp_path):
+    import asyncio
+    from ethevals.jobs import budget_check, load_job, plan, run
+
+    config, task = load_job(job_config(tmp_path, "free")), task_folder(tmp_path)
+    report = budget_check(plan([task], config, [], trials=1), 0)
+    (task / "instruction.md").write_text("Name a different unit.\n")
+    with pytest.raises(ValueError, match="The task differs from the plan"):
+        asyncio.run(run(report, config, tmp_path / "out", []))
+    assert not (tmp_path / "out/jobs").exists()
+
+
 @pytest.mark.parametrize("budget", ["-1", "nan", "inf"])
 def test_cli_rejects_bad_budgets_without_starting_harbor(tmp_path, budget):
     result = cli("-m", "ethevals.cli", "run", "--config", job_config(tmp_path), "--tasks", task_folder(tmp_path),
@@ -220,14 +268,19 @@ def test_catalog_contains_only_public_task_fields(tmp_path):
     assert len(entry["hash"]) == 64
 
 
-def test_invalid_check_records_become_retryable_verification_errors(tmp_path):
+@pytest.mark.parametrize("checks", [
+    {"unit": {"passed": "true", "reason": "Matches."}},
+    {" ": {"passed": True, "reason": "Matches."}},
+    {},
+])
+def test_invalid_check_records_become_retryable_verification_errors(tmp_path, checks):
     import shutil
     from ethevals.trial_rows import results_row
 
     fixture = Path(__file__).parent / "fixtures/harbor/recorded-trial"
     shutil.copytree(fixture, tmp_path / "trial")
     metadata = json.loads((fixture / "board.json").read_text())
-    (tmp_path / "trial/verifier/checks.json").write_text('{"unit":{"passed":"true","reason":"Matches."}}')
+    (tmp_path / "trial/verifier/checks.json").write_text(json.dumps(checks))
     row = results_row(tmp_path / "trial", metadata)
     assert (row["status"], row["error_kind"], row["error_reason"], row["checks"]) == (
         "error", "verification", "Each check needs a name, boolean passed, and one-line reason.", {})
@@ -246,7 +299,7 @@ def test_any_configured_agent_keeps_api_price_cost_when_a_plan_or_key_pays(tmp_p
     config.write_text(json.dumps(data))
     fixture = Path(__file__).parent / "fixtures/harbor"
     monkeypatch.setenv("PYTHONPATH", str(fixture.resolve()) + os.pathsep + os.environ.get("PYTHONPATH", ""))
-    result = cli("-m", "ethevals.cli", "run", "--config", config, "--tasks", fixture / "question",
+    result = cli("-m", "ethevals.cli", "run", "--config", config, "--tasks", fixture / "concepts/question",
                  "--trial", 2, "--budget", 6 if paid_by == "api_key" else 0,
                  "--output", tmp_path / "out", "--rows", tmp_path / "none")
     assert result.returncode == 0, result.stdout + result.stderr
@@ -270,8 +323,8 @@ def test_skills_trial_loads_captured_pack_through_harbor(tmp_path, monkeypatch, 
 
     fixture = Path(__file__).parent / "fixtures/harbor"
     monkeypatch.syspath_prepend(str(fixture.resolve()))
-    task = tmp_path / "question"
-    shutil.copytree(fixture / "question", task)
+    task = tmp_path / "concepts/question"
+    shutil.copytree(fixture / "concepts/question", task)
     settings = task / "task.toml"
     settings.write_text(settings.read_text().replace('["internet"]', '["internet", "skills"]'))
     if skills_dir:
@@ -320,7 +373,7 @@ def test_killed_job_resumes_without_repeating_its_finished_trial(tmp_path):
     data = json.loads(config.read_text())
     data["agents"]["local"]["name"] = "oracle"
     config.write_text(json.dumps(data))
-    task = Path(__file__).parent / "fixtures/harbor/question"
+    task = Path(__file__).parent / "fixtures/harbor/concepts/question"
     output = tmp_path / "out"
     args = [sys.executable, "-m", "ethevals.cli", "run", "--config", str(config),
             "--tasks", str(task), "--output", str(output), "--rows", str(tmp_path / "none"), "--budget", "0"]
@@ -366,7 +419,7 @@ def test_cli_runs_a_real_oracle_and_recovers_rows_without_repeating_finished_tri
     data["agents"]["local"]["name"] = "oracle"
     data["trials"] = 1
     config.write_text(json.dumps(data))
-    task = Path(__file__).parent / "fixtures/harbor/question"
+    task = Path(__file__).parent / "fixtures/harbor/concepts/question"
     output = tmp_path / "out"
     args = ["--config", config, "--tasks", task, "--output", output, "--rows", tmp_path / "absent.jsonl"]
     ran = cli("-m", "ethevals.cli", "run", *args, "--budget", "0")
