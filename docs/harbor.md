@@ -10,7 +10,8 @@ Each entry's `env` passes through Harbor's agent environment.
 The shipped plan entries set their force flags there, so local and CI trials select the same payment source.
 `required_env` lists nonempty credential variables.
 Each `required_files` entry declares a `path` and a `policy`, with Harbor's `${VAR:-default}` substitution in the path.
-The `plan_tokens` policy requires JSON with `tokens.access_token` and refuses an API key.
+The `plan_tokens` policy requires JSON with `auth_mode = "chatgpt"` and a nonempty `tokens.access_token`.
+The agent's environment overrides the host when selecting the credential file.
 Every plan entry must declare a credential requirement.
 The runner checks these requirements before creating any Harbor job.
 An entry's `modes` defaults to `[internet]`.
@@ -160,6 +161,7 @@ The board combines test checks and criteria checks; every check must pass.
 Criteria headings must differ from test check names.
 The judge's model, effort, time limit, payment source, and admission reserve come from the job config's `judge` settings.
 The default judge uses Opus 5.5 through `ANTHROPIC_API_KEY`; it refuses plan tokens.
+The pinned RewardKit version cannot accept an explicit key, so `key_env` accepts only `ANTHROPIC_API_KEY`.
 Each agent attempt reserves two judge attempts at `cost_limit_usd` each, even when a plan pays for the agent.
 RewardKit is pinned to 0.2.3, which supports Harbor's ATIF trajectory input and per-question reasons.
 `verifier/judge.json` preserves its output, usage, reasons, and errors beside Harbor's test records.

@@ -20,7 +20,7 @@ class JudgeSettings(Declaration):
     time_limit: int = Field(default=300, gt=0)
     cost_limit_usd: float = Field(default=2.0, ge=0, allow_inf_nan=False)
     paid_by: Literal["api_key", "free"] = "api_key"
-    key_env: str = "ANTHROPIC_API_KEY"
+    key_env: Literal["ANTHROPIC_API_KEY"] = "ANTHROPIC_API_KEY"
 
 
 def read_criteria(task: Path) -> dict[str, str]:

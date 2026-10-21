@@ -12,30 +12,34 @@ from test_jobs import job_config, task_folder
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_paid_workflow_plans_and_runs_with_one_secret_list():
+def test_paid_workflow_limits_secrets_to_the_steps_that_use_them():
     import yaml
 
-    workflow = yaml.safe_load((ROOT / ".github/workflows/results.yml").read_text())
-    selected = []
-    for job_name, step_name in [("plan", "Check the budget and emit the matrix"),
-                                ("matrix", "Run one planned trial")]:
-        job = workflow["jobs"][job_name]
-        step = next(step for step in job["steps"] if step.get("name") == step_name)
-        environment = {**workflow.get("env", {}), **job.get("env", {}), **step.get("env", {})}
-        selected.append({key: value for key, value in environment.items() if "secrets." in value})
-    assert selected[0] == selected[1]
-    assert selected[0]["EXA_API_KEY"] == "${{ secrets.EXA_API_KEY }}"
-    assert selected[0]["BASE_RPC_URL"] == "${{ secrets.BASE_RPC_URL }}"
+    source = (ROOT / ".github/workflows/results.yml").read_text()
+    workflow = yaml.safe_load(source)
+    exposed = {}
+    for job_name, job in workflow["jobs"].items():
+        for step in job["steps"]:
+            environment = {**workflow.get("env", {}), **job.get("env", {}), **step.get("env", {})}
+            secrets = {key: value for key, value in environment.items() if "secrets." in value}
+            if secrets:
+                exposed[job_name, step.get("name", step.get("uses", step.get("run")))] = secrets
+    rpc_names = ["MAINNET_RPC_URL", "BASE_RPC_URL"]
+    trial_names = ["CLAUDE_CODE_OAUTH_TOKEN", "CODEX_AUTH_JSON", "OPENROUTER_API_KEY",
+                   "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "EXA_API_KEY", *rpc_names]
+    assert exposed == {
+        ("plan", "Check the budget and emit the matrix"): {name: "${{ secrets." + name + " }}" for name in rpc_names},
+        ("matrix", "Run one planned trial"): {name: "${{ secrets." + name + " }}" for name in trial_names},
+    }
+    for name in trial_names:
+        assert source.count("${{ secrets." + name + " }}") == 1
 
 
-def test_ci_plan_carries_local_rejudge_evidence_to_a_fresh_runner(tmp_path, monkeypatch):
-    import argparse
-    import litellm
-    from harbor.job import Job
+def test_ci_plan_leaves_local_judge_evidence_on_the_planning_machine(tmp_path):
     from ethevals.job_config import load_job
     from ethevals.jobs import plan
+    from ethevals.publish import publish_logs
     from ethevals.trial_rows import recover_rows, write_rows
-    from test_ci import ci
 
     config_path, task = job_config(tmp_path, "free"), task_folder(tmp_path)
     (task / "tests/criteria.md").write_text("## explained\nDid it explain the unit?\n")
@@ -46,35 +50,25 @@ def test_ci_plan_carries_local_rejudge_evidence_to_a_fresh_runner(tmp_path, monk
     item = plan([task], config, [], trials=1)["missing"][0]
     folder = tmp_path / "old/jobs/saved/trial"
     shutil.copytree(ROOT / "runner/tests/fixtures/harbor/recorded-trial", folder)
+    private = tmp_path / "host-only.txt"
+    private.write_text("OFFLINE-HOST-ONLY")
+    (folder / "verifier/planted").symlink_to(private)
     (folder.parent / "board.json").write_text(json.dumps(item))
     previous = tmp_path / "previous.jsonl"
-    write_rows(previous, recover_rows(tmp_path / "old"))
+    rows = recover_rows(tmp_path / "old")
+    write_rows(previous, rows)
+    with pytest.raises(ValueError, match="Verifier output must stay inside its directory"):
+        publish_logs(tmp_path / "release", "owner/repo", "17", "a" * 40, rows=rows)
     saved = tmp_path / "plan"
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config_path, "--tasks", task,
-                 "--budget", 1, "--trials", 1, "--rows", previous, "--output", saved)
+                 "--budget", 1, "--trials", 2, "--rows", previous, "--output", saved)
     assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads((saved / "plan.json").read_text())
+    assert [row["trial"] for row in report["rejudge"]] == [1]
     admitted = json.loads((saved / "trials.json").read_text())
-    assert len(admitted) == 1
-    assert admitted[0]["missing"] == []
-    assert admitted[0]["rejudge"][0]["attempt"] == 1
-    shutil.rmtree(tmp_path / "old")
-    downloaded = tmp_path / "downloaded-plan"
-    shutil.move(str(saved), downloaded)
-
-    async def refuse(*args, **kwargs):
-        raise AssertionError("A judge-only trial cannot start an agent.")
-
-    async def completion(**kwargs):
-        return litellm.ModelResponse(choices=[{"message": {"role": "assistant", "content":
-            '{"score":"yes","reasoning":"It explains it."}'}}])
-
-    monkeypatch.setattr(Job, "create", refuse)
-    monkeypatch.setattr(litellm, "acompletion", completion)
-    output = tmp_path / "out"
-    assert ci.run_trial(argparse.Namespace(plan=downloaded, index=0, output=output)) == 0
-    row = json.loads((output / "rows.jsonl").read_text())
-    assert (row["attempt"], row["judge_attempts"], row["status"]) == (1, 1, "passed")
-    assert recover_rows(output) == [row]
+    assert [([row["trial"] for row in entry["missing"]], entry["rejudge"]) for entry in admitted] == [([2], [])]
+    assert sorted(path.name for path in saved.iterdir()) == [
+        "config.json", "plan.json", "rows.jsonl", "trials.json"]
 
 
 def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, monkeypatch):
@@ -218,7 +212,7 @@ def test_ci_oracle_trial_survives_artifact_download_and_publishes_locally(tmp_pa
     private = tmp_path / "private"
     private.mkdir()
     monkeypatch.setenv("TMPDIR", str(private))
-    monkeypatch.setenv("CODEX_AUTH_JSON", '{"tokens":{"access_token":"offline-private-plan-token"}}')
+    monkeypatch.setenv("CODEX_AUTH_JSON", '{"auth_mode":"chatgpt","tokens":{"access_token":"offline-private-plan-token"}}')
     config = job_config(tmp_path, "free")
     data = json.loads(config.read_text())
     data["agents"]["local"]["name"] = "oracle"

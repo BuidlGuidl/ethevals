@@ -21,15 +21,6 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env: &trial-secrets
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-      CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
-      MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
-      BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       scheduled_trials: ${{ steps.plan.outputs.scheduled_trials }}
@@ -48,6 +39,8 @@ jobs:
         id: plan
         env:
           RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
+          MAINNET_RPC_URL: &mainnet-rpc ${{ secrets.MAINNET_RPC_URL }}
+          BASE_RPC_URL: &base-rpc ${{ secrets.BASE_RPC_URL }}
         run: |
           uv run python scripts/ci.py plan-trials --modes vanilla internet skills --budget "$RUN_BUDGET" --restore-results --output results/ci-plan --github-output "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -62,7 +55,6 @@ jobs:
     needs: plan
     if: needs.plan.outputs.scheduled_trials != '0'
     runs-on: ubuntu-latest
-    env: *trial-secrets
     # Harbor builds task environments and runs their declared sidecars.
     timeout-minutes: 240
     strategy:
@@ -90,10 +82,17 @@ jobs:
       - name: Run one planned trial
         timeout-minutes: 190
         env:
-          TRIAL_INDEX: ${{ matrix.index }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          MAINNET_RPC_URL: *mainnet-rpc
+          BASE_RPC_URL: *base-rpc
         run: >-
           uv run python scripts/ci.py run-trial --plan results/ci-plan
-          --index "$TRIAL_INDEX" --output results/ci-run
+          --index ${{ matrix.index }} --output results/ci-run
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

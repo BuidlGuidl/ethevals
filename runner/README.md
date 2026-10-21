@@ -70,9 +70,9 @@ Local and CI trials use the same credential check.
 The judge key stays on the host while Claude Code uses its plan token.
 The run step allows 190 minutes; the job allows 240 minutes for setup, builds, and uploads too.
 Each job uploads saved trials after success or failure.
-The plan and matrix jobs share one secret list through a YAML anchor.
-If planning finds local judge work, the plan artifact carries its saved folder to the matrix job.
-Otherwise judge errors follow the agent retry rules, including `--retry-errors`.
+The planning step gets only RPC secrets; the trial step gets model credentials too.
+Each secret has one declaration; YAML aliases share the RPC secrets between those steps.
+Judge errors without a local saved folder follow the agent retry rules, including `--retry-errors`.
 
 The publisher has no model keys and runs after failed matrix jobs on `main`.
 It downloads every attempt's artifacts and rebuilds rows from saved Harbor trials at their downloaded paths.

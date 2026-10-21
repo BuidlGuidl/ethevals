@@ -170,14 +170,13 @@ def test_task_lint_accepts_all_real_tasks(capsys):
     assert capsys.readouterr().out == "".join(f"{path.parent}: lint passed\n" for path in paths)
 
 
-@pytest.mark.parametrize("credential", ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CODEX_AUTH_JSON", "CUSTOM_PROVIDER_KEY", "CUSTOM_JUDGE_KEY"])
+@pytest.mark.parametrize("credential", ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CODEX_AUTH_JSON", "CUSTOM_PROVIDER_KEY"])
 def test_task_cannot_declare_a_job_credential_as_required_env(harbor_task, tmp_path, capsys, credential):
     from ethevals.cli import main
     from ethevals.job_config import load_job
 
     config = load_job().model_dump()
     config["agents"]["codex-gpt-6"]["env"]["CUSTOM_PROVIDER_KEY"] = "${CUSTOM_PROVIDER_KEY:-}"
-    config["judge"]["key_env"] = "CUSTOM_JUDGE_KEY"
     job = tmp_path / "job.json"
     import json
     job.write_text(json.dumps(config))
@@ -191,7 +190,6 @@ def test_task_cannot_declare_a_job_credential_as_required_env(harbor_task, tmp_p
     assert f"{credential} is a job credential" in capsys.readouterr().err
     # The job config, rather than a fixed denylist, owns credential names.
     config["agents"]["codex-gpt-6"]["env"].pop("CUSTOM_PROVIDER_KEY")
-    config["judge"]["key_env"] = "OTHER_JUDGE_KEY"
     job.write_text(json.dumps(config))
     if credential.startswith("CUSTOM_"):
         assert main(["lint", "--tasks", str(harbor_task), "--config", str(job)]) == 0

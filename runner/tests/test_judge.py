@@ -401,10 +401,14 @@ def test_multiple_criteria_keep_names_reasons_and_api_price_cost(tmp_path, monke
     metadata.update(judge={"model": "anthropic/claude-opus-5-5", "effort": "high"},
                     criteria_names=["A unit was named", "Length?"])
     monkeypatch.setenv("ANTHROPIC_API_KEY", "stand-in-api-key")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat-offline-plan-token")
     monkeypatch.delenv("REWARDKIT_FORCE_SUBSCRIPTION", raising=False)
 
     async def completion(**kwargs):
         assert kwargs["model"] == "anthropic/claude-opus-5-5"
+        assert "api_key" not in kwargs
+        import os
+        assert os.environ["ANTHROPIC_API_KEY"] == "stand-in-api-key"
         response = litellm.ModelResponse(choices=[{"message": {"role": "assistant", "content": json.dumps({
             "q_0": {"score": "yes", "reasoning": "The reply says metre."},
             "q_1": {"score": "yes", "reasoning": "A metre measures length."}})}}])
@@ -419,6 +423,20 @@ def test_multiple_criteria_keep_names_reasons_and_api_price_cost(tmp_path, monke
         "unit": {"passed": True, "reason": "The final reply matches."},
         "A unit was named": {"passed": True, "reason": "The reply says metre."},
         "Length?": {"passed": True, "reason": "A metre measures length."}}
+
+
+def test_custom_judge_key_is_rejected_at_config_load_with_a_plan_token_present(tmp_path, monkeypatch):
+    from ethevals.job_config import load_job
+
+    path = job_config(tmp_path)
+    data = json.loads(path.read_text())
+    data["judge"] = {"key_env": "CUSTOM_JUDGE_KEY"}
+    path.write_text(json.dumps(data))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CUSTOM_JUDGE_KEY", "offline-custom-key")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat-offline-plan-token")
+    with pytest.raises(ValueError, match="key_env[\\s\\S]*ANTHROPIC_API_KEY"):
+        load_job(path)
 
 
 def test_missing_judge_result_is_a_retryable_error(tmp_path):

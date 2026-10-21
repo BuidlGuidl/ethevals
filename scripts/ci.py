@@ -7,7 +7,6 @@ import io
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -72,30 +71,21 @@ def plan_trials(args, run_args):
     # A zero CI budget disables even plan-paid trials whose API reserve is zero.
     scheduled, matrix, plan_counts = [], [], {}
     if report["within_budget"] and options.budget and options.budget > 0:
-        for kind in ("rejudge", "missing"):
-            for row in report[kind]:
-                group = config.agents[row["agent_key"]].name if kind == "missing" and row["paid_by"] == "plan" else ""
-                # GitHub accepts at most 100 pending jobs per concurrency group.
-                if len(scheduled) == 256 or group and plan_counts.get(group, 0) == 100:
-                    continue
-                index = len(scheduled)
-                item = {**row, "task_path": os.path.relpath(row["task_path"])}
-                if kind == "rejudge":
-                    folder = Path(row["trial_path"])
-                    relative = Path("rejudge") / str(index) / "trial"
-                    shutil.copytree(folder, args.output / relative)
-                    shutil.copyfile(folder.parent / "board.json", args.output / relative.parent / "board.json")
-                    item["trial_path"] = str(relative)
-                single = {"missing": [], "rejudge": [], "selected": [trial_identity(row)],
-                          "missing_trials": int(kind == "missing"), "worst_case_usd": row["worst_case_usd"]}
-                single[kind].append(item)
-                scheduled.append(single)
-                matrix.append({"index": index, "task_id": row["task_id"], "agent_key": row["agent_key"],
-                               "mode": row["mode"], "trial": row["trial"], "plan_group": group})
-                if group:
-                    plan_counts[group] = plan_counts.get(group, 0) + 1
+        for row in report["missing"]:
+            group = config.agents[row["agent_key"]].name if row["paid_by"] == "plan" else ""
+            # GitHub accepts at most 100 pending jobs per concurrency group.
+            if len(scheduled) == 256 or group and plan_counts.get(group, 0) == 100:
+                continue
+            index = len(scheduled)
+            item = {**row, "task_path": os.path.relpath(row["task_path"])}
+            scheduled.append({"missing": [item], "rejudge": [], "selected": [trial_identity(row)],
+                              "missing_trials": 1, "worst_case_usd": row["worst_case_usd"]})
+            matrix.append({"index": index, "task_id": row["task_id"], "agent_key": row["agent_key"],
+                           "mode": row["mode"], "trial": row["trial"], "plan_group": group})
+            if group:
+                plan_counts[group] = plan_counts.get(group, 0) + 1
     (args.output / "trials.json").write_text(json.dumps(scheduled, indent=2) + "\n")
-    deferred = len(report["missing"]) + len(report["rejudge"]) - len(scheduled)
+    deferred = len(report["missing"]) - len(scheduled)
     if deferred:
         print(f"Deferred {deferred} trials to a later run.", file=sys.stderr)
     if args.github_output:
@@ -110,15 +100,8 @@ def run_trial(args):
     if not 0 <= args.index < len(scheduled):
         raise ValueError("Trial index is outside the admitted plan")
     report = scheduled[args.index]
-    for item in [*report["rejudge"], *report["missing"]]:
+    for item in report["missing"]:
         item["task_path"] = str(Path(item["task_path"]).resolve())
-    for item in report["rejudge"]:
-        source = args.plan / item["trial_path"]
-        folder = args.output / "jobs" / f"rejudge-{args.index}" / "trial"
-        if not folder.exists():
-            shutil.copytree(source, folder)
-            shutil.copyfile(source.parent / "board.json", folder.parent / "board.json")
-        item["trial_path"] = str(folder.resolve())
     config = load_job(args.plan / "config.json")
     report = budget_check(report, report["worst_case_usd"], required=True)
     previous = previous_rows(args.output, args.plan / "rows.jsonl")

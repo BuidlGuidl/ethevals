@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 
-from harbor.utils.env import resolve_env_vars
+from harbor.utils.env import get_required_host_vars, resolve_env_vars
 from pydantic import Field, model_validator
 
 from .config import Declaration, parse_file
@@ -83,7 +83,11 @@ def check_credentials(agent: AgentSettings, key: str) -> None:
         if not environment.get(variable, "").strip():
             raise ValueError(f"{key}: missing {variable}")
     for credential in agent.required_files:
-        filename = resolve_env_vars({"path": credential.path})["path"]
+        filename = credential.path
+        for variable, default in get_required_host_vars({"path": filename}):
+            filename = environment.get(variable) or default
+            if filename is None:
+                raise ValueError(f"{key}: missing {variable}")
         # Match Harbor's default credential directory without changing HOME.
         path = Path.home() / filename[2:] if filename.startswith("~/") else Path(filename)
         if not path.is_file():
@@ -93,9 +97,9 @@ def check_credentials(agent: AgentSettings, key: str) -> None:
         except (ValueError, OSError) as error:
             raise ValueError(f"{key}: {path}: credential must contain plan tokens") from error
         if credential.policy == "plan_tokens" and (
-            not isinstance(parsed, dict) or parsed.get("OPENAI_API_KEY")
+            not isinstance(parsed, dict) or parsed.get("auth_mode") != "chatgpt"
             or not isinstance(parsed.get("tokens"), dict)
             or not isinstance(parsed["tokens"].get("access_token"), str)
             or not parsed["tokens"]["access_token"].strip()
         ):
-            raise ValueError(f"{key}: {path}: credential must contain plan tokens without an API key")
+            raise ValueError(f"{key}: {path}: credential must contain ChatGPT plan tokens with auth_mode=chatgpt")
