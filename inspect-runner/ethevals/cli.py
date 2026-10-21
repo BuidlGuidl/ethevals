@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import json
 import subprocess
 from pathlib import Path
@@ -29,6 +30,10 @@ def parse_args(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     parsers = {name: commands.add_parser(name) for name in
                ("run", "plan", "check", "validate", "catalog", "export-hf", "publish-logs")}
+    for name in ("lint", "free-check"):
+        parsers[name] = commands.add_parser(name, help="Check Harbor task folders.")
+        parsers[name].add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
+    parsers["free-check"].add_argument("--output", type=Path, default=Path("results/free-check"))
     for name in ("run", "plan", "check", "validate", "catalog", "export-hf"):
         parsers[name].add_argument("--evals", nargs="+", help="Eval folders. Defaults to evals/*/*.")
         parsers[name].add_argument("--config", type=Path)
@@ -67,6 +72,18 @@ def parse_args(argv=None):
 def main(argv=None) -> int:
     parser, args = parse_args(argv)
     try:
+        if args.command in {"lint", "free-check"}:
+            from .harbor_tasks import lint_task
+            paths = args.tasks or sorted(path.parent for path in Path("tasks").rglob("task.toml"))
+            if not paths:
+                raise ValueError("No task folders found. Use --tasks or start from the repository root.")
+            for path in paths:
+                lint_task(path)
+                print(f"{path}: lint passed")
+            if args.command == "free-check":
+                from .harbor_tasks import free_check
+                asyncio.run(free_check(paths, args.output))
+            return 0
         if args.command == "publish-logs":
             print(json.dumps(publish_logs(args.output, args.repo, args.run_id, args.commit,
                                          publish=args.publish), indent=2))

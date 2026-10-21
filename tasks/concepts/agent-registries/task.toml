@@ -1,0 +1,14 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[metadata]
+pillar = "concepts"
+motivation = "Check whether a model knows the ERC for agent discovery and trust."
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

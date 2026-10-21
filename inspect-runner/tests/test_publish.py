@@ -11,7 +11,7 @@ from support import fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
-EVALUATION = load_eval(ROOT / "evals/concepts/agent-registries", fixture_config())
+EVALUATION = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", fixture_config())
 
 
 def local_results(tmp_path):

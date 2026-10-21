@@ -62,7 +62,7 @@ def fixture_quiz(tmp_path, name="units", *, modes=None, choices=None, **scorer):
 
 def catalog_quiz():
     config = fixture_config()
-    return config, load_eval(ROOT / "evals/concepts/agent-registries", config)
+    return config, load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
 
 
 def build_task(evaluation, config, key, mode, answer, epochs, compose=None):

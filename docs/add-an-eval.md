@@ -109,8 +109,8 @@ target: C
 name: erc_number
 method: pattern
 pattern: 'ERC-?(\d+)'
-target: "8004"
-reference: "It is ERC-8004."
+target: "20"
+reference: "It is ERC-20."
 ```
 
 </details>
@@ -230,42 +230,9 @@ flowchart LR
 
 ### Simple quiz
 
-This recipe checks the reply against a fixed answer.
-It's [`evals/concepts/agent-registries`](../evals/concepts/agent-registries).
-
-```text
-agent-registries/
-├── eval.yaml
-└── scorer/
-    └── target.yaml
-```
-
-```yaml
-motivation: Check whether a model knows the ERC for agent discovery and trust. # (1)
-prompt: which ERC defines onchain identity, reputation and validation registries for AI agents? just the number please # (2)
-modes: [vanilla, internet, skills] # (3)
-```
-
-1. The website shows it. The agent never sees it.
-2. Ask the way a person would.
-3. A quiz needs no tools, so it can run in `vanilla`.
-
-<details>
-<summary><code>scorer/target.yaml</code></summary>
-
-```yaml
-name: erc_number # (1)
-method: match # (2)
-target: "8004" # (3)
-location: end # (4)
-```
-
-1. Names the check.
-2. `match` compares the reply with `target`.
-3. Targets are strings, so quote numbers.
-4. Passes when the reply ends with `8004`.
-
-</details>
+New quizzes use Harbor task folders under `tasks/`.
+Read [the Harbor guide](harbor.md) for final-reply inputs and the free check.
+The recipes below cover tasks that still use Inspect during the move.
 
 ### Eval with a fresh chain
 

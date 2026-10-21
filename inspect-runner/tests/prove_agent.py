@@ -16,6 +16,7 @@ from inspect_ai.model import ContentText, ContentToolUse, ModelOutput, get_model
 from support import build_task, fixture_config, valid_search_result
 from ethevals.loader import load_eval
 from ethevals.rows import export_rows
+from ethevals.scorers import target_reference
 from ethevals.preparation import build_images, prepare_compose
 from ethevals.skills import skill_index
 
@@ -108,7 +109,7 @@ console.log(JSON.stringify({matches, files, environments}));
     search_ok = False
     search_call = 2 if harness == "codex_cli" and not native_search else 1
     work_call = search_call + 1 + (native_search and harness == "claude_code")
-    search_marker = "native-search-proof-8004"
+    search_marker = "native-search-proof"
 
     def capture(original):
         def record(data):
@@ -143,7 +144,7 @@ console.log(JSON.stringify({matches, files, environments}));
         if native_search and calls < work_call:
             if harness == "claude_code" and calls == 1:
                 assert "WebSearch" in tool_names, tool_names
-                return ModelOutput.for_tool_call("mockllm/model", "WebSearch", {"query": "Ethereum ERC-8004"})
+                return ModelOutput.for_tool_call("mockllm/model", "WebSearch", {"query": "Ethereum ERC-20"})
             search_tool = next((tool for tool in tools if tool.name == "web_search"), None)
             assert search_tool is not None, f"{harness} offered no native web_search tool: {sorted(tool_names)}"
             if harness == "claude_code":
@@ -151,7 +152,7 @@ console.log(JSON.stringify({matches, files, environments}));
             else:
                 assert "openai" in search_tool.options, search_tool
             print(json.dumps({"native_search_tool": search_tool.model_dump(mode="json")}), flush=True)
-            result = json.dumps([{"type": "web_search_result", "url": "https://eips.ethereum.org/EIPS/eip-8004",
+            result = json.dumps([{"type": "web_search_result", "url": "https://eips.ethereum.org/EIPS/eip-20",
                                   "title": search_marker, "encrypted_content": "cHJvb2Y="}])
             block = ContentToolUse(tool_type="web_search", id="srvtoolu_native_proof", name="web_search" if harness == "claude_code" else "search",
                                    arguments=json.dumps({"type": "search", "query": search_marker}), result=result)
@@ -181,7 +182,7 @@ console.log(JSON.stringify({matches, files, environments}));
         if evaluation.target is not None:
             if args.answer == "empty":
                 return ModelOutput.from_content("mockllm/model", "No answer.")
-            return ModelOutput.from_content("mockllm/model", "ANSWER: C" if evaluation.declaration.choices else "8004")
+            return ModelOutput.from_content("mockllm/model", target_reference(evaluation.target, evaluation.declaration))
         if calls == work_call and args.answer == "reference":
             if evaluation.declaration.chain:
                 command = '''set -eu

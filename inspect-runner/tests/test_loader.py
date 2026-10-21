@@ -103,7 +103,7 @@ def test_catalog_exports_a_loaded_eval(tmp_path, config_path):
     ("eval.yaml", "prompt: Hello\nmotivation: Test\nmodes: [vanilla]\nextra: true\n"),
     ("eval.yaml", "prompt: Hello\nmotivation: Test\nmodes: [vanilla]\nchoices: [wei, ' ', ether]\n"),
     ("scorer/target.yaml", "target: wei\nextra: true\n"),
-    ("scorer/target.yaml", "target: 8004\n"),
+    ("scorer/target.yaml", "target: 42\n"),
     ("scorer/target.yaml", None),
 ])
 def test_loader_rejects_broken_declarations(folder, file, content):

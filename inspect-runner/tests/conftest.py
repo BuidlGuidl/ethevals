@@ -34,7 +34,7 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture
 def folder(tmp_path):
     target = tmp_path / "concepts" / "quiz"
-    shutil.copytree(ROOT / "evals/concepts/agent-registries", target)
+    shutil.copytree(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", target)
     declaration = yaml.safe_load((target / "eval.yaml").read_text())
     declaration["modes"] = ["vanilla", "internet"]
     (target / "eval.yaml").write_text(yaml.safe_dump(declaration, default_flow_style=None))

@@ -194,13 +194,13 @@ def publish_artifacts(args):
     return 0
 
 
-def checks(args, evals):
+def checks(args):
+    command(sys.executable, "-m", "ethevals.cli", "free-check", "--output", args.output / "harbor")
     command(sys.executable, "-m", "ethevals.cli", "validate")
     command(sys.executable, "-m", "ethevals.cli", "check", "--output", args.output / "check")
     command(sys.executable, "-m", "pytest", "-q")
     command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
             "--ignore=inspect-runner/tests/test_agents_docker.py")
-    write_hf(evals, args.output / "hf", DEFAULT_REPO, None)
     for task in ("test", "typecheck", "lint", "build"):
         command("pnpm", task, cwd="site")
     return 0
@@ -267,9 +267,11 @@ def main():
             return prefetch()
         if args.command == "publish-results":
             return publish_artifacts(args)
+        if args.command == "checks":
+            return checks(args)
         config = load_config()
         evals = [load_eval(path, config) for path in sorted(Path("evals").glob("*/*"))]
-        return {"checks": checks, "release": release}[args.command](args, evals)
+        return release(args, evals)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(2, f"ci: {error}\n")
 

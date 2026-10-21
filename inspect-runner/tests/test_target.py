@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.mark.parametrize("answer,expected", [("reference", True), ("empty", False)])
 def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
     config = fixture_config()
-    evals = [load_eval(path, config) for path in sorted((ROOT / "evals").glob("*/*"))]
+    evals = [load_eval(path, config) for path in sorted((ROOT / "inspect-runner/tests/fixtures").glob("*/*"))]
     evals = [item for item in evals if item.target is not None and "vanilla" in item.declaration.modes]
     output = tmp_path / answer
     success, rows = run(evals, config, output, answer=answer)
@@ -40,10 +40,10 @@ def test_quizzes_through_real_pipeline(tmp_path, answer, expected):
         assert calls[0].tools == []
 
 
-@pytest.mark.parametrize("method,answer,expected", [("pattern", "ERC 8004", True), ("pattern", "ERC 20", False), ("match", "20", False)])
+@pytest.mark.parametrize("method,answer,expected", [("pattern", "ERC 42", True), ("pattern", "ERC 20", False), ("match", "20", False)])
 def test_target_methods_from_real_log(folder, tmp_path, method, answer, expected):
     path = folder / "scorer/target.yaml"
-    path.write_text('name: number\ntarget: "8004"\nmethod: ' + method + ('\npattern: "ERC ([0-9]+)"\n' if method == "pattern" else "\n"))
+    path.write_text('name: number\ntarget: "42"\nmethod: ' + method + ('\npattern: "ERC ([0-9]+)"\n' if method == "pattern" else "\n"))
     config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.model = get_model("mockllm/model", custom_outputs=[ModelOutput.from_content("mockllm/model", answer)])

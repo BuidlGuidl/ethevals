@@ -397,6 +397,8 @@ The workflow has only content-read and status-write permissions.
 ## CI and publication
 
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
+It runs the [Harbor free check](../docs/harbor.md) and the Inspect free check during the move.
+The free-check job no longer exports an Inspect dataset because no quizzes remain under `evals/`.
 [results.yml](../.github/workflows/results.yml) queues paid runs after `main` changes, excluding results-only changes.
 It uses `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, optional `EXA_API_KEY`, and the `ETHEVALS_BUDGET_USD` repository variable.
 The matrix also receives `MAINNET_RPC_URL` and `BASE_RPC_URL` for fork evals.
@@ -449,8 +451,8 @@ Tests use the config factories in `tests/support.py`.
 The real CLI proofs run separately:
 
 ```sh
-uv run python inspect-runner/tests/prove_agent.py reference --agent claude-code-opus-5.5 --eval evals/concepts/agent-registries --output /tmp/claude-reference
-uv run python inspect-runner/tests/prove_agent.py reference --agent codex-cli-gpt-5.5 --eval evals/concepts/agent-registries --output /tmp/codex-reference
+uv run python inspect-runner/tests/prove_agent.py reference --agent claude-code-opus-5.5 --eval inspect-runner/tests/fixtures/concepts/quiz --output /tmp/claude-reference
+uv run python inspect-runner/tests/prove_agent.py reference --agent codex-cli-gpt-5.5 --eval inspect-runner/tests/fixtures/concepts/quiz --output /tmp/codex-reference
 ```
 
 Strip provider credentials before these commands.

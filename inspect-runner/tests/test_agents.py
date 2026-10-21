@@ -54,11 +54,11 @@ def test_optional_effort_reaches_model_call(monkeypatch, mode, key, effort):
 
     def reply(messages, tools, tool_choice, config):
         observed.append(config.reasoning_effort)
-        return ModelOutput.from_content("mockllm/opus-5.5", "8004")
+        return ModelOutput.from_content("mockllm/opus-5.5", "42")
 
     monkeypatch.setattr(actor.model.api, "outputs", reply)
     output = asyncio.run(actor.model.generate([ChatMessageUser(content="Name the ERC.")]))
-    assert (output.completion, observed, actor.metadata["effort"]) == ("8004", [effort], effort)
+    assert (output.completion, observed, actor.metadata["effort"]) == ("42", [effort], effort)
 
 
 def test_codex_agent_serializes_custom_calls_through_bridge(tmp_path, monkeypatch):

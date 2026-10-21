@@ -22,6 +22,22 @@ ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
 
 
+def test_pr_checks_run_both_runners_without_exporting_removed_quizzes(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(ci, "command", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(sys, "argv", ["ci.py", "checks", "--output", str(tmp_path)])
+    assert ci.main() == 0
+    assert calls == [
+        ((sys.executable, "-m", "ethevals.cli", "free-check", "--output", tmp_path / "harbor"), {}),
+        ((sys.executable, "-m", "ethevals.cli", "validate"), {}),
+        ((sys.executable, "-m", "ethevals.cli", "check", "--output", tmp_path / "check"), {}),
+        ((sys.executable, "-m", "pytest", "-q"), {}),
+        ((sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
+          "--ignore=inspect-runner/tests/test_agents_docker.py"), {}),
+        *((('pnpm', task), {"cwd": "site"}) for task in ("test", "typecheck", "lint", "build")),
+    ]
+
+
 def prefetch_fixture(monkeypatch, tmp_path, digest):
     from inspect_swe._codex_cli import agentbinary as codex
     from inspect_swe._opencode import agentbinary as opencode
@@ -177,7 +193,7 @@ def test_late_publication_retains_current_source_and_newer_rows(tmp_path, monkey
 
 def test_fresh_checkout_runs_only_missing_and_second_run_preserves_rows(tmp_path, monkeypatch):
     config = fixture_config()
-    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    quiz = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     agents_for, grade = select_actors(config, answer="reference")
     success, initial = run([quiz], config, tmp_path / "seed", answer="reference", epochs=1)
     assert success and initial[0]["status"] == "passed"
@@ -210,7 +226,7 @@ def test_plan_epochs_gate_stops_before_a_model_or_secret(tmp_path, budget):
     output = tmp_path / "eval-run-1"
     result = cli("scripts/ci.py", "plan-epochs", "--budget", budget, "--output", output,
                  "--config", config_path,
-                 "--rows", tmp_path / "rows.jsonl", "--evals", ROOT / "evals/concepts/agent-registries",
+                 "--rows", tmp_path / "rows.jsonl", "--evals", ROOT / "inspect-runner/tests/fixtures/concepts/quiz",
                  "--models", "test", "--modes", "vanilla")
     assert result.returncode == (1 if budget == "0" else 2)
     assert not (output / "logs").exists()
@@ -229,7 +245,7 @@ def test_completed_paid_store_needs_neither_key_nor_budget(tmp_path):
     config = small_config()
     config_path = tmp_path / "config.yaml"
     config_path.write_text(config.model_dump_json())
-    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    quiz = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     row = {"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test",
            "harness": None, "effort": "high", "mode": "vanilla",
            "epoch": 1, "status": "error", "attempt": 2}
@@ -257,7 +273,7 @@ def test_plan_epochs_restores_completed_epochs_without_eval(tmp_path, monkeypatc
     config = small_config()
     config_path = tmp_path / "config.json"
     config_path.write_text(config.model_dump_json())
-    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    quiz = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     rows = [{"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test",
              "harness": None, "effort": "high", "mode": "vanilla", "epoch": epoch,
              "status": "passed", "attempt": 1} for epoch in (1, 2)]
@@ -288,14 +304,14 @@ def test_plan_emits_two_evals(tmp_path):
     output, github_output = tmp_path / "plan", tmp_path / "github-output"
     args = argparse.Namespace(output=output, restore_results=False, github_output=github_output)
     assert ci.plan_epochs(args, ["--config", str(config_path), "--rows", str(tmp_path / "rows.jsonl"),
-                                "--evals", "evals/concepts/agent-registries", "evals/transactions/send-six-decimal-token",
+                                "--evals", "inspect-runner/tests/fixtures/concepts/quiz", "evals/transactions/send-six-decimal-token",
                                 "--agents", "test-agent", "--modes", "internet", "--epochs", "1", "--budget", "100"]) == 0
     values = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
     matrix = json.loads(values["matrix"])
     assert values["missing_epochs"] == "2"
     assert [(row["eval_id"], row["actor_key"], row["mode"], row["epoch"])
             for row in matrix["include"]] == [
-        ("concepts/agent-registries", "test-agent", "internet", 1),
+        ("concepts/quiz", "test-agent", "internet", 1),
         ("transactions/send-six-decimal-token", "test-agent", "internet", 1)]
 
 
@@ -305,13 +321,13 @@ def test_plan_defers_epochs_above_256_and_next_run_picks_them_up(tmp_path):
     config_path = tmp_path / "config.json"
     config_path.write_text(config.model_dump_json())
     previous, github_output = tmp_path / "rows.jsonl", tmp_path / "github-output"
-    options = ["--config", str(config_path), "--rows", str(previous), "--evals", "evals/concepts/agent-registries",
+    options = ["--config", str(config_path), "--rows", str(previous), "--evals", "inspect-runner/tests/fixtures/concepts/quiz",
                "--models", "test", "--modes", "vanilla", "--epochs", "257", "--budget", "1028"]
     assert ci.plan_epochs(argparse.Namespace(output=tmp_path / "first", restore_results=False,
                                             github_output=github_output), options) == 0
     matrix = json.loads(github_output.read_text().splitlines()[0].removeprefix("matrix="))
     assert [row["epoch"] for row in matrix["include"]] == list(range(1, 257))
-    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    quiz = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     write_rows(previous, [{"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test", "harness": None,
                           "effort": "high", "mode": "vanilla", "epoch": epoch, "status": "passed", "attempt": 1}
                          for epoch in range(1, 257)])
@@ -326,7 +342,7 @@ def test_matrix_runs_one_saved_plan_row_with_its_attempt(tmp_path):
     config = small_config()
     config_path = tmp_path / "config.json"
     config_path.write_text(config.model_dump_json())
-    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    quiz = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     row = {"eval_id": quiz.id, "eval_hash": quiz.hash, "model": "mockllm/test", "harness": None,
            "effort": "high", "mode": "vanilla", "epoch": 2, "status": "error", "attempt": 1}
     previous = tmp_path / "previous.jsonl"
@@ -348,7 +364,7 @@ def test_matrix_runs_one_saved_plan_row_with_its_attempt(tmp_path):
 def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows(tmp_path, monkeypatch):
     from support import small_config
     config = small_config()
-    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    quiz = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     previous = {"eval_id": quiz.id, "eval_hash": "stale", "model": "model", "mode": "vanilla", "epoch": 1,
                 "status": "passed", "log_file": "results-old/old.eval"}
     new = {**previous, "eval_hash": quiz.hash, "log_file": "logs/new.eval"}

@@ -12,8 +12,8 @@ import pytest
 @pytest.mark.parametrize("answer", ["reference", "empty"])
 @pytest.mark.parametrize("evaluation,mode", [
     ("evals/building/erc20-points-token", "internet"),
-    ("evals/concepts/agent-registries", "internet"),
-    ("evals/concepts/agent-registries", "skills"),
+    ("inspect-runner/tests/fixtures/concepts/quiz", "internet"),
+    ("inspect-runner/tests/fixtures/concepts/quiz", "skills"),
 ])
 def test_agent_proof(tmp_path, agent, answer, evaluation, mode):
     environment = os.environ.copy()

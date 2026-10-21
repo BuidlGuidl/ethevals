@@ -1,0 +1,4 @@
+name: answer
+method: match
+target: '42'
+location: end

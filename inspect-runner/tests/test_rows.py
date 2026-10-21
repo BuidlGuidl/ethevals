@@ -46,7 +46,7 @@ def test_rows_split_grader_usage_for_the_same_model(folder, tmp_path):
     config = fixture_config()
     task = build_task(load_eval(folder, config), config, None, "vanilla", "reference", 1)
     task.metadata.update(cost_source="computed:test", grader_cost_source="computed:grader", prices={"input": 1, "output": 2})
-    output = ModelOutput.from_content("mockllm/model", "8004")
+    output = ModelOutput.from_content("mockllm/model", "42")
     output.usage = ModelUsage(input_tokens=10, output_tokens=4, total_tokens=14)
     grade = ModelOutput.from_content("mockllm/model", "yes")
     grade.usage = ModelUsage(input_tokens=7, output_tokens=3, total_tokens=10)
@@ -77,7 +77,7 @@ def test_crashed_epoch_runs_again_without_repeating_finished_epochs(folder, tmp_
             return await generate(state)
         return solve
 
-    monkeypatch.setattr("ethevals.checks.quiz_check_solver", lambda evaluation, answer: CheckRun(crash_once(), "8004"))
+    monkeypatch.setattr("ethevals.checks.quiz_check_solver", lambda evaluation, answer: CheckRun(crash_once(), "42"))
     config = fixture_config()
     config.concurrency = 1
     evaluation = load_eval(folder, config)
@@ -110,7 +110,7 @@ def test_limits_are_final_failed_epochs(folder, tmp_path, monkeypatch):
     success, first = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
     assert (first[0]["status"], (None if first[0]["status"] == "error" else first[0]["status"] == "passed")) == ("failed", False)
-    assert first[0]["checks"]["erc_number"] == {"passed": False, "reason": "The answer is empty."}
+    assert first[0]["checks"]["answer"] == {"passed": False, "reason": "The answer is empty."}
     assert first[0]["limit"]["type"] == "time"
     success, second = run([evaluation], config, output, answer="reference", epochs=1)
     assert success is True
@@ -193,7 +193,7 @@ def test_errors_stop_after_two_attempts(tmp_path, monkeypatch):
 
     monkeypatch.setattr("ethevals.checks.quiz_check_solver", lambda evaluation, answer: CheckRun(crash()))
     config = fixture_config()
-    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     output = tmp_path / "results"
     for attempt, expected_success in [(1, False), (2, False), (2, True)]:
         success, rows = run([evaluation], config, output, answer="reference", epochs=1)
@@ -213,7 +213,7 @@ def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
     config.cost_limit = budget
     config.models["opus-5.5"].model = "mockllm/model"
     config.grader.model = "mockllm/model"
-    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     task = build_task(evaluation, config, "opus-5.5", "vanilla", None, 1)
 
     @solver
@@ -225,7 +225,7 @@ def test_cost_limit_discounts_cache_for_a_forty_call_build(tmp_path, budget):
         return solve
 
     def reply(messages, tools, tool_choice, config):
-        output = ModelOutput.from_content("mockllm/model", "8004")
+        output = ModelOutput.from_content("mockllm/model", "42")
         output.usage = ModelUsage(input_tokens=1000, input_tokens_cache_read=19000, output_tokens=1000, total_tokens=21000)
         return output
 

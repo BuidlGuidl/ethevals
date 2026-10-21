@@ -44,25 +44,27 @@ cd ethevals
 uv sync --frozen
 ```
 
-2. Ask Opus 5.5 a quiz question, with no tools and no Docker:
+2. Start Docker and check the Harbor tasks without a model or provider key:
 
 ```sh
-export ANTHROPIC_API_KEY=<your key>
-uv run ethevals run --evals evals/concepts/agent-registries --models opus-5.5 --modes vanilla --epochs 1 --budget 50 --output results/quickstart --rows results/quickstart/rows.jsonl
+unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
+uv run ethevals free-check --output results/quickstart
 ```
 
-`--budget` is a ceiling in USD. This run costs under a cent. `--output` and `--rows` keep your run apart from the published results.
+Each task's oracle run must pass, and its nop run must fail.
+Use a fresh output directory each time.
+Read [the Harbor guide](docs/harbor.md) for task inputs and check records.
 
-3. Start Docker and give the same question to Claude Code, which gets a shell and the internet:
+3. Check the tasks that still use Inspect during the move:
 
 ```sh
-uv run ethevals run --evals evals/concepts/agent-registries --agents claude-code-opus-5.5 --modes internet --epochs 1 --budget 50 --output results/quickstart --rows results/quickstart/rows.jsonl
+uv run ethevals check --output results/inspect-check
 ```
 
-4. Read the logs in Inspect's viewer, at the URL it prints:
+4. Read their trajectories in Inspect's viewer, at the URL it prints:
 
 ```sh
-uv run inspect view --log-dir results/quickstart/logs
+uv run inspect view --log-dir results/inspect-check/reference/logs
 ```
 
 5. Start the website in a second terminal, then open http://localhost:3000:

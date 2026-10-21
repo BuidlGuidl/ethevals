@@ -51,7 +51,7 @@ def test_pack_changes_repeat_only_skills_epochs_and_eval_changes_repeat_both(fol
     (["--modes", "internet", "skills", "--models", "opus-5.5"], "--models requires the vanilla mode"),
 ])
 def test_selector_requires_a_matching_mode(command, selection, message):
-    result = eval_cli(command, "--evals", ROOT / "evals/concepts/agent-registries", *selection)
+    result = eval_cli(command, "--evals", ROOT / "inspect-runner/tests/fixtures/concepts/quiz", *selection)
     assert result.returncode == 2
     assert message in result.stderr
 
@@ -64,7 +64,7 @@ def test_selector_requires_a_matching_mode(command, selection, message):
 ])
 def test_plan_derives_modes_from_selectors(tmp_path, selectors, expected):
     from collections import Counter
-    result = eval_cli("plan", "--evals", ROOT / "evals/concepts/agent-registries",
+    result = eval_cli("plan", "--evals", ROOT / "inspect-runner/tests/fixtures/concepts/quiz",
                       "--epochs", 1, "--output", tmp_path, *selectors)
     assert result.returncode == 0, result.stderr
     assert list(Counter(row["mode"] for row in json.loads(result.stdout)["missing"]).items()) == expected
@@ -75,7 +75,7 @@ def test_cli_runs_only_the_selected_epoch(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(config.model_dump_json())
     output = tmp_path / "results"
-    assert main(["run", "--config", str(path), "--evals", str(ROOT / "evals/concepts/agent-registries"),
+    assert main(["run", "--config", str(path), "--evals", str(ROOT / "inspect-runner/tests/fixtures/concepts/quiz"),
                  "--models", "test", "--modes", "vanilla", "--epoch", "2", "--budget", "4",
                  "--rows", str(tmp_path / "rows.jsonl"), "--output", str(output)]) == 0
     assert [(row["epoch"], row["attempt"], row["status"], row["effort"]) for row in read_rows(output / "rows.jsonl")] == [
@@ -84,7 +84,7 @@ def test_cli_runs_only_the_selected_epoch(tmp_path):
 
 
 def test_single_epoch_rejects_multiple_actors_before_providers(tmp_path):
-    result = eval_cli("run", "--evals", ROOT / "evals/concepts/agent-registries", "--modes", "vanilla",
+    result = eval_cli("run", "--evals", ROOT / "inspect-runner/tests/fixtures/concepts/quiz", "--modes", "vanilla",
                       "--epoch", "2", "--budget", "100", "--output", tmp_path)
     assert result.returncode == 2
     assert "--epoch requires exactly one eval, actor, and mode" in result.stderr
@@ -149,7 +149,7 @@ def test_planned_identity_matches_every_configured_provider(mode):
 
 def test_budget_stops_before_preparation(tmp_path, monkeypatch):
     config = small_config()
-    evaluation = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     monkeypatch.setattr("ethevals.runner.prepare_compose", lambda *a: pytest.fail("Preparation ran"))
     with pytest.raises(ValueError, match="Budget exceeded"):
         run([evaluation], config, tmp_path, budget=1, epochs=1, modes=["vanilla"])
@@ -162,7 +162,7 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
     config = small_config()
     config_path = tmp_path / "config.yaml"
     config_path.write_text(config.model_dump_json())
-    quiz = load_eval(ROOT / "evals/concepts/agent-registries", config)
+    quiz = load_eval(ROOT / "inspect-runner/tests/fixtures/concepts/quiz", config)
     base = {"eval_id": quiz.id, "eval_hash": quiz.hash, "harness": None,
             "model": "mockllm/test", "effort": "high", "mode": "vanilla"}
     rows = [{**base, "epoch": 1, "status": "failed", "attempt": 1},
