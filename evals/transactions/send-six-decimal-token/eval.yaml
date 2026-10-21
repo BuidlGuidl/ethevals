@@ -1,6 +1,0 @@
-chain: anvil
-motivation: Test whether an agent reads token decimals before signing an exact transfer.
-modes: [internet, skills]
-prompt: |
-  can you send 12.5 tokens to the recipient in chain.json? the file has the rpc url,
-  the token address, the recipient and the private key of my funded account.

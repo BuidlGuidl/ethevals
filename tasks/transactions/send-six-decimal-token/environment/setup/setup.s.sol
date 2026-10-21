@@ -20,5 +20,6 @@ contract Setup is ChainSetup {
         chainRecord("privateKey", bytes32(me.privateKey));
         chainRecord("recipient", recipient);
         chainRecord("token", address(token));
+        privateRecord("sender", me.addr);
     }
 }

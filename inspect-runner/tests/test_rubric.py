@@ -36,7 +36,7 @@ def test_transcript_projects_text_and_tools():
             ContentText(text="Reading.", internal={"opaque": "private payload"})], tool_calls=[
                 ToolCall(id="read", function="Bash", arguments={"command": "cast balance"},
                          view=ToolCallContent(format="text", content="private view"))]),
-        ChatMessageTool(id="result-id", content="12500000", tool_call_id="read", function="Bash"),
+        ChatMessageTool(id="result-id", content="42", tool_call_id="read", function="Bash"),
         ChatMessageTool(content="No receipt", tool_call_id="receipt", function="Bash",
                         error=ToolCallError("file_not_found", "Missing receipt")),
         ChatMessageAssistant(content="Confirmed: ✓"),
@@ -46,7 +46,7 @@ def test_transcript_projects_text_and_tools():
         {"role": "user", "content": "Read the balance."},
         {"role": "assistant", "content": "Reading.", "tool_calls": [
             {"id": "read", "function": "Bash", "arguments": {"command": "cast balance"}}]},
-        {"role": "tool", "tool_call_id": "read", "function": "Bash", "content": "12500000"},
+        {"role": "tool", "tool_call_id": "read", "function": "Bash", "content": "42"},
         {"role": "tool", "tool_call_id": "receipt", "function": "Bash", "content": "No receipt",
          "error": {"type": "file_not_found", "message": "Missing receipt"}},
         {"role": "assistant", "content": "Confirmed: ✓"},

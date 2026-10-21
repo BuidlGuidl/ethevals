@@ -6,8 +6,8 @@ import {Script} from "forge-std/Script.sol";
 abstract contract ChainSetup is Script {
     constructor() {
         vm.serializeString("chain", "rpcUrl", "http://chain:8545");
-        vm.writeJson(vm.serializeUint("chain", "chainId", block.chainid), "chain.json");
-        vm.writeJson("{}", "private.json");
+        vm.writeJson(vm.serializeUint("chain", "chainId", block.chainid), "chain_context.json");
+        vm.writeJson("{}", "private_chain_context.json");
     }
 
     function fund(address addr, uint256 amount) internal {
@@ -15,34 +15,34 @@ abstract contract ChainSetup is Script {
     }
 
     function chainRecord(string memory name, address value) internal {
-        vm.writeJson(vm.serializeAddress("chain", name, value), "chain.json");
+        vm.writeJson(vm.serializeAddress("chain", name, value), "chain_context.json");
     }
 
     function chainRecord(string memory name, uint256 value) internal {
-        vm.writeJson(vm.serializeUint("chain", name, value), "chain.json");
+        vm.writeJson(vm.serializeUint("chain", name, value), "chain_context.json");
     }
 
     function chainRecord(string memory name, bytes32 value) internal {
-        vm.writeJson(vm.serializeBytes32("chain", name, value), "chain.json");
+        vm.writeJson(vm.serializeBytes32("chain", name, value), "chain_context.json");
     }
 
     function chainRecord(string memory name, string memory value) internal {
-        vm.writeJson(vm.serializeString("chain", name, value), "chain.json");
+        vm.writeJson(vm.serializeString("chain", name, value), "chain_context.json");
     }
 
     function privateRecord(string memory name, address value) internal {
-        vm.writeJson(vm.serializeAddress("private", name, value), "private.json");
+        vm.writeJson(vm.serializeAddress("private", name, value), "private_chain_context.json");
     }
 
     function privateRecord(string memory name, uint256 value) internal {
-        vm.writeJson(vm.serializeUint("private", name, value), "private.json");
+        vm.writeJson(vm.serializeUint("private", name, value), "private_chain_context.json");
     }
 
     function privateRecord(string memory name, bytes32 value) internal {
-        vm.writeJson(vm.serializeBytes32("private", name, value), "private.json");
+        vm.writeJson(vm.serializeBytes32("private", name, value), "private_chain_context.json");
     }
 
     function privateRecord(string memory name, string memory value) internal {
-        vm.writeJson(vm.serializeString("private", name, value), "private.json");
+        vm.writeJson(vm.serializeString("private", name, value), "private_chain_context.json");
     }
 }

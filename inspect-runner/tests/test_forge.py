@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 
-from ethevals.scorers import forge_checks
+from ethevals.images.forge_checks import forge_checks
 import pytest
 
 

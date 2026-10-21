@@ -22,6 +22,7 @@ from pydantic import Field, model_validator
 from .config import Declaration
 from .sandboxes import workspace_files, runner_exec
 from .scoring_base import checks_score, scoring_boundary
+from .images.forge_checks import forge_checks
 
 class TargetScorer(Declaration):
     name: str = Field(default="answer", pattern=r"^[a-z][a-z0-9_]*$")
@@ -100,56 +101,6 @@ def rubric_questions(files) -> dict[str, str]:
     if not questions:
         raise ValueError("rubric.md: no named questions")
     return questions
-
-
-def forge_results(stdout: str) -> dict:
-    try:
-        output = json.loads(stdout)
-    except json.JSONDecodeError:
-        output = None
-    checks = {}
-    suites = {}
-    if isinstance(output, dict):
-        for suite, result in output.items():
-            if not isinstance(result, dict):
-                continue
-            for name, test in result.get("test_results", {}).items():
-                name = name.partition("(")[0]
-                if name in {"setUp", "constructor"}:
-                    name = f"{suite.rsplit(':', 1)[-1]}.{name}"
-                if name in suites:
-                    raise RuntimeError(f"Duplicate Forge check {name!r} in suites {suites[name]!r} and {suite!r}.")
-                suites[name] = suite
-                passed = test["status"] == "Success"
-                checks[name] = {
-                    "passed": passed,
-                    "reason": "Test passed." if passed else " ".join(str(test.get("reason") or test["status"]).split()),
-                }
-    return checks
-
-
-def compiler_diagnostic(stdout: str, stderr: str) -> str | None:
-    lines = [line.strip() for line in (stdout + "\n" + stderr).splitlines()]
-    reason = next((line for line in lines if re.match(r"^(?:Compiler)?Error \([0-9]+\):", line)), None)
-    if reason is None:
-        reason = next((line for line in lines if line.startswith("CompilerError:")), None)
-    if reason is None:
-        reason = next((line for line in lines if any(message in line.lower() for message in
-                      ("incompatible versions", "no solc version exists"))), None)
-    return reason
-
-
-def forge_checks(stdout: str, stderr: str, returncode: int) -> tuple[bool, str, dict]:
-    if returncode < 0 or returncode >= 128:
-        raise RuntimeError(f"Forge terminated with exit code {returncode}.")
-    checks = forge_results(stdout)
-    if checks and returncode and all(check["passed"] for check in checks.values()):
-        raise RuntimeError(f"Forge exited {returncode} after passing every test.")
-    compiled = bool(checks)
-    reason = compiler_diagnostic(stdout, stderr)
-    if not compiled and reason is None:
-        raise RuntimeError(f"Forge exited {returncode} without test results or a compiler diagnostic. {(stderr or stdout).strip()}")
-    return compiled, "Compilation passed." if compiled else reason, checks
 
 
 async def workspace_remappings(box, files):

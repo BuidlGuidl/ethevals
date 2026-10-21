@@ -63,12 +63,12 @@ def local_upstream(monkeypatch):
 
 
 def test_pinned_fork_reads_upstream_and_grades_the_filtered_transaction(tmp_path, local_upstream):
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/transactions/native-transfer", fixture_config())
     declaration = evaluation.declaration.model_copy(update={"chain": ForkChain(fork="mainnet", block=1)})
     files = dict(evaluation.files)
     files["setup/setup.s.sol"] = files["setup/setup.s.sol"].replace(
-        b'        chainRecord("token", address(token));',
-        b'        chainRecord("token", address(token));\n'
+        b'        chainRecord("recipient", vm.randomAddress());',
+        b'        chainRecord("recipient", vm.randomAddress());\n'
         b'        chainRecord("upstreamBalance", address(0x1234).balance);\n'
         b'        fund(address(0x5678), 2 ether);\n'
         b'        vm.rpc("anvil_impersonateAccount", \'["0x0000000000000000000000000000000000005678"]\');\n'

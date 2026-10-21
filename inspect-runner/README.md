@@ -301,7 +301,7 @@ To browse a local run, use `uv run inspect view --log-dir results/logs`.
 
 Setup runs when `setup/setup.s.sol` exists, before the agent's time allowance starts.
 The runner copies `setup/` and `workspace/` into the chain container's `/eval`.
-Its Foundry config maps `forge-std/` and `ethevals/` and permits reads and writes of `chain.json` and `private.json`.
+Its Foundry config maps `forge-std/` and `ethevals/` and permits reads and writes of `chain_context.json` and `private_chain_context.json`.
 Forge installs the compiler each pragma requires.
 The setup command has a 120-second timeout, or 600 seconds on a fork:
 
@@ -310,22 +310,23 @@ forge script setup/setup.s.sol --broadcast --slow --rpc-url http://127.0.0.1:854
 ```
 
 Setup inherits `ChainSetup` through `import {ChainSetup} from "ethevals/ChainSetup.sol";`.
-Its constructor creates `chain.json` with `rpcUrl: "http://chain:8545"` and the chain ID, and an empty `private.json`.
+Its constructor creates `chain_context.json` with `rpcUrl: "http://chain:8545"` and the chain ID.
+It also creates an empty `private_chain_context.json`.
 The helper adds these functions:
 
 | Function | Effect |
 | --- | --- |
 | `fund(addr, amount)` | Calls `anvil_setBalance` through `vm.rpc` to fund the real chain. |
-| `chainRecord(name, value)` | Writes an address, uint, bytes32, or string field into `chain.json`. |
-| `privateRecord(name, value)` | Writes the same value types into `private.json`. |
+| `chainRecord(name, value)` | Writes an address, uint, bytes32, or string field into `chain_context.json`. |
+| `privateRecord(name, value)` | Writes the same value types into `private_chain_context.json`. |
 
 Each record call rewrites its file, so `run()` needs no lifecycle hooks.
 `vm.deal` changes only Forge's simulation. `fund` changes the real chain.
 Wallet creation and broadcasts use Foundry's `vm.createWallet`, `vm.randomUint`, and `vm.startBroadcast`.
 Setup contracts can import contracts from `workspace/`, using only libraries shipped in `setup/` or `workspace/`.
 
-The runner delivers `chain.json` to the agent's `/workspace/chain.json`.
-The scorer receives an untouched copy of `chain.json` and the private file at its root, `/workspace`.
+The Inspect runner copies `chain_context.json` to the agent's `/workspace/chain.json`.
+The scorer receives the same context as `/workspace/chain.json` and the private context as `/workspace/private.json`.
 Validation rejects `workspace/chain.json` and `workspace/private.json`, because setup writes those files.
 The free check applies the prompt-word lint to the delivered chain file.
 

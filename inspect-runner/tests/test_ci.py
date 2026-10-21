@@ -304,7 +304,7 @@ def test_plan_emits_two_evals(tmp_path):
     output, github_output = tmp_path / "plan", tmp_path / "github-output"
     args = argparse.Namespace(output=output, restore_results=False, github_output=github_output)
     assert ci.plan_epochs(args, ["--config", str(config_path), "--rows", str(tmp_path / "rows.jsonl"),
-                                "--evals", "inspect-runner/tests/fixtures/concepts/quiz", "evals/transactions/send-six-decimal-token",
+                                "--evals", "inspect-runner/tests/fixtures/concepts/quiz", "inspect-runner/tests/fixtures/transactions/native-transfer",
                                 "--agents", "test-agent", "--modes", "internet", "--epochs", "1", "--budget", "100"]) == 0
     values = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
     matrix = json.loads(values["matrix"])
@@ -312,7 +312,7 @@ def test_plan_emits_two_evals(tmp_path):
     assert [(row["eval_id"], row["actor_key"], row["mode"], row["epoch"])
             for row in matrix["include"]] == [
         ("concepts/quiz", "test-agent", "internet", 1),
-        ("transactions/send-six-decimal-token", "test-agent", "internet", 1)]
+        ("transactions/native-transfer", "test-agent", "internet", 1)]
 
 
 def test_plan_defers_epochs_above_256_and_next_run_picks_them_up(tmp_path):

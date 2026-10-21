@@ -9,7 +9,7 @@ contract Solution is Script {
     using stdJson for string;
 
     function run() external {
-        string memory chain = vm.readFile("chain.json");
+        string memory chain = vm.readFile("chain_context.json");
         IERC20 token = IERC20(chain.readAddress(".token"));
         uint256 amount = 125 * 10 ** token.decimals() / 10;
         vm.startBroadcast(uint256(chain.readBytes32(".privateKey")));

@@ -40,7 +40,7 @@ def test_fork_compose_keeps_the_rpc_url_out_of_saved_files(tmp_path, monkeypatch
     saved = [file.read_bytes() for file in output.rglob("*") if file.is_file()]
     assert len(saved) == 1
     assert all(fake_url.encode() not in content for content in saved)
-    fresh = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
+    fresh = load_eval(ROOT / "inspect-runner/tests/fixtures/transactions/native-transfer", fixture_config())
     fresh_document = yaml.safe_load(prepare_compose(fresh, output).read_text())
     assert fresh_document["services"]["chain"]["mem_limit"] == "256m"
     assert "environment" not in fresh_document["services"]["chain"]

@@ -19,8 +19,8 @@ async def setup_script(evaluation, environments):
                                timeout=FORK_SETUP_TIMEOUT if evaluation.fork else SETUP_TIMEOUT)
     if not result.success:
         raise RuntimeError(f"Chain setup exited {result.returncode}: {(result.stderr or result.stdout)[-4096:]}")
-    chain = await box.read_file("/eval/chain.json", text=False)
-    private = await box.read_file("/eval/private.json", text=False)
+    chain = await box.read_file("/eval/chain_context.json", text=False)
+    private = await box.read_file("/eval/private_chain_context.json", text=False)
     await environments["default"].write_file("/workspace/chain.json", chain)
     await environments["scorer"].write_file("/workspace/chain.json", chain)
     await environments["scorer"].write_file("/workspace/private.json", private)

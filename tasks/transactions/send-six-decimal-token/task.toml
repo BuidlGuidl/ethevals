@@ -1,0 +1,14 @@
+schema_version = "1.3"
+
+[metadata]
+pillar = "transactions"
+motivation = "Check whether an agent reads token decimals before signing an exact transfer."
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 4096

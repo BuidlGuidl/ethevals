@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from inspect_ai import eval
 from inspect_ai.log import read_eval_log
-from inspect_ai.model import ContentText, ContentToolUse, ModelOutput, get_model
+from inspect_ai.model import ContentText, ContentToolUse, GenerateConfig, ModelOutput, get_model
 
 from support import build_task, fixture_config, valid_search_result
 from ethevals.loader import load_eval
@@ -187,15 +187,12 @@ console.log(JSON.stringify({matches, files, environments}));
             if evaluation.declaration.chain:
                 command = '''set -eu
 read_value() { node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('chain.json', 'utf8'))[process.argv[1]])" "$1"; }
-token=$(read_value token)
 recipient=$(read_value recipient)
 key=$(read_value privateKey)
 rpc=$(read_value rpcUrl)
-decimals=$(cast call "$token" 'decimals()(uint8)' --rpc-url "$rpc")
-amount=$((125 * 10 ** decimals / 10))
-cast send "$token" 'transfer(address,uint256)' "$recipient" "$amount" --private-key "$key" --rpc-url "$rpc"
+cast send "$recipient" --value 2ether --private-key "$key" --rpc-url "$rpc"
 '''
-                return ModelOutput.for_tool_call("mockllm/model", "Bash", {"command": command, "description": "Read decimals and sign the transfer"})
+                return ModelOutput.for_tool_call("mockllm/model", "Bash", {"command": command, "description": "Sign the transfer"})
             solution = (evaluation.folder / "solution/src/BuilderPoints.sol").read_bytes()
             encoded = base64.b64encode(solution).decode()
             command = (
@@ -208,25 +205,27 @@ cast send "$token" 'transfer(address,uint256)' "$recipient" "$amount" --private-
                 arguments = {"command": command, "description": "Write the requested token"}
             return ModelOutput.for_tool_call("mockllm/model", name, arguments)
         if evaluation.declaration.chain and args.answer == "reference" and calls == work_call + 1:
-            command = r'''read_value() { node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('chain.json', 'utf8'))[process.argv[1]])" "$1"; }; cast call "$(read_value token)" "balanceOf(address)(uint256)" "$(read_value recipient)" --rpc-url "$(read_value rpcUrl)"'''
+            command = r'''read_value() { node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('chain.json', 'utf8'))[process.argv[1]])" "$1"; }; cast balance "$(read_value recipient)" --rpc-url "$(read_value rpcUrl)"'''
             return ModelOutput.for_tool_call("mockllm/model", "Bash", {
                 "command": command, "description": "Confirm the recipient balance before reporting success"})
         return ModelOutput.from_content("mockllm/model", "Done.")
 
     def grade(messages, tools, tool_choice, config):
-        evidence = json.loads(messages[1].text)
+        source_text, transcript_text = messages[1].text.split("\nTranscript:\n")
+        sources = json.loads(source_text.removeprefix("Compiled source:\n"))
+        evidence = json.loads(transcript_text)
         if evaluation.declaration.chain and args.answer == "reference":
             call = next(call for message in evidence for call in message.get("tool_calls", [])
-                        if "balanceOf(address)(uint256)" in call["arguments"].get("command", ""))
+                        if "cast balance" in call["arguments"].get("command", ""))
             result = next(message for message in evidence if message.get("tool_call_id") == call["id"])
             assert set(call) == {"id", "function", "arguments"}, call
             assert set(result) == {"role", "tool_call_id", "function", "content"}, result
             assert result["role"] == "tool" and result["function"] == "Bash", result
-            assert "12500000" in result["content"], result
+            assert "2000000000000000000" in result["content"], result
             print(json.dumps({"grader_balance_check": call, "grader_balance_result": result}), flush=True)
         elif "tests" in evaluation.scorer_kinds:
-            assert "src/BuilderPoints.sol" in evidence
-            assert "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol" not in evidence
+            assert "workspace/src/BuilderPoints.sol" in sources
+            assert "workspace/lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol" not in sources
         passed = args.answer == "reference"
         return ModelOutput.from_content("mockllm/model", json.dumps({
             "passed": passed,
@@ -243,7 +242,8 @@ cast send "$token" 'transfer(address,uint256)' "$recipient" "$amount" --private-
                              (completions, "generate_config_from_openai_completions"),
                              (responses_impl, "generate_config_from_openai_responses")]:
             stack.enter_context(patch.object(module, name, capture(getattr(module, name))))
-        logs = eval(task, model_roles={"grader": get_model("mockllm/model", custom_outputs=grade)},
+        logs = eval(task, model_roles={"grader": get_model("mockllm/model", custom_outputs=grade,
+                    config=GenerateConfig(max_tokens=config.grader.max_tokens))},
              log_dir=str(args.output / "logs"), display="plain", retry_on_error=0, fail_on_error=False)
     rows = export_rows(args.output)
     row = rows[0]
@@ -282,7 +282,7 @@ cast send "$token" 'transfer(address,uint256)' "$recipient" "$amount" --private-
         assert not tool_names.intersection({"WebSearch", "websearch", "web_search", "web_search_preview", "web__run"}), tool_names
     if evaluation.declaration.chain:
         assert row["checks"]["verified_transfer"]["passed"] == (args.answer == "reference"), row
-    if "tests" in evaluation.scorer_kinds:
+    elif "tests" in evaluation.scorer_kinds:
         assert len([name for name in row["checks"] if name.startswith("test_")]) == 10, row
         assert "uses_standard_library" in row["checks"], row
         assert row["checks"]["compile"]["passed"] is True, row

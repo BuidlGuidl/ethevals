@@ -43,4 +43,4 @@ def test_exa_key_stays_out_of_each_harness_archive(tmp_path, agent):
 @pytest.mark.docker
 def test_act_rubric_proof(tmp_path):
     test_agent_proof(tmp_path, "claude-code-opus-5.5", "reference",
-                     "evals/transactions/send-six-decimal-token", "internet")
+                     "inspect-runner/tests/fixtures/transactions/native-transfer", "internet")

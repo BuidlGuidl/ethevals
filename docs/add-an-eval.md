@@ -122,12 +122,12 @@ reference: "It is ERC-20."
 
 ```solidity
 function test_recipient_balance() public view {  // (1)
-    assertEq(token.balanceOf(recipient), 12_500_000, "recipient holds 12.5 tokens in base units");  // (2)
+    assertEq(recipient.balance, 2 ether, "recipient holds the requested ether");  // (2)
 }
 ```
 
 1. The function name is the check's name.
-2. If the assertion fails, its message becomes the reason, like `recipient holds 12.5 tokens in base units: 1250000 != 12500000`.
+2. If the assertion fails, its message becomes the reason, like `recipient holds the requested ether: 0 != 2000000000000000000`.
 
 </details>
 
@@ -234,224 +234,10 @@ New quizzes use Harbor task folders under `tasks/`.
 Read [the Harbor guide](harbor.md) for final-reply inputs and the free check.
 The recipes below cover tasks that still use Inspect during the move.
 
-### Eval with a fresh chain
+### Task with a fresh chain
 
-This recipe checks what the agent did on a chain.
-Setup deploys a token with 6 decimals, the agent sends 12.5 of it, and a Forge test reads the recipient's balance.
-It's [`evals/transactions/send-six-decimal-token`](../evals/transactions/send-six-decimal-token).
-
-```text
-send-six-decimal-token/
-├── eval.yaml
-├── workspace/
-│   └── README.md
-├── setup/
-│   ├── setup.s.sol
-│   └── Token.sol
-├── scorer/
-│   ├── tests/
-│   │   └── Transfer.t.sol
-│   └── rubric.md
-└── solution/
-    └── solution.s.sol
-```
-
-```yaml
-motivation: Test whether an agent reads token decimals before signing an exact transfer.
-modes: [internet, skills] # (1)
-prompt: | # (2)
-  can you send 12.5 tokens to the recipient in chain.json? the file has the rpc url,
-  the token address, the recipient and the private key of my funded account.
-chain: anvil # (3)
-```
-
-1. A bare model can't send a transaction, so no `vanilla`.
-2. Setup writes `chain.json` into the workspace.
-3. Starts a fresh local chain for each epoch.
-
-<details>
-<summary><code>workspace/README.md</code></summary>
-
-```markdown
-`chain.json` holds the RPC URL, token address, recipient, and funded private key.
-```
-
-The agent starts with this file.
-
-</details>
-
-<details>
-<summary><code>setup/setup.s.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
-
-import {ChainSetup} from "ethevals/ChainSetup.sol";  // (1)
-import {Vm} from "forge-std/Vm.sol";
-import {Token} from "./Token.sol";  // (2)
-
-contract Setup is ChainSetup {
-    function run() external {
-        Vm.Wallet memory me = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));  // (3)
-        Vm.Wallet memory deployer = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));
-        address recipient = vm.randomAddress();
-        fund(me.addr, 10 ether);  // (4)
-        fund(deployer.addr, 1 ether);
-
-        vm.startBroadcast(deployer.privateKey);
-        Token token = new Token(me.addr);
-        vm.stopBroadcast();
-
-        chainRecord("privateKey", bytes32(me.privateKey));  // (5)
-        chainRecord("recipient", recipient);
-        chainRecord("token", address(token));
-    }
-}
-```
-
-1. Writes `chain.json` and gives you `fund`, `chainRecord`, and `privateRecord`.
-2. Setup can deploy its own contracts.
-3. Makes a new random wallet each epoch.
-4. Sets the wallet's ETH balance.
-5. Adds a field to `chain.json`.
-
-</details>
-
-<details>
-<summary><code>setup/Token.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity =0.8.30;
-
-contract Token {
-    string public constant name = "Six Decimal Token";
-    string public constant symbol = "SIX";
-    uint8 public constant decimals = 6;  // (1)
-    uint256 public constant totalSupply = 1000 * 10 ** 6;
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-
-    constructor(address owner) {
-        balanceOf[owner] = totalSupply;
-        emit Transfer(address(0), owner, totalSupply);
-    }
-
-    function transfer(address to, uint256 amount) external returns (bool) {
-        _transfer(msg.sender, to, amount);
-        return true;
-    }
-
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
-        emit Approval(msg.sender, spender, amount);
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        allowance[from][msg.sender] -= amount;
-        _transfer(from, to, amount);
-        return true;
-    }
-
-    function _transfer(address from, address to, uint256 amount) private {
-        require(to != address(0));
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
-        emit Transfer(from, to, amount);
-    }
-}
-```
-
-1. The trap: 12.5 tokens are 12,500,000 base units.
-
-</details>
-
-<details>
-<summary><code>scorer/tests/Transfer.t.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
-
-import {Test} from "forge-std/Test.sol";
-import {stdJson} from "forge-std/StdJson.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-
-contract TransferCheck is Test {
-    using stdJson for string;
-
-    address recipient;
-    IERC20 token;
-
-    function setUp() public {
-        string memory chain = vm.readFile("chain.json");  // (1)
-        recipient = chain.readAddress(".recipient");
-        token = IERC20(chain.readAddress(".token"));
-        vm.createSelectFork("chain");  // (2)
-    }
-
-    function test_recipient_balance() public view {  // (3)
-        assertEq(token.balanceOf(recipient), 12_500_000, "recipient holds 12.5 tokens in base units");  // (4)
-    }
-}
-```
-
-1. Tests read `chain.json`.
-2. Forks the chain as the agent left it.
-3. Each `test*` function is one check.
-4. The message is the reason when the check fails.
-
-</details>
-
-<details>
-<summary><code>scorer/rubric.md</code></summary>
-
-```markdown
-## verified_transfer
-
-Before reporting success, did the agent confirm on-chain that the transfer landed, for example by reading the transaction receipt or the recipient's token balance?
-```
-
-Each `##` heading is a check. A model answers the question from the transcript.
-
-</details>
-
-<details>
-<summary><code>solution/solution.s.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
-
-import {Script} from "forge-std/Script.sol";
-import {stdJson} from "forge-std/StdJson.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-
-contract Solution is Script {
-    using stdJson for string;
-
-    function run() external {
-        string memory chain = vm.readFile("chain.json");  // (1)
-        IERC20 token = IERC20(chain.readAddress(".token"));
-        uint256 amount = 125 * 10 ** token.decimals() / 10;  // (2)
-        vm.startBroadcast(uint256(chain.readBytes32(".privateKey")));
-        token.transfer(chain.readAddress(".recipient"), amount);
-        vm.stopBroadcast();
-    }
-}
-```
-
-1. Uses only what the agent gets.
-2. Reads the decimals from the chain.
-
-</details>
-
-To prove the test catches a wrong answer, change `amount` to `125 * 10 ** 4` and run `check`.
-The reference pass now fails with your assertion message. Change it back.
+New chain tasks use Harbor sidecars.
+Read [the Harbor guide](harbor.md) for setup, context files, and Forge checks.
 
 ### Eval on a mainnet fork
 
@@ -630,7 +416,7 @@ The solution is a flattened OpenZeppelin token in [`solution/src/BuilderPoints.s
 Install the runner as the [README](../README.md#quickstart) says, then run:
 
 ```sh
-eval_dir=evals/transactions/send-six-decimal-token
+eval_dir=evals/building/erc20-points-token
 uv run ethevals validate --evals "$eval_dir"
 uv run ethevals check --evals "$eval_dir" --output results/author-eval
 ```

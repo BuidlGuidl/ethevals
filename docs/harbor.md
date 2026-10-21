@@ -34,6 +34,24 @@ The task declares that path in `artifacts` so the separate verifier receives it.
 The solution writes a stand-in trajectory for Harbor's oracle agent.
 The nop agent leaves no reply.
 
+Tasks declare sidecars in `environment/docker-compose.yaml`.
+The shared chain image runs setup before its healthcheck releases the agent.
+Setup writes `chain_context.json` on a read-only public volume.
+It writes `private_chain_context.json` in a root-only directory on a separate volume.
+The agent runs as `agent`. The shared verifier runs as root and reads the live chain.
+Only the filtered RPC listens outside the sidecar's loopback interface.
+
+Forge verifiers call `python3 /opt/forge_checks.py` from `tests/test.sh`.
+The helper copies the agent's files and tests into a fresh project.
+It disables FFI and scopes library remappings to each agent project.
+It writes `compile` and each test's check, with contract names for failing setup and constructors.
+Compiler download failures raise errors instead of failed checks.
+The helper keeps Forge stdout and stderr beside `checks.json`.
+
+Criteria live in `tests/criteria.md`.
+Each `##` heading names a check and the following text asks a yes-or-no question.
+The free check prints a skip note because the judge needs a paid API call.
+
 Pull-request CI calls the free check through `scripts/ci.py checks`.
 The existing Inspect free check covers folders that remain under `evals/` during the move.
 

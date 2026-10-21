@@ -4,7 +4,8 @@ from pathlib import Path
 
 BUILD_INPUTS = {
     "runner": ("Dockerfile",),
-    "chain": ("Chain.Dockerfile", "rpc_filter.py", "rpc_methods.json", "ChainSetup.sol"),
+    "chain": ("Chain.Dockerfile", "rpc_filter.py", "rpc_methods.json", "ChainSetup.sol",
+              "setup-foundry.toml", "verify-foundry.toml", "forge_checks.py", "start_chain.py"),
 }
 
 

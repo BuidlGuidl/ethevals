@@ -34,7 +34,7 @@ def run_probe(evaluation, tmp_path, probe=None, answer="empty"):
 
 
 def test_agent_and_scorer_network_isolation(tmp_path):
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/transactions/native-transfer", fixture_config())
     observed = {}
 
     @solver
@@ -54,7 +54,7 @@ def test_agent_and_scorer_network_isolation(tmp_path):
 
 
 def test_slow_setup_preserves_agent_time(tmp_path):
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/transactions/native-transfer", fixture_config())
     files = {**evaluation.files, "setup/setup.s.sol": evaluation.files["setup/setup.s.sol"].replace(
         b'    function run() external {', b'    function run() external {\n        vm.sleep(31_000);')}
     # Keep grading below Inspect's separate 15-second scoring allowance.
@@ -82,7 +82,7 @@ def test_slow_setup_preserves_agent_time(tmp_path):
 
 
 def test_setup_records_and_real_funding(tmp_path):
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/transactions/native-transfer", fixture_config())
     extra = b'''
         address funded = address(0x1234);
         address simulated = address(0x5678);
@@ -99,7 +99,7 @@ def test_setup_records_and_real_funding(tmp_path):
         privateRecord("note", string("hidden"));
 '''
     files = {**evaluation.files, "setup/setup.s.sol": evaluation.files["setup/setup.s.sol"].replace(
-        b'        chainRecord("token", address(token));', b'        chainRecord("token", address(token));' + extra)}
+        b'        chainRecord("recipient", vm.randomAddress());', b'        chainRecord("recipient", vm.randomAddress());' + extra)}
     files["scorer/tests/Funding.t.sol"] = b'''
 pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
@@ -148,19 +148,16 @@ contract FundingCheck is Test {
 
 TRANSFER = '''set -eu
 read_value() { node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('chain.json', 'utf8'))[process.argv[1]])" "$1"; }
-token=$(read_value token)
 recipient=$(read_value recipient)
 key=$(read_value privateKey)
 rpc=$(read_value rpcUrl)
-decimals=$(cast call "$token" 'decimals()(uint8)' --rpc-url "$rpc")
-amount=$((125 * 10 ** decimals / 10))
-cast send "$token" 'transfer(address,uint256)' "$recipient" "$amount" --private-key "$key" --rpc-url "$rpc"
+cast send "$recipient" --value 2ether --private-key "$key" --rpc-url "$rpc"
 '''
 
 
 @pytest.mark.parametrize("variant", ["reference", "wrong", "cheat", "pending"])
 def test_transfers_and_grading_boundary(tmp_path, variant):
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/transactions/native-transfer", fixture_config())
     observed = {}
     files = dict(evaluation.files)
     files["scorer/tests/Transfer.t.sol"] = files["scorer/tests/Transfer.t.sol"].replace(
@@ -178,9 +175,9 @@ def test_transfers_and_grading_boundary(tmp_path, variant):
             if variant in {"reference", "wrong", "pending"}:
                 source = TRANSFER
                 if variant == "wrong":
-                    source = source.replace("125 * 10 ** decimals / 10", "13 * 10 ** decimals")
+                    source = source.replace("--value 2ether", "--value 3ether")
                 if variant == "pending":
-                    source = source.replace('cast send "$token"', 'cast send --async --nonce 1 "$token"')
+                    source = source.replace('cast send "$recipient"', 'cast send --async --nonce 1 "$recipient"')
                 result = await runner_exec(box, ["/bin/bash", "-c", source], timeout=60)
                 observed["send"] = (result.returncode, result.stderr)
                 if variant == "pending":
@@ -222,17 +219,17 @@ if curl -sS --connect-timeout 2 http://chain:8546; then exit 1; fi
     if variant == "reference":
         assert balance == {"passed": True, "reason": "Test passed."}
     else:
-        actual = 13000000 if variant == "wrong" else 0
+        actual = 3 * 10**18 if variant == "wrong" else 0
         assert balance == {"passed": False,
-            "reason": f"recipient holds 12.5 tokens in base units: {actual} != 12500000"}
+            "reason": f"recipient holds the requested ether: {actual} != 2000000000000000000"}
 
 
 def test_setup_rejects_agent_visible_words(tmp_path):
-    evaluation = load_eval(ROOT / "evals/transactions/send-six-decimal-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/transactions/native-transfer", fixture_config())
     files = dict(evaluation.files)
     files["setup/setup.s.sol"] = files["setup/setup.s.sol"].replace(
-        b'        chainRecord("token", address(token));',
-        b'        chainRecord("token", address(token));\n        chainRecord("note", string("EVAL"));')
+        b'        chainRecord("recipient", vm.randomAddress());',
+        b'        chainRecord("recipient", vm.randomAddress());\n        chainRecord("note", string("EVAL"));')
     _, row = run_probe(replace(evaluation, files=files), tmp_path, answer="reference")
     assert row["status"] == "error", row
     assert "forbidden word 'EVAL'" in row["error_reason"]

@@ -54,6 +54,9 @@ async def free_check(paths: list[Path], output: Path) -> None:
 
     if output.exists():
         raise ValueError(f"{output}: use a fresh output directory for each free check")
+    for path in paths:
+        if (path / "tests/criteria.md").is_file():
+            print(f"{path}: criteria skipped in the free check; the judge needs a paid API call.", flush=True)
     names = {}
     for agent, expected in (("oracle", True), ("nop", False)):
         config = JobConfig(
