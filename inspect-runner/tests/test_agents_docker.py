@@ -11,7 +11,7 @@ import pytest
 @pytest.mark.parametrize("agent", ["claude-code-opus-5.5", "codex-cli-gpt-5.5", "opencode-kimi-k3", "opencode-glm-5.3"])
 @pytest.mark.parametrize("answer", ["reference", "empty"])
 @pytest.mark.parametrize("evaluation,mode", [
-    ("evals/building/erc20-points-token", "internet"),
+    ("inspect-runner/tests/fixtures/building/counter", "internet"),
     ("inspect-runner/tests/fixtures/concepts/quiz", "internet"),
     ("inspect-runner/tests/fixtures/concepts/quiz", "skills"),
 ])

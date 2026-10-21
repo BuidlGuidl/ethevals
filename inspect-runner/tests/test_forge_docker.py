@@ -66,7 +66,7 @@ class DockerBox:
 def containers(tmp_path, environment=None):
     assert not any(os.environ.get(name) for name in (
         "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/building/counter", fixture_config())
     path = prepare_compose(evaluation, tmp_path)
     data = yaml.safe_load(path.read_bytes())
     for service in data["services"].values():
@@ -89,7 +89,7 @@ def test_compose_sees_only_the_normalized_document(tmp_path):
         validate_compose(tmp_path / "binary.yaml", data=yaml.safe_dump(data).encode())
     data["services"]["extra"]["environment"] = {"TOKEN": "$$SECRET_PROBE"}
     raw = yaml.safe_dump(data).encode() + b"# author comment\n"
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", fixture_config())
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/building/counter", fixture_config())
     path = prepare_compose(replace(evaluation, files={**evaluation.files, "compose.yaml": raw}), tmp_path)
     result = command(["docker", "compose", "-f", str(path), "config", "--format", "json"],
                      env={**os.environ, "SECRET_PROBE": "inert-canary"})
@@ -156,19 +156,19 @@ def test_unused_library_does_not_change_compiled_rubric_evidence(tmp_path):
 def submit(evaluation, variant):
     async def solve(state, generate):
         await run_solution(evaluation, sandbox())
-        source = evaluation.files["solution/src/BuilderPoints.sol"]
+        source = evaluation.files["solution/src/Counter.sol"]
         if variant == "setup":
-            source = source.replace(b"_mint(msg.sender, 100_000 * 10 ** 6);",
-                                    b'require(false, "constructor failed"); _mint(msg.sender, 100_000 * 10 ** 6);')
+            source = source.replace(b"constructor() {}",
+                                    b'constructor() { revert("constructor failed"); }')
         elif variant == "snapshot":
             result = await sandbox().exec(["bash", "-c", """
 mkdir /tmp/ethevals-workspace.tar.gz
-printf '// initial\n' > /workspace/src/Counter.sol
-nohup sh -c 'i=0; while true; do i=$((i+1)); printf "// %s\n" "$i" > /workspace/src/Counter.sol; sleep 0.05; done' >/dev/null 2>&1 &
+printf '// initial\n' > /workspace/src/Writer.sol
+nohup sh -c 'i=0; while true; do i=$((i+1)); printf "// %s\n" "$i" > /workspace/src/Writer.sol; sleep 0.05; done' >/dev/null 2>&1 &
 echo $! > /workspace/writer.pid
 """])
             assert result.success, result.stderr
-        await sandbox().write_file("/workspace/src/BuilderPoints.sol", source)
+        await sandbox().write_file("/workspace/src/Counter.sol", source)
         return await generate(state)
     return solve
 
@@ -178,9 +178,9 @@ def frozen_writer(underlying):
     async def score(state, target):
         result = await underlying(state, target)
         box = sandbox()
-        before = await box.read_file("/workspace/src/Counter.sol")
+        before = await box.read_file("/workspace/src/Writer.sol")
         await runner_exec(box, ["/usr/bin/sleep", "0.2"], user="root", cwd="/")
-        after = await box.read_file("/workspace/src/Counter.sol")
+        after = await box.read_file("/workspace/src/Writer.sol")
         assert before == after, (before, after)
         status = await runner_exec(box, ["/bin/sh", "-c", 'ps -o stat= -p "$(cat /workspace/writer.pid)"'], user="root", cwd="/")
         assert status.stdout.strip().startswith("T"), status
@@ -191,15 +191,15 @@ def frozen_writer(underlying):
 def test_reference_setup_failure_and_frozen_writer(tmp_path):
     output = tmp_path / "proof"
     config = fixture_config()
-    original = load_eval(Path("evals/building/erc20-points-token"), config)
+    original = load_eval(Path("inspect-runner/tests/fixtures/building/counter"), config)
     files = dict(original.files)
     files["scorer/tests/ImageLibrary.t.sol"] = b'''pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
-import {BuilderPoints} from "workspace/src/BuilderPoints.sol";
-contract ImageLibraryTest is Test { function testImageLibrary() public { assertEq(new BuilderPoints().balanceOf(address(this)), 100_000 * 10 ** 6); } } // PRIVATE_SOURCE_SENTINEL
+import {Counter} from "workspace/src/Counter.sol";
+contract ImageLibraryTest is Test { function testImageLibrary() public { assertEq(new Counter().value(), 7); } } // PRIVATE_SOURCE_SENTINEL
 contract ConstructorTest is Test {
-    BuilderPoints token = new BuilderPoints();
-    function testConstructed() public view { assertEq(token.totalSupply(), 100_000 * 10 ** 6); }
+    Counter token = new Counter();
+    function testConstructed() public view { assertEq(token.value(), 7); }
 }
 '''
     evaluation = replace(original, files=files, hash=content_hash(files))
@@ -328,7 +328,7 @@ contract CounterTest is Test {
 
 def test_context_remappings_keep_each_projects_library_private(tmp_path):
     config = fixture_config()
-    original = load_eval(ROOT / "evals/building/erc20-points-token", config)
+    original = load_eval(ROOT / "inspect-runner/tests/fixtures/building/counter", config)
     submitted = {
         "foundry.toml": original.files["workspace/foundry.toml"],
         "remappings.txt": b"../scorer/:scorer/helpers/=lib/evil/\n",
@@ -351,7 +351,7 @@ contract ScopedLibrariesTest is Test {
     function test_author_helper() public pure { assertEq(AuthorHelper.value(), 99, "author helper"); }
 }
 '''
-    files = {**original.files, "scorer/tests/BuilderPoints.t.sol": tests,
+    files = {**original.files, "scorer/tests/Counter.t.sol": tests,
              "scorer/helpers/AuthorHelper.sol": b'pragma solidity 0.8.30; library AuthorHelper { function value() internal pure returns (uint256) { return 99; } }'}
     evaluation = replace(original, files=files, hash=content_hash(files))
     task = build_task(evaluation, config, None, "internet", "reference", 1, prepare_compose(evaluation, tmp_path))

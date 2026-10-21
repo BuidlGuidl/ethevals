@@ -13,7 +13,7 @@ from support import build_task, fixture_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "evals/building/erc20-points-token"
+BUILD = ROOT / "inspect-runner/tests/fixtures/building/counter"
 
 
 def test_loader_preserves_target_and_prompt(folder):
@@ -214,7 +214,7 @@ def test_folder_rules(folder, change, reason):
 def test_check_names_are_unique_across_scorers(tmp_path, source, rubric, target, reason):
     folder = tmp_path / "building/token"
     shutil.copytree(BUILD, folder)
-    (folder / "scorer/tests/BuilderPoints.t.sol").write_text(f"contract Check {{ {source} }}")
+    (folder / "scorer/tests/Counter.t.sol").write_text(f"contract Check {{ {source} }}")
     (folder / "scorer/rubric.md").write_text(rubric)
     (folder / "scorer/target.yaml").write_text(f"name: {target}\ntarget: done\n")
     with pytest.raises(ValueError, match=reason):
@@ -235,7 +235,7 @@ def test_validate_rejects_tests_with_only_a_helper(tmp_path):
     from support import eval_cli
     folder = tmp_path / "building" / "helpers"
     shutil.copytree(BUILD, folder)
-    (folder / "scorer/tests/BuilderPoints.t.sol").unlink()
+    (folder / "scorer/tests/Counter.t.sol").unlink()
     (folder / "scorer/tests/Helper.sol").write_text("contract Helper {}")
     result = eval_cli("validate", "--evals", folder)
     assert result.returncode == 2
@@ -245,6 +245,6 @@ def test_validate_rejects_tests_with_only_a_helper(tmp_path):
 def test_unclaimed_helper_functions_are_not_checks(tmp_path):
     folder = tmp_path / "building" / "helpers"
     shutil.copytree(BUILD, folder)
-    (folder / "scorer/tests/Helper.sol").write_text("contract Helper { function test_name_and_symbol() public {} }")
+    (folder / "scorer/tests/Helper.sol").write_text("contract Helper { function test_value() public {} }")
     evaluation = load_eval(folder, fixture_config())
     assert evaluation.scorer_kinds == ["tests", "rubric"]

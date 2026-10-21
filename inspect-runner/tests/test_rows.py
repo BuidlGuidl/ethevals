@@ -37,7 +37,7 @@ YES = '{"passed": true, "reason": "Uses standard transfers."}'
 @solver
 def submit_source(source):
     async def solve(state, generate):
-        await sandbox().write_file("/workspace/src/BuilderPoints.sol", source)
+        await sandbox().write_file("/workspace/src/Counter.sol", source)
         return await generate(state)
     return solve
 
@@ -260,7 +260,7 @@ def test_compile_failure_grades_the_transcript_without_source(scoring_case):
     assert row["status"] == "failed"
     assert row["checks"] == {
         "compile": {"passed": False, "reason": "Error (6933): Expected primary expression."},
-        "uses_standard_library": {"passed": False, "reason": "Owner can seize tokens."}}
+        "reviewed_source": {"passed": False, "reason": "Owner can seize tokens."}}
     source_text, transcript_text = scoring_case["requests"][0][1].text.split("\nTranscript:\n")
     assert json.loads(source_text.split("\n", 1)[1]) == {}
     assert json.loads(transcript_text)[0]["role"] == "user"

@@ -25,7 +25,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("answer", choices=["reference", "empty"])
     parser.add_argument("--agent", choices=list(fixture_config().agents), required=True)
-    parser.add_argument("--eval", default="evals/building/erc20-points-token")
+    parser.add_argument("--eval", default="inspect-runner/tests/fixtures/building/counter")
     parser.add_argument("--mode", choices=["internet", "skills"], default="internet")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--exa-canary", action="store_true")
@@ -193,16 +193,16 @@ rpc=$(read_value rpcUrl)
 cast send "$recipient" --value 2ether --private-key "$key" --rpc-url "$rpc"
 '''
                 return ModelOutput.for_tool_call("mockllm/model", "Bash", {"command": command, "description": "Sign the transfer"})
-            solution = (evaluation.folder / "solution/src/BuilderPoints.sol").read_bytes()
+            solution = (evaluation.folder / "solution/src/Counter.sol").read_bytes()
             encoded = base64.b64encode(solution).decode()
             command = (
-                f"printf '%s' '{encoded}' | base64 -d > /workspace/src/BuilderPoints.sol && forge build"
+                f"mkdir -p /workspace/src && printf '%s' '{encoded}' | base64 -d > /workspace/src/Counter.sol && forge build"
             )
             if harness == "codex_cli":
                 name, arguments = "exec_command", {"cmd": command}
             else:
                 name = "Bash" if harness == "claude_code" else "bash"
-                arguments = {"command": command, "description": "Write the requested token"}
+                arguments = {"command": command, "description": "Write the requested contract"}
             return ModelOutput.for_tool_call("mockllm/model", name, arguments)
         if evaluation.declaration.chain and args.answer == "reference" and calls == work_call + 1:
             command = r'''read_value() { node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('chain.json', 'utf8'))[process.argv[1]])" "$1"; }; cast balance "$(read_value recipient)" --rpc-url "$(read_value rpcUrl)"'''
@@ -224,13 +224,15 @@ cast send "$recipient" --value 2ether --private-key "$key" --rpc-url "$rpc"
             assert "2000000000000000000" in result["content"], result
             print(json.dumps({"grader_balance_check": call, "grader_balance_result": result}), flush=True)
         elif "tests" in evaluation.scorer_kinds:
-            assert "workspace/src/BuilderPoints.sol" in sources
-            assert "workspace/lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol" not in sources
+            if args.answer == "reference":
+                assert sources["workspace/src/Counter.sol"].startswith("// SPDX-License-Identifier: MIT")
+            else:
+                assert sources == {}
         passed = args.answer == "reference"
         return ModelOutput.from_content("mockllm/model", json.dumps({
             "passed": passed,
             "reason": ("The agent checked the recipient balance before reporting success." if evaluation.declaration.chain
-                       else "The submitted token uses OpenZeppelin without holder controls.") if passed else "No completed work.",
+                       else "The submitted source returns seven.") if passed else "No completed work.",
         }))
 
     provider = task.model.source if harness == "codex_cli" else task.model
@@ -283,9 +285,9 @@ cast send "$recipient" --value 2ether --private-key "$key" --rpc-url "$rpc"
     if evaluation.declaration.chain:
         assert row["checks"]["verified_transfer"]["passed"] == (args.answer == "reference"), row
     elif "tests" in evaluation.scorer_kinds:
-        assert len([name for name in row["checks"] if name.startswith("test_")]) == 10, row
-        assert "uses_standard_library" in row["checks"], row
-        assert row["checks"]["compile"]["passed"] is True, row
+        assert len([name for name in row["checks"] if name.startswith("test_")]) == (1 if args.answer == "reference" else 0), row
+        assert "reviewed_source" in row["checks"], row
+        assert row["checks"]["compile"]["passed"] == (args.answer == "reference"), row
         assert row["status"] == ("passed" if args.answer == "reference" else "failed"), row
 
 

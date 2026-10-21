@@ -181,7 +181,7 @@ def test_plan_is_key_free_and_reserves_remaining_attempts(tmp_path):
 
 def test_build_plan_reserves_the_grader_context_window():
     config = fixture_config()
-    evaluation = load_eval(ROOT / "evals/building/erc20-points-token", config)
+    evaluation = load_eval(ROOT / "inspect-runner/tests/fixtures/building/counter", config)
     agents_for, _ = select_actors(config, agents=["claude-code-opus-5.5"], modes=["internet"], planning=True)
     report = budget_check(plan([evaluation], config, agents_for, [], epochs=1).report, 27.6)
     assert report["missing"][0]["per_attempt_usd"] == pytest.approx(12.9608)

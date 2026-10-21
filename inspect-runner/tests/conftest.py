@@ -13,7 +13,7 @@ from support import build_task, fixture_config, fixture_quiz
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "evals/building/erc20-points-token"
+BUILD = ROOT / "inspect-runner/tests/fixtures/building/counter"
 
 
 def pytest_addoption(parser):

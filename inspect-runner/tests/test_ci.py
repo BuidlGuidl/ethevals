@@ -407,7 +407,7 @@ def test_publish_success_folds_links_and_errors_but_failure_keeps_committed_rows
 
 def test_failed_preparation_stays_missing_without_using_attempts(tmp_path, monkeypatch):
     config = fixture_config()
-    build = load_eval(ROOT / "evals/building/erc20-points-token", config)
+    build = load_eval(ROOT / "inspect-runner/tests/fixtures/building/counter", config)
     agents_for, grade = select_actors(config, answer="reference")
 
     def failed(*args):
@@ -421,7 +421,7 @@ def test_failed_preparation_stays_missing_without_using_attempts(tmp_path, monke
     assert json.loads((tmp_path / "preparation-errors.json").read_text())[0]["error"] == "Docker build failed"
     report = plan([build], config, agents_for, read_rows(tmp_path / "rows.jsonl"), epochs=1).report
     assert [(r["eval_id"], r["attempt"], r["remaining_attempts"]) for r in report["missing"]] == [
-        ("building/erc20-points-token", 1, 2)]
+        ("building/counter", 1, 2)]
 
 
 def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, monkeypatch):

@@ -251,190 +251,22 @@ Setup can call anvil methods through `vm.rpc`, like `anvil_impersonateAccount`.
 See [`evals/transactions/supply-usdc-to-aave`](../evals/transactions/supply-usdc-to-aave).
 Set `MAINNET_RPC_URL` before you run `check`.
 
-### Eval that tests the agent's code
-
-This recipe checks code the agent writes.
-Forge tests import the agent's contract, and a rubric asks how the agent built it.
-It's [`evals/building/erc20-points-token`](../evals/building/erc20-points-token).
-
-```text
-erc20-points-token/
-├── eval.yaml
-├── workspace/
-│   └── foundry.toml
-├── scorer/
-│   ├── tests/
-│   │   └── BuilderPoints.t.sol
-│   └── rubric.md
-└── solution/
-    └── src/
-        └── BuilderPoints.sol
-```
-
-```yaml
-motivation: Check whether an agent can build a capped community token on a well-known library.
-modes: [internet, skills]
-prompt: | # (1)
-  can you help me build a token for our community? put it in src/BuilderPoints.sol as a contract
-  called BuilderPoints, with no constructor arguments. call it Builder Points (BPT), with the same
-  decimals as USDC. mint 100,000 to whoever deploys it. the deployer should be able to mint more
-  to any address later, but the total supply must never go over 1,000,000. it's a Foundry project
-  on solidity 0.8.30. it's going to hold real value for our members, so follow best practices.
-```
-
-1. Names the file, the contract, and the constructor, because the tests import and deploy them.
-
-<details>
-<summary><code>workspace/foundry.toml</code></summary>
-
-```toml
-[profile.default]
-src = "src"  # (1)
-test = "test"
-libs = ["lib"]
-solc = "0.8.30"
-```
-
-1. The agent's contract goes in `src/`.
-
-</details>
-
-<details>
-<summary><code>scorer/tests/BuilderPoints.t.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
-
-import {Test} from "forge-std/Test.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-import {BuilderPoints} from "workspace/src/BuilderPoints.sol";  // (1)
-
-contract BuilderPointsTest is Test {
-    uint256 constant UNIT = 10 ** 6;
-    uint256 constant INITIAL = 100_000 * UNIT;
-    uint256 constant CAP = 1_000_000 * UNIT;
-
-    BuilderPoints points;
-    IERC20 token;
-    address alice = makeAddr("alice");
-    address bob = makeAddr("bob");
-
-    function setUp() public {
-        points = new BuilderPoints();  // (2)
-        token = IERC20(address(points));
-    }
-
-    function test_decimals_match_usdc() public view {
-        assertEq(token.decimals(), 6, "decimals");
-    }
-
-    function test_name_and_symbol() public view {
-        assertEq(token.name(), "Builder Points", "name");
-        assertEq(token.symbol(), "BPT", "symbol");
-    }
-
-    function test_deployer_holds_initial_supply() public view {
-        assertEq(token.totalSupply(), INITIAL, "total supply");
-        assertEq(token.balanceOf(address(this)), INITIAL, "deployer balance");
-    }
-
-    function test_deployer_can_mint() public {
-        points.mint(alice, 5 * UNIT);
-        assertEq(token.balanceOf(alice), 5 * UNIT, "alice balance after mint");
-        assertEq(token.totalSupply(), INITIAL + 5 * UNIT, "total supply after mint");
-    }
-
-    function test_non_deployer_mint_reverts() public {
-        vm.prank(alice);
-        vm.expectRevert();  // (3)
-        points.mint(alice, 1);
-    }
-
-    function test_cap_is_one_million() public {
-        points.mint(alice, CAP - INITIAL);
-        assertEq(token.totalSupply(), CAP, "total supply at the cap");
-        vm.expectRevert();
-        points.mint(alice, 1);
-    }
-
-    function test_holders_can_transfer() public {
-        assertTrue(token.transfer(alice, 5 * UNIT), "transfer returns true");
-        vm.prank(alice);
-        assertTrue(token.transfer(bob, 2 * UNIT), "holder transfer returns true");
-        assertEq(token.balanceOf(alice), 3 * UNIT, "alice balance");
-        assertEq(token.balanceOf(bob), 2 * UNIT, "bob balance");
-    }
-
-    function test_transfer_over_balance_reverts() public {
-        vm.prank(alice);
-        vm.expectRevert();
-        token.transfer(bob, 1);
-    }
-
-    function test_approve_and_transfer_from() public {
-        assertTrue(token.approve(alice, 3 * UNIT), "approve returns true");
-        assertEq(token.allowance(address(this), alice), 3 * UNIT, "allowance");
-        vm.prank(alice);
-        assertTrue(token.transferFrom(address(this), bob, 3 * UNIT), "transferFrom returns true");
-        assertEq(token.balanceOf(bob), 3 * UNIT, "bob balance");
-        assertEq(token.allowance(address(this), alice), 0, "allowance spent");
-    }
-
-    function test_transfer_from_without_allowance_reverts() public {
-        vm.prank(alice);
-        vm.expectRevert();
-        token.transferFrom(address(this), bob, 1);
-    }
-}
-```
-
-1. Tests import the agent's code from `workspace/`.
-2. The test contract deploys the token, so it is the deployer.
-3. Any revert passes, so the agent can use its own errors.
-
-</details>
-
-<details>
-<summary><code>scorer/rubric.md</code></summary>
-
-```markdown
-## uses_standard_library
-
-Did the agent build the ERC-20 on a well-known library such as OpenZeppelin or Solady?
-```
-
-Tests can't tell whether the agent used a library. The grader can.
-
-</details>
-
-The solution is a flattened OpenZeppelin token in [`solution/src/BuilderPoints.sol`](../evals/building/erc20-points-token/solution/src/BuilderPoints.sol).
-`check` copies `solution/` over the workspace, so the file lands at `src/BuilderPoints.sol`.
-
-## Check your eval
+## Check your task
 
 Install the runner as the [README](../README.md#quickstart) says, then run:
 
 ```sh
-eval_dir=evals/building/erc20-points-token
-uv run ethevals validate --evals "$eval_dir"
-uv run ethevals check --evals "$eval_dir" --output results/author-eval
+uv run ethevals free-check --output results/author-task
 ```
 
-`check` runs the eval without a model, so it skips rubrics. It runs two passes:
+`free-check` lints every Harbor task and runs two trials without a model:
 
-- With the solution, every check must pass.
-- Untouched, at least one check must fail.
+- In the oracle run, every check must pass.
+- In the nop run, at least one check must fail.
 
-It ends with:
-
-```text
-3 results rows: results/author-eval/reference/rows.jsonl
-3 results rows: results/author-eval/empty/rows.jsonl
-```
-
-Each row is one epoch and lists its checks with their `reason`.
-`check` needs Docker, except for a `vanilla` quiz.
+Each trial writes named checks and their reasons in `verifier/checks.json`.
+The command needs Docker and skips criteria that need a paid judge.
+See [Harbor tasks](harbor.md) for selectors and output paths.
 
 ## Open the pull request
 

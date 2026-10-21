@@ -73,7 +73,7 @@ The archive permits at most 50 MiB of contents and 20,000 files.
 The scorer runs on the chain image and stays idle until grading.
 It starts neither Anvil nor the RPC filter.
 The scorer root mirrors the eval folder, with captured files under `workspace/` and the author's full folder under `scorer/`.
-Tests import the agent's files by path, such as `workspace/src/BuilderPoints.sol`.
+Tests import the agent's files by path, such as `workspace/src/Counter.sol`.
 The generated `foundry.toml` sets both `src` and `test` to `scorer/tests`.
 Forge compiles those tests and their imports.
 Broken files that no test imports do not fail compilation.
