@@ -37,7 +37,7 @@ def parse_args(argv=None):
         command.add_argument("--models", nargs="+", help="Model keys from the job config.")
         command.add_argument("--modes", nargs="+", help="Modes from the job config: vanilla, internet, or skills.")
         repeats = command.add_mutually_exclusive_group()
-        repeats.add_argument("--trials", type=positive)
+        repeats.add_argument("--trials", type=positive, help="Number of repeated trials per task, agent, and mode.")
         repeats.add_argument("--trial", type=positive, help="One numbered trial with one task, agent, and mode.")
         command.add_argument("--retry-errors", action="store_true", help="Grant one further attempt to selected errors.")
         command.add_argument("--rows", type=Path, default=Path("results/rows.jsonl"), help="Rows used to find missing trials.")
@@ -45,10 +45,10 @@ def parse_args(argv=None):
     parsers["export-hf"].add_argument("--hf-repo")
     parsers["export-hf"].add_argument("--license", help="HF dataset license identifier. Unset means undecided.")
     publisher = parsers["publish-logs"]
-    publisher.add_argument("--repo", required=True, help="GitHub owner/repo for log assets.")
+    publisher.add_argument("--repo", required=True, help="GitHub owner/repo for trajectories and verifier output.")
     publisher.add_argument("--run-id", required=True, help="Unique results run ID. The release tag is results-<run-id>.")
     publisher.add_argument("--commit", required=True, help="Full source commit SHA for the release tag.")
-    publisher.add_argument("--publish", action="store_true", help="Create the GitHub release and upload referenced logs with gh.")
+    publisher.add_argument("--publish", action="store_true", help="Create the GitHub release and upload trajectories and verifier output with gh.")
     return parser, parser.parse_args(argv)
 
 

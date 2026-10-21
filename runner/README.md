@@ -19,6 +19,7 @@ List shared image build inputs in [images/tag.py](ethevals/images/tag.py).
 
 ## Plan and run
 
+Run paid trials only with explicit spending intent and a reviewed budget.
 [Job settings](ethevals/job.yaml) select agents, models, CLI versions, modes, and the time limit.
 Use `--config` for a separate job configuration.
 Use `--tasks`, `--agents`, `--models`, and `--modes` to select trials.
@@ -103,8 +104,24 @@ See [Dataset publication](../docs/harbor.md#dataset-publication) for standalone 
 
 ## Maintainer checks
 
-Unset provider keys before free work.
-Run `uv run pytest -q` for unit tests.
+Use Python 3.13, uv, Node.js 22 or later, pnpm 9.14.2, and Docker with Compose.
+Keep all five provider key variables unset for free work.
+From the repository root, run these commands in one shell:
+
+```sh
+unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
+uv sync --frozen
+(cd site && pnpm install --frozen-lockfile)
+uv run ethevals lint
+uv run pytest -q
+(cd site && pnpm test && pnpm typecheck && pnpm lint && pnpm build)
+```
+
+On shared Docker, wait for other sessions' ETH Evals containers to finish before starting containers.
+Run `docker ps` before starting containers.
+Give Docker at least 7 GiB for one trial with a chain.
+The default concurrency is one.
+
 Run `uv run pytest -q --run-docker -m docker` for container checks.
 Run `uv run python scripts/ci.py checks --output results/ci` for the full PR job.
 Use a fresh output directory.

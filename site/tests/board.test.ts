@@ -64,7 +64,7 @@ test("an error-only cell has no score, and a time limit counts as a failure", ()
   assert.equal(limited.trials[0].checks.answer.reason, "Trial reached time limit 300.");
 });
 
-test("pillar means give evals equal weight and skip evals without scored trials", () => {
+test("pillar means give tasks equal weight and skip tasks without scored trials", () => {
   const board = buildBoard([evaluation, { ...evaluation, id: "concepts/b" }, { ...evaluation, id: "concepts/c" },
     { ...evaluation, id: "concepts/d", modes: ["vanilla"] }], [
     row(), row({ task_id: "concepts/b" }), row({ task_id: "concepts/b", trial: 2, ...failure }),
@@ -84,7 +84,7 @@ test("mode, agent, model, and effort keep different agents apart", () => {
   assert.deepEqual(buildBoard([evaluation], rows).tables.vanilla.agents, [{ model: "model-a", agent: null, effort: "high" }]);
 });
 
-test("the knowledge table and its panel data include only declared vanilla evals", () => {
+test("the knowledge table and its panel data include only declared vanilla tasks", () => {
   const board = buildBoard([evaluation, { ...evaluation, id: "building/token", pillar: "building", modes: ["internet"] }],
     [row({ mode: "vanilla", agent: null })]);
   assert.deepEqual(board.tables.vanilla.pillars.concepts.evals.map((entry) => entry.id), ["concepts/units"]);
@@ -93,7 +93,7 @@ test("the knowledge table and its panel data include only declared vanilla evals
   assert.equal(board.tables.internet.pillars.building.evals[0].id, "building/token");
 });
 
-test("a pillar with no declared evals for a mode differs from an unsupported eval", () => {
+test("a pillar with no declared tasks for a mode differs from an unsupported task", () => {
   const board = buildBoard([evaluation, { ...evaluation, id: "security/check", pillar: "security", modes: ["vanilla"] }], [row()]);
   assert.deepEqual(board.tables.internet.pillars.transactions.cells[agentKey(agent)],
     { state: "empty", score: null, passed: 0, total: 0, errors: 0, scoredEvals: 0 });
@@ -102,16 +102,16 @@ test("a pillar with no declared evals for a mode differs from an unsupported eva
   assert.equal(board.tables.internet.pillars.concepts.cells[agentKey(agent)].score, 1);
 });
 
-test("the table and panel both label an empty pillar as No evals yet", () => {
+test("the table and panel both label an empty pillar as No tasks yet", () => {
   const data = buildBoard([evaluation], [row()]);
   const table = renderToStaticMarkup(createElement(Board, { data }));
   const panel = renderToStaticMarkup(createElement(Detail, {
     data, selection: { pillar: "transactions", agent, mode: "internet" },
     onSelect: () => {},
   }));
-  assert.ok(table.includes('aria-label="Transactions, agent-a / model-a. No evals yet. Open details."'));
-  assert.ok(panel.includes('<p class="muted">No evals yet</p>'));
-  assert.ok(panel.includes("No evals yet for this mode."));
+  assert.ok(table.includes('aria-label="Transactions, agent-a / model-a. No tasks yet. Open details."'));
+  assert.ok(panel.includes('<p class="muted">No tasks yet</p>'));
+  assert.ok(panel.includes("No tasks yet for this mode."));
 });
 
 test("the board labels null effort as the provider default", () => {
@@ -157,7 +157,7 @@ test("selection decoding accepts known ids and closes unknown or prototype-named
   assert.equal(decodeSelection(new URLSearchParams({ eval: "constructor" }), data), null);
 });
 
-test("list rows have one eval button and Overall groups them under pillar headings", () => {
+test("list rows have one task button and Overall groups them under pillar headings", () => {
   const data = buildBoard([evaluation, { ...evaluation, id: "building/token", pillar: "building" }], [row()]);
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, onSelect: () => {} }));
   assert.equal((panel.match(/<button/g) ?? []).length, 2);
@@ -165,26 +165,26 @@ test("list rows have one eval button and Overall groups them under pillar headin
   assert.ok(panel.includes('class="run-dot passed"') && panel.includes('class="heat-chip"'));
   const board = renderToStaticMarkup(createElement(Board, { data }));
   assert.equal((board.match(/aria-label="Which results"/g) ?? []).length, 1);
-  assert.equal((board.match(/aria-label="Which eval results"/g) ?? []).length, 1);
+  assert.equal((board.match(/aria-label="Which task results"/g) ?? []).length, 1);
   assert.ok(board.includes('id="eval-concepts-units"') && board.includes('<span class="eval-title">Units</span>'));
   assert.ok(board.includes('<span class="matrix-cell" data-empty="true" title="No trials yet">–</span>'));
   assert.match(board, /<span class="cost-value"[^>]*>\$0\.20<\/span>/);
   assert.ok(!board.match(/<span class="cost-value"[^>]*tabindex/));
 });
 
-test("eval details open the prompt and list one button per run with compact counts", () => {
+test("task details open the instruction and list one button per trial with compact counts", () => {
   const quiz = { ...evaluation, choices: ["Wei", "Gwei"] };
   const data = buildBoard([quiz], [row(), row({ trial: 2, ...failure, total_tokens: 7000, checks: {
     good: { passed: true, reason: "The units match." }, bad: { passed: false, reason: "The answer differs." },
   } }), row({ trial: 3, ...error })]);
   const selection = { evaluation: quiz, agent, mode: "internet" as const, pillar: "concepts" as const };
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
-  assert.ok(panel.includes('<details class="prompt-disclosure" open=""><summary>Prompt</summary>'));
+  assert.ok(panel.includes('<details class="prompt-disclosure" open=""><summary>Instruction</summary>'));
   assert.ok(panel.includes('<ol class="prompt-choices" type="A"><li>Wei</li><li>Gwei</li></ol>'));
   assert.ok(panel.includes('<table class="runs-table">'));
-  for (const label of ["Run", "Result", "Checks", "Time", "Tokens", "Cost"]) assert.ok(panel.includes(`<th scope="col">${label}</th>`));
+  for (const label of ["Trial", "Result", "Checks", "Time", "Tokens", "Cost"]) assert.ok(panel.includes(`<th scope="col">${label}</th>`));
   assert.equal((panel.match(/class="run-open"/g) ?? []).length, 3);
-  assert.ok(panel.includes('aria-label="Run 2, FAIL, 1 of 2 checks passed, 8.0s, 7k tokens, $0.2500. Open run."'));
+  assert.ok(panel.includes('aria-label="Trial 2, FAIL, 1 of 2 checks passed, 8.0s, 7k tokens, $0.2500. Open trial."'));
   assert.ok(panel.includes(">PASS</span>") && panel.includes(">FAIL</span>") && panel.includes(">ERROR</span>"));
   assert.ok(panel.includes('<td>1/2</td>') && panel.includes('<td>7k</td>') && panel.includes('aria-hidden="true">›</td>'));
   assert.equal((panel.match(/open=""/g) ?? []).length, 1);
@@ -194,38 +194,38 @@ test("eval details open the prompt and list one button per run with compact coun
   assert.match(fromList, /class="back-button"[\s\S]*?<\/svg>Concepts/);
 });
 
-test("run details show the selected run, failed reasons first, and a switcher back to all runs", () => {
-  const data = buildBoard([evaluation], [row(), row({ trial: 2, ...failure, total_tokens: 7000, trajectory_url: "https://example.com/run.eval", checks: {
+test("trial details show the selected trial, failed reasons first, and a switcher back to all trials", () => {
+  const data = buildBoard([evaluation], [row(), row({ trial: 2, ...failure, total_tokens: 7000, trajectory_url: "https://example.com/run.json", checks: {
     good: { passed: true, reason: "Test passed." }, bad: { passed: false, reason: "The answer differs." },
   } }), row({ trial: 3, ...error })]);
   const selection = { evaluation, agent, mode: "internet" as const, fromList: true as const, run: 2 };
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
-  assert.match(panel, /<h1[^>]*>Run 2 of 3[\s\S]*?>FAIL<\/span><\/h1>/);
+  assert.match(panel, /<h1[^>]*>Trial 2 of 3[\s\S]*?>FAIL<\/span><\/h1>/);
   assert.ok(panel.includes('<p>Units</p>') && panel.includes('title="model-a · agent-a · effort high"'));
-  assert.ok(panel.includes('aria-label="Runs"') && panel.includes('aria-pressed="true" aria-label="Run 2: failed"'));
-  assert.ok(panel.includes('Run 1 ✓') && panel.includes('Run 2 ✗') && panel.includes('Run 3 !'));
-  assert.match(panel, /class="back-button"[\s\S]*?<\/svg>All runs/);
+  assert.ok(panel.includes('aria-label="Trials"') && panel.includes('aria-pressed="true" aria-label="Trial 2: failed"'));
+  assert.ok(panel.includes('Trial 1 ✓') && panel.includes('Trial 2 ✗') && panel.includes('Trial 3 !'));
+  assert.match(panel, /class="back-button"[\s\S]*?<\/svg>All trials/);
   assert.ok(panel.includes('<code>bad</code>') && panel.includes('<code>good</code>') && panel.includes("The answer differs."));
   assert.ok(panel.indexOf('<code>bad</code>') < panel.indexOf('<code>good</code>'));
   assert.ok(panel.includes("Test passed.") && !panel.includes("Cost source:") && !panel.includes('prompt-disclosure') && !panel.includes('aria-label="Agent modes"'));
   assert.ok(panel.includes('<dl class="run-stats"><div><dt>Checks</dt><dd>1 / 2</dd></div><div><dt>Tokens</dt><dd>7k</dd></div><div><dt>Cost</dt><dd>$0.2500</dd></div><div><dt>Time</dt><dd>8.0s</dd></div></dl>'));
-  assert.ok(panel.includes('<section class="scorer-verdict"><h3>Verifier checks</h3>'));
+  assert.ok(panel.includes('<section class="verifier-verdict"><h3>Verifier checks</h3>'));
   assert.ok(panel.indexOf('class="run-switcher"') < panel.indexOf('class="run-stats"'));
-  assert.ok(panel.indexOf('class="run-stats"') < panel.indexOf('class="scorer-verdict"'));
-  assert.ok(panel.indexOf('class="scorer-verdict"') < panel.indexOf('class="trajectory-links"'));
-  assert.ok(panel.includes('href="https://example.com/run.eval" target="_blank" rel="noreferrer">Open trajectory ↗'));
+  assert.ok(panel.indexOf('class="run-stats"') < panel.indexOf('class="verifier-verdict"'));
+  assert.ok(panel.indexOf('class="verifier-verdict"') < panel.indexOf('class="trajectory-links"'));
+  assert.ok(panel.includes('href="https://example.com/run.json" target="_blank" rel="noreferrer">Open trajectory ↗'));
   const passed = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: 1 }, onSelect: () => {} }));
-  assert.match(passed, /<h1[^>]*>Run 1 of 3[\s\S]*?>PASS<\/span><\/h1>/);
+  assert.match(passed, /<h1[^>]*>Trial 1 of 3[\s\S]*?>PASS<\/span><\/h1>/);
   assert.ok(passed.includes('<code>answer</code>') && passed.includes("The answer matches."));
   const errored = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: 3 }, onSelect: () => {} }));
-  assert.match(errored, /<h1[^>]*>Run 3 of 3[\s\S]*?>ERROR<\/span><\/h1>/);
+  assert.match(errored, /<h1[^>]*>Trial 3 of 3[\s\S]*?>ERROR<\/span><\/h1>/);
   assert.ok(errored.includes("Sandbox stopped.") && errored.includes("No checks completed.") && errored.includes("This error does not enter the score."));
   const allRuns = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: undefined }, onSelect: () => {} }));
   assert.ok(allRuns.includes('<table class="runs-table">') && allRuns.includes('prompt-disclosure'));
   assert.match(allRuns, /class="back-button"[\s\S]*?<\/svg>All pillars/);
 });
 
-test("run links keep their eval, mode, and list context and reject runs outside that selection", () => {
+test("trial links keep their task, mode, and list context and reject trials outside that selection", () => {
   const data = buildBoard([{ ...evaluation, modes: ["internet", "skills"] }], [row(), row({ trial: 2, ...failure }), row({ mode: "skills", trial: 3 })]);
   const selection = { evaluation: data.evaluations["concepts/units"], agent, mode: "internet" as const, pillar: "concepts" as const, fromList: true as const, run: 2 };
   const encoded = encodeSelection(selection);
@@ -254,7 +254,7 @@ test("each results table reads its own mode from the URL", () => {
     const top = html.slice(html.indexOf('id="leaderboard"'), html.indexOf('id="evals"'));
     const bottom = html.slice(html.indexOf('id="evals"'));
     assert.ok(top.includes(`class="row-label">${leaderboard}<small>`));
-    assert.ok(bottom.includes(`<h2>Results by eval · ${matrix}</h2>`));
+    assert.ok(bottom.includes(`<h2>Results by task · ${matrix}</h2>`));
     if (matrix === "Internet + Skills") assert.ok(bottom.includes("0 of 1 trials passed. Open details."));
     else assert.ok(bottom.includes("1 of 1 trials passed. Open details."));
     assert.ok(top.includes(leaderboard === "Model" ? "model-a. 100%. Open details." : "agent-a / model-a. 0%. Open details."));

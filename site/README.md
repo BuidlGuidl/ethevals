@@ -36,7 +36,7 @@ Different agents, models, and efforts stay separate.
 No passes or unknown cost produce `–`.
 Cost adds agent and judge API prices, even when a plan paid.
 
-Each run drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.
+Each trial drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.
 Its trajectory link opens the row's `trajectory_url`.
 Published rows use a full HTTP URL.
 Local rows use `/trajectories/<id>.json` and a `trajectory_file` path.
@@ -46,7 +46,7 @@ A local link without a file fails the build.
 The browser never receives host paths.
 No Inspect viewer or log download runs during the build.
 
-The drawer's `d` query parameter keeps its task, mode, configuration, and run selection.
+The drawer's `d` query parameter keeps its task, mode, configuration, and trial selection.
 Browser Back closes a drawer opened from the board.
 The loader computes cells and summaries once for all pages.
 

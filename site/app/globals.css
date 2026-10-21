@@ -153,9 +153,9 @@
   .run-dot.error { @apply border border-amber bg-transparent; }
   .heat-chip { @apply grid min-w-20 gap-1 px-3 py-2 text-center text-[16px] font-semibold; background: color-mix(in srgb, var(--heat-hi) var(--score), var(--heat-lo)); }
   .heat-chip[data-empty="true"] { @apply bg-transparent text-dim; }
-  .scorer-verdict { @apply border border-border bg-sheet; }
-  .scorer-verdict h3 { @apply border-b border-border px-4 py-3; }
-  .scorer-verdict > p { @apply px-4 py-3; }
+  .verifier-verdict { @apply border border-border bg-sheet; }
+  .verifier-verdict h3 { @apply border-b border-border px-4 py-3; }
+  .verifier-verdict > p { @apply px-4 py-3; }
   .checks li { @apply flex items-start gap-3 border-b border-border px-4 py-3; }
   .checks li:last-child { border-bottom: 0; }
   .checks p { @apply mt-1 text-xs text-muted; }

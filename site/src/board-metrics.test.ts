@@ -8,7 +8,7 @@ test("Overall gives scored pillars equal weight and skips missing scores", () =>
   assert.equal(overallScore([0, null]), 0);
 });
 
-test("cost per pass includes failed model spend, excludes errors and grader spend", () => {
+test("cost per pass includes failed model spend, excludes errors and judge spend", () => {
   assert.equal(costPerPass([
     { status: "passed", model_cost_usd: 0.2 }, { status: "passed", model_cost_usd: 0.3 },
     { status: "failed", model_cost_usd: 0.5 }, { status: "error", model_cost_usd: 50 },
@@ -44,7 +44,7 @@ test("the board publishes summaries, costs and paired lifts for each configurati
   assert.deepEqual(board.counts, { evals: 2, agents: 1, runs: 4 });
 });
 
-test("lift pairs evals when skills covers a strict subset of Internet results", () => {
+test("lift pairs tasks when skills covers a strict subset of Internet results", () => {
   const evaluation: Eval = { id: "concepts/a", hash: "a", title: "A", pillar: "concepts", motivation: "Check A.", prompt: "A?", choices: [], modes: ["internet", "skills"] };
   const evals: Eval[] = [evaluation, { ...evaluation, id: "concepts/b" }, { ...evaluation, id: "building/c", pillar: "building" }];
   const base: Row = { schema_version: 7, task_id: "concepts/a", task_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,

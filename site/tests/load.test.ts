@@ -111,7 +111,7 @@ test("missing default rows give an explicit empty state, while an override is re
   assert.equal(loadBoard({ ETHEVALS_ROWS: "../results/rows.jsonl" }, f.site).tables.internet.agents[0].model, "model-a");
 });
 
-test("missing eval roots and missing or malformed catalogs fail loudly", (t) => {
+test("missing task roots and missing or malformed catalogs fail loudly", (t) => {
   const f = fixture(t);
   const catalog = path.join(f.site, ".catalog/catalog.json");
   rmSync(path.join(f.root, "tasks"), { recursive: true });
@@ -136,10 +136,10 @@ test("an empty catalog needs no legacy task root and excludes old rows", (t) => 
 
 test("published URLs reach the board and unsafe URLs fail with a line number", (t) => {
   const f = fixture(t);
-  f.write([{ trajectory_url: "https://example.org/results/trial.eval" }, { trial: 2 }]);
+  f.write([{ trajectory_url: "https://example.org/results/trial.json" }, { trial: 2 }]);
   const board = loadBoard({}, f.site);
   const cell = board.tables.internet.pillars.concepts.evals[0].cells['["model-a","agent-a","high"]'];
-  assert.deepEqual(cell.trials.map((trial) => trial.trajectoryUrl), ["https://example.org/results/trial.eval", null]);
+  assert.deepEqual(cell.trials.map((trial) => trial.trajectoryUrl), ["https://example.org/results/trial.json", null]);
   f.write([{ trajectory_url: "javascript:alert(1)" }]);
   assert.throws(() => loadBoard({}, f.site), /rows.jsonl:2:/);
 });
@@ -157,12 +157,12 @@ test("default site paths do not depend on the process working directory", () => 
 
 test("committed errors remain visible without unpublished release links", (t) => {
   const f = fixture(t);
-  f.write([{ trajectory_url: "https://github.com/example/ethevals/releases/download/results-1/trial.eval" }, { trial: 2, status: "error",
+  f.write([{ trajectory_url: "https://github.com/example/ethevals/releases/download/results-1/trial.json" }, { trial: 2, status: "error",
     error_kind: "execution", error_reason: "Provider unavailable." }]);
   const board = loadBoard({}, f.site);
   const cell = board.tables.internet.pillars.concepts.evals[0].cells['["model-a","agent-a","high"]'];
   assert.deepEqual([cell.passed, cell.total, cell.errors], [1, 1, 1]);
-  assert.equal(cell.trials[0].trajectoryUrl, "https://github.com/example/ethevals/releases/download/results-1/trial.eval");
+  assert.equal(cell.trials[0].trajectoryUrl, "https://github.com/example/ethevals/releases/download/results-1/trial.json");
   assert.equal(cell.trials[1].trajectoryUrl, null);
   assert.equal(cell.trials[1].error_reason, "Provider unavailable.");
 });

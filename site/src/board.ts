@@ -148,7 +148,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
     const columns = [...(mode === "vanilla" ? agents.vanilla : configurations).values()]
       .sort((a, b) => agentKey(a).localeCompare(agentKey(b), "en"));
     const table: Table = { agents: columns, pillars: {} as Table["pillars"], summaries: {} };
-    // The knowledge table shows declared vanilla evals. Both table and panel use these rows.
+    // The knowledge table shows declared vanilla tasks. Both table and panel use these rows.
     const eligible = evaluations.filter((evaluation) => mode !== "vanilla" || evaluation.modes.includes("vanilla"));
     for (const pillar of pillars) {
       const evals = eligible.filter((evaluation) => evaluation.pillar === pillar).map((evaluation) => ({
