@@ -43,6 +43,27 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
         reward = result.verifier_result.rewards if result.verifier_result else None
         if not checks or reward != {"reward": int(all(check["passed"] for check in checks.values()))}:
             kind, reason = "verification", "Missing checks or reward disagrees with checks."
+    judge = metadata.get("judge")
+    judge_cost, judge_paid_by = (None if judge else 0.0), None
+    if judge:
+        try:
+            judged = json.loads((folder / "verifier/judge.json").read_text())
+            judge_paid_by, judge_cost = judged["paid_by"], judged["cost_usd"]
+            if judged["judge"] != judge:
+                raise ValueError("The saved judge differs from the planned judge.")
+            if judged["error"]:
+                raise ValueError(judged["error"])
+            extra = judged["checks"]
+            if set(extra) != set(metadata["criteria_names"]) or set(extra) & set(checks) or any(
+                type(check.get("passed")) is not bool or not isinstance(check.get("reason"), str)
+                or not check["reason"].strip() or len(check["reason"].splitlines()) != 1
+                for check in extra.values()
+            ):
+                raise ValueError("The judge must return each criteria check with a boolean and a one-line reason.")
+            checks.update(extra)
+        except (ValueError, OSError, KeyError, TypeError, AttributeError) as exc:
+            if not reason:
+                kind, reason = "judge", f"Cannot judge criteria: {exc}"
     n_input, _, n_output, cost = result.compute_token_cost_totals()
     if metadata["paid_by"] == "free":
         cost = 0.0
@@ -60,7 +81,7 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
         "checks": checks, "error_kind": kind, "error_reason": " ".join(reason.split()) if reason else None,
         "limit": {"type": "time", "limit": metadata["time_limit"], "reason": error.exception_message} if timed_out else None,
         "total_tokens": (n_input or 0) + (n_output or 0),
-        "model_cost_usd": cost, "judge_cost_usd": 0.0, "judge": None, "judge_paid_by": None,
+        "model_cost_usd": cost, "judge_cost_usd": judge_cost, "judge": judge, "judge_paid_by": judge_paid_by,
         "cost_source": "free" if metadata["paid_by"] == "free" else "harbor" if cost is not None else "unavailable",
         "total_seconds": elapsed, "working_seconds": working,
         "trajectory_file": str(trajectory.resolve()) if trajectory.is_file() else None,

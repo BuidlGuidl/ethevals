@@ -45,8 +45,7 @@ Each numbered trial has its own Harbor job under `OUTPUT/jobs/`.
 Rows use schema version 7 and link a trajectory JSON file when one exists.
 Cost comes from Harbor's API-price usage record, regardless of the payment source.
 Unknown cost stays null; free stand-ins cost $0.
-Rows reserve separate judge fields for the criteria runner.
-Agent trials with criteria stop until that runner lands.
+Rows record judge model, effort, API-price cost, and payment source separately.
 The free check still skips paid criteria.
 
 To open a local job on the board, build from `site/`:
@@ -126,6 +125,20 @@ The helper keeps Forge stdout and stderr beside `checks.json`.
 
 Criteria live in `tests/criteria.md`.
 Each `##` heading names a check and the following text asks a yes-or-no question.
+After Harbor saves the tests, RewardKit answers these questions from the ATIF trajectory and the task's declared `artifacts`.
+Artifact destinations follow Harbor's paths under the trial's `artifacts/` directory.
+Missing artifacts or trajectories produce a judge error.
+The board combines test checks and criteria checks; every check must pass.
+Criteria headings must differ from test check names.
+The judge's model, effort, time limit, payment source, and admission reserve come from the job config's `judge` settings.
+The default judge uses Opus 5.5 through `ANTHROPIC_API_KEY`; it refuses plan tokens.
+Each remaining attempt reserves the judge's `cost_limit_usd`, even when a plan pays for the agent.
+RewardKit is pinned to 0.2.3, which supports Harbor's ATIF trajectory input and per-question reasons.
+`verifier/judge.json` preserves its output, usage, reasons, and errors beside Harbor's test records.
+Row recovery reads that file without another judge call.
+An interrupted or failed judge produces a trial error; the planner selects another attempt within `max_attempts`.
+Timeouts, invalid answers, and missing reasons count as judge errors, so they never become failed checks.
+Local stand-ins set `judge.paid_by: free` and use a local model endpoint.
 The free check prints a skip note because the judge needs a paid API call.
 
 Pull-request CI calls the free check through `scripts/ci.py checks`.

@@ -13,6 +13,7 @@ from pydantic import Field, model_validator
 from .config import Declaration, parse_file
 from .files import content_hash
 from .harbor_tasks import lint_task
+from .judge import JudgeSettings, check_judge_key, judge_trial, read_criteria
 from .skills import SkillsPack, pack_skills
 from .trial_rows import fold_rows, recover_rows, write_rows
 
@@ -41,6 +42,7 @@ class JobSettings(Declaration):
     modes: list[Literal["vanilla", "internet", "skills"]]
     models: dict[str, ModelSettings]
     agents: dict[str, AgentSettings]
+    judge: JudgeSettings = Field(default_factory=JudgeSettings)
 
     @model_validator(mode="after")
     def check_references(self):
@@ -108,6 +110,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
     combinations = 0
     for path in paths:
         task = task_entry(path)
+        criteria = read_criteria(path)
         if task["id"] in ids:
             raise ValueError(f"Duplicate task ID: {task['id']}")
         ids.add(task["id"])
@@ -136,13 +139,16 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                         exhausted.append(row)
                         continue
                     reserve = agent.cost_limit_usd if agent.paid_by == "api_key" else 0.0
+                    judge_reserve = config.judge.cost_limit_usd if criteria and config.judge.paid_by == "api_key" else 0.0
                     remaining = max(1, config.max_attempts - attempt)
                     missing.append({**metadata, "task_path": str(path.resolve()), "agent_key": key,
                                     "agent_version": agent.version, "harbor_version": config.harbor_version,
                                     "paid_by": agent.paid_by, "time_limit": config.time_limit,
                                     "attempt": attempt + 1, "remaining_attempts": remaining,
-                                    "agent_reserve_usd": reserve, "judge_reserve_usd": 0.0,
-                                    "worst_case_usd": reserve * remaining})
+                                    "agent_reserve_usd": reserve, "judge_reserve_usd": judge_reserve,
+                                    "judge": {"model": config.judge.model, "effort": config.judge.effort} if criteria else None,
+                                    "criteria_names": list(criteria),
+                                    "worst_case_usd": (reserve + judge_reserve) * remaining})
     if not selected:
         raise ValueError("No tasks declare a selected mode and agent")
     if trial is not None and combinations != 1:
@@ -183,8 +189,8 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
         missing = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
         if missing:
             raise ValueError(f"{path}: missing {', '.join(missing)}")
-        if (path / "tests/criteria.md").exists() and item["paid_by"] != "free":
-            raise ValueError(f"{path}: criteria require the judge runner before agent trials can start")
+        if item["judge"]:
+            check_judge_key(config.judge)
     try:
         for item in report["missing"]:
             agent = config.agents[item["agent_key"]]
@@ -206,6 +212,12 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
                 verifier={"override_timeout_sec": config.time_limit}, environment={"type": "docker"},
             ))
             await job.run()
+            if item["judge"]:
+                for result_path in destination.glob("*/result.json"):
+                    saved = json.loads(result_path.read_text())
+                    error = saved.get("exception_info")
+                    if saved.get("finished_at") and (not error or error["exception_type"] == "AgentTimeoutError"):
+                        await judge_trial(result_path.parent, Path(item["task_path"]), config.judge)
             write_rows(output / "rows.jsonl", fold_rows(previous, recover_rows(output)))
     finally:
         rows = fold_rows(previous, recover_rows(output))

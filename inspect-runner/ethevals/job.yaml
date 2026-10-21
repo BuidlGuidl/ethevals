@@ -2,6 +2,12 @@ harbor_version: 0.24.0
 time_limit: 7200
 trials: 3
 max_attempts: 2
+judge:
+  model: anthropic/claude-opus-5-5
+  effort: high
+  time_limit: 300
+  paid_by: api_key
+  cost_limit_usd: 2.0
 modes: [vanilla, internet, skills]
 models:
   opus-5.5:
