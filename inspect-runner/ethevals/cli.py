@@ -25,7 +25,8 @@ def parse_args(argv=None):
         command = parsers[name]
         command.add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
         command.add_argument("--config", type=Path, help="Board-wide Harbor job settings.")
-    for name in ("check", "validate", "export-hf"):
+    parsers["export-hf"].add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
+    for name in ("check", "validate"):
         parsers[name].add_argument("--evals", nargs="+", help="Eval folders. Defaults to evals/*/*.")
         parsers[name].add_argument("--config", type=Path)
         parsers[name].set_defaults(effort=None)
@@ -94,6 +95,12 @@ def main(argv=None) -> int:
             success = asyncio.run(jobs.run(report, config, args.output, previous, skills_pack=skills_pack))
             print(f"Results rows: {args.output / 'rows.jsonl'}")
             return 0 if success else 1
+        if args.command == "export-hf":
+            from .hf import DEFAULT_REPO, write_hf
+
+            paths = args.tasks or sorted(path.parent for path in Path("tasks").rglob("task.toml"))
+            print(json.dumps(write_hf(paths, args.output, args.hf_repo or DEFAULT_REPO, args.license), indent=2))
+            return 0
         if args.command in {"lint", "free-check"}:
             from .harbor_tasks import lint_task
             paths = args.tasks or sorted(path.parent for path in Path("tasks").rglob("task.toml"))
@@ -128,11 +135,6 @@ def main(argv=None) -> int:
             evals = available_checks(evals)
             if not evals:
                 return 0
-        if args.command == "export-hf":
-            from .hf import DEFAULT_REPO, write_hf
-
-            print(json.dumps(write_hf(evals, args.output, args.hf_repo or DEFAULT_REPO, args.license), indent=2))
-            return 0
         if args.command == "validate":
             for evaluation in evals:
                 print(f"{evaluation.id} {evaluation.hash}")

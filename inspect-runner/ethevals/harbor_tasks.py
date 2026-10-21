@@ -7,6 +7,7 @@ import re
 from harbor.models.task.task import Task
 import yaml
 
+from .images.tag import image_tag
 
 AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)
 
@@ -34,6 +35,10 @@ def lint_task(path: Path) -> None:
             continue
         if match := AGENT_WORDS.search(text):
             raise ValueError(f"{item}: agent-visible text contains forbidden word {match.group()!r}")
+        for image in re.findall(r"ghcr\.io/buidlguidl/ethevals-[\w:.-]+", text):
+            pins = {"ghcr.io/buidlguidl/" + image_tag(image=name) for name in ("chain", "quiz")}
+            if image not in pins:
+                raise ValueError(f"{item}: shared image pin {image} differs from its build inputs; update the task pin")
     for compose in path.rglob("*compose.y*ml"):
         document = yaml.safe_load(compose.read_text())
         if not isinstance(document, dict) or set(document) - {"services", "volumes", "networks", "name"}:
@@ -43,6 +48,16 @@ def lint_task(path: Path) -> None:
             if volume not in ({}, None):
                 raise ValueError(f"{compose}: volume {name}: host mounts are forbidden; use a plain named volume")
         for name, service in document.get("services", {}).items():
+            build = service.get("build")
+            if build:
+                build = {"context": build} if isinstance(build, str) else build
+                context = (compose.parent / build.get("context", ".")).resolve()
+                inputs = [context, context / build.get("dockerfile", "Dockerfile")]
+                extra = build.get("additional_contexts", {})
+                extra = dict(item.split("=", 1) for item in extra) if isinstance(extra, list) else extra
+                inputs.extend((compose.parent / value).resolve() for value in extra.values())
+                if any(not item.resolve().is_relative_to(path.resolve()) for item in inputs):
+                    raise ValueError(f"{compose}: service {name}: build inputs must stay inside the task folder")
             if service.get("privileged", False) is not False:
                 raise ValueError(f"{compose}: service {name}: privileged containers are forbidden")
             if "extends" in service or "volumes_from" in service:

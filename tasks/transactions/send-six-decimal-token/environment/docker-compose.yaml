@@ -1,12 +1,9 @@
 services:
   main:
     build:
-      context: ../../../../inspect-runner/ethevals/images
-      dockerfile: Chain.Dockerfile
-    entrypoint: []
+      context: .
+      dockerfile: Dockerfile
     user: agent
-    working_dir: /workspace
-    command: [sh, -c, "ln -s /chain/chain_context.json /workspace/chain_context.json && sleep infinity"]
     volumes:
       - public-context:/chain:ro
       - private-context:/private:ro
@@ -15,11 +12,8 @@ services:
         condition: service_healthy
   chain:
     build:
-      context: ../../../../inspect-runner/ethevals/images
+      context: .
       dockerfile: Chain.Dockerfile
-      target: sidecar
-      additional_contexts:
-        setup: ./setup
     mem_limit: 3g
     volumes:
       - public-context:/chain

@@ -53,6 +53,23 @@ def test_task_lint_rejects_privileged_container(harbor_task):
     assert "service browser: privileged containers are forbidden" in result.stderr
 
 
+@pytest.mark.parametrize("build", [
+    "../../shared",
+    '{context: ., dockerfile: ../../Dockerfile}',
+    '{context: ., additional_contexts: {files: ../../shared}}',
+    '{context: ., additional_contexts: [files=../../shared]}',
+])
+def test_task_lint_keeps_build_inputs_inside_the_folder(harbor_task, build):
+    compose = harbor_task / "environment/docker-compose.yaml"
+    compose.write_text(f"services:\n  main:\n    build: {build}\n")
+    result = cli("-m", "ethevals.cli", "lint", "--tasks", harbor_task)
+    assert result.returncode == 2
+    assert "build inputs must stay inside the task folder" in result.stderr
+    compose.write_text("services:\n  main:\n    build: .\n")
+    result = cli("-m", "ethevals.cli", "lint", "--tasks", harbor_task)
+    assert (result.returncode, result.stdout) == (0, f"{harbor_task}: lint passed\n")
+
+
 @pytest.mark.parametrize("name", ["instruction.md", "environment/README.md"])
 def test_task_lint_rejects_test_words_in_agent_text(harbor_task, name):
     (harbor_task / name).write_text("This is an eval.\n")

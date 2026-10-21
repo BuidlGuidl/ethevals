@@ -59,8 +59,6 @@ def test_pinned_fork_keeps_its_secret_out_of_setup_agent_and_logs(tmp_path, monk
             "[metadata]", '[metadata]\nrequired_env = ["ARCHIVE_RPC_URL"]'))
         compose = task / "environment/docker-compose.yaml"
         document = yaml.safe_load(compose.read_text())
-        for service in document["services"].values():
-            service["build"]["context"] = str(IMAGES)
         document["services"]["chain"]["environment"] = {
             "FORK_RPC_URL": "${ARCHIVE_RPC_URL:?ARCHIVE_RPC_URL is required}", "FORK_BLOCK_NUMBER": "1"}
         document["services"]["chain"]["networks"] = ["default", "upstream"]

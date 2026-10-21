@@ -1,9 +1,8 @@
 services:
   main:
     build:
-      context: ../../../../inspect-runner/ethevals/images
-      dockerfile: Chain.Dockerfile
-      target: agent
+      context: .
+      dockerfile: Dockerfile
     user: agent
     volumes:
       - public-context:/chain:ro
@@ -13,11 +12,8 @@ services:
         condition: service_healthy
   chain:
     build:
-      context: ../../../../inspect-runner/ethevals/images
+      context: .
       dockerfile: Chain.Dockerfile
-      target: sidecar
-      additional_contexts:
-        setup: ./setup
     environment:
       FORK_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required}
       FORK_BLOCK_NUMBER: "23819000"

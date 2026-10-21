@@ -8,6 +8,7 @@ import sys
 import pytest
 
 from ethevals.trial_rows import fold_rows, read_rows, write_rows
+from ethevals.images.tag import image_tag
 from test_publish import recorded_row
 
 
@@ -23,12 +24,105 @@ def test_pr_checks_run_harbor_without_the_removed_public_tasks(tmp_path, monkeyp
     monkeypatch.setattr(sys, "argv", ["ci.py", "checks", "--output", str(tmp_path)])
     assert ci.main() == 0
     assert calls == [
+        *((('docker', 'build', '--file', ROOT / 'inspect-runner/ethevals/images' / dockerfile,
+            '--tag', 'ghcr.io/buidlguidl/' + image_tag(image=name), ROOT / 'inspect-runner/ethevals/images'), {})
+          for name, dockerfile in (("quiz", "Quiz.Dockerfile"), ("chain", "Chain.Dockerfile"))),
         ((sys.executable, "-m", "ethevals.cli", "free-check", "--output", tmp_path / "harbor"), {}),
         ((sys.executable, "-m", "pytest", "-q"), {}),
         ((sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
           "--ignore=inspect-runner/tests/test_agents_docker.py"), {}),
         *((('pnpm', task), {"cwd": "site"}) for task in ("test", "typecheck", "lint", "build")),
     ]
+
+
+def test_release_dry_run_stages_tasks_without_remote_writes(tmp_path, monkeypatch, capsys):
+    source = ROOT / "inspect-runner/tests/fixtures/harbor/question"
+    shutil.copytree(source, tmp_path / "tasks/concepts/question")
+    monkeypatch.chdir(tmp_path)
+    calls = []
+
+    def external(*args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout="a" * 40 + "\n")
+
+    monkeypatch.setattr(ci, "command", external)
+    monkeypatch.setattr(sys, "argv", ["ci.py", "release", "--output", str(tmp_path / "dataset"), "--license", "mit"])
+    assert ci.main() == 0
+    assert calls == [("git", "rev-parse", "HEAD")]
+    assert (tmp_path / "dataset/tasks/concepts--question/tests/test.sh").read_bytes() == (source / "tests/test.sh").read_bytes()
+    assert '"dry_run": true' in capsys.readouterr().out
+
+
+def test_image_publication_uses_the_same_tags_as_local_builds(monkeypatch):
+    import argparse
+
+    calls = []
+    monkeypatch.setattr(ci, "command", lambda *args, **kwargs: calls.append(args))
+    assert ci.images(argparse.Namespace(publish=False)) == 0
+    local = calls[:]
+    calls.clear()
+    assert ci.images(argparse.Namespace(publish=True)) == 0
+    pushes = calls[:len(local)]
+    assert pushes == [("docker", "buildx", "build", "--platform", "linux/amd64,linux/arm64", "--push", *args[2:])
+                      for args in local]
+    for push, pull in zip(pushes, calls[len(local):], strict=True):
+        assert pull[:2] == ("docker", "--config")
+        assert pull[3:] == ("manifest", "inspect", push[push.index("--tag") + 1])
+        assert not Path(pull[2]).exists()
+    # Every source task uses the tags that both build paths produce.
+    pins = {args[args.index("--tag") + 1] for args in pushes}
+    references = set()
+    for path in (ROOT / "tasks").rglob("*Dockerfile"):
+        references.add(path.read_text().splitlines()[0].removeprefix("FROM "))
+    assert references == pins
+
+
+def test_release_uploads_the_staged_tree_and_tags_its_hf_commit(tmp_path, monkeypatch):
+    import argparse
+
+    shutil.copytree(ROOT / "inspect-runner/tests/fixtures/harbor/question", tmp_path / "tasks/concepts/question")
+    monkeypatch.chdir(tmp_path)
+    calls = []
+    commit = "a" * 40
+    message = f"ETH Evals from BuidlGuidl/ethevals@{commit}"
+
+    def external(*args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout=commit + "\n")
+
+    monkeypatch.setattr(ci, "command", external)
+    monkeypatch.setattr(ci, "hf_get", lambda repo, path: [{"title": message, "id": "hf-commit"}]
+                        if path == "commits/main" else {"tags": []})
+    assert ci.release(argparse.Namespace(output=tmp_path / "dataset", hf_repo="example/tasks",
+                                         license="mit", publish=True)) == 0
+    assert calls == [
+        ("git", "rev-parse", "HEAD"),
+        ("hf", "upload", "example/tasks", str(tmp_path / "dataset"), ".", "--repo-type", "dataset",
+         "--commit-message", message, "--delete", "tasks/*", "--delete", "data/*"),
+        ("hf", "repo", "tag", "create", "example/tasks", "gh-aaaaaaa", "--repo-type", "dataset",
+         "--revision", "hf-commit"),
+    ]
+    assert (tmp_path / "dataset/tasks/concepts--question/solution/solve.sh").read_bytes() == (
+        ROOT / "inspect-runner/tests/fixtures/harbor/question/solution/solve.sh").read_bytes()
+
+
+def test_private_images_fail_publication_before_it_can_continue(monkeypatch):
+    import argparse
+
+    calls = []
+
+    def external(*args, **kwargs):
+        calls.append(args)
+        if "manifest" in args:
+            assert args[:2] == ("docker", "--config")
+            assert list(Path(args[2]).iterdir()) == []
+            raise subprocess.CalledProcessError(1, args)
+
+    monkeypatch.setattr(ci, "command", external)
+    with pytest.raises(subprocess.CalledProcessError):
+        ci.images(argparse.Namespace(publish=True))
+    assert [args[:3] for args in calls[:2]] == [("docker", "buildx", "build")] * 2
+    assert len(calls) == 3
 
 
 def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, monkeypatch):

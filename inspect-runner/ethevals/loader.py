@@ -121,8 +121,6 @@ def load_eval(folder: Path, config: Config, skills_pack: SkillsPack | None = Non
             valid = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:len(declaration.choices)])
             if any(value not in valid for value in targets):
                 raise ValueError(f"{path}: target must name an available choice letter")
-        if hf_skip_reason(declaration, files) is None:
-            validate_hf_export(target, str(path))
     validate_check_names(files, target, folder)
     if ("tests" in kinds or declaration.chain) and not has_solution(files):
         raise ValueError(f"{folder}: solution is required for tests or a chain")
@@ -132,20 +130,6 @@ def load_eval(folder: Path, config: Config, skills_pack: SkillsPack | None = Non
         validate_compose(folder / "compose.yaml", data=files["compose.yaml"])
     return Eval(folder, f"{folder.parent.name}/{folder.name}", eval_hash,
                 folder.parent.name, declaration, kinds, target, files, skills, skills_hash)
-
-
-def validate_hf_export(target: TargetScorer, source: str) -> None:
-    if isinstance(target.target, list) and len(target.target) != 1:
-        raise ValueError(f"{source}: Inspect's HF loader cannot preserve alternative targets")
-
-
-def hf_skip_reason(declaration, files):
-    if "scorer/target.yaml" not in files:
-        return "target.yaml is absent"
-    if "vanilla" not in declaration.modes:
-        return "vanilla mode is not declared"
-    if "scorer/rubric.md" in files:
-        return "rubric cannot be exported"
 
 
 AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)

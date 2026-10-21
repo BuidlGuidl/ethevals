@@ -19,11 +19,6 @@ def test_sidecar_controls_and_context_access_before_verification(tmp_path):
                   .get("metadata", {}).get("required_env"))
     task = tmp_path / "transfer"
     shutil.copytree(source, task)
-    compose = task / "environment/docker-compose.yaml"
-    document = yaml.safe_load(compose.read_text())
-    for service in document["services"].values():
-        service["build"]["context"] = str(ROOT / "inspect-runner/ethevals/images")
-    compose.write_text(yaml.safe_dump(document))
     probe = '''import json
 from pathlib import Path
 import socket

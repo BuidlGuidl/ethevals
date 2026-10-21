@@ -37,6 +37,7 @@ jobs:
         with:
           enable-cache: false
       - run: uv sync --frozen
+      - run: uv run python scripts/ci.py images
       - name: Run the fork oracle and nop runs
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}

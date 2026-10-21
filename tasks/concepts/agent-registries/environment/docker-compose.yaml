@@ -1,6 +1,0 @@
-services:
-  main:
-    build:
-      context: ../../../../inspect-runner/ethevals/images
-      dockerfile: Quiz.Dockerfile
-    command: ["sleep", "infinity"]

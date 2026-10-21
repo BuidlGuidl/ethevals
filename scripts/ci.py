@@ -12,10 +12,9 @@ import tempfile
 from urllib.request import Request, urlopen
 
 from ethevals.cli import main as ethevals, parse_args
-from ethevals.config import load_config
 from ethevals.jobs import load_job
 from ethevals.hf import DEFAULT_REPO, write_hf
-from ethevals.loader import load_eval
+from ethevals.images.tag import image_tag
 from ethevals.publish import publish_logs
 from ethevals.trial_rows import SCHEMA_VERSION, fold_rows, read_rows, write_rows, recover_rows
 
@@ -194,6 +193,7 @@ def publish_artifacts(args):
 
 
 def checks(args):
+    images(argparse.Namespace(publish=False))
     command(sys.executable, "-m", "ethevals.cli", "free-check", "--output", args.output / "harbor")
     command(sys.executable, "-m", "pytest", "-q")
     command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
@@ -215,15 +215,35 @@ def hf_tag(sha):
     return f"gh-{sha[:7]}"
 
 
-def release(args, evals):
+def images(args):
+    directory = Path(__file__).resolve().parents[1] / "inspect-runner/ethevals/images"
+    tags = []
+    for name, dockerfile in (("quiz", "Quiz.Dockerfile"), ("chain", "Chain.Dockerfile")):
+        tag = "ghcr.io/buidlguidl/" + image_tag(directory, name)
+        tags.append(tag)
+        if args.publish:
+            command("docker", "buildx", "build", "--platform", "linux/amd64,linux/arm64", "--push",
+                    "--file", directory / dockerfile, "--tag", tag, directory)
+        else:
+            command("docker", "build", "--file", directory / dockerfile, "--tag", tag, directory)
+    if args.publish:
+        # GHCR starts new packages as private. Do not publish tasks until readers can pull them.
+        with tempfile.TemporaryDirectory(prefix="ethevals-public-image-") as anonymous:
+            for tag in tags:
+                command("docker", "--config", anonymous, "manifest", "inspect", tag, stdout=subprocess.DEVNULL)
+    return 0
+
+
+def release(args):
     if not args.license:
         raise ValueError("Choose the dataset license before a release")
-    print(json.dumps(write_hf(evals, args.output, args.hf_repo, args.license), indent=2))
+    paths = sorted(path.parent for path in Path("tasks").rglob("task.toml"))
+    print(json.dumps(write_hf(paths, args.output, args.hf_repo, args.license), indent=2))
     commit = command("git", "rev-parse", "HEAD", capture_output=True).stdout.strip()
     tag = hf_tag(commit)
     message = f"ETH Evals from BuidlGuidl/ethevals@{commit}"
     command_line = ["hf", "upload", args.hf_repo, str(args.output), ".", "--repo-type", "dataset",
-                    "--commit-message", message]
+                    "--commit-message", message, "--delete", "tasks/*", "--delete", "data/*"]
     if args.publish:
         command(*command_line)
         head, tags = hf_get(args.hf_repo, "commits/main")[0], hf_get(args.hf_repo, "refs")["tags"]
@@ -239,6 +259,8 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     checks_parser = commands.add_parser("checks")
     checks_parser.add_argument("--output", type=Path, required=True)
+    builder = commands.add_parser("images", help="Build shared images with the GHCR tags used by task folders.")
+    builder.add_argument("--publish", action="store_true", help="Push multi-architecture images to GHCR.")
     planner = commands.add_parser("plan-trials")
     planner.add_argument("--output", type=Path, required=True)
     planner.add_argument("--restore-results", action="store_true")
@@ -265,13 +287,13 @@ def main():
         args = parser.parse_args()
         if args.command == "run-trial":
             return run_trial(args)
+        if args.command == "images":
+            return images(args)
         if args.command == "publish-results":
             return publish_artifacts(args)
         if args.command == "checks":
             return checks(args)
-        config = load_config()
-        evals = [load_eval(path, config) for path in sorted(Path("evals").glob("*/*"))]
-        return release(args, evals)
+        return release(args)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(2, f"ci: {error}\n")
 

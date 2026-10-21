@@ -55,7 +55,6 @@ ETHEVALS_ROWS=../results/local/rows.jsonl pnpm build
 ```
 
 The build copies local trajectories into the static export and links published trajectories directly.
-Paid CI and release publication still need their Harbor migration.
 
 ## Free checks
 
@@ -68,6 +67,7 @@ Run the free check from the repository root:
 
 ```sh
 unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
+uv run python scripts/ci.py images
 uv run ethevals free-check --output results/free-check
 ```
 
@@ -100,6 +100,13 @@ The helper trims punctuation around the reply and ignores case unless `ignore_ca
 It writes the named check and reward, without copying a reply reader into each task.
 
 Tasks declare sidecars in `environment/docker-compose.yaml`.
+Single-container tasks use `environment/Dockerfile` alone.
+Each task Dockerfile starts from a pinned shared GHCR image and copies its starting files from its own folder.
+Compose build contexts stay inside the task folder.
+Keep starting files as plain files; copy them with `COPY` rather than creating them in a Compose command.
+The lint checks shared image pins against their build inputs.
+After changing a shared image input, run `uv run python -m ethevals.images.tag` and update the affected task pins.
+`scripts/ci.py images` builds those tags locally. `--publish` pushes both Linux architectures to GHCR.
 The shared chain image runs setup before its healthcheck releases the agent.
 Setup writes `chain_context.json` on a read-only public volume.
 It writes `private_chain_context.json` in a root-only directory on a separate volume.
@@ -142,6 +149,35 @@ Local stand-ins set `judge.paid_by: free` and use a local model endpoint.
 The free check prints a skip note because the judge needs a paid API call.
 
 Pull-request CI calls the free check through `scripts/ci.py checks`.
+
+## Dataset publication
+
+`uv run python scripts/ci.py release --output out/hf --license mit` stages every task and previews the HF upload.
+`uv run ethevals export-hf --output out/hf` stages the same layout without an upload preview.
+Both commands require an empty output directory.
+The export copies every task file unchanged, including setup, tests, and solutions.
+Published folder names combine the pillar and task name under `tasks/`.
+Harbor 0.24.0 discovers immediate children there when `--repo` has no dataset selector.
+`registry.json` also supplies the explicit `ethevals@1.0` dataset entry.
+This version names the registry format; pin the repository revision to select task content.
+
+```sh
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test --agent oracle --n-concurrent 1
+```
+
+Select a task with `--include-task-name NAME` and set its declared `metadata.required_env` variables first.
+Replace `oracle` with `nop` to check untouched work.
+The folder needs Docker and Harbor, with no ETH Evals install.
+Plain Harbor runs execute the task's verifier; the board also runs declared paid criteria through RewardKit.
+
+On `main`, the release workflow pushes the shared images before uploading the dataset with `HF_TOKEN`.
+The upload removes obsolete files under `tasks/` and the old quiz `data/` folder in the same commit.
+Files outside those managed folders remain unless the staged output replaces them.
+It checks image access with an empty Docker credential directory before the dataset upload.
+GHCR creates new packages as private, even for public repositories.
+After each package's first push, an owner must set its visibility to public in GitHub Packages and rerun the workflow.
+It tags HF revisions `gh-SHORT_SHA` and supports manual reruns on `main`.
+Pull requests build the same image tags locally and publish nothing.
 
 References: [Harbor v0.24.0](https://github.com/harbor-framework/harbor/tree/v0.24.0),
 [separate verifier inputs](https://docs.harborframework.com/tasks/separate-verifier).

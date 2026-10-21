@@ -450,13 +450,19 @@ A retry also reopens a missing results pull request without another push.
 `ethevals publish-logs --output DIR --repo OWNER/REPO --run-id ID --commit SHA` stages a trial release locally.
 Adding `--publish` uploads it through `gh` and saves a receipt under `DIR/published/`.
 
-`ethevals export-hf --output DIR` writes vanilla quizzes to an empty directory.
-It selects evals with `target.yaml`, vanilla mode, and no rubric.
-It prints a reason for every skipped eval.
+`ethevals export-hf --output DIR` copies every Harbor task folder to an empty directory.
+It writes `registry.json`, Harbor metadata in `eval.yaml`, and the dataset card.
+Task files remain unchanged. Published names combine pillar and task name under `tasks/`.
 `--hf-repo` and `--license` set dataset card values.
 `scripts/ci.py release` previews the HF upload; `--publish` performs it.
-[release.yml](../.github/workflows/release.yml) publishes to `buidlguidl/ethevals-test` on every push to `main` with `HF_TOKEN`.
+The upload removes obsolete task files and the old quiz `data/` exports in the same HF commit.
+[release.yml](../.github/workflows/release.yml) pushes shared images to GHCR before uploading every task to `buidlguidl/ethevals-test`.
+It runs on pushes to `main` with `HF_TOKEN` and the workflow's GHCR token.
 It tags dataset changes `gh-<short sha>` and supports manual reruns without inputs.
+`scripts/ci.py images` builds shared images locally with the same pinned GHCR tags used by the source tasks.
+Its `--publish` flag pushes Linux amd64 and arm64 images.
+Pull-request, fork, and paid-trial jobs build locally, so they need no prior image release.
+See [Dataset publication](../docs/harbor.md#dataset-publication) for standalone Harbor commands.
 
 ## Maintainer checks
 

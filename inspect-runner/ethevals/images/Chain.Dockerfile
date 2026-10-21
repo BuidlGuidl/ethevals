@@ -20,15 +20,4 @@ USER agent
 WORKDIR /eval
 ENTRYPOINT ["python3", "/opt/rpc_filter.py"]
 
-FROM tools AS sidecar
-USER root
-COPY --from=setup / /setup
-ENTRYPOINT ["python3", "/opt/start_chain.py"]
-
-FROM tools AS agent
-WORKDIR /workspace
-RUN ln -s /chain/chain_context.json /workspace/chain_context.json
-ENTRYPOINT []
-CMD ["sleep", "infinity"]
-
 FROM tools AS default
