@@ -425,6 +425,16 @@ Path('/logs/agent/auth-proof.json').write_text(json.dumps({
         "chain_matches_context": True, "fallback_without_api": None, "forced_fallback": None}
 
 
+def reach_host(task: Path) -> None:
+    """Map host.docker.internal to the host, which Docker on Linux doesn't do by itself."""
+    import yaml
+
+    compose = task / "environment/docker-compose.yaml"
+    data = yaml.safe_load(compose.read_text()) if compose.exists() else {"services": {}}
+    data["services"].setdefault("main", {}).setdefault("extra_hosts", []).append("host.docker.internal:host-gateway")
+    compose.write_text(yaml.safe_dump(data, sort_keys=False))
+
+
 @pytest.mark.docker
 def test_plain_harbor_and_board_agree_on_a_saved_judged_chain_trial(tmp_path, monkeypatch):
     from ethevals.trial_rows import results_row
@@ -433,6 +443,7 @@ def test_plain_harbor_and_board_agree_on_a_saved_judged_chain_trial(tmp_path, mo
     source = next(path.parent.parent for path in (root / "tasks").rglob("tests/transfer.toml"))
     task = tmp_path / source.parent.name / "judged-chain"
     shutil.copytree(source, task)
+    reach_host(task)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-judge-key")
 
     def reply(request):
@@ -489,6 +500,7 @@ def test_harbor_regrade_reuses_artifacts_without_an_agent_run(tmp_path, monkeypa
     task = tmp_path / "concepts/question"
     shutil.copytree(Path(__file__).parent / "fixtures/harbor/concepts/question", task)
     add_judge(task)
+    reach_host(task)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-judge-key")
     passed = False
 
