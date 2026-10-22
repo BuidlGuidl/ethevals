@@ -73,20 +73,20 @@ The expected final reply to a quiz: one accepted answer, or a list where any one
 _Avoid_: answer key, flag
 
 **Criteria**:
-Yes-or-no questions a judge answers about the agent's work. Each question is one check.
+Yes-or-no questions a judge answers about the agent's work, kept in a RewardKit judge file in the task's tests. Each question is one check.
 _Avoid_: rubric
 
 **Judge**:
-The model that answers criteria.
+The model that answers criteria. It runs in the verifier.
 _Avoid_: grader
 
 **Solution**:
 A working answer that ships with the task. It proves every check can pass.
 _Avoid_: reference solution, golden answer, oracle
 
-**Motivation**:
-One line on why the task exists.
-_Avoid_: notes, description
+**Description**:
+One line on why the task exists, kept in the `[task]` table.
+_Avoid_: motivation, notes
 
 **Quiz**:
 A task that asks a question with a fixed answer and checks the reply against a target. The word describes a task. It is not a field.
@@ -94,20 +94,24 @@ A task that asks a question with a fixed answer and checks the reply against a t
 ## How tasks are run and checked
 
 **Trial**:
-One agent on a model, or one bare model in the vanilla mode, on one task in one mode at one effort, executed once. The trial number counts repeats. A trial passes only if every check passes.
+One agent on a model, or one bare model in the vanilla mode, on one task in one mode at one effort, executed once. The trial number counts repeats. A trial passes when its reward is 1.
 _Avoid_: epoch, run
 
 **Job**:
-A batch of trials run together.
+A batch of trials run together. Its `n_attempts` is how many scored trials it runs for each task, agent, and mode.
 
-**Attempt**:
-One execution of a trial. An error can lead to another attempt, up to the retry limit.
+**Retry**:
+Running a trial again after an error, up to the job's retry limit. A retry adds no scored trial. Harbor's exclusion list decides which errors get one.
+_Avoid_: attempt
 
 **Time limit**:
-The wall-clock time one trial gets, the same for every task. A trial that reaches it is checked on what the agent left.
+The wall-clock time an agent or verifier gets. Harbor's default applies unless a task sets its own, and a task sets one only when it needs it. A trial that reaches it is checked on what the agent left.
 
 **Check**:
-One named pass-or-fail result about a trial, with a one-line reason. A test check takes its test function's name, and a criteria check takes its question's heading.
+One named pass-or-fail result about a trial, with a one-line reason. A test check takes its test function's name, and a criteria check takes its criterion's name.
+
+**Reward**:
+Harbor's result for a trial, written by RewardKit. `reward` is 1 only when every check passes. A task can add other reward keys.
 
 **Compile**:
 The check that the tests, and the agent code they import, compile. A task has one, shared by every test tool. If it fails, every test fails with it.
