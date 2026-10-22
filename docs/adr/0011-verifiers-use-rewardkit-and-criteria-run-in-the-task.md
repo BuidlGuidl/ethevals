@@ -60,7 +60,7 @@ It amends ADR 0010.
 
 ## Known gaps
 
-- **The judge key sits in the verifier.** For a chain task, that's the agent's container after the agent stops, and nothing freezes a process the agent left running there. The board uses a judge-only key with its own spend limit.
+- **The judge key sits in the verifier.** For a chain task, that's the agent's container after the agent stops, and nothing freezes a process the agent left running there. Today's chain task runs its verifier as root and its agent as another user, so a leftover agent process can't read the verifier's environment. The judge still shares `ANTHROPIC_API_KEY` with the vanilla Opus agent. Giving the judge its own key with its own spend limit is a follow-up.
 - **Locally, nothing stops a stuck trial** whose agent has no budget flag, such as OpenCode on OpenRouter. On CI, the step timeout does.
 - **A judged task costs outside users money.** Running it from Hugging Face needs the user's own judge key.
 
