@@ -91,13 +91,13 @@ def check_folder(folder: Path, secrets: dict[str, set[bytes]]) -> tuple[list[str
                 raise ValueError("Publication forbids symlinks and special files")
             name = path.relative_to(folder).as_posix().encode()
             matches(name)
+            # Artifact uploads keep files only, so empty folders stay out of the digest.
+            if stat.S_ISDIR(mode):
+                continue
             if path.name == RECEIPT and path.parent == folder:
                 matches(path.read_bytes())
                 continue
             digest.update(len(name).to_bytes(8) + name)
-            if stat.S_ISDIR(mode):
-                digest.update(b"directory")
-                continue
             digest.update(path.stat().st_size.to_bytes(8))
             tail = b""
             with path.open("rb") as file:

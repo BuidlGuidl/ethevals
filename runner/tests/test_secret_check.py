@@ -141,6 +141,25 @@ def test_whole_job_check_withholds_artifact_and_release_for_declared_secrets(tmp
     assert (release["assets"], release["rows"][0]["error_kind"]) == ([], "secret")
 
 
+def test_a_checked_job_still_publishes_after_the_artifact_upload_drops_its_empty_folders(tmp_path):
+    config = load_job(job_config(tmp_path, "free"))
+    raw, artifact = tmp_path / "raw", tmp_path / "artifact"
+    folder = raw / "jobs/job/trial"
+    shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", folder)
+    shutil.copyfile(folder / "board.json", folder.parent / "board.json")
+    # Harbor leaves empty folders in a trial, and GitHub's artifact upload keeps only files.
+    (folder / "artifacts/logs/artifacts").mkdir(parents=True)
+    (folder / "artifacts/logs/.hidden").write_text("kept with include-hidden-files\n")
+    check_output(raw, secret_values(config, []))
+    stage_artifact(raw, artifact)
+    for path in sorted(artifact.rglob("*"), reverse=True):
+        if path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
+    require_checked(artifact / "jobs/job")
+    report = publish_logs(tmp_path / "release", "owner/repo", "22", "a" * 40, rows=recover_rows(artifact))
+    assert report["rows"][0]["status"] == "passed"
+
+
 def test_clean_checked_artifact_survives_download_and_force_flags(tmp_path):
     config = load_job(job_config(tmp_path, "free"))
     config.agents["local"].env = {"NEW_FORCE_AUTH": "1", "AGENT_BASE_URL": "https://models.example/v1"}
