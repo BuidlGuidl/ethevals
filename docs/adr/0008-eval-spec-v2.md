@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0010
 ---
 
 # Eval spec v2: the files declare the eval, and Foundry runs every step

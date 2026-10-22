@@ -1,0 +1,7 @@
+[profile.default]
+src = "tests"
+test = "tests"
+libs = []
+ffi = false
+auto_detect_remappings = false
+auto_detect_solc = true

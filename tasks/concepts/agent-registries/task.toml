@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/agent-registries"
+description = "Check whether a model knows the ERC that gives AI agents onchain identity, reputation, and validation registries."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "erc", "agent-discovery"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

@@ -1,0 +1,22 @@
+schema_version = "1.3"
+
+[task]
+name = "buidlguidl/send-six-decimal-token"
+description = "Check whether an agent reads a token's decimals before sending an exact amount, and confirms the transfer landed."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "erc20", "transfers"]
+
+[metadata]
+pillar = "transactions"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[environment]
+cpus = 1
+memory_mb = 4096

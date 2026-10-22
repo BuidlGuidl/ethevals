@@ -1,91 +1,56 @@
 # ETH Evals board
 
-The site builds a static board from the runner's catalog and results.
-The browser receives public declarations and row details, without targets or scorer files.
-[The root guide](../README.md#quickstart) covers opening the board.
+The site builds a static board from Harbor task declarations and results rows.
+The browser receives public instructions and check records, without verifier files or targets.
 
 ## Build
 
 Use Node.js 22 or later, pnpm 9.14.2, and uv with Python 3.13.
 From `site/`, run `pnpm install --frozen-lockfile`, then `pnpm build`.
-The build writes `out/` for any static file host; no runtime server or database is required.
-A normal build runs `ethevals catalog` to refresh `.catalog/catalog.json`.
-The catalog has an `evals` list and one `skills_hash` for the current pack.
+The build writes `out/` for a static file host.
+It refreshes `.catalog/catalog.json` through `ethevals catalog`.
+The catalog lists tasks and the current skills hash.
 
-## Demo data and settings
-
-Run `ETHEVALS_DEMO=1 pnpm build` to use the invented board.
-The banner labels demo results; log links open a bundled demo transcript.
-Run `pnpm build` without that variable to return to real results.
-
-All data paths resolve from `site/`.
-
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `ETHEVALS_DEMO` | `0` | `1` selects `demo/catalog.json` and `demo/rows.jsonl`. |
-| `ETHEVALS_ROWS` | `../results/rows.jsonl` | One runner results file. |
-
+Run `ETHEVALS_DEMO=1 pnpm build` for an invented board.
+The banner labels its results, and its trajectory links are examples.
 Demo mode and an explicit rows path cannot be combined.
-A missing default rows file produces the empty state; a missing explicit file fails the build.
-Malformed rows and duplicate epochs fail with their file and line.
-The loader accepts schema version 6 and skips older rows.
-It displays only current eval hashes and, for skills-mode rows, the current skills hash.
-A skills change reruns only skills-mode epochs and preserves internet and vanilla results.
-The leaderboard switches between Internet, Internet + Skills, and Model only.
-Internet and Internet + Skills share configuration rows; Model only shows bare models.
-The eval matrix has its own mode toggle and groups evals under pillar bands.
-The URL keeps the leaderboard mode in `mode` and the matrix mode in `evals`.
-The How it works page explains the pillars, modes, isolated runs, and publication pipeline.
-The comparison page shows up to five configurations and highlights the best value for each metric.
-The build reports loaded, current, and stale row counts.
 
-Published rows supply full log URLs.
-`ETHEVALS_LOGS_TOKEN` lets the build download missing release logs into `site/.logs/` for the bundled viewer.
-The token needs read-only Contents access to `BuidlGuidl/ethevals`.
-To download a run's logs from the repository root, run `gh release download <tag> --repo BuidlGuidl/ethevals --dir site/.logs`. The tag is in each row's `log_url`.
-Build and dev bundle local `.eval` files into an Inspect viewer; matching board links open it and retain a download link.
-`vercel.json` advertises byte-range support for bundled logs so Inspect can read their size when Vercel omits `Content-Length`.
-See [the runner reference](../inspect-runner/README.md#ci-and-publication) for publication.
+`ETHEVALS_ROWS` selects a results file, relative to `site/`.
+It defaults to `../results/rows.jsonl`.
+A missing default file produces an empty board.
+A missing explicit file fails the build.
+Malformed rows and duplicate trials fail with their file and line.
+The loader accepts schema version 8 and skips older rows.
+It shows only current task hashes and, for skills-mode rows, the current skills hash.
+The 160 Inspect rows have been removed.
 
-## Scores
+## Scores and trajectories
 
-An eval score is its share of passed epochs; errors remain visible but do not enter the denominator.
-A pillar score averages eval scores, excluding evals without scored epochs.
-The board shows epoch counts instead of confidence intervals.
-Unsupported modes show `Not applicable`; supported cells without scores show `No epochs yet`.
-Overall is the mean of scored pillar scores, excluding pillars without scores.
-Skill lift averages the change over evals scored in both Internet and Internet + Skills for the same configuration.
-Overall lift averages the pillar lifts, excluding pillars without paired evals.
-Lift uses percentage points and stays unknown when no evals pair.
-Each configuration includes its effort; different efforts stay separate.
-`$ / pass` divides the model cost of scored epochs by passed epochs.
-No passes or a missing model price produce `–`.
-Cost limits count as failures. Errors remain in the drawer and do not enter scores or the cost calculation.
+The task matrix shows passed trials out of scored trials.
+Errors stay visible in the drawer and do not enter scores.
+A pillar score averages its task pass rates.
+Overall averages scored pillars.
+The mode controls select Internet, Internet + Skills, or Model only.
+Different agents, models, and efforts stay separate.
+`$ / pass` divides model cost for scored trials by passed trials.
+No passes or unknown cost produce `–`.
+Cost adds agent and judge API prices, even when a plan paid.
 
-Epoch cost adds model and grader cost. If either amount is unknown, the total stays unknown.
-The drawer shows cost, tokens, elapsed time, checks, and any error or limit from the row.
-Its list, eval, and run views use the `d` query parameter; browser Back closes a drawer opened from the board.
-The eval view lists runs in a table. Each row opens that run's checks and log.
-The selection's `run` field keeps the run in the URL; the run switcher changes only that field.
-The selected run has four stat tiles and a Scorer verdict panel below the switcher.
-Failed checks show their reasons. Passed checks show their names without reasons.
-"All runs" returns to the eval view. The drawer keeps the mode selected when it opened.
-Example links point to highlighted rows in the eval matrix.
-Log links use the normal Inspect viewer when a matching log is bundled.
-Without a bundled log, the link says "Download log" and points to the published file.
-The loader computes cells, summaries, and lifts once; the client reuses them across pages.
+Each trial drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.
+Its trajectory link opens the row's `trajectory_url`.
+Harbor Hub links say "Open full trial on Harbor Hub" and open the public trial page.
+If the Hub upload fails or skips, published rows link to the release's trajectory JSON.
+Published rows use a full HTTP URL.
+Local rows use `/trajectories/<id>.json` and a `trajectory_file` path.
+The build copies that file into the static export.
+Relative file paths resolve from the rows file's directory.
+A local link without a file fails the build.
+The browser never receives host paths.
+No Inspect viewer or log download runs during the build.
 
-## Interface
-
-The site ports the geek design from Pablo's prototype to React components.
-Tailwind CSS v4 defines its dark tokens and responsive layout in `app/globals.css`.
-Styling uses named classes in `globals.css` built with `@apply`.
-The used shadcn/ui components are Sheet, Tooltip, and ToggleGroup, built on Radix primitives.
-JetBrains Mono covers the interface, VT323 covers section headings, and Archivo covers diagram text.
-`next/font/google` bundles all three fonts during the build.
-Motion animates the Results logo into the nav; reduced motion disables the animation.
-Lucide supplies the stroke icons. The pipeline and isolated-run diagrams use inline SVG.
-On phones, diagram notes form a vertical timeline and the detail drawer fills the screen.
+The drawer's `d` query parameter keeps its task, mode, configuration, and trial selection.
+Browser Back closes a drawer opened from the board.
+The loader computes cells and summaries once for all pages.
 
 ## Checks
 
@@ -98,6 +63,6 @@ pnpm lint
 pnpm build
 ```
 
-Tests include a key-free runner integration with fixture evals and no Docker.
-After a demo build, `pnpm exec tsx scripts/check-export.ts demo` checks the exported assets.
-After a build with no results, the same command with `empty` checks the empty board.
+The runner integration reads a recorded real Harbor oracle trial without Docker or provider keys.
+After a demo build, run `pnpm exec tsx scripts/check-export.ts demo`.
+After a build with no results, use `empty` instead.

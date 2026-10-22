@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: superseded by ADR-0010
 ---
 
 # Run evals on Inspect

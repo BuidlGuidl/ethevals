@@ -1,0 +1,13 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+atif-trajectory = "/logs/agent/trajectory.json"
+guard = "flag"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "verified_transfer"
+type = "binary"
+description = "Before reporting success, did the agent confirm on-chain that the transfer landed, for example by reading the transaction receipt or the recipient's token balance?"

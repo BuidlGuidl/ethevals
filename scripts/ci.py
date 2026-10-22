@@ -1,28 +1,25 @@
 """Local entry points for the workflows. Remote writes require --publish."""
 import argparse
+import asyncio
 import base64
 from contextlib import redirect_stdout
-import hashlib
 import io
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
 from urllib.request import Request, urlopen
 
-from inspect_swe._codex_cli.agentbinary import codex_cli_binary_source, _platform_to_codex_arch
-from inspect_swe._opencode.agentbinary import opencode_binary_source, _asset_name_candidates
-
-from ethevals.agents import HARNESSES
 from ethevals.cli import main as ethevals, parse_args
-from ethevals.config import load_config
+from ethevals.job_config import load_job
+from ethevals.jobs import budget_check, run
 from ethevals.hf import DEFAULT_REPO, write_hf
-from ethevals.loader import load_eval
+from ethevals.images.tag import BUILD_INPUTS, image_tag
 from ethevals.publish import publish_logs
-from ethevals.rows import fold_rows, read_rows, write_rows, store_rows
+from ethevals.secret_check import RECEIPT, check_output, require_checked, secret_values, stage_artifact
+from ethevals.trial_rows import SCHEMA_VERSION, fold_rows, previous_rows, read_rows, write_rows, recover_rows, trial_identity
 
 BASE_BRANCH = "main"
 RESULTS_BRANCH = "ci/results"
@@ -30,43 +27,6 @@ RESULTS_BRANCH = "ci/results"
 
 def command(*args, **kwargs):
     return subprocess.run(list(map(str, args)), check=True, text=kwargs.pop("text", True), **kwargs)
-
-
-def prefetch_release(source, version, repo, tag, candidates):
-    platform = "linux-x64"  # The CI runner image uses Debian on ubuntu-latest x64.
-    release = json.loads(command("gh", "api", f"repos/{repo}/releases/tags/{tag}", capture_output=True).stdout)
-    assets = {asset["name"]: asset for asset in release["assets"]}
-    asset = next((assets[name] for name in candidates if name in assets), None)
-    if asset is None:
-        raise ValueError(f"{repo} {tag}: missing asset {', '.join(candidates)}")
-    name = asset["name"]
-    digest = asset.get("digest") or ""
-    if not digest.startswith("sha256:") or len(digest[7:]) != 64:
-        raise ValueError(f"{name}: release has no valid sha256 digest")
-    cache = source.cached_package_path(version, platform)
-    with tempfile.TemporaryDirectory(dir=cache.parent) as directory:
-        downloaded = Path(directory) / name
-        command("gh", "release", "download", tag, "--repo", repo, "--pattern", name, "--output", downloaded)
-        with downloaded.open("rb") as archive:
-            actual = "sha256:" + hashlib.file_digest(archive, "sha256").hexdigest()
-        if actual != digest:
-            raise ValueError(f"{name}: sha256 mismatch: expected {digest}, got {actual}")
-        downloaded.replace(cache)
-    print(f"{name}: {digest} matches; cached at {cache}")
-
-
-def prefetch():
-    if not os.environ.get("GH_TOKEN"):
-        raise ValueError("prefetch requires GH_TOKEN to read public releases")
-    platform = "linux-x64"
-    codex_version = HARNESSES["codex_cli"].version
-    prefetch_release(codex_cli_binary_source(), codex_version, "openai/codex", f"rust-v{codex_version}",
-                     [f"codex-package-{_platform_to_codex_arch(platform)}.tar.gz"])
-    opencode_version = HARNESSES["opencode"].version
-    prefetch_release(opencode_binary_source(), opencode_version, "anomalyco/opencode", f"v{opencode_version}",
-                     _asset_name_candidates(platform))
-    # Claude Code downloads from claude.ai and Google Cloud Storage, not GitHub.
-    return 0
 
 
 def stored_file(ref, path):
@@ -80,7 +40,8 @@ def result_record(own_rows=()):
     rows = []
     for ref in (f"refs/remotes/origin/{BASE_BRANCH}", f"refs/remotes/origin/{RESULTS_BRANCH}"):
         content = stored_file(ref, "results/rows.jsonl") or ""
-        rows = fold_rows(rows, [json.loads(line) for line in content.splitlines() if line.strip()])
+        rows = fold_rows(rows, [row for line in content.splitlines() if line.strip()
+                               for row in [json.loads(line)] if row.get("schema_version") == SCHEMA_VERSION])
     return fold_rows(rows, own_rows)
 
 
@@ -89,7 +50,7 @@ def restore_results(rows):
     write_rows(rows, result_record())
 
 
-def plan_epochs(args, run_args):
+def plan_trials(args, run_args):
     argv = ["plan", *run_args, "--output", str(args.output)]
     _, options = parse_args(argv)
     if args.output.exists():
@@ -100,7 +61,7 @@ def plan_epochs(args, run_args):
         restore_results(rows)
     else:
         write_rows(rows, read_rows(options.rows))
-    config = load_config(options.config, effort=options.effort)
+    config = load_job(options.config)
     (args.output / "config.json").write_text(config.model_dump_json() + "\n")
     captured = io.StringIO()
     with redirect_stdout(captured):
@@ -108,18 +69,70 @@ def plan_epochs(args, run_args):
     print(captured.getvalue(), end="")
     report = json.loads(captured.getvalue())
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
-    if status:
-        return status
-    missing = report["missing"][:256]
-    matrix = {"include": [{"index": index, **{key: row[key] for key in
-               ("eval_id", "actor_key", "mode", "epoch", "worst_case_usd")}} for index, row in enumerate(missing)]}
-    if len(report["missing"]) > len(missing):
-        print(f"Deferred {len(report['missing']) - len(missing)} epochs to a later run.", file=sys.stderr)
+    # A zero CI budget disables even plan-paid trials whose API reserve is zero.
+    scheduled, matrix, plan_counts = [], [], {}
+    if report["within_budget"] and options.budget and options.budget > 0:
+        for row in report["missing"]:
+            group = config.agents[row["agent_key"]].name if row["paid_by"] == "plan" else ""
+            # GitHub accepts at most 100 pending jobs per concurrency group.
+            if len(scheduled) == 256 or group and plan_counts.get(group, 0) == 100:
+                continue
+            index = len(scheduled)
+            item = {**row, "task_path": os.path.relpath(row["task_path"])}
+            scheduled.append({"missing": [item], "selected": [trial_identity(row)],
+                              "missing_trials": 1, "worst_case_usd": row["worst_case_usd"]})
+            matrix.append({"index": index, "task_id": row["task_id"], "agent_key": row["agent_key"],
+                           "mode": row["mode"], "trial": row["trial"], "plan_group": group})
+            if group:
+                plan_counts[group] = plan_counts.get(group, 0) + 1
+    (args.output / "trials.json").write_text(json.dumps(scheduled, indent=2) + "\n")
+    deferred = len(report["missing"]) - len(scheduled)
+    if deferred:
+        print(f"Deferred {deferred} trials to a later run.", file=sys.stderr)
     if args.github_output:
         with args.github_output.open("a") as output:
-            output.write(f"matrix={json.dumps(matrix, separators=(',', ':'))}\n")
-            output.write(f"missing_epochs={report['missing_epochs']}\n")
-    return 0
+            output.write(f"matrix={json.dumps({'include': matrix}, separators=(',', ':'))}\n")
+            output.write(f"scheduled_trials={len(scheduled)}\n")
+    return status if options.budget else 0
+
+
+def run_trial(args):
+    scheduled = json.loads((args.plan / "trials.json").read_text())
+    if not 0 <= args.index < len(scheduled):
+        raise ValueError("Trial index is outside the admitted plan")
+    report = scheduled[args.index]
+    for item in report["missing"]:
+        item["task_path"] = str(Path(item["task_path"]).resolve())
+    config = load_job(args.plan / "config.json")
+    secrets = secret_values(config, [Path(item["task_path"]) for item in report["missing"]])
+    report = budget_check(report, report["worst_case_usd"], required=True)
+    previous = previous_rows(args.output, args.plan / "rows.jsonl")
+    args.output.mkdir(parents=True, exist_ok=True)
+    public = args.output / "public"
+    if public.exists():
+        import shutil
+        shutil.rmtree(public)
+    (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
+    # Harbor uploads this file itself; it must stay outside the artifact directory.
+    with tempfile.TemporaryDirectory(prefix="ethevals-auth-") as directory:
+        auth = os.environ.pop("CODEX_AUTH_JSON", None)
+        old_path = os.environ.get("CODEX_AUTH_JSON_PATH")
+        try:
+            if auth:
+                path = Path(directory) / "auth.json"
+                path.touch(mode=0o600)
+                path.write_text(auth)
+                os.environ["CODEX_AUTH_JSON_PATH"] = str(path)
+            success = asyncio.run(run(report, config, args.output, previous, publication_secrets=secrets))
+            print(f"Results rows: {args.output / 'rows.jsonl'}")
+            return 0 if success else 1
+        finally:
+            check_output(args.output, secrets, require_inventory=True)
+            stage_artifact(args.output, public)
+            if old_path is None:
+                os.environ.pop("CODEX_AUTH_JSON_PATH", None)
+            else:
+                os.environ["CODEX_AUTH_JSON_PATH"] = old_path
 
 
 def commit_results(rows, repo, publish):
@@ -145,7 +158,7 @@ def commit_results(rows, repo, publish):
         command("git", "update-index", "--add", "--cacheinfo", f"100644,{blob},results/rows.jsonl", env=environment)
         tree = command("git", "write-tree", capture_output=True, env=environment).stdout.strip()
         previous_tree = command("git", "rev-parse", f"{ref if has_results else base}^{{tree}}", capture_output=True).stdout.strip()
-        commit = command("git", "commit-tree", tree, *parents, "-m", "Record eval attempts and log links",
+        commit = command("git", "commit-tree", tree, *parents, "-m", "Record trials and trajectory links",
                          capture_output=True, env=environment).stdout.strip() if tree != previous_tree else None
     environment.pop("GIT_INDEX_FILE")
     if commit:
@@ -162,31 +175,32 @@ def commit_results(rows, repo, publish):
                                   "--base", BASE_BRANCH, "--state", "open", "--json", "number", capture_output=True).stdout)
     if not existing:
         command("gh", "pr", "create", "--repo", repo, "--head", RESULTS_BRANCH, "--base", BASE_BRANCH,
-                "--title", "Record eval results", "--body",
-                "Add completed epochs and execution errors. Full logs for scored epochs link to results releases. "
-                "Approve the PR checks before merging. Errors retry automatically within the attempt cap on the next run.")
+                "--title", "Record trial results", "--body",
+                "Add completed trials and execution errors. Trajectories and verifier output link to results releases. "
+                "Approve the PR checks before merging. Errors retry within the retry cap on the next run.")
 
 
 def publish_artifacts(args):
-    # Rebuild each attempt from its own logs, even if the run timed out.
+    # Rebuild rows at their new download paths, even after an interrupted job.
     rows = []
     combined = args.output / "combined"
-    logs = combined / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    for output in sorted(args.output.glob("eval-run-*")):
-        own_rows = store_rows(output)
-        rows = fold_rows(rows, own_rows)
-        for source in sorted((output / "logs").glob("*.eval")):
-            shutil.copyfile(source, logs / source.name)
+    for output in sorted(args.output.glob("trial-run-*")):
+        for folder in sorted((output / "jobs").glob("*")):
+            receipt = folder / RECEIPT
+            if not receipt.is_file() or not json.loads(receipt.read_text()).get("withheld"):
+                require_checked(folder)
+        rows = fold_rows(rows, recover_rows(output))
     if not rows:
         return 0
-    linked = [{**row, "log_url": row.get("log_url") or
-               f"https://github.com/{args.repo}/releases/download/results-{args.run_id}/{Path(row['log_file']).name}"}
-              if row["status"] in {"passed", "failed"} else row for row in rows]
-    commit_results(result_record(linked), args.repo, args.publish)
     try:
-        report = publish_logs(combined, args.repo, args.run_id, args.commit,
-                              publish=args.publish, rows=rows, resume=True)
+        report = publish_logs(combined, args.repo, args.run_id, args.commit, rows=rows)
+        linked = result_record(report["rows"])
+        write_rows(combined / "rows.jsonl", linked)
+        commit_results(linked, args.repo, args.publish)
+        if args.publish:
+            report = publish_logs(combined, args.repo, args.run_id, args.commit,
+                                  publish=True, rows=rows, resume=True)
+        (combined / "release.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))
     except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
         print(f"{combined}: publication failed: {error}", file=sys.stderr)
@@ -194,15 +208,23 @@ def publish_artifacts(args):
     return 0
 
 
-def checks(args, evals):
-    command(sys.executable, "-m", "ethevals.cli", "validate")
-    command(sys.executable, "-m", "ethevals.cli", "check", "--output", args.output / "check")
-    command(sys.executable, "-m", "pytest", "-q")
-    command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker",
-            "--ignore=inspect-runner/tests/test_agents_docker.py")
-    write_hf(evals, args.output / "hf", DEFAULT_REPO, None)
-    for task in ("test", "typecheck", "lint", "build"):
-        command("pnpm", task, cwd="site")
+def checks(args):
+    # CI runs the parts as parallel jobs; locally, the default runs them all in order.
+    if args.part in ("all", "free", "docker"):
+        images(argparse.Namespace(publish=False))
+    if args.part in ("all", "free"):
+        command(sys.executable, "-m", "ethevals.cli", "free-check", "--output", args.output / "harbor")
+    if args.part == "unit":
+        command(sys.executable, "-m", "ethevals.cli", "lint")
+    if args.part in ("all", "unit"):
+        command(sys.executable, "-m", "pytest", "-q")
+    if args.part in ("all", "docker"):
+        # Pytest reads a bare "I/N" as a test path before it loads the option, so pass it joined.
+        shard = [f"--shard={args.shard}"] if args.shard else []
+        command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker", *shard)
+    if args.part in ("all", "unit"):
+        for task in ("test", "typecheck", "lint", "build"):
+            command("pnpm", task, cwd="site")
     return 0
 
 
@@ -218,15 +240,36 @@ def hf_tag(sha):
     return f"gh-{sha[:7]}"
 
 
-def release(args, evals):
+def images(args):
+    directory = Path(__file__).resolve().parents[1] / "runner/ethevals/images"
+    tags = []
+    for name, inputs in BUILD_INPUTS.items():
+        dockerfile = inputs[0]
+        tag = "ghcr.io/buidlguidl/" + image_tag(directory, name)
+        tags.append(tag)
+        if args.publish:
+            command("docker", "buildx", "build", "--platform", "linux/amd64,linux/arm64", "--push",
+                    "--file", directory / dockerfile, "--tag", tag, directory)
+        else:
+            command("docker", "build", "--file", directory / dockerfile, "--tag", tag, directory)
+    if args.publish:
+        # GHCR starts new packages as private. Do not publish tasks until readers can pull them.
+        with tempfile.TemporaryDirectory(prefix="ethevals-public-image-") as anonymous:
+            for tag in tags:
+                command("docker", "--config", anonymous, "manifest", "inspect", tag, stdout=subprocess.DEVNULL)
+    return 0
+
+
+def release(args):
     if not args.license:
         raise ValueError("Choose the dataset license before a release")
-    print(json.dumps(write_hf(evals, args.output, args.hf_repo, args.license), indent=2))
+    paths = sorted(path.parent for path in Path("tasks").rglob("task.toml"))
+    print(json.dumps(write_hf(paths, args.output, args.hf_repo, args.license), indent=2))
     commit = command("git", "rev-parse", "HEAD", capture_output=True).stdout.strip()
     tag = hf_tag(commit)
     message = f"ETH Evals from BuidlGuidl/ethevals@{commit}"
     command_line = ["hf", "upload", args.hf_repo, str(args.output), ".", "--repo-type", "dataset",
-                    "--commit-message", message]
+                    "--commit-message", message, "--delete", "tasks/*", "--delete", "data/*"]
     if args.publish:
         command(*command_line)
         head, tags = hf_get(args.hf_repo, "commits/main")[0], hf_get(args.hf_repo, "refs")["tags"]
@@ -240,13 +283,21 @@ def release(args, evals):
 def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("prefetch")
     checks_parser = commands.add_parser("checks")
     checks_parser.add_argument("--output", type=Path, required=True)
-    planner = commands.add_parser("plan-epochs")
+    checks_parser.add_argument("--part", choices=("all", "unit", "free", "docker"), default="all",
+                               help="Run one part of the PR job: unit and site, the free check, or the Docker proofs.")
+    checks_parser.add_argument("--shard", help="With --part docker, run shard I of N, written I/N.")
+    builder = commands.add_parser("images", help="Build shared images with the GHCR tags used by task folders.")
+    builder.add_argument("--publish", action="store_true", help="Push multi-architecture images to GHCR.")
+    planner = commands.add_parser("plan-trials")
     planner.add_argument("--output", type=Path, required=True)
     planner.add_argument("--restore-results", action="store_true")
     planner.add_argument("--github-output", type=Path)
+    trial = commands.add_parser("run-trial")
+    trial.add_argument("--plan", type=Path, required=True)
+    trial.add_argument("--index", type=int, required=True)
+    trial.add_argument("--output", type=Path, required=True)
     publisher = commands.add_parser("publish-results")
     publisher.add_argument("--output", type=Path, required=True)
     publisher.add_argument("--repo", required=True)
@@ -260,16 +311,18 @@ def main():
     release_parser.add_argument("--publish", action="store_true")
     args, run_args = parser.parse_known_args()
     try:
-        if args.command == "plan-epochs":
-            return plan_epochs(args, run_args)
+        if args.command == "plan-trials":
+            return plan_trials(args, run_args)
         args = parser.parse_args()
-        if args.command == "prefetch":
-            return prefetch()
+        if args.command == "run-trial":
+            return run_trial(args)
+        if args.command == "images":
+            return images(args)
         if args.command == "publish-results":
             return publish_artifacts(args)
-        config = load_config()
-        evals = [load_eval(path, config) for path in sorted(Path("evals").glob("*/*"))]
-        return {"checks": checks, "release": release}[args.command](args, evals)
+        if args.command == "checks":
+            return checks(args)
+        return release(args)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(2, f"ci: {error}\n")
 

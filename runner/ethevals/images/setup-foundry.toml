@@ -1,0 +1,5 @@
+[profile.default]
+src = "setup"
+remappings = ["forge-std/=/opt/solidity/lib/forge-std/src/", "ethevals/=/opt/solidity/lib/"]
+ffi = false
+fs_permissions = [{ access = "read-write", path = "chain_context.json" }, { access = "read-write", path = "private_chain_context.json" }]

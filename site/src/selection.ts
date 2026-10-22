@@ -19,7 +19,7 @@ export function decodeSelection(query: URLSearchParams, data: BoardData): Select
     if (evaluation && (!evaluation.modes.includes(mode) || (value.pillar && evaluation.pillar !== value.pillar))) return null;
     if (value.run !== undefined && (!evaluation || !Number.isInteger(value.run)
       || !data.tables[mode].pillars[evaluation.pillar].evals.find((entry) => entry.id === evaluation.id)
-        ?.cells[agentKey(agent)].epochs.some((epoch) => epoch.epoch === value.run))) return null;
+        ?.cells[agentKey(agent)].trials.some((trial) => trial.trial === value.run))) return null;
     return { agent, mode, pillar: value.pillar, evaluation, fromList: value.list === true ? true : undefined, run: value.run };
   } catch { return null; }
 }

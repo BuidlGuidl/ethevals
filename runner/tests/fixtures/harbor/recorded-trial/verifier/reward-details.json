@@ -1,0 +1,14 @@
+{
+  "reward": {
+    "score": 1.0,
+    "criteria": [{
+      "name": "unit",
+      "value": 1.0,
+      "raw": true,
+      "weight": 1.0,
+      "description": "unit",
+      "reasoning": "The final reply matches."
+    }],
+    "kind": "programmatic"
+  }
+}

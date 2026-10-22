@@ -1,0 +1,109 @@
+harbor_version: 0.24.0
+n_attempts: 3
+retry:
+  max_retries: 1
+hub:
+  org: buidlguidl
+  key_env: HARBOR_API_KEY
+judge:
+  model: anthropic/claude-opus-5-5
+  effort: high
+  paid_by: api_key
+  cost_limit_usd: 2.0
+  key_env: ANTHROPIC_API_KEY
+modes: [vanilla, internet, skills]
+models:
+  opus-5.5:
+    name: anthropic/claude-opus-5-5
+    effort: high
+  gpt-6.1-sol:
+    name: openai/gpt-6.1-sol
+    effort: high
+  kimi-k3:
+    name: openrouter/moonshotai/kimi-k3
+    effort: high
+  glm-5.3:
+    name: openrouter/z-ai/glm-5.3
+    effort: high
+agents:
+  vanilla-opus-5.5:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: opus-5.5
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      ANTHROPIC_API_KEY: '${ANTHROPIC_API_KEY:-}'
+  vanilla-gpt-6.1-sol:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: gpt-6.1-sol
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENAI_API_KEY: '${OPENAI_API_KEY:-}'
+  vanilla-kimi-k3:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: kimi-k3
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+  vanilla-glm-5.3:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: glm-5.3
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+  claude-code-opus-5.5:
+    name: claude-code
+    version: 2.1.284
+    model: opus-5.5
+    modes: [internet, skills]
+    paid_by: plan
+    cost_limit_usd: 20.0
+    env:
+      # Harbor 0.24.0 redacts AUTH values; uppercase preserves JSON numbers and booleans.
+      CLAUDE_FORCE_OAUTH: "YES"
+    required_env: [CLAUDE_CODE_OAUTH_TOKEN]
+  codex-gpt-6.1-sol:
+    name: codex
+    version: 0.163.0
+    model: gpt-6.1-sol
+    modes: [internet, skills]
+    paid_by: plan
+    cost_limit_usd: 20.0
+    env:
+      CODEX_FORCE_AUTH_JSON: "YES"
+      # CI writes the credential file; reserve its input name and clear the raw JSON.
+      CODEX_AUTH_JSON: ""
+    required_files:
+      - path: '${CODEX_AUTH_JSON_PATH:-~/.codex/auth.json}'
+        policy: plan_tokens
+  opencode-kimi-k3:
+    name: opencode
+    version: 1.18.33
+    model: kimi-k3
+    modes: [internet, skills]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+      EXA_API_KEY: '${EXA_API_KEY:-}'
+  opencode-glm-5.3:
+    name: opencode
+    version: 1.18.33
+    model: glm-5.3
+    modes: [internet, skills]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+      EXA_API_KEY: '${EXA_API_KEY:-}'

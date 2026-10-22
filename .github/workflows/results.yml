@@ -1,4 +1,4 @@
-name: Eval results
+name: Trial results
 on:
   push:
     branches: [main]
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       budget:
-        description: Worst-case USD budget for missing epochs
+        description: Worst-case USD budget for missing trials
         required: true
         type: string
 permissions:
@@ -17,13 +17,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   plan:
-    name: Plan missing epochs
+    name: Plan missing trials
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
-      missing_epochs: ${{ steps.plan.outputs.missing_epochs }}
+      scheduled_trials: ${{ steps.plan.outputs.scheduled_trials }}
       sha: ${{ steps.plan.outputs.sha }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -39,25 +39,31 @@ jobs:
         id: plan
         env:
           RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
+          MAINNET_RPC_URL: &mainnet-rpc ${{ secrets.MAINNET_RPC_URL }}
+          BASE_RPC_URL: &base-rpc ${{ secrets.BASE_RPC_URL }}
         run: |
-          uv run python scripts/ci.py plan-epochs --modes vanilla internet skills --budget "$RUN_BUDGET" --restore-results --output results/ci-plan --github-output "$GITHUB_OUTPUT"
+          uv run python scripts/ci.py plan-trials --modes vanilla internet skills --budget "$RUN_BUDGET" --restore-results --output results/ci-plan --github-output "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: eval-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          name: trial-plan-${{ github.run_id }}-${{ github.run_attempt }}
           path: results/ci-plan/
           retention-days: 14
           if-no-files-found: error
   matrix:
-    name: ${{ matrix.eval_id }} / ${{ matrix.actor_key }} / ${{ matrix.mode }} / epoch ${{ matrix.epoch }}
+    name: ${{ matrix.task_id }} / ${{ matrix.agent_key }} / ${{ matrix.mode }} / trial ${{ matrix.trial }}
     needs: plan
-    if: needs.plan.outputs.missing_epochs != '0'
+    if: needs.plan.outputs.scheduled_trials != '0'
     runs-on: ubuntu-latest
-    # 120 minutes for the agent, 60 for scoring, 45 for builds, and 15 for setup and uploads.
+    # Harbor builds task environments and runs their declared sidecars.
     timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    concurrency:
+      group: ${{ matrix.plan_group && format('ethevals-plan-{0}', matrix.plan_group) || format('ethevals-key-{0}-{1}-{2}', github.run_id, github.run_attempt, matrix.index) }}
+      queue: max
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -69,68 +75,48 @@ jobs:
       - run: uv sync --frozen
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: eval-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          name: trial-plan-${{ github.run_id }}-${{ github.run_attempt }}
           path: results/ci-plan
       - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-      - name: Name stock images from their inputs
-        id: images
-        run: uv run python -m ethevals.images.tag >> "$GITHUB_OUTPUT"
-      - name: Build the runner image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
-        with:
-          context: inspect-runner/ethevals/images
-          file: inspect-runner/ethevals/images/Dockerfile
-          tags: ${{ steps.images.outputs.runner }}
-          load: true
-          cache-from: type=gha,scope=ethevals-runner
-          cache-to: type=gha,scope=ethevals-runner,mode=max
-      - name: Build the chain image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
-        with:
-          context: inspect-runner/ethevals/images
-          file: inspect-runner/ethevals/images/Chain.Dockerfile
-          tags: ${{ steps.images.outputs.chain }}
-          load: true
-          cache-from: type=gha,scope=ethevals-chain
-          cache-to: type=gha,scope=ethevals-chain,mode=max
-      - name: Fetch pinned agent binaries
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: uv run python scripts/ci.py prefetch
-      - name: Run one planned epoch
+      - run: uv run python scripts/ci.py images
+      - name: Run one planned trial
         timeout-minutes: 190
         env:
-          EVAL_ID: ${{ matrix.eval_id }}
-          ACTOR: ${{ matrix.actor_key }}
-          SELECTOR: ${{ matrix.mode == 'vanilla' && '--models' || '--agents' }}
-          MODE: ${{ matrix.mode }}
-          EPOCH: ${{ matrix.epoch }}
-          BUDGET: ${{ matrix.worst_case_usd }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
-          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
-          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          MAINNET_RPC_URL: *mainnet-rpc
+          BASE_RPC_URL: *base-rpc
         run: >-
-          uv run ethevals run --config results/ci-plan/config.json --rows results/ci-plan/rows.jsonl
-          --output results/ci-run --evals "evals/$EVAL_ID" "$SELECTOR" "$ACTOR"
-          --modes "$MODE" --epoch "$EPOCH" --budget "$BUDGET"
+          uv run python scripts/ci.py run-trial --plan results/ci-plan
+          --index ${{ matrix.index }} --output results/ci-run
+      - name: Upload checked trials to Harbor Hub
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          HARBOR_API_KEY: ${{ secrets.HARBOR_API_KEY }}
+        run: >-
+          uv run ethevals upload-hub --output results/ci-run
+          --config results/ci-plan/config.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: eval-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.index }}
-          path: results/ci-run/
+          name: trial-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.index }}
+          path: results/ci-run/public/
           retention-days: 14
           if-no-files-found: warn
   publish:
     name: Publish results
     needs: [plan, matrix]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.result == 'success' && needs.plan.outputs.missing_epochs != '0'
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.result == 'success' && needs.plan.outputs.scheduled_trials != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write # Publish log assets and append the results branch.
+      contents: write # Publish trial assets and append the results branch.
       pull-requests: write # Open the results PR.
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -144,9 +130,9 @@ jobs:
       - run: uv sync --frozen
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          pattern: eval-run-${{ github.run_id }}-*
+          pattern: trial-run-${{ github.run_id }}-*
           path: results/artifact
-      - name: Publish logs and update the results PR
+      - name: Publish trial assets and update the results PR
         env:
           GH_TOKEN: ${{ github.token }}
           RESULTS_REPO: ${{ github.repository }}

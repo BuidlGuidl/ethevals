@@ -6,4 +6,4 @@ out/
 .test-tmp/
 .catalog/
 .logs/
-public/logs/
+public/trajectories/

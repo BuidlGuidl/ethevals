@@ -1,5 +1,5 @@
 ---
-status: amended by ADR-0008
+status: amended by ADR-0008 and ADR-0010
 ---
 
 # Free checks on pull requests, paid runs after merge

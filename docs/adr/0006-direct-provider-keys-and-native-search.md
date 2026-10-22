@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: amended by ADR-0010
 ---
 
 # Use direct provider keys and native search

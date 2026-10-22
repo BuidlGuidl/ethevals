@@ -1,0 +1,28 @@
+services:
+  main:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: agent
+    volumes:
+      - public-context:/chain:ro
+      - private-context:/private:ro
+    depends_on:
+      chain:
+        condition: service_healthy
+  chain:
+    build:
+      context: .
+      dockerfile: Chain.Dockerfile
+    mem_limit: 3g
+    volumes:
+      - public-context:/chain
+      - private-context:/private
+    healthcheck:
+      test: [CMD-SHELL, "test -f /tmp/chain-ready && cast chain-id --rpc-url http://127.0.0.1:8545"]
+      interval: 1s
+      timeout: 3s
+      retries: 180
+volumes:
+  public-context: {}
+  private-context: {}
