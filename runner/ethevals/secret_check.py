@@ -11,6 +11,7 @@ import tempfile
 
 from harbor.utils.env import get_required_host_vars, is_sensitive_env_key
 
+from .files import write_whole
 from .job_config import JobSettings
 from .harbor_tasks import task_host_variables
 
@@ -120,8 +121,8 @@ def remember_secrets(folder: Path, secrets: dict[str, set[bytes]]) -> None:
         except ValueError:
             return
     inventory.parent.mkdir(parents=True, exist_ok=True)
-    inventory.write_text(json.dumps({name: sorted(hashlib.sha256(value).hexdigest() for value in values)
-                                     for name, values in secrets.items()}) + "\n")
+    write_whole(inventory, json.dumps({name: sorted(hashlib.sha256(value).hexdigest() for value in values)
+                                       for name, values in secrets.items()}) + "\n", inventory.parent)
 
 
 def check_output(output: Path, secrets: dict[str, set[bytes]], *, require_inventory: bool = False) -> None:
@@ -179,7 +180,7 @@ def check_output(output: Path, secrets: dict[str, set[bytes]], *, require_invent
             record = {"withheld": json.loads(encoded)}
             prefix = "::warning::" if os.environ.get("GITHUB_ACTIONS") == "true" else ""
             print(prefix + reason, file=sys.stderr)
-        receipt.write_text(json.dumps(record, sort_keys=True) + "\n")
+        write_whole(receipt, json.dumps(record, sort_keys=True) + "\n", output)
 
 
 def require_checked(folder: Path) -> None:

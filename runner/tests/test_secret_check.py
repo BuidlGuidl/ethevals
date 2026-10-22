@@ -176,6 +176,28 @@ def test_unchecked_and_changed_jobs_cannot_stage_release_files(tmp_path):
     assert len(report["assets"]) == 2
 
 
+def test_a_check_killed_while_writing_its_receipt_leaves_the_job_readable(tmp_path, monkeypatch):
+    raw = tmp_path / "raw"
+    folder = raw / "jobs/job/trial"
+    shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", folder)
+    shutil.copyfile(folder / "board.json", folder.parent / "board.json")
+    check_output(raw, {})
+    write_text = Path.write_text
+
+    def killed(path, text, *args, **kwargs):
+        # Opening the file empties it, then the kill lands before any text.
+        write_text(path, "", *args, **kwargs)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(Path, "write_text", killed)
+    with pytest.raises(KeyboardInterrupt):
+        check_output(raw, {})
+    monkeypatch.undo()
+    check_output(raw, {})
+    require_checked(folder.parent)
+    assert len(recover_rows(raw)) == 1
+
+
 def test_release_cannot_substitute_an_unchecked_trajectory(tmp_path):
     raw = tmp_path / "raw"
     folder = raw / "jobs/job/trial"

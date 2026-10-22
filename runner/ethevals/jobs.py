@@ -14,6 +14,7 @@ from harbor.models.trial.config import AgentConfig
 from harbor.publisher.packager import Packager
 from pydantic import ValidationError
 
+from .files import write_whole
 from .job_config import JobSettings, check_credentials, check_judge_key
 from .harbor_tasks import lint_task, task_host_variables, task_judges
 from .skills import SkillsPack, pack_skills
@@ -198,7 +199,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             destination = output / "jobs" / name
             destination.mkdir(parents=True, exist_ok=True)
             remember_secrets(destination, secrets)
-            (destination / "board.json").write_text(json.dumps(item, indent=2) + "\n")
+            write_whole(destination / "board.json", json.dumps(item, indent=2) + "\n", output)
             config_path = destination / "config.json"
             if config_path.exists():
                 try:

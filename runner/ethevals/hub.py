@@ -11,6 +11,7 @@ from uuid import UUID
 from harbor.auth.credentials import API_KEY_ENV_VAR
 
 from .job_config import JobSettings
+from .files import write_whole
 from .secret_check import RECEIPT, check_folder, check_output, require_checked, secret_values, stage_artifact
 
 
@@ -33,7 +34,7 @@ def upload_hub(output: Path, config: JobSettings) -> None:
                 names, digest = check_folder(snapshot, secrets)
                 if names:
                     check_output(Path(temporary), secrets)
-                    shutil.copyfile(snapshot / RECEIPT, folder / RECEIPT)
+                    write_whole(folder / RECEIPT, (snapshot / RECEIPT).read_text(), output)
                     continue
                 job_id = str(UUID(json.loads((snapshot / "result.json").read_text())["id"]))
                 trials = {str(UUID(json.loads(path.read_text())["id"]))

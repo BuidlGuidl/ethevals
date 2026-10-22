@@ -1,4 +1,4 @@
-"""Capture skills files and hash paths with their bytes."""
+"""Capture skills files, hash paths with their bytes, and write small files whole."""
 import hashlib
 from pathlib import Path
 
@@ -14,6 +14,17 @@ def manifest(folder: Path) -> dict[str, bytes]:
             raise ValueError(f"{path}: hard links are forbidden in the skills pack")
     return {path.relative_to(folder).as_posix(): path.read_bytes() for path in paths
             if path.is_file() and not JUNK_NAMES.intersection(path.relative_to(folder).parts)}
+
+
+def write_whole(path: Path, text: str, scratch: Path) -> None:
+    """Replace a file in one step, so a run killed mid-write never leaves it half written.
+
+    The temporary file goes in scratch, outside any job folder the publication check fingerprints.
+    """
+    scratch.mkdir(parents=True, exist_ok=True)
+    temporary = scratch / f".{path.parent.name}.{path.name}.tmp"
+    temporary.write_text(text)
+    temporary.replace(path)
 
 
 def content_hash(files: dict[str, bytes]) -> str:
