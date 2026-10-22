@@ -202,7 +202,7 @@ def test_task_cannot_interpolate_a_job_credential_in_compose(harbor_task, tmp_pa
     from ethevals.job_config import load_job
 
     config = load_job().model_dump(mode="json")
-    config["agents"]["codex-gpt-6"]["env"]["CUSTOM_PROVIDER_KEY"] = "${CUSTOM_PROVIDER_KEY:-}"
+    config["agents"]["codex-gpt-6.1-sol"]["env"]["CUSTOM_PROVIDER_KEY"] = "${CUSTOM_PROVIDER_KEY:-}"
     job = tmp_path / "job.json"
     import json
     job.write_text(json.dumps(config))
@@ -213,7 +213,7 @@ def test_task_cannot_interpolate_a_job_credential_in_compose(harbor_task, tmp_pa
     assert error.value.code == 2
     assert f"{credential} is a job credential" in capsys.readouterr().err
     # The job config, rather than a fixed denylist, owns credential names.
-    config["agents"]["codex-gpt-6"]["env"].pop("CUSTOM_PROVIDER_KEY")
+    config["agents"]["codex-gpt-6.1-sol"]["env"].pop("CUSTOM_PROVIDER_KEY")
     job.write_text(json.dumps(config))
     if credential.startswith("CUSTOM_"):
         assert main(["lint", "--tasks", str(harbor_task), "--config", str(job)]) == 0

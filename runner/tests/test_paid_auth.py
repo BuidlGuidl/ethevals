@@ -23,7 +23,7 @@ class Captured(Exception):
 
 @pytest.mark.parametrize("key,default_auth,paid_by", [
     ("claude-code-opus-5.5", False, "plan"), ("claude-code-opus-5.5", False, "api_key"),
-    ("codex-gpt-6", False, "plan"), ("codex-gpt-6", True, "plan"),
+    ("codex-gpt-6.1-sol", False, "plan"), ("codex-gpt-6.1-sol", True, "plan"),
 ])
 def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, monkeypatch, key, default_auth, paid_by):
     config, task = load_job(), task_folder(tmp_path)
@@ -82,7 +82,7 @@ def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, 
 
 @pytest.mark.parametrize("key,empty", [
     ("claude-code-opus-5.5", False), ("claude-code-opus-5.5", True),
-    ("codex-gpt-6", False), ("codex-gpt-6", True),
+    ("codex-gpt-6.1-sol", False), ("codex-gpt-6.1-sol", True),
 ])
 def test_missing_plan_credential_refuses_before_harbor(tmp_path, monkeypatch, key, empty):
     config, task = load_job(), task_folder(tmp_path)
@@ -155,8 +155,8 @@ def test_codex_uploads_chatgpt_auth_file_instead_of_an_api_key(tmp_path, monkeyp
             uploads.append((Path(source).read_text(), target))
             raise Captured
 
-    agent = Codex(logs_dir=tmp_path, model_name="openai/gpt-6")
-    settings = load_job().agents["codex-gpt-6"]
+    agent = Codex(logs_dir=tmp_path, model_name="openai/gpt-6.1-sol")
+    settings = load_job().agents["codex-gpt-6.1-sol"]
     if not accepted:
         with pytest.raises(ValueError, match="plan tokens"):
             check_credentials(settings, "selected")
@@ -174,7 +174,7 @@ def test_api_key_only_auth_file_is_refused_for_a_codex_plan(tmp_path, monkeypatc
     from test_ci import ci
 
     config, task = load_job(), task_folder(tmp_path)
-    config.agents = {"selected": config.agents["codex-gpt-6"]}
+    config.agents = {"selected": config.agents["codex-gpt-6.1-sol"]}
     auth = tmp_path / "auth.json"
     auth.write_text('{"OPENAI_API_KEY":"offline-key-only"}')
     monkeypatch.setenv("CODEX_AUTH_JSON_PATH", str(auth))
@@ -207,7 +207,7 @@ def test_api_key_only_auth_file_is_refused_for_a_codex_plan(tmp_path, monkeypatc
 @pytest.mark.parametrize("templated", [False, True])
 def test_plan_checks_the_auth_file_harbor_uploads(tmp_path, monkeypatch, agent_has_plan, templated):
     config, task = load_job(), task_folder(tmp_path)
-    config.agents = {"selected": config.agents["codex-gpt-6"]}
+    config.agents = {"selected": config.agents["codex-gpt-6.1-sol"]}
     plan_auth, key_auth = tmp_path / "plan.json", tmp_path / "key.json"
     plan_auth.write_text('{"auth_mode":"chatgpt","tokens":{"access_token":"offline-plan-token"}}')
     key_auth.write_text('{"auth_mode":"apikey","OPENAI_API_KEY":"offline-key-only"}')
