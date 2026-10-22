@@ -5,7 +5,7 @@ from pathlib import Path
 
 from harbor.models.trial.result import TrialResult
 
-from .checks import read_reward, validate_checks
+from .checks import JudgeError, read_details, read_reward
 
 SCHEMA_VERSION = 8
 
@@ -22,8 +22,27 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
     reason = error.exception_message if error and not timed_out else None
     kind = error.exception_type if reason else None
     rewards, checks = {}, {}
+    judge = metadata.get("judge")
+    judge_cost, judge_paid_by = (None if judge else 0.0), metadata.get("judge_paid_by")
     try:
-        rewards, checks = read_reward(folder / "verifier")
+        details = read_details(folder / "verifier")
+        judges = [detail for detail in details if detail.get("kind") in {"llm", "agent", "jev"}]
+        if judge:
+            costs = [detail.get("usage", {}).get("cost_usd") for detail in judges]
+            judge_cost = (0.0 if judge_paid_by == "free" else
+                          sum(costs) if costs and all(type(cost) in (int, float) for cost in costs) else None)
+        rewards, checks = read_reward(folder / "verifier", details=details)
+        if judge:
+            if not judges:
+                raise JudgeError("The verifier did not record the planned judge.", rewards, checks)
+            for detail in judges:
+                settings = detail["judge"]
+                if settings["model"] != judge["model"] or settings.get("reasoning_effort") != judge["effort"]:
+                    raise JudgeError("The verifier judge differs from the planned judge.", rewards, checks)
+    except JudgeError as exc:
+        rewards, checks = exc.rewards, exc.checks
+        if not reason:
+            kind, reason = "judge", str(exc)
     except ValueError as exc:
         if not reason:
             kind, reason = error.exception_type if error else "verification", str(exc)
@@ -35,31 +54,6 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
         saved = result.verifier_result.rewards if result.verifier_result else None
         if saved != rewards:
             kind, reason = error.exception_type if error else "verification", "Harbor's saved rewards differ from reward.json."
-    judge = metadata.get("judge")
-    judge_attempts = 0
-    criteria_passed = True
-    judge_cost, judge_paid_by = (None if judge else 0.0), None
-    if judge and set(metadata["criteria_names"]) & set(checks) and not reason:
-        kind, reason = "verification", "Criteria headings must differ from test check names."
-    if judge:
-        judge_path = folder / "verifier/judge.json"
-        try:
-            judged = json.loads(judge_path.read_text())
-            judge_attempts = judged.get("attempts", 1)
-            judge_paid_by, judge_cost = judged["paid_by"], judged["cost_usd"]
-            if judged["judge"] != judge:
-                raise ValueError("The saved judge differs from the planned judge.")
-            if judged["error"]:
-                raise ValueError(judged["error"])
-            extra = validate_checks(judged["checks"])
-            criteria_passed = all(check["passed"] for check in extra.values())
-            if set(extra) != set(metadata["criteria_names"]):
-                raise ValueError("The judge must return each criteria check with a boolean and a one-line reason.")
-            if not set(extra) & set(checks):
-                checks.update(extra)
-        except (ValueError, OSError, KeyError, TypeError, AttributeError) as exc:
-            if not reason:
-                kind, reason = "judge", f"Cannot judge criteria: {judge_path}: {exc}"
     n_input, _, n_output, cost = result.compute_token_cost_totals()
     if metadata["paid_by"] == "free":
         cost = 0.0
@@ -73,13 +67,12 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
             "task_id", "task_hash", "skills_hash", "agent", "model", "effort", "mode", "trial", "retry",
             "paid_by", "agent_version", "harbor_version", "time_limit")},
         "completed_at": result.finished_at.isoformat() if result.finished_at else None,
-        "status": "error" if reason else "passed" if rewards.get("reward") == 1 and criteria_passed else "failed",
+        "status": "error" if reason else "passed" if rewards.get("reward") == 1 else "failed",
         "rewards": rewards,
         "checks": checks, "error_kind": kind, "error_reason": " ".join(reason.split()) if reason else None,
         "limit": {"type": "time", "limit": metadata["time_limit"], "reason": error.exception_message} if timed_out else None,
         "total_tokens": (n_input or 0) + (n_output or 0),
         "model_cost_usd": cost, "judge_cost_usd": judge_cost, "judge": judge, "judge_paid_by": judge_paid_by,
-        "judge_attempts": judge_attempts,
         "cost_source": "free" if metadata["paid_by"] == "free" else "harbor" if cost is not None else "unavailable",
         "total_seconds": elapsed, "working_seconds": working,
         "trajectory_file": str(trajectory.resolve()) if trajectory.is_file() else None,
@@ -99,8 +92,8 @@ def fold_rows(*groups: list[dict]) -> list[dict]:
         for row in group:
             identity = trial_identity(row)
             old = latest.get(identity)
-            if old is None or (row["retry"], row.get("completed_at") or "", row.get("judge_attempts", 0), (row.get("trajectory_url") or "").startswith("https://")) > (
-                old["retry"], old.get("completed_at") or "", old.get("judge_attempts", 0), (old.get("trajectory_url") or "").startswith("https://")):
+            if old is None or (row["retry"], row.get("completed_at") or "", (row.get("trajectory_url") or "").startswith("https://")) > (
+                old["retry"], old.get("completed_at") or "", (old.get("trajectory_url") or "").startswith("https://")):
                 latest[identity] = row
     return sorted(latest.values(), key=lambda row: tuple(str(value or "") for value in trial_identity(row)[:-1]) + (row["trial"],))
 

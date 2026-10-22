@@ -20,8 +20,7 @@ def recorded_row(tmp_path):
 
 def test_release_stages_trajectory_and_all_verifier_output_without_remote_writes(tmp_path):
     row = recorded_row(tmp_path)
-    judge = Path(row["verifier_files"]) / "judge.json"
-    judge.write_text('{"checks":{"explained":{"passed":true,"reason":"Names the unit."}}}')
+    details = Path(row["verifier_files"]) / "reward-details.json"
     report = publish_logs(tmp_path / "release", "owner/repo", "12", "a" * 40, rows=[row])
     assert (report["dry_run"], report["release"]) == (True, "results-12")
     assert len(report["assets"]) == 2
@@ -29,8 +28,7 @@ def test_release_stages_trajectory_and_all_verifier_output_without_remote_writes
     assert Path(trajectory["source"]).read_bytes() == Path(row["trajectory_file"]).read_bytes()
     with tarfile.open(verifier["source"]) as archive:
         assert json.load(archive.extractfile("reward.json")) == row["rewards"]
-        assert "reward-details.json" in archive.getnames()
-        assert archive.extractfile("judge.json").read() == judge.read_bytes()
+        assert archive.extractfile("reward-details.json").read() == details.read_bytes()
     assert report["rows"][0]["trajectory_url"] == trajectory["url"]
     assert report["rows"][0]["verifier_url"] == verifier["url"]
     assert not (tmp_path / "release/published").exists()

@@ -78,7 +78,7 @@ def plan_trials(args, run_args):
                 continue
             index = len(scheduled)
             item = {**row, "task_path": os.path.relpath(row["task_path"])}
-            scheduled.append({"missing": [item], "rejudge": [], "selected": [trial_identity(row)],
+            scheduled.append({"missing": [item], "selected": [trial_identity(row)],
                               "missing_trials": 1, "worst_case_usd": row["worst_case_usd"]})
             matrix.append({"index": index, "task_id": row["task_id"], "agent_key": row["agent_key"],
                            "mode": row["mode"], "trial": row["trial"], "plan_group": group})

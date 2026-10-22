@@ -45,4 +45,5 @@ That manual check keeps secrets away from unreviewed pull-request code.
 
 Task files, including solutions, become public in the dataset.
 Training on them is welcome; the board cannot distinguish learned answers from new work.
-Keep credentials outside the task files.
+Keep credential values outside the task files.
+If a task has judge criteria, declare its judge key through `[verifier.env]`, as the RewardKit skill shows.

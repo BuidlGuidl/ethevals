@@ -15,7 +15,7 @@ from support import cli
 
 
 @contextmanager
-def stand_in(reply="metre", status=200):
+def stand_in(reply="metre", status=200, host="127.0.0.1"):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -24,7 +24,7 @@ def stand_in(reply="metre", status=200):
             requests.append(request)
             payload = {"id": "local-completion", "object": "chat.completion", "created": 1,
                        "model": request["model"], "choices": [{"index": 0, "finish_reason": "stop",
-                       "message": {"role": "assistant", "content": reply}}],
+                       "message": {"role": "assistant", "content": reply(request) if callable(reply) else reply}}],
                        "usage": {"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110,
                                  "prompt_tokens_details": {"cached_tokens": 40}}}
             if status != 200:
@@ -39,7 +39,7 @@ def stand_in(reply="metre", status=200):
         def log_message(self, *args):
             pass
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server = ThreadingHTTPServer((host, 0), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

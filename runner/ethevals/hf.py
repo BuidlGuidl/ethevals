@@ -60,7 +60,11 @@ The registry resolves task paths against the selected dataset commit.
 
 Tasks declare required host variables in `metadata.required_env` in `task.toml`.
 Set those variables before running the selected tasks.
-Plain Harbor runs execute each task's verifier. The board also runs paid criteria through RewardKit when declared.
+Plain Harbor runs execute every test and criterion through RewardKit in the task's verifier.
+Tasks with a judge TOML under `tests/` require `ANTHROPIC_API_KEY` through `[verifier.env]`.
+Set a judge-only API key with its own spend limit. A missing key stops Harbor with the variable's name.
+Claude plan tokens cannot pay for the judge.
+The task's judge is the default; the board overrides its model and effort from the job config.
 These public solutions can appear in training data. Scores alone do not establish unseen Ethereum knowledge.
 """)
     return {"repo": repo, "output": str(output), "tasks": len(tasks), "license": license}

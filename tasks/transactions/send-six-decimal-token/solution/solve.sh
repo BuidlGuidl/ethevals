@@ -11,3 +11,4 @@ ffi = false
 fs_permissions = [{access = "read", path = "/workspace/chain_context.json"}]
 EOF
 forge script /solution/solution.s.sol --root /workspace --broadcast --rpc-url http://chain:8545
+python3 /solution/confirm.py

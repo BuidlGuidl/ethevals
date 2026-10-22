@@ -3,8 +3,13 @@ from pathlib import Path
 import json
 import os
 import re
+import shutil
+import tomllib
+
+from rewardkit.models import JudgeTomlConfig
 
 from harbor.models.task.task import Task
+import toml
 import yaml
 
 from .checks import read_reward
@@ -14,6 +19,15 @@ from .job_config import JobSettings, load_job
 AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)
 SERVICE_KEYS = {"image", "build", "init", "command", "entrypoint", "working_dir", "user",
                 "environment", "networks", "volumes", "depends_on", "healthcheck", "mem_limit", "cpus"}
+
+
+def task_judges(path: Path) -> dict[Path, JudgeTomlConfig]:
+    judges = {}
+    for file in sorted((path / "tests").rglob("*.toml")):
+        document = tomllib.loads(file.read_text())
+        if "judge" in document or "criterion" in document:
+            judges[file] = JudgeTomlConfig.model_validate(document)
+    return judges
 
 
 def lint_task(path: Path, config: JobSettings | None = None) -> None:
@@ -31,10 +45,39 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         not isinstance(name, str) or not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name) for name in required
     ):
         raise ValueError(f"{path / 'task.toml'}: metadata.required_env must list environment variable names")
-    credentials = (config or load_job()).credential_names()
+    config = config or load_job()
+    credentials = config.credential_names()
     for name in required:
         if name in credentials:
             raise ValueError(f"{path / 'task.toml'}: {name} is a job credential; tasks cannot request it")
+    judges = task_judges(path)
+    if task.config.verifier.env != ({config.judge.key_env: "${" + config.judge.key_env + "}"} if judges else {}):
+        raise ValueError(f"{path / 'task.toml'}: verifier.env must declare only the required judge key when a judge exists")
+    names = set()
+    for file, judge in judges.items():
+        if judge.judge.atif_trajectory != "/logs/agent/trajectory.json":
+            raise ValueError(f"{file}: the judge must read the ATIF trajectory /logs/agent/trajectory.json")
+        if judge.judge.guard not in {"flag", "penalize"}:
+            raise ValueError(f"{file}: the judge guard must be flag or penalize")
+        if judge.scoring.aggregation != "all-pass" or judge.judge.weight <= 0:
+            raise ValueError(f"{file}: criteria must count toward all-pass")
+        for criterion in judge.criterion:
+            if not criterion.name or not criterion.name.strip() or criterion.name in names:
+                raise ValueError(f"{file}: every criterion needs a unique, nonempty name")
+            names.add(criterion.name)
+            if criterion.type != "binary" or criterion.optional or criterion.weight <= 0:
+                raise ValueError(f"{file}: criteria must be required binary checks with positive weights")
+        for directory in [file.parent, *file.parent.parents]:
+            reward = directory / "reward.toml"
+            document = tomllib.loads(reward.read_text()) if reward.exists() else {}
+            aggregates = document.get("reward", [])
+            root = directory == path / "tests"
+            if (not aggregates or any(item.get("aggregation") != "all-pass"
+                    or any(weight <= 0 for weight in item.get("weights", {}).values()) for item in aggregates)
+                    or root and not any(item.get("name") == "reward" for item in aggregates)):
+                raise ValueError(f"{reward}: judge criteria and tests must contribute to all-pass reward")
+            if root:
+                break
     visible = [path / "instruction.md", *(path / "environment").rglob("*")]
     for item in visible:
         if not item.is_file():
@@ -124,18 +167,32 @@ async def free_check(paths: list[Path], output: Path) -> None:
             print(f"{path}: skipped oracle and nop runs because {', '.join(missing)} is unset.", flush=True)
         else:
             available.append(path)
-    paths = available
-    if not paths:
+    if not available:
         return
-    for path in paths:
-        if (path / "tests/criteria.md").is_file():
+    originals = {}
+    for path in available:
+        staged = output / "tasks" / path.parent.name / path.name
+        shutil.copytree(path, staged)
+        originals[staged.resolve()] = path
+        judges = task_judges(staged)
+        if judges:
             print(f"{path}: criteria skipped in the free check; the judge needs a paid API call.", flush=True)
+            for file in judges:
+                file.unlink()
+            for reward in (staged / "tests").rglob("reward.toml"):
+                document = tomllib.loads(reward.read_text())
+                for aggregate in document.get("reward", []):
+                    aggregate.pop("weights", None)
+                if reward.parent != staged / "tests" and not any(reward.parent.rglob("*.py")):
+                    document.pop("reward", None)
+                reward.write_text(toml.dumps(document))
+    paths = list(originals)
     names = {}
     for agent, expected in (("oracle", True), ("nop", False)):
         config = JobConfig(
             job_name=agent, jobs_dir=output, n_concurrent_trials=1, quiet=True,
             agents=[{"name": agent, "override_timeout_sec": 1200}],
-            verifier={"override_timeout_sec": 1200},
+            verifier={"override_timeout_sec": 1200, "env": {load_job().judge.key_env: ""}},
             environment={"type": "docker"},
             tasks=[{"path": path.resolve()} for path in paths],
         )
@@ -150,7 +207,7 @@ async def free_check(paths: list[Path], output: Path) -> None:
                 raise ValueError(f"{result_path}: {result['exception_info']['exception_message']}")
             rewards, checks = read_reward(result_path.parent / "verifier")
             checks_path = result_path.parent / "verifier/reward-details.json"
-            path = Path(result["config"]["task"]["path"]).resolve()
+            path = originals[Path(result["config"]["task"]["path"]).resolve()]
             if expected:
                 names[path] = set(checks)
             elif set(checks) != names.get(path):

@@ -35,14 +35,15 @@ def test_paid_workflow_limits_secrets_to_the_steps_that_use_them():
         assert source.count("${{ secrets." + name + " }}") == 1
 
 
-def test_ci_plan_leaves_local_judge_evidence_on_the_planning_machine(tmp_path):
+def test_ci_plan_holds_judge_errors_without_scheduling_agent_work(tmp_path):
     from ethevals.job_config import load_job
     from ethevals.jobs import plan
     from ethevals.publish import publish_logs
     from ethevals.trial_rows import recover_rows, write_rows
 
     config_path, task = job_config(tmp_path, "free"), task_folder(tmp_path)
-    (task / "tests/criteria.md").write_text("## explained\nDid it explain the unit?\n")
+    from test_task_judges import add_judge
+    add_judge(task)
     config = load_job(config_path)
     config.agents["local"].name = "oracle"
     config.judge.model, config.judge.paid_by = "openai/gpt-5", "free"
@@ -64,9 +65,9 @@ def test_ci_plan_leaves_local_judge_evidence_on_the_planning_machine(tmp_path):
                  "--budget", 1, "--n-attempts", 2, "--rows", previous, "--output", saved)
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads((saved / "plan.json").read_text())
-    assert [row["trial"] for row in report["rejudge"]] == [1]
+    assert [row["trial"] for row in report["exhausted_errors"]] == [1]
     admitted = json.loads((saved / "trials.json").read_text())
-    assert [([row["trial"] for row in entry["missing"]], entry["rejudge"]) for entry in admitted] == [([2], [])]
+    assert [[row["trial"] for row in entry["missing"]] for entry in admitted] == [[2]]
     assert sorted(path.name for path in saved.iterdir()) == [
         "config.json", "plan.json", "rows.jsonl", "trials.json"]
 

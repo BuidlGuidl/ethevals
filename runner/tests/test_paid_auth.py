@@ -72,12 +72,12 @@ def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, 
             assert budget == "7.25"
             assert "--max-budget-usd 7.25" in flags
         else:
-            assert env == {"CLAUDE_FORCE_OAUTH": "1"}
+            assert env == {"CLAUDE_FORCE_OAUTH": "YES"}
             assert credentials == {"CLAUDE_CODE_OAUTH_TOKEN": "offline-plan-token"}
             assert budget is None
             assert "--max-budget-usd" not in flags
     else:
-        assert captured == [({"CODEX_FORCE_AUTH_JSON": "1", "CODEX_AUTH_JSON": ""}, auth)]
+        assert captured == [({"CODEX_FORCE_AUTH_JSON": "YES", "CODEX_AUTH_JSON": ""}, auth)]
 
 
 @pytest.mark.parametrize("key,empty", [
@@ -106,7 +106,7 @@ def test_missing_plan_credential_refuses_before_harbor(tmp_path, monkeypatch, ke
     assert not (tmp_path / "out/jobs").exists()
 
 
-def test_claude_plan_token_reaches_container_while_judge_key_stays_on_host(tmp_path, monkeypatch):
+def test_claude_plan_uses_its_token_and_board_judge_requires_an_api_key(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "offline-plan-token")
     monkeypatch.setenv("CLAUDE_FORCE_OAUTH", "1")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-judge-key")
@@ -124,7 +124,7 @@ def test_claude_plan_token_reaches_container_while_judge_key_stays_on_host(tmp_p
         asyncio.run(agent.run("Name a unit.", Container(), AgentContext()))
     assert requests[0]["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == "offline-plan-token"
     assert "ANTHROPIC_API_KEY" not in requests[0]["env"]
-    from ethevals.judge import JudgeSettings, check_judge_key
+    from ethevals.job_config import JudgeSettings, check_judge_key
     check_judge_key(JudgeSettings())
     import os
     assert os.environ["ANTHROPIC_API_KEY"] == "offline-judge-key"
@@ -194,7 +194,7 @@ def test_api_key_only_auth_file_is_refused_for_a_codex_plan(tmp_path, monkeypatc
             saved = tmp_path / "plan"
             saved.mkdir()
             (saved / "trials.json").write_text(json.dumps([{
-                "missing": [item], "rejudge": [], "selected": [], "worst_case_usd": 0}]))
+                "missing": [item], "selected": [], "worst_case_usd": 0}]))
             (saved / "config.json").write_text(config.model_dump_json())
             ci.run_trial(argparse.Namespace(plan=saved, index=0, output=output))
         else:

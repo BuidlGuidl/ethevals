@@ -41,6 +41,8 @@ def parse_args(argv=None):
         repeats = command.add_mutually_exclusive_group()
         repeats.add_argument("--n-attempts", type=positive, help="Number of scored trials per task, agent, and mode.")
         repeats.add_argument("--trial", type=positive, help="One numbered trial with one task, agent, and mode.")
+        command.add_argument("--retry-judge-error", action="store_true",
+                             help="With --trial, admit one fresh execution after a judge error under the budget.")
         command.add_argument("--rows", type=Path, default=Path("results/rows.jsonl"), help="Rows used to find missing trials.")
         command.add_argument("--budget", type=float, help="USD admission budget. Every agent trial requires an explicit budget.")
     parsers["export-hf"].add_argument("--hf-repo")
@@ -73,6 +75,7 @@ def main(argv=None) -> int:
             report = jobs.budget_check(jobs.plan(
                 paths, config, previous, agents=args.agents, models=args.models, modes=args.modes,
                 n_attempts=args.n_attempts, trial=args.trial, skills_pack=skills_pack,
+                retry_judge_error=args.retry_judge_error,
             ), args.budget, required=args.command == "run")
             if args.command == "plan":
                 print(json.dumps(report, indent=2))

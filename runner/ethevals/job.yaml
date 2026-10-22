@@ -6,7 +6,6 @@ retry:
 judge:
   model: anthropic/claude-opus-5-5
   effort: high
-  time_limit: 300
   paid_by: api_key
   cost_limit_usd: 2.0
   key_env: ANTHROPIC_API_KEY
@@ -67,7 +66,8 @@ agents:
     paid_by: plan
     cost_limit_usd: 20.0
     env:
-      CLAUDE_FORCE_OAUTH: "1"
+      # Harbor 0.24.0 redacts AUTH values; uppercase preserves JSON numbers and booleans.
+      CLAUDE_FORCE_OAUTH: "YES"
     required_env: [CLAUDE_CODE_OAUTH_TOKEN]
   codex-gpt-6:
     name: codex
@@ -77,7 +77,7 @@ agents:
     paid_by: plan
     cost_limit_usd: 20.0
     env:
-      CODEX_FORCE_AUTH_JSON: "1"
+      CODEX_FORCE_AUTH_JSON: "YES"
       # CI writes the credential file; reserve its input name and clear the raw JSON.
       CODEX_AUTH_JSON: ""
     required_files:

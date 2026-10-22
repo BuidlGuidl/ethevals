@@ -55,11 +55,9 @@ Harbor's `RetryConfig` supplies the exception exclusions and optional inclusion 
 Excluded errors never start another agent execution.
 The board schedules retries across jobs and admits their spend before execution.
 Rows count retries from zero for the initial execution.
-The plan lists agent trials under `missing` and judge-only re-runs under `rejudge`; both count toward the budget.
-The runner judges saved folders before starting agent trials.
-A saved folder qualifies only with remaining judge calls, matching judge settings, and missing or failed judge output.
-Without that folder, or after the judge settings change, the agent retry rules apply.
-Criteria headings that match test check names cause a verification error.
+The plan lists agent trials under `missing` and holds judge errors under `exhausted_errors`.
+Judge errors never schedule another agent execution, even after artifacts move.
+Duplicate check names cause a verification error.
 
 Run the same command and output directory after an interruption.
 The runner reads saved Harbor trial folders before planning and rebuilds missing rows.
@@ -165,28 +163,38 @@ It writes `compile` and each test's check, with contract names for failing setup
 Compiler download failures raise errors instead of failed checks.
 The helper keeps Forge stdout and stderr beside `checks.json`.
 
-Criteria live in `tests/criteria.md`.
-Each `##` heading names a check and the following text asks a yes-or-no question.
-After Harbor saves the tests, RewardKit answers these questions from the ATIF trajectory and the task's declared `artifacts`.
-Artifact destinations follow Harbor's paths under the trial's `artifacts/` directory.
-Missing artifacts or trajectories produce a judge error.
-The board combines test checks and criteria checks; every check must pass.
-Criteria headings must differ from test check names.
-The judge's model, effort, time limit, payment source, and admission reserve come from the job config's `judge` settings.
-The default judge uses Opus 5.5 through `ANTHROPIC_API_KEY`; it refuses plan tokens.
-The pinned RewardKit version cannot accept an explicit key, so `key_env` accepts only `ANTHROPIC_API_KEY`.
-Each agent execution reserves two judge calls at `cost_limit_usd` each, even when a plan pays for the agent.
-RewardKit is pinned to 0.2.3, which supports Harbor's ATIF trajectory input and per-question reasons.
-`verifier/judge.json` preserves its output, usage, reasons, and errors beside Harbor's test records.
-Row recovery reads that file without another judge call.
-Judging retries on the saved trial folder, up to two calls, without another agent run.
-`judge.json` counts calls before starting them, including an interrupted call, and adds their known costs.
-After an interruption, the next run reserves only the remaining judge calls and keeps the retry number.
-Two unsuccessful calls leave a judge error on the board.
-An exhausted judge or an unavailable saved folder cannot start another agent execution.
-Timeouts, invalid answers, and missing reasons count as judge errors, so they never become failed checks.
-Local stand-ins set `judge.paid_by: free` and use a local model endpoint.
-The free check prints a skip note because the judge needs a paid API call.
+Criteria live in RewardKit judge TOML files under `tests/` and run through `test.sh`.
+Lint requires named binary criteria, `atif-trajectory = "/logs/agent/trajectory.json"`, and `guard = "flag"` or `"penalize"`.
+Each judge and its enclosing rewards use `all-pass`, so every test and criterion counts toward the same reward.
+The task's judge model and effort provide the defaults for plain Harbor runs.
+The board overrides them through `REWARDKIT_JUDGE` and `REWARDKIT_REASONING_EFFORT` from the job config.
+Each judged task declares only `ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"` in `[verifier.env]`.
+A missing key stops Harbor with the variable's name.
+Use a judge-only API key with its own spend limit.
+Harbor scopes agent credentials to agent commands; verifier commands receive no plan token.
+The board refuses a plan token in the judge key before starting Harbor.
+For shared verifiers, the judge key reaches the agent's container after the agent stops.
+Processes the agent left running can still read it, as ADR 0011 records.
+Each agent execution reserves three calls per judge batch, multiplied by samples and `cost_limit_usd`.
+In individual mode, the reserve covers each criterion and its separate guard call.
+Executions paid by a plan also reserve judge spend.
+`reward-details.json` supplies criterion reasons, errors, and API-price judge usage to rows.
+A missing cost stays null; local stand-ins use `judge.paid_by: free` and cost $0.
+RewardKit retries malformed replies internally up to three calls.
+Timeouts recorded on criteria or guards produce a judge error on the board.
+Malformed replies stop the verifier and produce a Harbor trial error.
+Neither error silently starts another agent execution.
+
+For saved tasks whose verifier needs only copied artifacts, use `harbor trial regrade TRIAL -p TASK`.
+Harbor regrade uses a separate verifier and leaves the source trial untouched.
+It cannot restore a sidecar's live state, so it cannot repeat a chain task's Forge tests.
+For those tasks, use the [explicit recovery command](../runner/README.md#ci-and-publication) after reviewing its budget.
+The board performs no automatic regrade and no automatic agent retry for judge errors.
+
+The free check stages task copies under `OUTPUT/tasks/`, removes judge TOMLs, and overrides the judge key with an empty value.
+The copies drop aggregation weights and empty judge groups; `all-pass` still requires every remaining test.
+It prints the skipped-criteria note and runs the unchanged programmatic tests through RewardKit.
+Source tasks and published folders keep their judges and required keys.
 
 Pull-request CI calls the free check through `scripts/ci.py checks`.
 

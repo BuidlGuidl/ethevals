@@ -42,12 +42,13 @@ def test_free_check_rejects_blank_check_names_like_board_rows(harbor_task, tmp_p
     class SavedJob:
         def __init__(self, config):
             self.agent = config.job_name
+            self.task = config.tasks[0].path
 
         async def run(self):
             folder = tmp_path / "out" / self.agent / "trial"
             (folder / "verifier").mkdir(parents=True)
             (folder / "result.json").write_text(json.dumps({
-                "config": {"task": {"path": str(harbor_task)}},
+                "config": {"task": {"path": str(self.task)}},
                 "verifier_result": {"rewards": {"reward": int(self.agent == "oracle")}}}))
             (folder / "verifier/reward.json").write_text(json.dumps({"reward": int(self.agent == "oracle")}))
             (folder / "verifier/reward-details.json").write_text(json.dumps({

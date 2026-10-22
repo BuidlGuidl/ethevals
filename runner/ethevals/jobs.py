@@ -13,12 +13,11 @@ from harbor.agents.factory import AgentFactory
 from harbor.models.trial.config import AgentConfig
 from pydantic import ValidationError
 
-from .job_config import JobSettings, check_credentials
+from .job_config import JobSettings, check_credentials, check_judge_key
 from .files import content_hash
-from .harbor_tasks import lint_task
-from .judge import MAX_JUDGE_ATTEMPTS, check_judge_key, judge_trial, read_criteria
+from .harbor_tasks import lint_task, task_judges
 from .skills import SkillsPack, pack_skills
-from .trial_rows import fold_rows, recover_rows, results_row, trial_identity, write_rows
+from .trial_rows import fold_rows, recover_rows, trial_identity, write_rows
 
 
 def task_entry(path: Path, config: JobSettings | None = None) -> dict:
@@ -50,7 +49,9 @@ def write_catalog(paths: list[Path], output: Path) -> None:
 
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,
          models=None, modes=None, n_attempts=None, trial=None,
-         skills_pack: SkillsPack | None = None) -> dict:
+         skills_pack: SkillsPack | None = None, retry_judge_error=False) -> dict:
+    if retry_judge_error and trial is None:
+        raise ValueError("--retry-judge-error requires --trial with one task, agent, and mode")
     modes = modes or config.modes
     if set(modes) - set(config.modes):
         raise ValueError("Selected modes must be listed in the job config")
@@ -60,12 +61,12 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         if selected and set(selected) - available.keys():
             raise ValueError(f"Unknown {label}: {', '.join(sorted(set(selected) - available.keys()))}")
     prior = {trial_identity(row): row for row in previous}
-    missing, rejudge, exhausted, selected, deferred = [], [], [], [], []
+    missing, exhausted, selected, deferred = [], [], [], []
     ids = set()
     combinations = 0
     for path in paths:
         task = task_entry(path, config)
-        criteria = read_criteria(path)
+        judges = task_judges(path)
         if task["id"] in ids:
             raise ValueError(f"Duplicate task ID: {task['id']}")
         ids.add(task["id"])
@@ -93,32 +94,19 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     retry = row.get("retry", -1)
                     if row.get("status") in {"passed", "failed"}:
                         continue
-                    judge = {"model": config.judge.model, "effort": config.judge.effort} if criteria else None
+                    judge = {"model": config.judge.model, "effort": config.judge.effort} if judges else None
                     item = {**metadata, "task_path": str(path.resolve()), "agent_key": key,
                             "agent_version": agent.version, "harbor_version": config.harbor_version,
                             "paid_by": agent.paid_by, "time_limit": config.time_limit,
-                            "judge": judge, "criteria_names": list(criteria)}
-                    if row.get("error_kind") == "judge":
-                        folder = Path(row["verifier_files"]).parent if row.get("verifier_files") else None
-                        remaining_judge = MAX_JUDGE_ATTEMPTS - row.get("judge_attempts", 0)
-                        if folder and (folder / "result.json").is_file() and judge and remaining_judge > 0:
-                            try:
-                                board = json.loads((folder.parent / "board.json").read_text())
-                                judge_path = folder / "verifier/judge.json"
-                                saved = json.loads(judge_path.read_text()) if judge_path.exists() else None
-                                eligible = (trial_identity(board) == identity and board["judge"] == judge
-                                            and (saved is None or saved["error"] and saved["judge"] == judge))
-                            except (OSError, ValueError, KeyError, TypeError):
-                                eligible = False
-                            if eligible:
-                                reserve = config.judge.cost_limit_usd * remaining_judge if config.judge.paid_by == "api_key" else 0.0
-                                rejudge.append({**item, "trial_path": str(folder.resolve()), "retry": retry,
-                                                "remaining_executions": 1, "agent_reserve_usd": 0.0,
-                                                "judge_reserve_usd": reserve, "worst_case_usd": reserve})
-                                continue
+                            "judge": judge, "judge_paid_by": config.judge.paid_by if judge else None}
+                    recovery = retry_judge_error and row.get("judge") and row.get("error_kind") in {
+                        "judge", "RewardFileNotFoundError", "RewardFileEmptyError", "VerifierOutputParseError"}
+                    if row.get("error_kind") == "judge" and not recovery:
+                        exhausted.append(row)
+                        continue
                     policy = config.retry
                     exception = row.get("error_kind")
-                    if row and (retry >= policy.max_retries
+                    if row and not recovery and (retry >= policy.max_retries
                                 or exception in (policy.exclude_exceptions or set())
                                 or policy.include_exceptions and exception not in policy.include_exceptions):
                         exhausted.append(row)
@@ -128,8 +116,11 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                                          "missing_env": missing_env})
                         continue
                     reserve = agent.cost_limit_usd if agent.paid_by == "api_key" else 0.0
-                    judge_reserve = config.judge.cost_limit_usd * MAX_JUDGE_ATTEMPTS if criteria and config.judge.paid_by == "api_key" else 0.0
-                    remaining = policy.max_retries - retry
+                    judge_calls = sum(judge.judge.samples * (len(judge.criterion) + 1
+                                      if judge.judge.mode == "individual" else 1) for judge in judges.values())
+                    # RewardKit 0.2.3 retries malformed replies up to three calls.
+                    judge_reserve = config.judge.cost_limit_usd * judge_calls * 3 if config.judge.paid_by == "api_key" else 0.0
+                    remaining = 1 if recovery else policy.max_retries - retry
                     missing.append({**item, "retry": retry + 1, "remaining_executions": remaining,
                                     "agent_reserve_usd": reserve, "judge_reserve_usd": judge_reserve,
                                     "worst_case_usd": (reserve + judge_reserve) * remaining})
@@ -138,16 +129,16 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
     if trial is not None and combinations != 1:
         raise ValueError("--trial requires exactly one task, agent, and mode")
     deferred_ids = {trial_identity(row) for row in deferred}
-    return {"missing": missing, "rejudge": rejudge, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
-            "worst_case_usd": round(sum(row["worst_case_usd"] for row in [*missing, *rejudge]), 8),
+    return {"missing": missing, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
+            "worst_case_usd": round(sum(row["worst_case_usd"] for row in missing), 8),
             "selected": [identity for identity in selected if identity not in deferred_ids]}
 
 
 def budget_check(report: dict, budget: float | None, *, required=False) -> dict:
     if budget is not None and (not math.isfinite(budget) or budget < 0):
         raise ValueError("Budget must be a finite, nonnegative USD amount")
-    if required and (report["missing"] or report["rejudge"]) and budget is None:
-        raise ValueError("A trial or judge re-run requires --budget before Harbor starts")
+    if required and report["missing"] and budget is None:
+        raise ValueError("A trial requires --budget before Harbor starts")
     report.update(budget_usd=budget, within_budget=budget is None or report["worst_case_usd"] <= budget)
     return report
 
@@ -166,7 +157,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             path = skills_path / name.removeprefix("/skills/")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-    for item in [*report["rejudge"], *report["missing"]]:
+    for item in report["missing"]:
         path = Path(item["task_path"])
         if task_entry(path, config)["hash"] != item["task_hash"]:
             raise ValueError("The task differs from the plan; plan the trials again")
@@ -193,16 +184,6 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             harbor.skills = [str(skills_path)]
         prepared.append((item, harbor))
     rows = previous
-    for item in report["rejudge"]:
-        folder = Path(item["trial_path"])
-        metadata = json.loads((folder.parent / "board.json").read_text())
-        if trial_identity(metadata) != trial_identity(item) or metadata["judge"] != item["judge"]:
-            raise ValueError("The saved trial differs from the plan")
-        try:
-            await judge_trial(folder, Path(item["task_path"]), config.judge)
-        finally:
-            rows = fold_rows(rows, [results_row(folder, metadata)])
-            write_rows(output / "rows.jsonl", rows)
     for item, harbor in prepared:
         try:
             name = hashlib.sha256(json.dumps([item, harbor.model_dump(mode="json")], sort_keys=True).encode()).hexdigest()[:24]
@@ -221,15 +202,13 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             job = await Job.create(JobConfig(
                 job_name=name, jobs_dir=output / "jobs", n_concurrent_trials=1, quiet=True,
                 agents=[harbor], tasks=[{"path": item["task_path"]}],
-                verifier={"override_timeout_sec": config.time_limit}, environment={"type": "docker"},
+                verifier={"override_timeout_sec": config.time_limit, "env": {
+                    "REWARDKIT_JUDGE": config.judge.model,
+                    "REWARDKIT_REASONING_EFFORT": config.judge.effort,
+                    "CLAUDE_CODE_OAUTH_TOKEN": "", "REWARDKIT_FORCE_SUBSCRIPTION": "",
+                } if item["judge"] else {}}, environment={"type": "docker"},
             ))
             await job.run()
-            if item["judge"]:
-                for result_path in destination.glob("*/result.json"):
-                    saved = json.loads(result_path.read_text())
-                    error = saved.get("exception_info")
-                    if saved.get("finished_at") and (not error or error["exception_type"] == "AgentTimeoutError"):
-                        await judge_trial(result_path.parent, Path(item["task_path"]), config.judge)
         finally:
             rows = fold_rows(rows, recover_rows(output))
             write_rows(output / "rows.jsonl", rows)

@@ -20,12 +20,11 @@ for (const withCriteria of [false, true]) test(`a real Harbor row reaches the bo
   const env = { ...process.env };
   for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY"]) delete env[key];
   const script = `
-import asyncio
 import json
 import shutil
 from pathlib import Path
 import litellm
-from ethevals.judge import JudgeSettings, judge_trial
+from rewardkit.runner import run as run_rewardkit
 from ethevals.jobs import write_catalog, task_entry
 from ethevals.trial_rows import results_row, write_rows
 fixture, output = Path(${JSON.stringify(fixture)}), Path(${JSON.stringify(root)})
@@ -34,22 +33,32 @@ shutil.copytree(fixture / "concepts/question", task)
 shutil.copytree(fixture / "recorded-trial", trial)
 metadata = json.loads((fixture / "recorded-trial/board.json").read_text())
 if ${withCriteria ? "True" : "False"}:
-    (task / "tests/criteria.md").write_text("## named_unit\\nDid the reply name a unit?\\n")
-    (trial / "artifacts/logs/agent").mkdir(parents=True)
-    shutil.copyfile(trial / "agent/trajectory.json", trial / "artifacts/logs/agent/trajectory.json")
-    settings = JudgeSettings(model="openai/gpt-5", paid_by="free")
-    metadata.update(judge={"model": settings.model, "effort": settings.effort}, criteria_names=["named_unit"])
+    (task / "tests/judge.toml").write_text('[judge]\\njudge = "openai/gpt-5"\\nreasoning_effort = "high"\\n'
+        'atif-trajectory = "/logs/agent/trajectory.json"\\nguard = "flag"\\n'
+        '[scoring]\\naggregation = "all-pass"\\n[[criterion]]\\nname = "named_unit"\\n'
+        'description = "Did the reply name a unit?"\\ntype = "binary"\\n')
+    declaration = task / "task.toml"
+    declaration.write_text(declaration.read_text() + '\\n[verifier.env]\\nANTHROPIC_API_KEY = "' + '$' + '{ANTHROPIC_API_KEY}"\\n')
+    metadata.update(judge={"model": "openai/gpt-5", "effort": "high"}, judge_paid_by="free")
+    criteria = output / "criteria"
+    shutil.copytree(task / "tests", criteria)
+    (criteria / "answer.py").write_text('from rewardkit import criterion\\n@criterion\\ndef unit(workspace):\\n'
+        '    return {"score": True, "reasoning": "The final reply matches."}\\n')
+    judge = criteria / "judge.toml"
+    judge.write_text(judge.read_text().replace('/logs/agent/trajectory.json', str(trial / "agent/trajectory.json")))
     judge_calls = 0
     async def completion(**kwargs):
         global judge_calls
         judge_calls += 1
-        if judge_calls == 1:
-            raise RuntimeError("The stand-in judge failed once.")
         return litellm.ModelResponse(choices=[{"message": {"role": "assistant", "content":
-            '{"score":"yes","reasoning":"The reply names the unit metre."}'}}])
+            '{"named_unit":{"score":"yes","reasoning":"The reply names the unit metre."},'
+            '"guard":{"score":"no","reasoning":"No judge instructions."}}'}}])
     litellm.acompletion = completion
-    asyncio.run(judge_trial(trial, task, settings))
-    assert judge_calls == 2
+    rewards = run_rewardkit(criteria, workspace=output, output=trial / "verifier/reward.json")
+    saved = json.loads((trial / "result.json").read_text())
+    saved["verifier_result"]["rewards"] = rewards
+    (trial / "result.json").write_text(json.dumps(saved))
+    assert judge_calls == 1
 write_catalog([task], output)
 metadata["task_hash"] = task_entry(task)["hash"]
 write_rows(output / "rows.jsonl", [results_row(trial, metadata,

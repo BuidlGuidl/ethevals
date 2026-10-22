@@ -9,6 +9,9 @@ modes = ["internet", "skills"]
 environment_mode = "shared"
 user = "root"
 
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
 [environment]
 cpus = 1
 memory_mb = 4096

@@ -17,7 +17,7 @@ const evalFiles = [
   ["│   └──", "docker-compose.yaml", "optional sidecars, such as a chain"],
   ["├──", "tests/", ""],
   ["│   ├──", "test.sh", "the verifier that writes named checks"],
-  ["│   └──", "criteria.md", "optional questions for a judge"],
+  ["│   └──", "judge.toml", "optional RewardKit questions for a judge"],
   ["└──", "solution/", "solve.sh, which the oracle runs"],
 ];
 

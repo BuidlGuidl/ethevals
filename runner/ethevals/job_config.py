@@ -10,7 +10,22 @@ from harbor.models.job.config import RetryConfig
 from pydantic import Field, model_validator
 
 from .config import Declaration, parse_file
-from .judge import JudgeSettings
+
+
+class JudgeSettings(Declaration):
+    model: str = "anthropic/claude-opus-5-5"
+    effort: Literal["low", "medium", "high"] = "high"
+    cost_limit_usd: float = Field(default=2.0, ge=0, allow_inf_nan=False)
+    paid_by: Literal["api_key", "free"] = "api_key"
+    key_env: Literal["ANTHROPIC_API_KEY"] = "ANTHROPIC_API_KEY"
+
+
+def check_judge_key(settings: JudgeSettings) -> None:
+    if settings.paid_by == "free":
+        return
+    key = os.environ.get(settings.key_env, "")
+    if not key.strip() or key.startswith("sk-ant-oat"):
+        raise ValueError(f"The judge requires {settings.key_env} and cannot use a plan token.")
 
 
 class ModelSettings(Declaration):

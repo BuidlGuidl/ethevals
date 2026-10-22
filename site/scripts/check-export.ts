@@ -25,7 +25,7 @@ for (const diagram of ["pipeline", "run"]) {
 }
 const tree = how.slice(how.indexOf('<section id="hw-eval"'), how.indexOf('<section id="hw-run"'));
 assert.ok(tree.includes('class="eval-tree"'));
-for (const file of ["task.toml", "instruction.md", "environment/", "Dockerfile", "docker-compose.yaml", "tests/", "test.sh", "criteria.md", "solution/", "solve.sh"]) assert.ok(tree.includes(file));
+for (const file of ["task.toml", "instruction.md", "environment/", "Dockerfile", "docker-compose.yaml", "tests/", "test.sh", "judge.toml", "solution/", "solve.sh"]) assert.ok(tree.includes(file));
 const run = how.slice(how.indexOf('<section id="hw-run"'), how.indexOf('<section id="hw-add"'));
 const runDiagrams = run.split(/(?=<svg class="diagram run-diagram)/).slice(1)
   .map((fragment) => fragment.slice(0, fragment.lastIndexOf("</svg>") + 6));

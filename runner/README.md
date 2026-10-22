@@ -67,17 +67,33 @@ Codex credentials use a temporary mode-0600 file outside the artifact directory;
 Harbor receives `CODEX_AUTH_JSON_PATH` and uploads the file itself.
 The job config forces Codex plan payment and requires plan tokens in its credential file before Harbor starts.
 Local and CI trials use the same credential check.
-The judge key stays on the host while Claude Code uses its plan token.
+The judge key enters only the verifier's commands; agent commands use their own configured credentials.
 The run step allows 190 minutes; the job allows 240 minutes for setup, builds, and uploads too.
 Each job uploads saved trials after success or failure.
 The planning step gets only RPC secrets; the trial step gets model credentials too.
 Each secret has one declaration; YAML aliases share the RPC secrets between those steps.
-Judge errors without a local saved folder follow the agent retry rules, within the retry cap.
+Judge errors never schedule another agent execution automatically.
+To repeat a judged trial, select one task, agent, mode, and trial number with `--retry-judge-error`.
+This admits one execution, advances its retry number, and reserves its agent and judge costs under the budget.
+It can repeat the agent's full work, including sidecar setup.
+Keep the original rows and saved trial.
+Use a fresh output directory.
+Review the plan before running the same selection with the reviewed budget:
+
+```sh
+uv run ethevals plan --tasks TASK --agents AGENT --modes MODE --trial N --retry-judge-error --rows ROWS --budget USD --output results/recovery
+uv run ethevals run --tasks TASK --agents AGENT --modes MODE --trial N --retry-judge-error --rows ROWS --budget USD --output results/recovery
+```
+
+Replace the uppercase values with the failed trial's selection, saved rows path, and reviewed budget.
+The option also admits missing or broken reward output on a judged trial.
+Malformed judge replies can cause this.
+Other errors retain the configured retry policy.
 
 The publisher has no model keys and runs after failed matrix jobs on `main`.
 It downloads every workflow retry's artifacts and rebuilds rows from saved Harbor trials at their downloaded paths.
 It folds retries before staging one trajectory JSON and one verifier archive per trial.
-The archive includes check records, reasons, and any `judge.json`.
+The archive includes check records and RewardKit's criterion reasons and usage.
 Errors also keep their available output.
 
 `publish-results` writes `combined/rows.jsonl`, `combined/release.json`, and `combined/assets/` locally.
