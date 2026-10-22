@@ -473,8 +473,10 @@ def test_plain_harbor_and_board_agree_on_a_saved_judged_chain_trial(tmp_path, mo
             result = json.loads(result_path.read_text())
             assert result["exception_info"] is None, result
             assert result["verifier_result"]["rewards"]["reward"] == expected
-            from ethevals.jobs import task_entry
-            metadata = {"task_id": "transactions/judged-chain", "task_hash": task_entry(task)["hash"], "skills_hash": None,
+            from harbor.publisher.packager import Packager
+            # The catalog would lint this copy, and lint rightly refuses the test's host mapping.
+            digest = "sha256:" + Packager.compute_content_hash(task)[0]
+            metadata = {"task_id": "transactions/judged-chain", "task_hash": digest, "skills_hash": None,
                 "agent": agent, "model": "local/model", "effort": None, "mode": "internet", "trial": 1,
                 "retry": 0, "paid_by": "free", "agent_version": result["agent_info"]["version"],
                 "harbor_version": "0.24.0",
