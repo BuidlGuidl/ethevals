@@ -150,11 +150,11 @@ It writes `private_chain_context.json` in a root-only directory on a separate vo
 The agent runs as `agent`. The shared verifier runs as root and reads the live chain.
 Only the filtered RPC listens outside the sidecar's loopback interface.
 
-Tasks list required secret variable names in `metadata.required_env` in `task.toml`.
+Each task's compose file declares host variables through `${VAR:?message}` interpolation.
+Compose stops with that message if the value is missing or empty.
 If a variable is unset, the free check lints the task and skips its runs.
 The planner defers its pending trials and excludes them from the budget and CI matrix.
 Both commands print the missing variable's name.
-Compose interpolation accepts only declared variable names.
 Tasks cannot request credential names from the job's agent requirements, agent environment, or judge key.
 Use `--config` with lint or free-check to check against another job config.
 Compose service keys use an allowlist; host namespaces, extra capabilities, and implicit host environment values are forbidden.
@@ -212,7 +212,9 @@ Pull-request CI calls the free check through `scripts/ci.py checks`.
 `uv run python scripts/ci.py release --output out/hf --license mit` stages every task and previews the HF upload.
 `uv run ethevals export-hf --output out/hf` stages the same layout without an upload preview.
 Both commands require an empty output directory.
-The export copies every task file unchanged, including setup, tests, and solutions.
+The export copies exactly the files Harbor's packager counts, with their bytes unchanged.
+The board's task hash is Harbor's `sha256:` package digest.
+Saved board trials must carry the same digest in `lock.json` as their plan.
 Published folders combine the pillar and directory name under `tasks/`.
 Registry entries use `[task].name`, which Harbor also reads from the copied task.
 Harbor 0.24.0 discovers immediate children there when `--repo` has no dataset selector.
@@ -223,7 +225,7 @@ This version names the registry format; pin the repository revision to select ta
 harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test --agent oracle --n-concurrent 1
 ```
 
-Select a task with `--include-task-name NAME` and set its declared `metadata.required_env` variables first.
+Select a task with `--include-task-name NAME` and set the host variables its compose file names first.
 Replace `oracle` with `nop` to check untouched work.
 The folder needs Docker and Harbor, with no ETH Evals install.
 Plain Harbor runs execute the task's verifier; the board also runs declared paid criteria through RewardKit.

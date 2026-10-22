@@ -30,6 +30,30 @@ def task_judges(path: Path) -> dict[Path, JudgeTomlConfig]:
     return judges
 
 
+def task_host_variables(path: Path) -> list[str]:
+    """Read required host variables from compose interpolation."""
+    names = set()
+    for compose in sorted(path.rglob("*compose.y*ml")):
+        def read(value):
+            if isinstance(value, str):
+                value = value.replace("$$", "")
+                for match in re.finditer(r"\$(?:\{)?([A-Za-z_][A-Za-z0-9_]*)", value):
+                    name = match[1]
+                    if not re.match(r"\$\{" + name + r":\?[^{}\s][^{}]*\}", value[match.start():]):
+                        raise ValueError(f"{compose}: {name}: host variables must use ${{{name}:?message}}")
+                    names.add(name)
+            elif isinstance(value, dict):
+                for key, child in value.items():
+                    read(key)
+                    read(child)
+            elif isinstance(value, list):
+                for child in value:
+                    read(child)
+
+        read(yaml.safe_load(compose.read_text()))
+    return sorted(names)
+
+
 def lint_task(path: Path, config: JobSettings | None = None) -> None:
     for item in path.rglob("*"):
         if item.is_symlink():
@@ -46,14 +70,9 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         raise ValueError(f"{path / 'task.toml'}: [task].description must be a nonempty line")
     if task.config.metadata.get("pillar") != path.parent.name:
         raise ValueError(f"{path / 'task.toml'}: metadata.pillar must match the parent folder {path.parent.name!r}")
-    required = task.config.metadata.get("required_env", [])
-    if not isinstance(required, list) or any(
-        not isinstance(name, str) or not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name) for name in required
-    ):
-        raise ValueError(f"{path / 'task.toml'}: metadata.required_env must list environment variable names")
     config = config or load_job()
     credentials = config.credential_names()
-    for name in required:
+    for name in task_host_variables(path):
         if name in credentials:
             raise ValueError(f"{path / 'task.toml'}: {name} is a job credential; tasks cannot request it")
     judges = task_judges(path)
@@ -102,20 +121,6 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
     for compose in path.rglob("*compose.y*ml"):
         document = yaml.safe_load(compose.read_text())
 
-        def check_interpolation(value):
-            if isinstance(value, str):
-                for variable in re.findall(r"\$(?:\{)?([A-Za-z_][A-Za-z0-9_]*)", value.replace("$$", "")):
-                    if variable not in required:
-                        raise ValueError(f"{compose}: {variable}: host interpolation requires metadata.required_env")
-            elif isinstance(value, dict):
-                for key, child in value.items():
-                    check_interpolation(key)
-                    check_interpolation(child)
-            elif isinstance(value, list):
-                for child in value:
-                    check_interpolation(child)
-
-        check_interpolation(document)
         if not isinstance(document, dict) or set(document) - {"services", "volumes", "networks", "name"}:
             raise ValueError(f"{compose}: only services, volumes, networks, and name are allowed")
         volumes = document.get("volumes") or {}
@@ -168,7 +173,7 @@ async def free_check(paths: list[Path], output: Path) -> None:
         raise ValueError(f"{output}: use a fresh output directory for each free check")
     available = []
     for path in paths:
-        missing = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
+        missing = [name for name in task_host_variables(path) if not os.environ.get(name)]
         if missing:
             print(f"{path}: skipped oracle and nop runs because {', '.join(missing)} is unset.", flush=True)
         else:

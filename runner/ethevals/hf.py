@@ -5,11 +5,13 @@ import re
 import shutil
 
 from harbor.models.task.task import Task
+from harbor.publisher.packager import Packager
 import yaml
 
-from .harbor_tasks import lint_task
+from .harbor_tasks import lint_task, task_host_variables
 
 DEFAULT_REPO = "buidlguidl/ethevals-test"
+DESCRIPTION = "Tasks that measure how well AI agents do Ethereum work and what bare models know about Ethereum."
 
 
 def write_hf(paths: list[Path], output: Path, repo: str = DEFAULT_REPO,
@@ -20,21 +22,27 @@ def write_hf(paths: list[Path], output: Path, repo: str = DEFAULT_REPO,
         raise ValueError("No task folders found")
     if output.exists() and any(output.iterdir()):
         raise ValueError(f"{output}: HF export requires an empty output directory")
-    tasks = []
+    tasks, requirements = [], []
     for path in sorted(paths):
         lint_task(path)
         name = Task(path).name
         if any(task["name"] == name for task in tasks):
             raise ValueError(f"Duplicate task name: {name}")
         tasks.append({"name": name, "path": f"tasks/{path.parent.name}--{path.name}"})
+        if variables := task_host_variables(path):
+            requirements.append(f"- `{name}`: " + ", ".join(f"`{variable}`" for variable in variables))
     # Check every folder before copying; publication never rewrites task files.
     for path, task in zip(sorted(paths), tasks, strict=True):
-        shutil.copytree(path, output / task["path"])
+        for file in Packager.collect_files(path):
+            destination = output / task["path"] / file.relative_to(path.resolve())
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(file, destination)
     (output / "registry.json").write_text(json.dumps([{
-        "name": "ethevals", "version": "1.0", "description": "Ethereum tasks.", "tasks": tasks,
+        "name": "ethevals", "version": "1.0", "description": DESCRIPTION, "tasks": tasks,
     }], indent=2) + "\n")
     (output / "eval.yaml").write_text(yaml.safe_dump({
-        "name": "ETH Evals", "evaluation_framework": "harbor", "tasks": tasks,
+        "name": "ETH Evals", "description": DESCRIPTION, "evaluation_framework": "harbor",
+        "tasks": [{"id": "ethevals", "config": "default", "split": "test"}],
     }, sort_keys=False))
     card = {"pretty_name": "ETH Evals", "language": ["en"],
             "tags": ["ethereum", "rl-environment", "harbor"]}
@@ -44,7 +52,7 @@ def write_hf(paths: list[Path], output: Path, repo: str = DEFAULT_REPO,
 
 This dataset contains {len(tasks)} Ethereum tasks in Harbor format.
 Each folder contains its instruction, environment, tests, and solution.
-The files match the source task folder byte for byte.
+The export contains exactly the files Harbor's packager counts, with their bytes unchanged.
 Each task's `[task].name` stays the same in the source folder, registry, and Harbor trials.
 Shared images use pinned GHCR tags. ETH Evals code is not required.
 
@@ -60,8 +68,11 @@ Use `--dataset ethevals@1.0` to select the explicit registry entry.
 Append `@gh-SHORT_SHA` to the repository URL to pin a published source revision.
 The registry resolves task paths against the selected dataset commit.
 
-Tasks declare required host variables in `metadata.required_env` in `task.toml`.
-Set those variables before running the selected tasks.
+Each task's compose file declares its host variables through `${{VAR:?message}}` interpolation.
+Set those variables before running the task. Compose stops with the message if a value is missing or empty.
+
+{chr(10).join(requirements)}
+
 Plain Harbor runs execute every test and criterion through RewardKit in the task's verifier.
 Tasks with a judge TOML under `tests/` require `ANTHROPIC_API_KEY` through `[verifier.env]`.
 Set a judge-only API key with its own spend limit. A missing key stops Harbor with the variable's name.

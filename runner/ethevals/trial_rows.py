@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 from harbor.models.trial.result import TrialResult
+from harbor.models.job.lock import TaskLock
 
 from .checks import JudgeError, read_details, read_reward
 
@@ -17,6 +18,9 @@ def trial_identity(row: dict) -> tuple:
 
 
 def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = None) -> dict:
+    lock = TaskLock.model_validate(json.loads((folder / "lock.json").read_text())["task"])
+    if lock.digest != metadata["task_hash"]:
+        raise ValueError(f"{folder / 'lock.json'}: task digest differs from the plan")
     result = TrialResult.model_validate_json((folder / "result.json").read_text())
     error = result.exception_info
     timed_out = error is not None and error.exception_type == "AgentTimeoutError"

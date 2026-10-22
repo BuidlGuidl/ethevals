@@ -47,16 +47,16 @@ jobs:
           import os
           from pathlib import Path
           from ethevals.cli import main
-          from harbor.models.task.task import Task
-          tasks = [Task(path.parent) for path in sorted(Path("tasks").rglob("task.toml"))]
-          tasks = [task for task in tasks if task.config.metadata.get("required_env")]
+          from ethevals.harbor_tasks import task_host_variables
+          tasks = [path.parent.resolve() for path in sorted(Path("tasks").rglob("task.toml"))]
+          tasks = [task for task in tasks if task_host_variables(task)]
           if not tasks:
               raise SystemExit("No tasks declare required environment variables.")
           for task in tasks:
-              for variable in task.config.metadata["required_env"]:
+              for variable in task_host_variables(task):
                   if not os.environ.get(variable):
                       raise SystemExit(f"Missing {variable}")
-          raise SystemExit(main(["free-check", "--tasks", *[str(task.task_dir) for task in tasks],
+          raise SystemExit(main(["free-check", "--tasks", *[str(task) for task in tasks],
                                  "--output", "results/fork-check"]))
           PY
       - name: Post the commit status

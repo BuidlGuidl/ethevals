@@ -11,11 +11,11 @@ from harbor.models.job.config import JobConfig
 from harbor.models.task.task import Task
 from harbor.agents.factory import AgentFactory
 from harbor.models.trial.config import AgentConfig
+from harbor.publisher.packager import Packager
 from pydantic import ValidationError
 
 from .job_config import JobSettings, check_credentials, check_judge_key
-from .files import content_hash
-from .harbor_tasks import lint_task, task_judges
+from .harbor_tasks import lint_task, task_host_variables, task_judges
 from .skills import SkillsPack, pack_skills
 from .secret_check import check_output, remember_secrets, secret_values
 from .trial_rows import fold_rows, recover_rows, trial_identity, write_rows
@@ -31,9 +31,8 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
     modes = metadata.get("modes")
     if not isinstance(modes, list) or not modes or any(not isinstance(mode, str) or mode not in {"vanilla", "internet", "skills"} for mode in modes):
         raise ValueError(f"{path}: metadata.modes must list supported modes")
-    files = {file.relative_to(path).as_posix(): file.read_bytes() for file in path.rglob("*")
-             if file.is_file() and not {".DS_Store", "__pycache__", ".pytest_cache"}.intersection(file.parts)}
-    return {"id": f"{pillar}/{path.name}", "hash": content_hash(files), "pillar": pillar,
+    digest, _ = Packager.compute_content_hash(path)
+    return {"id": f"{pillar}/{path.name}", "hash": "sha256:" + digest, "pillar": pillar,
             "name": task.name, "description": task.config.task.description,
             "instruction": (path / "instruction.md").read_text(), "modes": modes}
 
@@ -77,7 +76,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         if task["name"] in names:
             raise ValueError(f"Duplicate task name: {task['name']}")
         names.add(task["name"])
-        missing_env = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
+        missing_env = [name for name in task_host_variables(path) if not os.environ.get(name)]
         if missing_env:
             print(f"{path}: deferred trials because {', '.join(missing_env)} is unset.", file=sys.stderr, flush=True)
         for key, agent in config.agents.items():
@@ -176,7 +175,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
     prepared = []
     for item in report["missing"]:
         path = Path(item["task_path"])
-        missing = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
+        missing = [name for name in task_host_variables(path) if not os.environ.get(name)]
         if missing:
             raise ValueError(f"{path}: missing {', '.join(missing)}")
         agent = config.agents[item["agent_key"]]

@@ -9,7 +9,6 @@ keywords = ["ethereum", "defi", "fork"]
 [metadata]
 pillar = "transactions"
 modes = ["internet", "skills"]
-required_env = ["MAINNET_RPC_URL"]
 
 [verifier]
 environment_mode = "shared"

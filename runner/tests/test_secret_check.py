@@ -102,8 +102,8 @@ def test_whole_job_check_withholds_artifact_and_release_for_declared_secrets(tmp
     config = load_job(job_config(tmp_path, "free"))
     task = task_folder(tmp_path)
     if source == "host":
-        settings = task / "task.toml"
-        settings.write_text(settings.read_text() + 'required_env = ["ARCHIVE_RPC_URL"]\n')
+        (task / "environment/docker-compose.yaml").write_text(
+            "services:\n  browser:\n    environment:\n      URL: ${ARCHIVE_RPC_URL:?Set ARCHIVE_RPC_URL}\n")
         monkeypatch.setenv(label, value)
     elif source.startswith("auth"):
         auth = tmp_path / "auth.json"

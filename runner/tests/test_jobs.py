@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import cli
+from support import cli, recorded_trial
 import pytest
 
 
@@ -32,6 +32,31 @@ def task_folder(tmp_path):
     (task / "tests/test.sh").write_text("#!/bin/sh\nexit 0\n")
     (task / "solution/solve.sh").write_text("#!/bin/sh\nexit 0\n")
     return task
+
+
+def test_catalog_hashes_every_real_task_with_harbors_package_digest(tmp_path):
+    from harbor.publisher.packager import Packager
+    from ethevals.jobs import write_catalog
+
+    paths = sorted(path.parent for path in (Path(__file__).resolve().parents[2] / "tasks").glob("*/*/task.toml"))
+    write_catalog(paths, tmp_path)
+    entries = json.loads((tmp_path / "catalog.json").read_text())["tasks"]
+    assert len(entries) == len(paths)
+    assert [entry["hash"] for entry in entries] == [
+        "sha256:" + Packager.compute_content_hash(path)[0] for path in paths]
+
+
+def test_row_builder_refuses_a_saved_trial_with_a_different_lock_digest(tmp_path):
+    import shutil
+    from ethevals.trial_rows import results_row
+
+    folder = tmp_path / "trial"
+    shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", folder)
+    metadata = json.loads((folder / "board.json").read_text())
+    lock = {"task": {"name": "buidlguidl/question", "type": "local", "digest": "sha256:" + "0" * 64}}
+    (folder / "lock.json").write_text(json.dumps(lock))
+    with pytest.raises(ValueError, match="task digest differs from the plan"):
+        results_row(folder, metadata)
 
 
 def test_board_job_uses_harbor_timeouts_without_overrides(tmp_path, monkeypatch):
@@ -271,7 +296,7 @@ def test_recovery_restarts_a_job_interrupted_during_its_first_config_write(tmp_p
     assert (job_folder / "config.json").read_text() == partial
 
     async def finished(job):
-        shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", job.job_dir / "trial")
+        recorded_trial(job.job_dir / "trial", task)
 
     monkeypatch.setattr(Job, "run", original_run if real_trial else finished)
     assert asyncio.run(run(report, config, output, [])) is True
@@ -334,6 +359,7 @@ def test_cli_selects_configured_entries(tmp_path, selection, message):
 
 
 def test_catalog_contains_only_public_task_fields(tmp_path):
+    from harbor.publisher.packager import Packager
     task = task_folder(tmp_path)
     (task / "tests/private.txt").write_text("Do not publish the verifier in the catalog.")
     output = tmp_path / "catalog"
@@ -344,7 +370,7 @@ def test_catalog_contains_only_public_task_fields(tmp_path):
     assert {key: value for key, value in entry.items() if key != "hash"} == {
         "id": "concepts/question", "pillar": "concepts", "name": "buidlguidl/question", "description": "Check a reply.",
         "instruction": "Name a unit.\n", "modes": ["internet"]}
-    assert len(entry["hash"]) == 64
+    assert entry["hash"] == "sha256:" + Packager.compute_content_hash(task)[0]
 
 
 @pytest.mark.parametrize("command", ["lint", "catalog", "plan", "export-hf"])

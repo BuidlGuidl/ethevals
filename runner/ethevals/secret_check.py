@@ -9,18 +9,13 @@ import stat
 import sys
 import tempfile
 
-from harbor.models.task.task import Task
 from harbor.utils.env import get_required_host_vars, is_sensitive_env_key
 
 from .job_config import JobSettings
+from .harbor_tasks import task_host_variables
 
 RECEIPT = "publication-check.json"
 MIN_SECRET_BYTES = 8
-
-
-def task_host_variables(path: Path) -> list[str]:
-    """Return a task's declared host-variable names."""
-    return Task(path).config.metadata.get("required_env", [])
 
 
 def secret_values(config: JobSettings, paths: list[Path]) -> dict[str, set[bytes]]:

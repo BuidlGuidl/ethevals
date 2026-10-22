@@ -169,13 +169,13 @@ def test_hub_credential_comes_from_config_and_tasks_cannot_request_it(tmp_path, 
     from ethevals.secret_check import secret_values
 
     task = task_folder(tmp_path)
-    settings = task / "task.toml"
     config = load_job()
     config.hub.key_env = key_env
     lint_task(task, config)
     monkeypatch.setenv(key_env, "offline-hub-key")
     assert secret_values(config, [task])[key_env] == {b"offline-hub-key"}
-    settings.write_text(settings.read_text() + f'required_env = ["{key_env}"]\n')
+    (task / "environment/docker-compose.yaml").write_text(
+        'services:\n  browser:\n    environment:\n      KEY: ${' + key_env + ':?Set the key}\n')
     with pytest.raises(ValueError, match=f"{key_env} is a job credential"):
         lint_task(task, config)
 

@@ -136,24 +136,20 @@ def test_task_lint_rejects_service_options_outside_allowlist(harbor_task, key, v
 
 
 @pytest.mark.parametrize("value", [
-    "${HOST_SECRET}", "$HOST_SECRET", "${ARCHIVE_RPC_URL:-${HOST_SECRET}}",
+    "${HOST_SECRET}", "$HOST_SECRET", "${HOST_SECRET:-default}", "${HOST_SECRET?required}", "${HOST_SECRET:?}",
 ])
-def test_task_lint_rejects_undeclared_interpolation(harbor_task, value):
+def test_task_lint_requires_compose_host_variables_to_fail_clearly_when_unset(harbor_task, value):
     from ethevals.harbor_tasks import lint_task
 
-    (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
         "services": {"browser": {"environment": {"URL": value}}}}))
-    with pytest.raises(ValueError, match="HOST_SECRET.*metadata.required_env"):
+    with pytest.raises(ValueError, match="HOST_SECRET.*must use.*message"):
         lint_task(harbor_task)
 
 
 def test_task_lint_accepts_declared_interpolation_and_container_dollars(harbor_task):
     from ethevals.cli import main
 
-    (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({"services": {
         "browser": {"build": ".", "environment": {"URL": "${ARCHIVE_RPC_URL:?required}"},
                     "command": "echo $$CONTAINER_VAR"}}}))
@@ -172,13 +168,11 @@ def test_task_lint_rejects_implicit_host_environment(harbor_task, environment):
 
 @pytest.mark.parametrize("network", [
     {"external": True, "name": "host"}, {"driver": "host"},
-    {"external": True, "name": "${NETWORK_NAME}"},
+    {"external": True, "name": "${NETWORK_NAME:?Set the network}"},
 ])
 def test_task_lint_rejects_host_network_definitions(harbor_task, network):
     from ethevals.harbor_tasks import lint_task
 
-    (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["NETWORK_NAME"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
         "services": {"browser": {"networks": ["outside"]}}, "networks": {"outside": network}}))
     with pytest.raises(ValueError, match="network outside: host networks and network driver options are forbidden"):
@@ -203,7 +197,7 @@ def test_task_lint_accepts_all_real_tasks(capsys):
 
 
 @pytest.mark.parametrize("credential", ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CODEX_AUTH_JSON", "CUSTOM_PROVIDER_KEY"])
-def test_task_cannot_declare_a_job_credential_as_required_env(harbor_task, tmp_path, capsys, credential):
+def test_task_cannot_interpolate_a_job_credential_in_compose(harbor_task, tmp_path, capsys, credential):
     from ethevals.cli import main
     from ethevals.job_config import load_job
 
@@ -212,10 +206,8 @@ def test_task_cannot_declare_a_job_credential_as_required_env(harbor_task, tmp_p
     job = tmp_path / "job.json"
     import json
     job.write_text(json.dumps(config))
-    settings = harbor_task / "task.toml"
-    settings.write_text(f'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["{credential}"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
-        "services": {"browser": {"environment": {"LEAK": "${" + credential + "}"}}}}))
+        "services": {"browser": {"environment": {"LEAK": "${" + credential + ":?Set the key}"}}}}))
     with pytest.raises(SystemExit) as error:
         main(["lint", "--tasks", str(harbor_task), "--config", str(job)])
     assert error.value.code == 2
@@ -230,8 +222,8 @@ def test_task_cannot_declare_a_job_credential_as_required_env(harbor_task, tmp_p
 def test_task_cannot_declare_the_default_judge_key(harbor_task, capsys):
     from ethevals.cli import main
 
-    (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ANTHROPIC_API_KEY"]\n')
+    (harbor_task / "environment/docker-compose.yaml").write_text(
+        "services:\n  browser:\n    environment:\n      KEY: ${ANTHROPIC_API_KEY:?Set the key}\n")
     with pytest.raises(SystemExit) as error:
         main(["lint", "--tasks", str(harbor_task)])
     assert error.value.code == 2
@@ -295,11 +287,9 @@ def test_task_lint_rejects_implicit_host_build_arguments(harbor_task, arguments)
 def test_task_lint_rejects_interpolation_in_build_paths(harbor_task, monkeypatch):
     from ethevals.harbor_tasks import lint_task
 
-    (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["BUILD_ROOT"]\n')
     monkeypatch.setenv("BUILD_ROOT", "/")
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
-        "services": {"browser": {"build": {"context": "${BUILD_ROOT}"}}}}))
+        "services": {"browser": {"build": {"context": "${BUILD_ROOT:?Set the path}"}}}}))
     with pytest.raises(ValueError, match="build paths must be literal"):
         lint_task(harbor_task)
 
@@ -312,7 +302,7 @@ def test_task_lint_rejects_test_words_in_agent_text(harbor_task, name):
     assert f"{name}: agent-visible text contains forbidden word 'eval'" in result.stderr
 
 
-def test_free_check_validates_and_skips_a_task_without_required_env(harbor_task, tmp_path, monkeypatch, capsys):
+def test_free_check_validates_and_skips_a_task_without_compose_host_variable(harbor_task, tmp_path, monkeypatch, capsys):
     from ethevals.cli import main
     from harbor.job import Job
 
@@ -321,8 +311,8 @@ def test_free_check_validates_and_skips_a_task_without_required_env(harbor_task,
 
     monkeypatch.setattr(Job, "create", refuse_job)
     monkeypatch.delenv("ARCHIVE_RPC_URL", raising=False)
-    (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+    (harbor_task / "environment/docker-compose.yaml").write_text(
+        "services:\n  browser:\n    environment:\n      URL: ${ARCHIVE_RPC_URL:?Set ARCHIVE_RPC_URL}\n")
     output = tmp_path / "job"
     assert main(["free-check", "--tasks", str(harbor_task), "--output", str(output)]) == 0
     assert capsys.readouterr().out == (
@@ -336,15 +326,6 @@ def test_free_check_validates_and_skips_a_task_without_required_env(harbor_task,
     assert "forbidden word 'eval'" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("value", ['"ARCHIVE_RPC_URL"', '["not a variable"]'])
-def test_task_lint_rejects_invalid_required_env(harbor_task, value):
-    (harbor_task / "task.toml").write_text(
-        f'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = {value}\n')
-    result = cli("-m", "ethevals.cli", "lint", "--tasks", harbor_task)
-    assert result.returncode == 2
-    assert "metadata.required_env must list environment variable names" in result.stderr
-
-
 def test_manual_workflow_requires_secrets_and_selects_declared_tasks(harbor_task, tmp_path, monkeypatch):
     from ethevals import cli as task_cli
 
@@ -353,8 +334,8 @@ def test_manual_workflow_requires_secrets_and_selects_declared_tasks(harbor_task
     step = next(step for step in workflow["jobs"]["check"]["steps"]
                 if step.get("name") == "Run the fork oracle and nop runs")
     script = step["run"].split("\n", 1)[1].rsplit("\nPY", 1)[0]
-    (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+    (harbor_task / "environment/docker-compose.yaml").write_text(
+        "services:\n  browser:\n    environment:\n      URL: ${ARCHIVE_RPC_URL:?Set ARCHIVE_RPC_URL}\n")
     task = tmp_path / "tasks/question"
     task.parent.mkdir()
     harbor_task.rename(task)

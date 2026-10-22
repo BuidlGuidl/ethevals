@@ -1,14 +1,15 @@
+import asyncio
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
-import tomllib
 import uuid
 
 import pytest
 import yaml
+from ethevals.harbor_tasks import task_host_variables
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +27,47 @@ def chain_tools():
     docker("build", "--target", "tools", "--file", str(IMAGES / "Chain.Dockerfile"),
            "--tag", image, str(IMAGES))
     return image
+
+
+def test_free_check_keeps_compose_host_values_out_of_main_container(tmp_path, monkeypatch):
+    from harbor.environments.docker.docker import DockerEnvironment
+    from ethevals.harbor_tasks import free_check
+
+    source = next(path.parent for path in (ROOT / "tasks").glob("*/*/task.toml")
+                  if task_host_variables(path.parent))
+    task = tmp_path / source.parent.name / "fork-env"
+    shutil.copytree(source, task)
+    variables = task_host_variables(task)
+    dummy = "http://127.0.0.1:1/offline-fork-url"
+    for name in variables:
+        monkeypatch.setenv(name, dummy)
+    compose = task / "environment/docker-compose.yaml"
+    document = yaml.safe_load(compose.read_text())
+    for service in document["services"].values():
+        if "healthcheck" in service:
+            service["healthcheck"].update(interval="1s", retries=1)
+    compose.write_text(yaml.safe_dump(document))
+    observed = {}
+    original = DockerEnvironment._run_docker_compose_command
+
+    async def inspect(self, command, *args, **kwargs):
+        try:
+            return await original(self, command, *args, **kwargs)
+        finally:
+            if command[0] == "up":
+                for name in document["services"]:
+                    listed = await original(self, ["ps", "--all", "--quiet", name])
+                    container = json.loads(docker("inspect", listed.stdout.strip()))[0]
+                    observed[name] = container["Config"]["Env"]
+
+    monkeypatch.setattr(DockerEnvironment, "_run_docker_compose_command", inspect)
+    with pytest.raises(ValueError):
+        asyncio.run(free_check([task], tmp_path / "job"))
+    (tmp_path / "container-env-proof.json").write_text(json.dumps(observed, indent=2))
+    assert any(dummy in value for name, env in observed.items() if name != "main" for value in env)
+    assert any(value.startswith("PATH=") for value in observed["main"])
+    assert all(dummy not in value and value.split("=", 1)[0] not in variables
+               for value in observed["main"])
 
 
 def test_pinned_fork_keeps_its_secret_out_of_setup_agent_and_logs(tmp_path, monkeypatch, chain_tools):
@@ -50,13 +92,9 @@ def test_pinned_fork_keeps_its_secret_out_of_setup_agent_and_logs(tmp_path, monk
         docker("exec", name, "cast", "rpc", "evm_mine")
         source = next(path.parent.parent for path in (ROOT / "tasks").rglob("environment/docker-compose.yaml")
                       if "chain" in yaml.safe_load(path.read_text())["services"]
-                      and not tomllib.loads((path.parent.parent / "task.toml").read_text())
-                      .get("metadata", {}).get("required_env"))
+                      and not task_host_variables(path.parent.parent))
         task = tmp_path / source.parent.name / "fork"
         shutil.copytree(source, task)
-        settings = task / "task.toml"
-        settings.write_text(settings.read_text().replace(
-            "[metadata]", '[metadata]\nrequired_env = ["ARCHIVE_RPC_URL"]'))
         compose = task / "environment/docker-compose.yaml"
         document = yaml.safe_load(compose.read_text())
         document["services"]["chain"]["environment"] = {

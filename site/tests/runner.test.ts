@@ -61,6 +61,8 @@ if ${withCriteria ? "True" : "False"}:
     assert judge_calls == 1
 write_catalog([task], output)
 metadata["task_hash"] = task_entry(task)["hash"]
+(trial / "lock.json").write_text(json.dumps({"task": {
+    "name": "buidlguidl/question", "type": "local", "digest": metadata["task_hash"]}}))
 write_rows(output / "rows.jsonl", [results_row(trial, metadata,
     trajectory_url="https://example.org/trials/oracle/trajectory.json")])
 `;

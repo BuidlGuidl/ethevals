@@ -5,7 +5,7 @@ import tarfile
 
 import pytest
 
-from support import cli
+from support import cli, recorded_trial
 from test_jobs import job_config, task_folder
 
 
@@ -51,7 +51,7 @@ def test_ci_plan_holds_judge_errors_without_scheduling_agent_work(tmp_path):
     config_path.write_text(config.model_dump_json())
     item = plan([task], config, [], n_attempts=1)["missing"][0]
     folder = tmp_path / "old/jobs/saved/trial"
-    shutil.copytree(ROOT / "runner/tests/fixtures/harbor/recorded-trial", folder)
+    recorded_trial(folder, task)
     private = tmp_path / "host-only.txt"
     private.write_text("OFFLINE-HOST-ONLY")
     (folder / "verifier/planted").symlink_to(private)
@@ -98,7 +98,7 @@ def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, 
 
     async def saved_result(job):
         calls.append(job.config.tasks[0].path)
-        shutil.copytree(ROOT / "runner/tests/fixtures/harbor/recorded-trial", job.job_dir / "trial")
+        recorded_trial(job.job_dir / "trial", task)
 
     monkeypatch.setattr(Job, "run", saved_result)
     output = tmp_path / "out"
@@ -108,11 +108,11 @@ def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, 
     assert calls == [task.resolve()]
 
 
-def test_ci_plan_defers_tasks_with_missing_required_env(tmp_path, monkeypatch):
+def test_ci_plan_defers_tasks_with_missing_compose_host_variable(tmp_path, monkeypatch):
     monkeypatch.delenv("ARCHIVE_RPC_URL", raising=False)
     config, task = job_config(tmp_path, "api_key"), task_folder(tmp_path)
-    settings = task / "task.toml"
-    settings.write_text(settings.read_text() + 'required_env = ["ARCHIVE_RPC_URL"]\n')
+    (task / "environment/docker-compose.yaml").write_text(
+        "services:\n  browser:\n    environment:\n      URL: ${ARCHIVE_RPC_URL:?Set ARCHIVE_RPC_URL}\n")
     output, github_output = tmp_path / "plan", tmp_path / "github-output"
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config,
                  "--tasks", task, "--budget", 1, "--rows", tmp_path / "none",
@@ -139,8 +139,8 @@ def test_ci_plan_defers_tasks_with_missing_required_env(tmp_path, monkeypatch):
 def test_local_run_defers_unavailable_task_and_succeeds_without_harbor(tmp_path, monkeypatch):
     monkeypatch.delenv("ARCHIVE_RPC_URL", raising=False)
     task = task_folder(tmp_path)
-    settings = task / "task.toml"
-    settings.write_text(settings.read_text() + 'required_env = ["ARCHIVE_RPC_URL"]\n')
+    (task / "environment/docker-compose.yaml").write_text(
+        "services:\n  browser:\n    environment:\n      URL: ${ARCHIVE_RPC_URL:?Set ARCHIVE_RPC_URL}\n")
     result = cli("-m", "ethevals.cli", "run", "--config", job_config(tmp_path),
                  "--tasks", task, "--budget", 0, "--rows", tmp_path / "none",
                  "--output", tmp_path / "out")
