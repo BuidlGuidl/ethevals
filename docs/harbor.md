@@ -5,7 +5,8 @@
 `runner/ethevals/job.yaml` holds the board's agents, models, CLI pins, and Harbor pin.
 Each agent entry names a Harbor agent or Python import path and a model key.
 Its `paid_by` field is `plan`, `api_key`, or `free` for a local stand-in.
-Model effort becomes Harbor's `reasoning_effort`; `kwargs` carries other agent options.
+Model effort becomes Harbor's `reasoning_effort`. OpenCode has no effort option, so it gets the effort as its model `variant`.
+`kwargs` carries other agent options.
 Each entry's `env` passes through Harbor's agent environment.
 The board sets no agent or verifier time limit.
 Harbor defaults to no agent limit and a 600-second verifier limit.

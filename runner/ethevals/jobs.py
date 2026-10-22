@@ -183,11 +183,14 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
         model = config.models[agent.model]
         check_credentials(agent, item["agent_key"])
         kwargs = {**model.kwargs, **agent.kwargs, "version": agent.version}
-        if model.effort is not None:
-            kwargs["reasoning_effort"] = model.effort
         harbor = AgentConfig(name=agent.name, model_name=model.name, kwargs=kwargs, env=agent.env)
         options = AgentFactory.get_agent_class_from_config(harbor).options_model
-        if agent.paid_by == "api_key" and options is not None and "max_budget_usd" in options.model_fields:
+        fields = options.model_fields if options is not None else {}
+        if model.effort is not None:
+            # OpenCode has no effort option; its model variant sets the provider's effort.
+            effort = "variant" if "variant" in fields and "reasoning_effort" not in fields else "reasoning_effort"
+            harbor.kwargs[effort] = model.effort
+        if agent.paid_by == "api_key" and "max_budget_usd" in fields:
             harbor.kwargs["max_budget_usd"] = str(agent.cost_limit_usd)
         if item["mode"] == "skills":
             harbor.skills = [str(skills_path)]

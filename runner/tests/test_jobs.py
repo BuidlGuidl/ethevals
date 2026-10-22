@@ -83,6 +83,32 @@ def test_board_job_uses_harbor_timeouts_without_overrides(tmp_path, monkeypatch)
         asyncio.run(run(report, config, tmp_path / "out", []))
 
 
+def test_opencode_gets_the_model_effort_as_its_variant(tmp_path, monkeypatch):
+    import asyncio
+    from harbor.job import Job
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
+
+    path, task = job_config(tmp_path, "free"), task_folder(tmp_path)
+    data = json.loads(path.read_text())
+    data["agents"]["local"].update(name="opencode", version="1.18.33")
+    path.write_text(json.dumps(data))
+    config = load_job(path)
+    report = budget_check(plan([task], config, [], n_attempts=1), 0)
+
+    class Planned(Exception):
+        pass
+
+    async def capture(config):
+        # OpenCode has no reasoning_effort option; its variant sets the provider's effort.
+        assert [agent.kwargs for agent in config.agents] == [{"version": "1.18.33", "variant": "high"}]
+        raise Planned
+
+    monkeypatch.setattr(Job, "create", capture)
+    with pytest.raises(Planned):
+        asyncio.run(run(report, config, tmp_path / "out", []))
+
+
 def test_plan_reserves_no_agent_spend_for_a_plan_but_run_requires_budget(tmp_path):
     config, task = job_config(tmp_path), task_folder(tmp_path)
     args = ["--config", config, "--tasks", task, "--output", tmp_path / "out",

@@ -15,14 +15,16 @@ modes: [vanilla, internet, skills]
 models:
   opus-5.5:
     name: anthropic/claude-opus-5-5
-    effort: medium
+    effort: high
   gpt-6.1-sol:
     name: openai/gpt-6.1-sol
-    effort: medium
+    effort: high
   kimi-k3:
     name: openrouter/moonshotai/kimi-k3
+    effort: high
   glm-5.3:
     name: openrouter/z-ai/glm-5.3
+    effort: high
 agents:
   vanilla-opus-5.5:
     name: ethevals.vanilla:VanillaAgent
