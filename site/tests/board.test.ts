@@ -28,6 +28,20 @@ function getCell(evaluation: Eval, agent: Agent, mode: "internet" | "vanilla", r
   return buildBoard([evaluation], rows).tables[mode].pillars[evaluation.pillar].evals[0].cells[agentKey(agent)];
 }
 
+test("the drawer labels the full Harbor Hub trial and the release fallback", () => {
+  for (const [url, label] of [
+    ["https://hub.harborframework.com/jobs/job-id/trials/trial-id", "Open full trial on Harbor Hub ↗"],
+    ["https://github.com/owner/repo/releases/download/results-1/trajectory.json", "Open trajectory ↗"],
+  ]) {
+    const data = buildBoard([evaluation], [row({ trajectory_url: url })]);
+    const panel = renderToStaticMarkup(createElement(Detail, {
+      data, selection: { evaluation, pillar: "concepts", agent, mode: "internet", run: 1 },
+      onSelect: () => {},
+    }));
+    assert.ok(panel.includes(`href="${url}" target="_blank" rel="noreferrer">${label}</a>`));
+  }
+});
+
 const failure = { status: "failed", checks: { answer: { passed: false, reason: "The answer differs." } } } as const;
 const error = { status: "error", checks: {}, error_kind: "execution", error_reason: "Sandbox stopped." } as const;
 

@@ -2,6 +2,9 @@ harbor_version: 0.24.0
 n_attempts: 3
 retry:
   max_retries: 1
+hub:
+  org: buidlguidl
+  key_env: HARBOR_API_KEY
 judge:
   model: anthropic/claude-opus-5-5
   effort: high

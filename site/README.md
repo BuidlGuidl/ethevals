@@ -38,6 +38,8 @@ Cost adds agent and judge API prices, even when a plan paid.
 
 Each trial drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.
 Its trajectory link opens the row's `trajectory_url`.
+Harbor Hub links say "Open full trial on Harbor Hub" and open the public trial page.
+If the Hub upload fails or skips, published rows link to the release's trajectory JSON.
 Published rows use a full HTTP URL.
 Local rows use `/trajectories/<id>.json` and a `trajectory_file` path.
 The build copies that file into the static export.

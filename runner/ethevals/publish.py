@@ -30,7 +30,8 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
         if row.get("error_kind") in {"secret", "publication"}:
             linked.append(row)
             continue
-        if (row.get("trajectory_url") or "").startswith("https://"):
+        hub_url = (row.get("trajectory_url") or "").startswith("https://hub.harborframework.com/jobs/")
+        if (row.get("trajectory_url") or "").startswith("https://") and (not hub_url or row.get("verifier_url")):
             linked.append(row)
             continue
         checked_job = Path(row["verifier_files"]).parent.parent
@@ -49,7 +50,7 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
             destination = asset_dir / name
             if source.resolve() != destination:
                 shutil.copyfile(source, destination)
-            links.update(trajectory_file=str(destination), trajectory_url=f"{base}/{name}")
+            links.update(trajectory_file=str(destination), trajectory_url=row["trajectory_url"] if hub_url else f"{base}/{name}")
             assets.append({"name": name, "source": str(destination), "url": f"{base}/{name}"})
         verifier = Path(row["verifier_files"])
         if not verifier.is_dir() or verifier.is_symlink():

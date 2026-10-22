@@ -93,6 +93,15 @@ jobs:
         run: >-
           uv run python scripts/ci.py run-trial --plan results/ci-plan
           --index ${{ matrix.index }} --output results/ci-run
+      - name: Upload checked trials to Harbor Hub
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          HARBOR_API_KEY: ${{ secrets.HARBOR_API_KEY }}
+        run: >-
+          uv run ethevals upload-hub --output results/ci-run
+          --config results/ci-plan/config.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

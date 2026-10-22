@@ -58,6 +58,11 @@ class AgentSettings(Declaration):
         return self
 
 
+class HubSettings(Declaration):
+    org: str = Field(min_length=1)
+    key_env: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
 class JobSettings(Declaration):
     harbor_version: str
     n_attempts: int = Field(default=3, gt=0)
@@ -66,6 +71,7 @@ class JobSettings(Declaration):
     models: dict[str, ModelSettings]
     agents: dict[str, AgentSettings]
     judge: JudgeSettings = Field(default_factory=JudgeSettings)
+    hub: HubSettings | None = None
 
     @model_validator(mode="after")
     def check_references(self):
@@ -81,7 +87,7 @@ class JobSettings(Declaration):
         return self
 
     def credential_names(self) -> set[str]:
-        return {self.judge.key_env} | {name for agent in self.agents.values()
+        return {self.judge.key_env} | ({self.hub.key_env} if self.hub else set()) | {name for agent in self.agents.values()
                                       for name in [*agent.required_env, *agent.env]}
 
 

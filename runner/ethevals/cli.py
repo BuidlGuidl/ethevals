@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -16,7 +17,7 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(prog="ethevals")
     commands = parser.add_subparsers(dest="command", required=True)
     parsers = {name: commands.add_parser(name) for name in
-               ("run", "plan", "catalog", "export-hf", "publish-logs")}
+               ("run", "plan", "catalog", "export-hf", "publish-logs", "upload-hub")}
     for name in ("lint", "free-check"):
         parsers[name] = commands.add_parser(name, help="Check Harbor task folders.")
         parsers[name].add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
@@ -32,6 +33,9 @@ def parse_args(argv=None):
     parsers["catalog"].add_argument("--output", type=Path, default=Path("results"))
     parsers["export-hf"].add_argument("--output", type=Path, required=True)
     parsers["publish-logs"].add_argument("--output", type=Path, required=True)
+    parsers["upload-hub"].add_argument("--output", type=Path, required=True, help="Checked output directory to publish publicly to Harbor Hub.")
+    parsers["upload-hub"].add_argument("--config", type=Path, help="Job settings with the Hub org and key variable.")
+    parsers["run"].add_argument("--upload-hub", action="store_true", help="Publish checked job folders publicly to Harbor Hub.")
     for name in ("run", "plan"):
         command = parsers[name]
         command.description = "Job n_attempts sets scored repeats; retry.max_retries caps reruns after eligible errors."
@@ -85,7 +89,21 @@ def main(argv=None) -> int:
             if not report["within_budget"]:
                 raise ValueError("Budget exceeded; no trials started")
             write_rows(args.output / "rows.jsonl", previous)
-            success = asyncio.run(jobs.run(report, config, args.output, previous, skills_pack=skills_pack))
+            from .hub import upload_hub
+            from .secret_check import secret_values
+            from .trial_rows import recover_rows, fold_rows, read_rows
+
+            secrets = secret_values(config, [Path(item["task_path"]) for item in [*report["rejudge"], *report["missing"]]])
+            hub_key = os.environ.pop(config.hub.key_env, None) if config.hub else None
+            try:
+                success = asyncio.run(jobs.run(report, config, args.output, previous, skills_pack=skills_pack,
+                                               publication_secrets=secrets))
+            finally:
+                if hub_key is not None:
+                    os.environ[config.hub.key_env] = hub_key
+            if args.upload_hub:
+                upload_hub(args.output, config)
+                write_rows(args.output / "rows.jsonl", fold_rows(read_rows(args.output / "rows.jsonl"), recover_rows(args.output)))
             print(f"Results rows: {args.output / 'rows.jsonl'}")
             return 0 if success else 1
         if args.command == "export-hf":
@@ -113,6 +131,14 @@ def main(argv=None) -> int:
             if args.command == "free-check":
                 from .harbor_tasks import free_check
                 asyncio.run(free_check(paths, args.output))
+            return 0
+        if args.command == "upload-hub":
+            from .hub import upload_hub
+            from .job_config import load_job
+            from .trial_rows import recover_rows, write_rows
+
+            upload_hub(args.output, load_job(args.config))
+            write_rows(args.output / "rows.jsonl", recover_rows(args.output))
             return 0
         if args.command == "publish-logs":
             from .publish import publish_logs

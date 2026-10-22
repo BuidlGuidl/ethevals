@@ -87,7 +87,7 @@ function RunView({ trial, trials, onRun }: { trial: Trial; trials: Trial[]; onRu
       {!checks.length && <p className="muted">No checks completed.</p>}
     </section>
     <p className="muted">{trial.paid_by === "free" ? "No model spend" : `Paid by ${trial.paid_by === "plan" ? "plan" : "API key"}`} · Cost at API prices</p>
-    {trial.trajectoryUrl ? <div className="trajectory-links"><a className="button" href={trial.trajectoryUrl} target="_blank" rel="noreferrer">Open trajectory ↗</a></div> : <p className="muted">Trajectory not published.</p>}
+    {trial.trajectoryUrl ? <div className="trajectory-links"><a className="button" href={trial.trajectoryUrl} target="_blank" rel="noreferrer">{trial.trajectoryUrl.startsWith("https://hub.harborframework.com/jobs/") ? "Open full trial on Harbor Hub ↗" : "Open trajectory ↗"}</a></div> : <p className="muted">Trajectory not published.</p>}
   </>;
 }
 

@@ -42,7 +42,8 @@ def secret_values(config: JobSettings, paths: list[Path]) -> dict[str, set[bytes
             for child in value:
                 auth_tokens(child, name)
 
-    names = ({config.judge.key_env} | {name for agent in config.agents.values() for name in agent.required_env}
+    names = ({config.judge.key_env} | ({config.hub.key_env} if config.hub else set())
+             | {name for agent in config.agents.values() for name in agent.required_env}
              | {name for path in paths for name in task_host_variables(path)})
     for name in names:
         add(name, os.environ.get(name))

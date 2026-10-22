@@ -35,6 +35,14 @@ The reserve covers remaining API-key executions and paid criteria.
 Plan-funded agents reserve no API spend, but their criteria still need a judge key and budget.
 Read [Board jobs](../docs/harbor.md#board-jobs) for payment sources, recovery, and trajectory links.
 
+Use `uv run harbor view results/local/jobs` to browse saved jobs locally.
+The board opens published trials on Harbor Hub, with trajectory, verifier output, artifacts, and config.
+Local runs publish publicly only with `ethevals run --upload-hub`.
+Set the key variable named by `hub.key_env` in the job config before uploading.
+The runner removes that key from the agent's execution environment and restores it for the upload.
+Use `ethevals upload-hub --output results/local` to upload saved, checked jobs without running another trial.
+Pass the same `--config` when the run used separate job settings.
+
 ## CI and publication
 
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
@@ -51,6 +59,7 @@ The workflow needs these GitHub secrets:
 - `ANTHROPIC_API_KEY`: the judge and Anthropic vanilla trials.
 - `OPENAI_API_KEY` and `OPENROUTER_API_KEY`: vanilla trials for those providers; OpenCode also uses OpenRouter.
 - `EXA_API_KEY`, `MAINNET_RPC_URL`, and `BASE_RPC_URL`: optional search and task-declared fork credentials.
+- `HARBOR_API_KEY`: Harbor Hub API key, available only to the upload step.
 
 The job graph is `plan → matrix → publish`.
 The plan reads current `main`; later jobs check out its saved SHA.
@@ -70,6 +79,13 @@ Local and CI trials use the same credential check.
 The judge key enters only the verifier's commands; agent commands use their own configured credentials.
 The run step allows 190 minutes; the job allows 240 minutes for setup, builds, and uploads too.
 Each job uploads only `results/ci-run/public/` after success or failure.
+Before the artifact upload, a separate step uploads checked Harbor jobs publicly to the configured Hub org.
+That step checks its Hub key too and rebuilds the artifact if the check withholds a folder.
+The default org is `buidlguidl`. Create its API key in Harbor Hub's profile settings.
+The Hub key never reaches the step that runs the agent.
+Successful uploads record links from Harbor's job and trial IDs in an artifact receipt.
+Missing keys and failed uploads keep the trial result and schedule no extra paid trial.
+The trajectory JSON remains a release asset and supplies the board link when the Hub upload fails or skips.
 The trial step checks every file in each Harbor job folder while its credentials remain available.
 Local runs use the same check before writing results rows.
 The check matches exact credential values from job settings, including the judge key.

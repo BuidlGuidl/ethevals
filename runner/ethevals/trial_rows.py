@@ -95,14 +95,16 @@ def fold_rows(*groups: list[dict]) -> list[dict]:
         for row in group:
             identity = trial_identity(row)
             old = latest.get(identity)
-            if old is None or (row["retry"], row.get("completed_at") or "", (row.get("trajectory_url") or "").startswith("https://")) > (
-                old["retry"], old.get("completed_at") or "", (old.get("trajectory_url") or "").startswith("https://")):
+            url, old_url = row.get("trajectory_url") or "", (old or {}).get("trajectory_url") or ""
+            if old is None or (row["retry"], row.get("completed_at") or "", url.startswith("https://"), url.startswith("https://hub.harborframework.com/jobs/")) > (
+                old["retry"], old.get("completed_at") or "", old_url.startswith("https://"), old_url.startswith("https://hub.harborframework.com/jobs/")):
                 latest[identity] = row
     return sorted(latest.values(), key=lambda row: tuple(str(value or "") for value in trial_identity(row)[:-1]) + (row["trial"],))
 
 
 def recover_rows(output: Path) -> list[dict]:
     rows = []
+    from .hub import trial_url
     from .secret_check import RECEIPT
     for receipt in sorted((output / "jobs").glob(f"*/{RECEIPT}")):
         withheld = json.loads(receipt.read_text()).get("withheld")
@@ -115,7 +117,7 @@ def recover_rows(output: Path) -> list[dict]:
         metadata = json.loads(board_path.read_text())
         for result in sorted(board_path.parent.glob("*/result.json")):
             try:
-                row = results_row(result.parent, metadata)
+                row = results_row(result.parent, metadata, trajectory_url=trial_url(result.parent))
             except (ValueError, OSError, KeyError) as error:
                 logging.getLogger(__name__).warning("Skipping unreadable trial %s: %s", result, error)
                 continue
