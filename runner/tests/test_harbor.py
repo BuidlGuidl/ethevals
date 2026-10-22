@@ -196,7 +196,30 @@ def test_task_lint_accepts_all_real_tasks(capsys):
     assert capsys.readouterr().out == "".join(f"{path.parent}: lint passed\n" for path in paths)
 
 
-@pytest.mark.parametrize("credential", ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CODEX_AUTH_JSON", "CUSTOM_PROVIDER_KEY"])
+def test_every_real_task_readme_quotes_its_instruction_and_names_every_check():
+    import re
+    from ethevals.harbor_tasks import task_judges
+
+    for path in sorted((Path(__file__).resolve().parents[2] / "tasks").glob("*/*/task.toml")):
+        task = path.parent
+        readme = (task / "README.md").read_text()
+        sections = re.findall(r"^## (.+)$", readme, re.MULTILINE)
+        assert readme.startswith("# "), task
+        assert sections in (["The instruction", "What it touches", "The checks", "Why it matters"],
+                            ["The instruction", "What it touches", "The checks", "Why it matters", "Notes"]), task
+        quoted = re.search(r"^## The instruction\n\n```text\n(.*?)```$", readme, re.MULTILINE | re.DOTALL)
+        assert quoted and quoted[1] == (task / "instruction.md").read_text(), task
+        tests = task / "tests"
+        names = set(re.findall(r"\bfunction (test\w*)\(", "".join(file.read_text() for file in tests.glob("*.t.sol"))))
+        names |= {"compile"} if names else set()
+        names |= set(re.findall(r'\bname="(\w+)"', "".join(file.read_text() for file in tests.glob("*.py"))))
+        names |= {criterion.name for judge in task_judges(task).values() for criterion in judge.criterion}
+        table = readme.split("\n## The checks\n", 1)[1].split("\n## ", 1)[0]
+        missing = {name for name in names if f"| `{name}` |" not in table}
+        assert names and not missing, f"{task}/README.md: the checks table leaves out {sorted(missing)}"
+
+
+@pytest.mark.parametrize("credential",["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CODEX_AUTH_JSON", "CUSTOM_PROVIDER_KEY"])
 def test_task_cannot_interpolate_a_job_credential_in_compose(harbor_task, tmp_path, capsys, credential):
     from ethevals.cli import main
     from ethevals.job_config import load_job

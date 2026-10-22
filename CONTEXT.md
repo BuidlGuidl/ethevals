@@ -88,6 +88,10 @@ _Avoid_: reference solution, golden answer, oracle
 One line on why the task exists, kept in the `[task]` table.
 _Avoid_: motivation, notes
 
+**README**:
+The task's `README.md`, written for people. It quotes the instruction, names the areas the task touches and the gotchas the instruction leaves out, says what each check proves, and says why it matters beyond the task. The agent never sees it.
+_Avoid_: motivation, notes
+
 **Quiz**:
 A task that asks a question with a fixed answer and checks the reply against a target. The word describes a task. It is not a field.
 

@@ -3,7 +3,7 @@ artifacts = ["/workspace"]
 
 [task]
 name = "buidlguidl/revenue-payouts"
-description = "Check whether an agent can split incoming payments while handling token behavior and payee callbacks."
+description = "Check whether an agent's payout contract handles USDT and USDC as they behave on mainnet, payees it doesn't control, and money that keeps arriving."
 authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "solidity", "payments"]
 

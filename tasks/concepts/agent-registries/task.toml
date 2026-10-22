@@ -3,7 +3,7 @@ artifacts = ["/logs/agent/trajectory.json"]
 
 [task]
 name = "buidlguidl/agent-registries"
-description = "Check whether a model knows the ERC for agent discovery and trust."
+description = "Check whether a model knows the ERC that gives AI agents onchain identity, reputation, and validation registries."
 authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "erc", "agent-discovery"]
 

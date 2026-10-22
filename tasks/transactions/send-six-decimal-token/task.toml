@@ -2,7 +2,7 @@ schema_version = "1.3"
 
 [task]
 name = "buidlguidl/send-six-decimal-token"
-description = "Check whether an agent reads token decimals before signing an exact transfer."
+description = "Check whether an agent reads a token's decimals before sending an exact amount, and confirms the transfer landed."
 authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "erc20", "transfers"]
 

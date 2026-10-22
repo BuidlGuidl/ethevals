@@ -25,6 +25,7 @@ tasks/
 └── <pillar>/
     └── <task_name>/
         ├── task.toml                 required: the name, description, modes, and how the verifier runs
+        ├── README.md                 required: what the task touches and why it matters, for people
         ├── instruction.md            required: the message the agent or model gets
         ├── environment/              required: the agent's container and the files it starts with
         │   ├── Dockerfile
@@ -66,6 +67,26 @@ Leave out what the board decides.
 Which agents run, how many trials each gets (`n_attempts`), and how many retries a trial gets after an error all live in the board's [job config](../runner/ethevals/job.yaml).
 The board sets no time limit of its own, so Harbor's defaults apply. The agent has none, and the verifier gets 10 minutes.
 Add `[agent].timeout_sec` or `[verifier].timeout_sec` only when your task needs a different one.
+
+### `README.md`
+
+`README.md` tells people why the task exists and what it catches.
+Harbor Hub and the Hugging Face dataset publish it with the task, and the agent never sees it.
+Use these sections, in this order:
+
+| Section               | Holds                                                                         |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `# <title>`           | two or three sentences on what the user asks and what the task checks        |
+| `## The instruction`  | `instruction.md`, word for word, in a `text` block                             |
+| `## What it touches`  | the areas the task touches, and the gotchas in each that the instruction leaves out |
+| `## The checks`       | a table with every check by name, what it proves, and its area                |
+| `## Why it matters`   | where the same gotchas hurt real projects, with links                         |
+| `## Notes`            | optional caveats, such as a known contract that passes every check            |
+
+A unit test fails the pull request if a section is missing, if the quoted instruction differs from `instruction.md`, or if the table leaves out a check.
+Write the README before the tests.
+If you can't name a gotcha that the instruction leaves out, the task probably won't tell agents apart.
+The [revenue payouts README](../tasks/building/revenue-payouts/README.md) is a full example.
 
 ### `instruction.md`
 
@@ -338,6 +359,7 @@ It's [`tasks/concepts/agent-registries`](../tasks/concepts/agent-registries).
 ```text
 agent-registries/
 ├── task.toml
+├── README.md
 ├── instruction.md
 ├── environment/
 │   └── Dockerfile
@@ -452,6 +474,7 @@ It's [`tasks/transactions/send-six-decimal-token`](../tasks/transactions/send-si
 ```text
 send-six-decimal-token/
 ├── task.toml
+├── README.md
 ├── instruction.md
 ├── environment/
 │   ├── Dockerfile
@@ -826,6 +849,7 @@ It's [`tasks/transactions/supply-usdc-to-aave`](../tasks/transactions/supply-usd
 ```text
 supply-usdc-to-aave/
 ├── task.toml
+├── README.md
 ├── instruction.md
 ├── environment/
 │   ├── Dockerfile
@@ -997,6 +1021,7 @@ It's [`tasks/building/revenue-payouts`](../tasks/building/revenue-payouts).
 ```text
 revenue-payouts/
 ├── task.toml
+├── README.md
 ├── instruction.md
 ├── environment/
 │   ├── Dockerfile
