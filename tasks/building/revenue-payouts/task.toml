@@ -1,9 +1,14 @@
 schema_version = "1.3"
 artifacts = ["/workspace"]
 
+[task]
+name = "buidlguidl/revenue-payouts"
+description = "Check whether an agent can split incoming payments while handling token behavior and payee callbacks."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "solidity", "payments", "rewardkit"]
+
 [metadata]
 pillar = "building"
-motivation = "Check whether an agent can split incoming payments while handling token behavior and payee callbacks."
 modes = ["internet", "skills"]
 
 [verifier]

@@ -465,7 +465,7 @@ def test_plain_harbor_and_board_agree_on_a_saved_judged_chain_trial(tmp_path, mo
             metadata = {"task_id": "transactions/judged-chain", "task_hash": "proof", "skills_hash": None,
                 "agent": agent, "model": "local/model", "effort": None, "mode": "internet", "trial": 1,
                 "retry": 0, "paid_by": "free", "agent_version": result["agent_info"]["version"],
-                "harbor_version": "0.24.0", "time_limit": 7200,
+                "harbor_version": "0.24.0",
                 "judge": {"model": "openai/gpt-5", "effort": "high"}, "judge_paid_by": "free"}
             row = results_row(result_path.parent, metadata)
             assert (row["status"], row["rewards"]["reward"], row["checks"]["verified_transfer"]) == (

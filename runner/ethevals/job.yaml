@@ -1,5 +1,4 @@
 harbor_version: 0.24.0
-time_limit: 7200
 n_attempts: 3
 retry:
   max_retries: 1

@@ -3,11 +3,13 @@ from pathlib import Path
 import shutil
 
 from harbor.models.registry import Registry
+from harbor.models.task.task import Task
 import pytest
 import yaml
 
 from ethevals.cli import main
 from ethevals.hf import write_hf
+from support import cli
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,7 +28,8 @@ def test_export_copies_a_complete_task_and_writes_a_harbor_registry(tmp_path, ca
     registry = Registry.from_path(output / "registry.json")
     assert [(d.name, d.version, [(t.name, str(t.path), t.git_url) for t in d.tasks])
             for d in registry.datasets] == [
-        ("ethevals", "1.0", [("concepts--question", "tasks/concepts--question", None)])]
+        ("ethevals", "1.0", [("buidlguidl/question", "tasks/concepts--question", None)])]
+    assert Task(task).name == Task(published).name == "buidlguidl/question"
     assert yaml.safe_load((output / "eval.yaml").read_text())["evaluation_framework"] == "harbor"
     card = yaml.safe_load((output / "README.md").read_text().split("---", 2)[1])
     assert card["tags"] == ["ethereum", "rl-environment", "harbor"]
@@ -46,3 +49,19 @@ def test_export_rejects_a_task_with_an_external_build_context_before_copying(tmp
     with pytest.raises(ValueError, match="inside the task folder"):
         write_hf([task], output)
     assert not output.exists()
+
+
+@pytest.mark.docker
+def test_exported_package_keeps_its_name_in_a_plain_harbor_trial(tmp_path):
+    task = tmp_path / "concepts/question"
+    shutil.copytree(ROOT / "runner/tests/fixtures/harbor/concepts/question", task)
+    output = tmp_path / "dataset"
+    write_hf([task], output)
+    entry = json.loads((output / "registry.json").read_text())[0]["tasks"][0]
+    result = cli("-m", "harbor.cli.main", "run", "--path", output / entry["path"],
+                 "--agent", "oracle", "--n-concurrent", 1, "--jobs-dir", tmp_path / "jobs", "--job-name", "export")
+    assert result.returncode == 0, result.stdout + result.stderr
+    saved = json.loads(next((tmp_path / "jobs/export").glob("*/result.json")).read_text())
+    assert (Task(task).name, entry["name"], saved["task_name"], saved["verifier_result"]["rewards"]["reward"]) == (
+        "buidlguidl/question", "buidlguidl/question", "buidlguidl/question", 1)
+    assert saved["exception_info"] is None

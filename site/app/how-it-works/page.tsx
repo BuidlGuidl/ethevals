@@ -10,7 +10,7 @@ const scope = {
   security: "Vulnerabilities: spotting known bug patterns, triaging an audit, fixing a bug before it ships.",
 };
 const evalFiles = [
-  ["├──", "task.toml", "settings, motivation, and modes"],
+  ["├──", "task.toml", "settings, description, and modes"],
   ["├──", "instruction.md", "the instruction the agent receives"],
   ["├──", "environment/", ""],
   ["│   ├──", "Dockerfile", "the agent's tools and starting files"],

@@ -13,12 +13,40 @@ def harbor_task(tmp_path):
     (task / "environment").mkdir(parents=True)
     (task / "tests").mkdir()
     (task / "solution").mkdir()
-    (task / "task.toml").write_text('schema_version = "1.3"\n[metadata]\npillar = "concepts"\n')
+    (task / "task.toml").write_text('schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\n')
     (task / "instruction.md").write_text("What is the unit?\n")
     (task / "environment/Dockerfile").write_text("FROM debian:bookworm-slim\n")
     (task / "tests/test.sh").write_text("#!/bin/sh\nexit 0\n")
     (task / "solution/solve.sh").write_text("#!/bin/sh\nexit 0\n")
     return task
+
+
+@pytest.mark.parametrize("field", ["name", "description"])
+@pytest.mark.parametrize("value", [None, ""])
+def test_task_lint_requires_package_name_and_description(harbor_task, field, value):
+    from ethevals.cli import main
+
+    settings = harbor_task / "task.toml"
+    package = {"name": "buidlguidl/question", "description": "Check a reply."}
+    if value is None:
+        package.pop(field)
+    else:
+        package[field] = value
+    settings.write_text('schema_version = "1.3"\n[metadata]\npillar = "concepts"\n[task]\n' + "".join(
+        f"{key} = {json.dumps(item)}\n" for key, item in package.items()))
+    with pytest.raises(SystemExit) as error:
+        main(["lint", "--tasks", str(harbor_task)])
+    assert error.value.code == 2
+
+
+def test_task_lint_requires_a_package_table(harbor_task):
+    from ethevals.cli import main
+
+    (harbor_task / "task.toml").write_text('schema_version = "1.3"\n[metadata]\npillar = "concepts"\n')
+
+    with pytest.raises(SystemExit) as error:
+        main(["lint", "--tasks", str(harbor_task)])
+    assert error.value.code == 2
 
 
 def test_task_lint_rejects_host_mount(harbor_task):
@@ -114,7 +142,7 @@ def test_task_lint_rejects_undeclared_interpolation(harbor_task, value):
     from ethevals.harbor_tasks import lint_task
 
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
         "services": {"browser": {"environment": {"URL": value}}}}))
     with pytest.raises(ValueError, match="HOST_SECRET.*metadata.required_env"):
@@ -125,7 +153,7 @@ def test_task_lint_accepts_declared_interpolation_and_container_dollars(harbor_t
     from ethevals.cli import main
 
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({"services": {
         "browser": {"build": ".", "environment": {"URL": "${ARCHIVE_RPC_URL:?required}"},
                     "command": "echo $$CONTAINER_VAR"}}}))
@@ -150,7 +178,7 @@ def test_task_lint_rejects_host_network_definitions(harbor_task, network):
     from ethevals.harbor_tasks import lint_task
 
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["NETWORK_NAME"]\n')
+        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["NETWORK_NAME"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
         "services": {"browser": {"networks": ["outside"]}}, "networks": {"outside": network}}))
     with pytest.raises(ValueError, match="network outside: host networks and network driver options are forbidden"):
@@ -185,7 +213,7 @@ def test_task_cannot_declare_a_job_credential_as_required_env(harbor_task, tmp_p
     import json
     job.write_text(json.dumps(config))
     settings = harbor_task / "task.toml"
-    settings.write_text(f'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["{credential}"]\n')
+    settings.write_text(f'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["{credential}"]\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
         "services": {"browser": {"environment": {"LEAK": "${" + credential + "}"}}}}))
     with pytest.raises(SystemExit) as error:
@@ -203,7 +231,7 @@ def test_task_cannot_declare_the_default_judge_key(harbor_task, capsys):
     from ethevals.cli import main
 
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ANTHROPIC_API_KEY"]\n')
+        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ANTHROPIC_API_KEY"]\n')
     with pytest.raises(SystemExit) as error:
         main(["lint", "--tasks", str(harbor_task)])
     assert error.value.code == 2
@@ -268,7 +296,7 @@ def test_task_lint_rejects_interpolation_in_build_paths(harbor_task, monkeypatch
     from ethevals.harbor_tasks import lint_task
 
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["BUILD_ROOT"]\n')
+        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["BUILD_ROOT"]\n')
     monkeypatch.setenv("BUILD_ROOT", "/")
     (harbor_task / "environment/docker-compose.yaml").write_text(yaml.safe_dump({
         "services": {"browser": {"build": {"context": "${BUILD_ROOT}"}}}}))
@@ -294,7 +322,7 @@ def test_free_check_validates_and_skips_a_task_without_required_env(harbor_task,
     monkeypatch.setattr(Job, "create", refuse_job)
     monkeypatch.delenv("ARCHIVE_RPC_URL", raising=False)
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     output = tmp_path / "job"
     assert main(["free-check", "--tasks", str(harbor_task), "--output", str(output)]) == 0
     assert capsys.readouterr().out == (
@@ -311,7 +339,7 @@ def test_free_check_validates_and_skips_a_task_without_required_env(harbor_task,
 @pytest.mark.parametrize("value", ['"ARCHIVE_RPC_URL"', '["not a variable"]'])
 def test_task_lint_rejects_invalid_required_env(harbor_task, value):
     (harbor_task / "task.toml").write_text(
-        f'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = {value}\n')
+        f'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = {value}\n')
     result = cli("-m", "ethevals.cli", "lint", "--tasks", harbor_task)
     assert result.returncode == 2
     assert "metadata.required_env must list environment variable names" in result.stderr
@@ -326,7 +354,7 @@ def test_manual_workflow_requires_secrets_and_selects_declared_tasks(harbor_task
                 if step.get("name") == "Run the fork oracle and nop runs")
     script = step["run"].split("\n", 1)[1].rsplit("\nPY", 1)[0]
     (harbor_task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
+        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\ndescription = "Check a reply."\n[metadata]\npillar = "concepts"\nrequired_env = ["ARCHIVE_RPC_URL"]\n')
     task = tmp_path / "tasks/question"
     task.parent.mkdir()
     harbor_task.rename(task)

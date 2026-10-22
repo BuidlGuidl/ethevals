@@ -8,7 +8,7 @@ import type { Row } from "../src/rows";
 
 const evaluation = {
   id: "concepts/units", hash: "current", pillar: "concepts",
-  instruction: "How many wei?", motivation: "Check units.", modes: ["internet", "vanilla", "skills"],
+  instruction: "How many wei?", description: "Check units.", modes: ["internet", "vanilla", "skills"],
 };
 const paid: Row = {
   schema_version: 8, task_id: "concepts/units", task_hash: "current", skills_hash: null,

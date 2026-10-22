@@ -10,7 +10,7 @@ import { Configuration } from "../components/configuration";
 
 const evaluation: Eval = {
   id: "concepts/units", hash: "current", title: "Units", pillar: "concepts",
-  motivation: "Check units.", instruction: "How many wei equal one ether?", modes: ["internet", "vanilla"],
+  description: "Check units.", instruction: "How many wei equal one ether?", modes: ["internet", "vanilla"],
 };
 const agent = { model: "model-a", agent: "agent-a", effort: "high" };
 function row(overrides: Partial<Row> = {}): Row {

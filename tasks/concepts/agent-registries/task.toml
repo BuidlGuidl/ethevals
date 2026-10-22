@@ -1,9 +1,14 @@
 schema_version = "1.3"
 artifacts = ["/logs/agent/trajectory.json"]
 
+[task]
+name = "buidlguidl/agent-registries"
+description = "Check whether a model knows the ERC for agent discovery and trust."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "erc", "agent-discovery", "rewardkit"]
+
 [metadata]
 pillar = "concepts"
-motivation = "Check whether a model knows the ERC for agent discovery and trust."
 modes = ["vanilla", "internet", "skills"]
 
 [verifier]

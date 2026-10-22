@@ -38,6 +38,12 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         if not (path / name).is_file():
             raise ValueError(f"{path / name}: required file is missing")
     task = Task(path)
+    if task.config.task is None:
+        raise ValueError(f"{path / 'task.toml'}: [task] must declare name and description")
+    if task.config.task.org != "buidlguidl":
+        raise ValueError(f"{path / 'task.toml'}: [task].name must use the buidlguidl org")
+    if not task.config.task.description.strip():
+        raise ValueError(f"{path / 'task.toml'}: [task].description must be a nonempty line")
     if task.config.metadata.get("pillar") != path.parent.name:
         raise ValueError(f"{path / 'task.toml'}: metadata.pillar must match the parent folder {path.parent.name!r}")
     required = task.config.metadata.get("required_env", [])
@@ -192,7 +198,7 @@ async def free_check(paths: list[Path], output: Path) -> None:
         config = JobConfig(
             job_name=agent, jobs_dir=output, n_concurrent_trials=1, quiet=True,
             agents=[{"name": agent, "override_timeout_sec": 1200}],
-            verifier={"override_timeout_sec": 1200, "env": {load_job().judge.key_env: ""}},
+            verifier={"env": {load_job().judge.key_env: ""}},
             environment={"type": "docker"},
             tasks=[{"path": path.resolve()} for path in paths],
         )

@@ -12,7 +12,6 @@
   "agent_version": "1.0.0",
   "harbor_version": "0.24.0",
   "paid_by": "free",
-  "time_limit": 60,
   "retry": 0,
   "remaining_executions": 2,
   "agent_reserve_usd": 0.0,

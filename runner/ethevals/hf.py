@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import shutil
 
+from harbor.models.task.task import Task
 import yaml
 
 from .harbor_tasks import lint_task
@@ -22,10 +23,10 @@ def write_hf(paths: list[Path], output: Path, repo: str = DEFAULT_REPO,
     tasks = []
     for path in sorted(paths):
         lint_task(path)
-        name = f"{path.parent.name}--{path.name}"
+        name = Task(path).name
         if any(task["name"] == name for task in tasks):
-            raise ValueError(f"{path}: duplicate published task name {name}")
-        tasks.append({"name": name, "path": f"tasks/{name}"})
+            raise ValueError(f"Duplicate task name: {name}")
+        tasks.append({"name": name, "path": f"tasks/{path.parent.name}--{path.name}"})
     # Check every folder before copying; publication never rewrites task files.
     for path, task in zip(sorted(paths), tasks, strict=True):
         shutil.copytree(path, output / task["path"])
@@ -44,6 +45,7 @@ def write_hf(paths: list[Path], output: Path, repo: str = DEFAULT_REPO,
 This dataset contains {len(tasks)} Ethereum tasks in Harbor format.
 Each folder contains its instruction, environment, tests, and solution.
 The files match the source task folder byte for byte.
+Each task's `[task].name` stays the same in the source folder, registry, and Harbor trials.
 Shared images use pinned GHCR tags. ETH Evals code is not required.
 
 Install Harbor 0.24.0 and Docker, then run an oracle check:

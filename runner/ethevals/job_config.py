@@ -60,7 +60,6 @@ class AgentSettings(Declaration):
 
 class JobSettings(Declaration):
     harbor_version: str
-    time_limit: int = Field(gt=0)
     n_attempts: int = Field(default=3, gt=0)
     retry: RetryConfig = Field(default_factory=lambda: RetryConfig(max_retries=1))
     modes: list[Literal["vanilla", "internet", "skills"]]

@@ -2,6 +2,7 @@
 import json
 import logging
 from pathlib import Path
+import re
 
 from harbor.models.trial.result import TrialResult
 
@@ -19,6 +20,8 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
     result = TrialResult.model_validate_json((folder / "result.json").read_text())
     error = result.exception_info
     timed_out = error is not None and error.exception_type == "AgentTimeoutError"
+    timeout = re.fullmatch(r"(?:Agent|Verifier) execution timed out after ([0-9.eE+-]+) seconds", error.exception_message) if (
+        error and error.exception_type in {"AgentTimeoutError", "VerifierTimeoutError"}) else None
     reason = error.exception_message if error and not timed_out else None
     kind = error.exception_type if reason else None
     rewards, checks = {}, {}
@@ -65,12 +68,12 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
         "schema_version": SCHEMA_VERSION,
         **{key: metadata[key] for key in (
             "task_id", "task_hash", "skills_hash", "agent", "model", "effort", "mode", "trial", "retry",
-            "paid_by", "agent_version", "harbor_version", "time_limit")},
+            "paid_by", "agent_version", "harbor_version")},
         "completed_at": result.finished_at.isoformat() if result.finished_at else None,
         "status": "error" if reason else "passed" if rewards.get("reward") == 1 else "failed",
         "rewards": rewards,
         "checks": checks, "error_kind": kind, "error_reason": " ".join(reason.split()) if reason else None,
-        "limit": {"type": "time", "limit": metadata["time_limit"], "reason": error.exception_message} if timed_out else None,
+        "limit": {"type": "time", "limit": float(timeout[1]), "reason": error.exception_message} if timeout else None,
         "total_tokens": (n_input or 0) + (n_output or 0),
         "model_cost_usd": cost, "judge_cost_usd": judge_cost, "judge": judge, "judge_paid_by": judge_paid_by,
         "cost_source": "free" if metadata["paid_by"] == "free" else "harbor" if cost is not None else "unavailable",

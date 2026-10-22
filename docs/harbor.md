@@ -2,11 +2,17 @@
 
 ## Board jobs
 
-`runner/ethevals/job.yaml` holds the board's agents, models, CLI pins, Harbor pin, and time limit.
+`runner/ethevals/job.yaml` holds the board's agents, models, CLI pins, and Harbor pin.
 Each agent entry names a Harbor agent or Python import path and a model key.
 Its `paid_by` field is `plan`, `api_key`, or `free` for a local stand-in.
 Model effort becomes Harbor's `reasoning_effort`; `kwargs` carries other agent options.
 Each entry's `env` passes through Harbor's agent environment.
+The board sets no agent or verifier time limit.
+Harbor defaults to no agent limit and a 600-second verifier limit.
+Set `[agent].timeout_sec` or `[verifier].timeout_sec` in `task.toml` only when the task needs a limit.
+Rows show the limit Harbor reached, and an agent timeout still checks the work left behind.
+CI stops each trial step after 190 minutes.
+Locally, a stuck agent with no budget flag can run without a bound.
 The shipped plan entries set their force flags there, so local and CI trials select the same payment source.
 `required_env` lists nonempty credential variables.
 Each `required_files` entry declares a `path` and a `policy`, with Harbor's `${VAR:-default}` substitution in the path.
@@ -39,7 +45,7 @@ API-key trials reserve `cost_limit_usd` for the initial execution and each remai
 Plan-funded trials reserve $0 of agent spend.
 The reserve controls admission.
 For API-key entries whose Harbor options include `max_budget_usd`, the runner sets that cap from `cost_limit_usd`.
-Plan entries use the time limit alone.
+The runner sets no spending cap for plan entries.
 Set `cost_limit_usd` outside `kwargs`; the config rejects `kwargs.max_budget_usd` on agents and models.
 Claude Code exposes this flag; other agents have no runtime spending cap.
 Planning needs no provider keys or Docker.
@@ -95,6 +101,9 @@ uv run ethevals free-check --output results/free-check
 
 Use a fresh output directory for each job.
 The command lints every folder under `tasks/` that contains `task.toml`.
+Each task has a `[task]` table with a unique `buidlguidl/NAME`, a description, authors, and keywords.
+Lint requires the name and a nonempty description.
+Pillar and modes stay in `[metadata]`.
 It then runs Harbor's oracle and nop agents, one trial at a time.
 Use `--tasks` to select task folders.
 `uv run ethevals lint` runs the lint alone.
@@ -204,7 +213,8 @@ Pull-request CI calls the free check through `scripts/ci.py checks`.
 `uv run ethevals export-hf --output out/hf` stages the same layout without an upload preview.
 Both commands require an empty output directory.
 The export copies every task file unchanged, including setup, tests, and solutions.
-Published folder names combine the pillar and task name under `tasks/`.
+Published folders combine the pillar and directory name under `tasks/`.
+Registry entries use `[task].name`, which Harbor also reads from the copied task.
 Harbor 0.24.0 discovers immediate children there when `--repo` has no dataset selector.
 `registry.json` also supplies the explicit `ethevals@1.0` dataset entry.
 This version names the registry format; pin the repository revision to select task content.

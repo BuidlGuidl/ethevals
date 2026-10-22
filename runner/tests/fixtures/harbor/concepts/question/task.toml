@@ -1,9 +1,14 @@
 schema_version = "1.3"
 artifacts = ["/logs/agent/trajectory.json"]
 
+[task]
+name = "buidlguidl/question"
+description = "Check a final reply."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["quiz", "rewardkit"]
+
 [metadata]
 pillar = "concepts"
-motivation = "Check a final reply."
 modes = ["internet"]
 
 [verifier]

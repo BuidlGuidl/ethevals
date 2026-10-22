@@ -20,7 +20,7 @@ List shared image build inputs in [images/tag.py](ethevals/images/tag.py).
 ## Plan and run
 
 Run paid trials only with explicit spending intent and a reviewed budget.
-[Job settings](ethevals/job.yaml) select agents, models, CLI versions, modes, and the time limit.
+[Job settings](ethevals/job.yaml) select agents, models, CLI versions, and modes.
 Use `--config` for a separate job configuration.
 Use `--tasks`, `--agents`, `--models`, and `--modes` to select trials.
 Use `--n-attempts N` for repeats or `--trial N` for one numbered trial.
@@ -111,7 +111,8 @@ Adding `--publish` uploads it through `gh` and saves a receipt under `DIR/publis
 
 `ethevals export-hf --output DIR` copies every Harbor task folder to an empty directory.
 It writes `registry.json`, Harbor metadata in `eval.yaml`, and the dataset card.
-Task files remain unchanged. Published names combine pillar and task name under `tasks/`.
+Task files remain unchanged. Published folders combine pillar and directory name under `tasks/`.
+Registry entries use each task's `[task].name`.
 `--hf-repo` and `--license` set dataset card values.
 `scripts/ci.py release` previews the HF upload; `--publish` performs it.
 The upload removes obsolete task files and the old quiz `data/` exports in the same HF commit.

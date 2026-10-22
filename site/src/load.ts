@@ -10,7 +10,7 @@ const catalogSchema = z.object({
   skills_hash: z.string().min(1),
   tasks: z.array(z.object({
     id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
-    motivation: z.string().min(1), instruction: z.string().min(1),
+    description: z.string().min(1), instruction: z.string().min(1),
     modes: z.array(z.enum(["vanilla", "internet", "skills"])).min(1),
   })),
 });

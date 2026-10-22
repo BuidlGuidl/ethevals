@@ -30,19 +30,22 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
     modes = metadata.get("modes")
     if not isinstance(modes, list) or not modes or any(not isinstance(mode, str) or mode not in {"vanilla", "internet", "skills"} for mode in modes):
         raise ValueError(f"{path}: metadata.modes must list supported modes")
-    motivation = metadata.get("motivation")
-    if not isinstance(motivation, str) or not motivation.strip():
-        raise ValueError(f"{path}: metadata.motivation must be a nonempty line")
     files = {file.relative_to(path).as_posix(): file.read_bytes() for file in path.rglob("*")
              if file.is_file() and not {".DS_Store", "__pycache__", ".pytest_cache"}.intersection(file.parts)}
     return {"id": f"{pillar}/{path.name}", "hash": content_hash(files), "pillar": pillar,
-            "motivation": motivation, "instruction": (path / "instruction.md").read_text(), "modes": modes}
+            "name": task.name, "description": task.config.task.description,
+            "instruction": (path / "instruction.md").read_text(), "modes": modes}
 
 
 def write_catalog(paths: list[Path], output: Path) -> None:
     entries = [task_entry(path) for path in paths]
     if len({entry["id"] for entry in entries}) != len(entries):
         raise ValueError("Task IDs must be unique")
+    names = set()
+    for entry in entries:
+        if entry["name"] in names:
+            raise ValueError(f"Duplicate task name: {entry['name']}")
+        names.add(entry["name"])
     output.mkdir(parents=True, exist_ok=True)
     (output / "catalog.json").write_text(json.dumps({"tasks": entries, "skills_hash": pack_skills().hash}, indent=2) + "\n")
 
@@ -62,7 +65,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
             raise ValueError(f"Unknown {label}: {', '.join(sorted(set(selected) - available.keys()))}")
     prior = {trial_identity(row): row for row in previous}
     missing, exhausted, selected, deferred = [], [], [], []
-    ids = set()
+    ids, names = set(), set()
     combinations = 0
     for path in paths:
         task = task_entry(path, config)
@@ -70,6 +73,9 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         if task["id"] in ids:
             raise ValueError(f"Duplicate task ID: {task['id']}")
         ids.add(task["id"])
+        if task["name"] in names:
+            raise ValueError(f"Duplicate task name: {task['name']}")
+        names.add(task["name"])
         missing_env = [name for name in Task(path).config.metadata.get("required_env", []) if not os.environ.get(name)]
         if missing_env:
             print(f"{path}: deferred trials because {', '.join(missing_env)} is unset.", file=sys.stderr, flush=True)
@@ -97,7 +103,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     judge = {"model": config.judge.model, "effort": config.judge.effort} if judges else None
                     item = {**metadata, "task_path": str(path.resolve()), "agent_key": key,
                             "agent_version": agent.version, "harbor_version": config.harbor_version,
-                            "paid_by": agent.paid_by, "time_limit": config.time_limit,
+                            "paid_by": agent.paid_by,
                             "judge": judge, "judge_paid_by": config.judge.paid_by if judge else None}
                     recovery = retry_judge_error and row.get("judge") and row.get("error_kind") in {
                         "judge", "RewardFileNotFoundError", "RewardFileEmptyError", "VerifierOutputParseError"}
@@ -175,8 +181,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
         kwargs = {**model.kwargs, **agent.kwargs, "version": agent.version}
         if model.effort is not None:
             kwargs["reasoning_effort"] = model.effort
-        harbor = AgentConfig(name=agent.name, model_name=model.name, kwargs=kwargs,
-                             env=agent.env, override_timeout_sec=config.time_limit)
+        harbor = AgentConfig(name=agent.name, model_name=model.name, kwargs=kwargs, env=agent.env)
         options = AgentFactory.get_agent_class_from_config(harbor).options_model
         if agent.paid_by == "api_key" and options is not None and "max_budget_usd" in options.model_fields:
             harbor.kwargs["max_budget_usd"] = str(agent.cost_limit_usd)
@@ -202,7 +207,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             job = await Job.create(JobConfig(
                 job_name=name, jobs_dir=output / "jobs", n_concurrent_trials=1, quiet=True,
                 agents=[harbor], tasks=[{"path": item["task_path"]}],
-                verifier={"override_timeout_sec": config.time_limit, "env": {
+                verifier={"env": {
                     "REWARDKIT_JUDGE": config.judge.model,
                     "REWARDKIT_REASONING_EFFORT": config.judge.effort,
                     "CLAUDE_CODE_OAUTH_TOKEN": "", "REWARDKIT_FORCE_SUBSCRIPTION": "",

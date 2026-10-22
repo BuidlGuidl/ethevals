@@ -8,7 +8,7 @@ import pytest
 def job_config(tmp_path, paid_by="plan"):
     path = tmp_path / "job.json"
     path.write_text(json.dumps({
-        "harbor_version": "0.24.0", "time_limit": 60, "n_attempts": 2, "retry": {"max_retries": 1},
+        "harbor_version": "0.24.0", "n_attempts": 2, "retry": {"max_retries": 1},
         "modes": ["internet"],
         "models": {"local": {"name": "local/model", "effort": "high"}},
         "agents": {"local": {"name": "nop", "version": "1.0.0", "model": "local",
@@ -24,13 +24,38 @@ def task_folder(tmp_path):
     for name in ["environment", "tests", "solution"]:
         (task / name).mkdir(parents=True)
     (task / "task.toml").write_text(
-        'schema_version = "1.3"\n[metadata]\npillar = "concepts"\n'
-        'motivation = "Check a reply."\nmodes = ["internet"]\n')
+        'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\n'
+        'description = "Check a reply."\n[metadata]\npillar = "concepts"\n'
+        'modes = ["internet"]\n')
     (task / "instruction.md").write_text("Name a unit.\n")
     (task / "environment/Dockerfile").write_text("FROM debian:bookworm-slim\n")
     (task / "tests/test.sh").write_text("#!/bin/sh\nexit 0\n")
     (task / "solution/solve.sh").write_text("#!/bin/sh\nexit 0\n")
     return task
+
+
+def test_board_job_uses_harbor_timeouts_without_overrides(tmp_path, monkeypatch):
+    import asyncio
+    from harbor.job import Job
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
+
+    config, task = load_job(job_config(tmp_path, "free")), task_folder(tmp_path)
+    report = budget_check(plan([task], config, [], n_attempts=1), 0)
+    assert "time_limit" not in report["missing"][0]
+
+    class Planned(Exception):
+        pass
+
+    async def capture(config):
+        assert [(agent.name, agent.kwargs, agent.override_timeout_sec) for agent in config.agents] == [
+            ("nop", {"version": "1.0.0", "reasoning_effort": "high"}, None)]
+        assert ([item.path for item in config.tasks], config.verifier.override_timeout_sec) == ([task.resolve()], None)
+        raise Planned
+
+    monkeypatch.setattr(Job, "create", capture)
+    with pytest.raises(Planned):
+        asyncio.run(run(report, config, tmp_path / "out", []))
 
 
 def test_plan_reserves_no_agent_spend_for_a_plan_but_run_requires_budget(tmp_path):
@@ -60,7 +85,8 @@ def test_vanilla_plans_only_declared_tasks_and_configured_models(tmp_path):
     import shutil
     shutil.copytree(task, quiz)
     settings = quiz / "task.toml"
-    settings.write_text(settings.read_text().replace('["internet"]', '["vanilla", "internet"]'))
+    settings.write_text(settings.read_text().replace('["internet"]', '["vanilla", "internet"]')
+                        .replace('buidlguidl/question', 'buidlguidl/quiz'))
     args = ["--config", config, "--tasks", task, quiz, "--n-attempts", 1,
             "--output", tmp_path / "out", "--rows", tmp_path / "none"]
     result = cli("-m", "ethevals.cli", "plan", *args)
@@ -316,9 +342,28 @@ def test_catalog_contains_only_public_task_fields(tmp_path):
     catalog = json.loads((output / "catalog.json").read_text())
     entry = catalog["tasks"][0]
     assert {key: value for key, value in entry.items() if key != "hash"} == {
-        "id": "concepts/question", "pillar": "concepts", "motivation": "Check a reply.",
+        "id": "concepts/question", "pillar": "concepts", "name": "buidlguidl/question", "description": "Check a reply.",
         "instruction": "Name a unit.\n", "modes": ["internet"]}
     assert len(entry["hash"]) == 64
+
+
+@pytest.mark.parametrize("command", ["lint", "catalog", "plan", "export-hf"])
+def test_task_package_names_must_be_unique(tmp_path, command):
+    import shutil
+
+    task = task_folder(tmp_path)
+    other = task.with_name("other")
+    shutil.copytree(task, other)
+    args = ["--tasks", task, other]
+    if command != "lint":
+        args.extend(["--output", tmp_path / "out"])
+    if command == "plan":
+        args.extend(["--config", job_config(tmp_path)])
+    result = cli("-m", "ethevals.cli", command, *args)
+    assert result.returncode == 2
+    assert "Duplicate task name: buidlguidl/question" in result.stderr
+    if command == "export-hf":
+        assert not (tmp_path / "out").exists()
 
 
 @pytest.mark.parametrize("details", [
@@ -340,20 +385,50 @@ def test_invalid_rewardkit_details_become_verification_errors(tmp_path, details)
     assert str(path) in row["error_reason"]
 
 
+@pytest.mark.parametrize("phase,status", [("Agent", "passed"), ("Verifier", "error")])
+def test_saved_timeout_keeps_its_limit_without_the_source_task(tmp_path, phase, status):
+    import shutil
+    from ethevals.trial_rows import results_row
+
+    fixture = Path(__file__).parent / "fixtures/harbor/recorded-trial"
+    folder = tmp_path / "trial"
+    shutil.copytree(fixture, folder)
+    metadata = json.loads((fixture / "board.json").read_text())
+    result_path = folder / "result.json"
+    result = json.loads(result_path.read_text())
+    message = f"{phase} execution timed out after 2.5 seconds"
+    result["exception_info"] = {
+        "exception_type": f"{phase}TimeoutError", "exception_message": message,
+        "exception_traceback": "", "occurred_at": result["finished_at"],
+    }
+    result["config"]["task"]["path"] = str(tmp_path / "removed-task")
+    if phase == "Verifier":
+        result["verifier_result"] = None
+        (folder / "verifier/reward.json").unlink()
+    result_path.write_text(json.dumps(result))
+    row = results_row(folder, metadata)
+    assert (row["status"], row["limit"]) == (status, {"type": "time", "limit": 2.5, "reason": message})
+    assert "time_limit" not in row
+
+
 @pytest.mark.docker
 @pytest.mark.parametrize("paid_by", ["api_key", "plan"])
 def test_any_configured_agent_keeps_api_price_cost_when_a_plan_or_key_pays(tmp_path, monkeypatch, paid_by):
     import os
+    import shutil
 
     config = job_config(tmp_path, paid_by)
     data = json.loads(config.read_text())
     data["agents"]["local"]["name"] = "local_agent:LocalAgent"
     data["agents"]["local"]["kwargs"] = {"delay": 6}
-    data["time_limit"] = 5
     config.write_text(json.dumps(data))
     fixture = Path(__file__).parent / "fixtures/harbor"
+    task = tmp_path / "concepts/question"
+    shutil.copytree(fixture / "concepts/question", task)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text() + "\n[agent]\ntimeout_sec = 5\n")
     monkeypatch.setenv("PYTHONPATH", str(fixture.resolve()) + os.pathsep + os.environ.get("PYTHONPATH", ""))
-    result = cli("-m", "ethevals.cli", "run", "--config", config, "--tasks", fixture / "concepts/question",
+    result = cli("-m", "ethevals.cli", "run", "--config", config, "--tasks", task,
                  "--trial", 2, "--budget", 6 if paid_by == "api_key" else 0,
                  "--output", tmp_path / "out", "--rows", tmp_path / "none")
     assert result.returncode == 0, result.stdout + result.stderr
@@ -362,8 +437,12 @@ def test_any_configured_agent_keeps_api_price_cost_when_a_plan_or_key_pays(tmp_p
         2, "passed", 0.01234, 110, paid_by)
     assert row["limit"]["type"] == "time"
     assert row["limit"]["limit"] == 5
+    assert row["limit"]["reason"] == "Agent execution timed out after 5.0 seconds"
+    assert "time_limit" not in row
     trial_config = json.loads(next((tmp_path / "out/jobs").glob("*/*/config.json")).read_text())
     assert trial_config["agent"]["kwargs"] == {"delay": 6, "version": "1.0.0", "reasoning_effort": "high"}
+    assert (trial_config["agent"].get("override_timeout_sec"),
+            trial_config.get("verifier", {}).get("override_timeout_sec")) == (None, None)
 
 
 @pytest.mark.docker

@@ -103,7 +103,7 @@ def test_vanilla_quiz_through_harbor_and_board_rows(tmp_path, model):
     output, config = tmp_path / "out", tmp_path / "job.json"
     with stand_in(reply="metre") as (completion, requests):
         config.write_text(json.dumps({
-            "harbor_version": "0.24.0", "time_limit": 60, "n_attempts": 1, "modes": ["vanilla"],
+            "harbor_version": "0.24.0", "n_attempts": 1, "modes": ["vanilla"],
             "models": {"configured": {"name": model, "effort": "high", "kwargs": {"completion": completion}}},
             "agents": {"bare": {"name": "ethevals.vanilla:VanillaAgent", "version": "0.1.0",
                                   "model": "configured", "modes": ["vanilla"], "paid_by": "free", "cost_limit_usd": 0}}}))

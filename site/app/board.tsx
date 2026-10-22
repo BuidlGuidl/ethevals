@@ -49,7 +49,7 @@ function EvalList({ table, evaluations, agent, pillar, onEval }: {
 
 function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Trial[]; onRun: (run: number) => void }) {
   return <>
-    <p className="why">{evaluation.motivation}</p>
+    <p className="why">{evaluation.description}</p>
     <details className="prompt-disclosure" open><summary>Instruction</summary><pre>{unwrapPrompt(evaluation.instruction)}</pre>
     </details>
     <section className="detail-section"><h3>Trials</h3>{trials.length ?
