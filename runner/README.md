@@ -69,7 +69,21 @@ The job config forces Codex plan payment and requires plan tokens in its credent
 Local and CI trials use the same credential check.
 The judge key enters only the verifier's commands; agent commands use their own configured credentials.
 The run step allows 190 minutes; the job allows 240 minutes for setup, builds, and uploads too.
-Each job uploads saved trials after success or failure.
+Each job uploads only `results/ci-run/public/` after success or failure.
+The trial step checks every file in each Harbor job folder while its credentials remain available.
+Local runs use the same check before writing results rows.
+The check matches exact credential values from job settings, including the judge key.
+It also checks each task's declared host variables and the token values inside Codex `auth.json`.
+The check ignores values shorter than eight bytes. Force flags such as `"1"` never match trial files.
+Checked folders carry a digest. Release staging refuses missing digests or files changed after the check.
+Interrupted jobs keep private credential fingerprints. If their original credentials are unavailable, the check withholds their files.
+Trials with a match keep an error row that names the variable and omits its value.
+Their raw files stay local and never enter the public artifact or release assets.
+CI emits a warning and the trial reports an error.
+Unreadable files and symlinks also withhold the job.
+If the check withholds a trial, rotate the named credential.
+Inspect its raw files on the machine that ran it.
+Keep those raw files private. Run a new trial with the replacement credential.
 The planning step gets only RPC secrets; the trial step gets model credentials too.
 Each secret has one declaration; YAML aliases share the RPC secrets between those steps.
 Judge errors never schedule another agent execution automatically.

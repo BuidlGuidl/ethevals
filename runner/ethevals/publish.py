@@ -8,6 +8,7 @@ import subprocess
 import tarfile
 
 from .trial_rows import read_rows, trial_identity, write_rows
+from .secret_check import require_checked
 
 
 def publish_logs(output: Path, repo: str, run_id: str, commit: str,
@@ -26,15 +27,22 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
     base = f"https://github.com/{repo}/releases/download/{tag}"
     assets, linked = [], []
     for row in rows if rows is not None else read_rows(root / "rows.jsonl"):
+        if row.get("error_kind") in {"secret", "publication"}:
+            linked.append(row)
+            continue
         if (row.get("trajectory_url") or "").startswith("https://"):
             linked.append(row)
             continue
+        checked_job = Path(row["verifier_files"]).parent.parent
+        require_checked(checked_job)
         key = hashlib.sha256(json.dumps([trial_identity(row), row["retry"], row["completed_at"]]).encode()).hexdigest()[:24]
         asset_dir = root / "assets"
         asset_dir.mkdir(parents=True, exist_ok=True)
         links = {}
         if row.get("trajectory_file"):
             source = Path(row["trajectory_file"])
+            if not source.resolve().is_relative_to(checked_job.resolve()):
+                raise ValueError("The trajectory must stay inside its checked job")
             if not source.is_file() or source.is_symlink():
                 raise ValueError(f"Missing trajectory file: {source}")
             name = f"trajectory-{key}.json"

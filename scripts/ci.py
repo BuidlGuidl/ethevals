@@ -18,6 +18,7 @@ from ethevals.jobs import budget_check, run
 from ethevals.hf import DEFAULT_REPO, write_hf
 from ethevals.images.tag import BUILD_INPUTS, image_tag
 from ethevals.publish import publish_logs
+from ethevals.secret_check import RECEIPT, check_output, require_checked, secret_values, stage_artifact
 from ethevals.trial_rows import SCHEMA_VERSION, fold_rows, previous_rows, read_rows, write_rows, recover_rows, trial_identity
 
 BASE_BRANCH = "main"
@@ -103,9 +104,14 @@ def run_trial(args):
     for item in report["missing"]:
         item["task_path"] = str(Path(item["task_path"]).resolve())
     config = load_job(args.plan / "config.json")
+    secrets = secret_values(config, [Path(item["task_path"]) for item in report["missing"]])
     report = budget_check(report, report["worst_case_usd"], required=True)
     previous = previous_rows(args.output, args.plan / "rows.jsonl")
     args.output.mkdir(parents=True, exist_ok=True)
+    public = args.output / "public"
+    if public.exists():
+        import shutil
+        shutil.rmtree(public)
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     # Harbor uploads this file itself; it must stay outside the artifact directory.
     with tempfile.TemporaryDirectory(prefix="ethevals-auth-") as directory:
@@ -117,10 +123,12 @@ def run_trial(args):
                 path.touch(mode=0o600)
                 path.write_text(auth)
                 os.environ["CODEX_AUTH_JSON_PATH"] = str(path)
-            success = asyncio.run(run(report, config, args.output, previous))
+            success = asyncio.run(run(report, config, args.output, previous, publication_secrets=secrets))
             print(f"Results rows: {args.output / 'rows.jsonl'}")
             return 0 if success else 1
         finally:
+            check_output(args.output, secrets, require_inventory=True)
+            stage_artifact(args.output, public)
             if old_path is None:
                 os.environ.pop("CODEX_AUTH_JSON_PATH", None)
             else:
@@ -177,6 +185,10 @@ def publish_artifacts(args):
     rows = []
     combined = args.output / "combined"
     for output in sorted(args.output.glob("trial-run-*")):
+        for folder in sorted((output / "jobs").glob("*")):
+            receipt = folder / RECEIPT
+            if not receipt.is_file() or not json.loads(receipt.read_text()).get("withheld"):
+                require_checked(folder)
         rows = fold_rows(rows, recover_rows(output))
     if not rows:
         return 0

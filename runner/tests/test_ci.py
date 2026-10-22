@@ -257,6 +257,9 @@ def test_publish_records_downloaded_trials_before_upload_and_retries_release(tmp
     metadata = json.loads((later / "board.json").read_text())
     metadata["retry"] = 1
     (later / "board.json").write_text(json.dumps(metadata))
+    from ethevals.secret_check import check_output
+    check_output(tmp_path / "trial-run-12-1-0", {})
+    check_output(tmp_path / "trial-run-12-2-0", {})
     saved = []
     real_command = ci.command
 

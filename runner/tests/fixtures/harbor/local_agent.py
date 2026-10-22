@@ -1,6 +1,7 @@
 """A local agent for job, billing, and time-limit proofs."""
 import asyncio
 import json
+import os
 import shlex
 
 from harbor.agents.nop import NopAgent
@@ -51,3 +52,10 @@ Path('/logs/agent/skills.json').write_text(json.dumps({{'directory': {self.skill
         if result.return_code != 0:
             raise RuntimeError(result.stderr)
         await super().run(instruction, environment, context)
+
+
+class LeakingAgent(LocalAgent):
+    async def run(self, instruction, environment, context):
+        await super().run(instruction, environment, context)
+        await environment.exec(command="printf %s " + shlex.quote(os.environ["OFFLINE_AGENT_TOKEN"])
+                               + " >> /logs/agent/trajectory.json")

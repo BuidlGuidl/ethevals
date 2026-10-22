@@ -97,7 +97,7 @@ jobs:
         if: always()
         with:
           name: trial-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.index }}
-          path: results/ci-run/
+          path: results/ci-run/public/
           retention-days: 14
           if-no-files-found: warn
   publish:

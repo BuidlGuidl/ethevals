@@ -58,7 +58,7 @@ def test_ci_plan_holds_judge_errors_without_scheduling_agent_work(tmp_path):
     previous = tmp_path / "previous.jsonl"
     rows = recover_rows(tmp_path / "old")
     write_rows(previous, rows)
-    with pytest.raises(ValueError, match="Verifier output must stay inside its directory"):
+    with pytest.raises(ValueError, match="publication check"):
         publish_logs(tmp_path / "release", "owner/repo", "17", "a" * 40, rows=rows)
     saved = tmp_path / "plan"
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config_path, "--tasks", task,
@@ -239,7 +239,7 @@ def test_ci_oracle_trial_survives_artifact_download_and_publishes_locally(tmp_pa
     assert all(b"offline-private-plan-token" not in file.read_bytes()
                for file in output.rglob("*") if file.is_file())
     artifact = tmp_path / "download/trial-run-12-1-0"
-    shutil.copytree(output, artifact)
+    shutil.copytree(output / "public", artifact)
     shutil.rmtree(output)
     # Recovery must read the downloaded files, not stale paths or aggregate rows.
     (artifact / "rows.jsonl").unlink()

@@ -17,6 +17,7 @@ from .job_config import JobSettings, check_credentials, check_judge_key
 from .files import content_hash
 from .harbor_tasks import lint_task, task_judges
 from .skills import SkillsPack, pack_skills
+from .secret_check import check_output, remember_secrets, secret_values
 from .trial_rows import fold_rows, recover_rows, trial_identity, write_rows
 
 
@@ -150,9 +151,12 @@ def budget_check(report: dict, budget: float | None, *, required=False) -> dict:
 
 
 async def run(report: dict, config: JobSettings, output: Path, previous: list[dict], *,
-              skills_pack: SkillsPack | None = None) -> bool:
+              skills_pack: SkillsPack | None = None,
+              publication_secrets: dict[str, set[bytes]] | None = None) -> bool:
     if not report["within_budget"]:
         raise ValueError("Budget exceeded; no trials started")
+    secrets = publication_secrets if publication_secrets is not None else secret_values(
+        config, [Path(item["task_path"]) for item in report["missing"]])
     skills_path = None
     if any(item["mode"] == "skills" for item in report["missing"]):
         skills_pack = skills_pack if skills_pack is not None else pack_skills()
@@ -194,6 +198,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             name = hashlib.sha256(json.dumps([item, harbor.model_dump(mode="json")], sort_keys=True).encode()).hexdigest()[:24]
             destination = output / "jobs" / name
             destination.mkdir(parents=True, exist_ok=True)
+            remember_secrets(destination, secrets)
             (destination / "board.json").write_text(json.dumps(item, indent=2) + "\n")
             config_path = destination / "config.json"
             if config_path.exists():
@@ -215,6 +220,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             ))
             await job.run()
         finally:
+            check_output(output, secrets, require_inventory=True)
             rows = fold_rows(rows, recover_rows(output))
             write_rows(output / "rows.jsonl", rows)
     selected = {tuple(identity) for identity in report["selected"]}

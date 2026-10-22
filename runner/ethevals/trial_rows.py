@@ -103,7 +103,15 @@ def fold_rows(*groups: list[dict]) -> list[dict]:
 
 def recover_rows(output: Path) -> list[dict]:
     rows = []
+    from .secret_check import RECEIPT
+    for receipt in sorted((output / "jobs").glob(f"*/{RECEIPT}")):
+        withheld = json.loads(receipt.read_text()).get("withheld")
+        if withheld:
+            rows.append(withheld)
     for board_path in sorted((output / "jobs").glob("*/board.json")):
+        receipt = board_path.parent / RECEIPT
+        if receipt.is_file() and json.loads(receipt.read_text()).get("withheld"):
+            continue
         metadata = json.loads(board_path.read_text())
         for result in sorted(board_path.parent.glob("*/result.json")):
             try:
