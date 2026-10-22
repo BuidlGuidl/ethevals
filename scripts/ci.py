@@ -169,7 +169,7 @@ def commit_results(rows, repo, publish):
         command("gh", "pr", "create", "--repo", repo, "--head", RESULTS_BRANCH, "--base", BASE_BRANCH,
                 "--title", "Record trial results", "--body",
                 "Add completed trials and execution errors. Trajectories and verifier output link to results releases. "
-                "Approve the PR checks before merging. Errors retry within the attempt cap on the next run.")
+                "Approve the PR checks before merging. Errors retry within the retry cap on the next run.")
 
 
 def publish_artifacts(args):

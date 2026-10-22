@@ -5,9 +5,9 @@ from pathlib import Path
 
 from harbor.models.trial.result import TrialResult
 
-from .checks import validate_checks
+from .checks import read_reward, validate_checks
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def trial_identity(row: dict) -> tuple:
@@ -21,23 +21,23 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
     timed_out = error is not None and error.exception_type == "AgentTimeoutError"
     reason = error.exception_message if error and not timed_out else None
     kind = error.exception_type if reason else None
-    checks = {}
-    checks_path = folder / "verifier/checks.json"
-    if checks_path.exists():
-        try:
-            checks = validate_checks(json.loads(checks_path.read_text()))
-        except (ValueError, OSError) as exc:
-            kind, reason = "verification", f"{checks_path}: {exc}"
+    rewards, checks = {}, {}
+    try:
+        rewards, checks = read_reward(folder / "verifier")
+    except ValueError as exc:
+        if not reason:
+            kind, reason = error.exception_type if error else "verification", str(exc)
     if result.finished_at is None:
         kind, reason = "execution", "The trial did not finish."
     if result.agent_info.version != metadata["agent_version"]:
         kind, reason = "agent_version", f"Expected agent version {metadata['agent_version']}; got {result.agent_info.version}."
     if not reason:
-        reward = result.verifier_result.rewards if result.verifier_result else None
-        if not checks or reward != {"reward": int(all(check["passed"] for check in checks.values()))}:
-            kind, reason = "verification", "Missing checks or reward disagrees with checks."
+        saved = result.verifier_result.rewards if result.verifier_result else None
+        if saved != rewards:
+            kind, reason = error.exception_type if error else "verification", "Harbor's saved rewards differ from reward.json."
     judge = metadata.get("judge")
     judge_attempts = 0
+    criteria_passed = True
     judge_cost, judge_paid_by = (None if judge else 0.0), None
     if judge and set(metadata["criteria_names"]) & set(checks) and not reason:
         kind, reason = "verification", "Criteria headings must differ from test check names."
@@ -52,6 +52,7 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
             if judged["error"]:
                 raise ValueError(judged["error"])
             extra = validate_checks(judged["checks"])
+            criteria_passed = all(check["passed"] for check in extra.values())
             if set(extra) != set(metadata["criteria_names"]):
                 raise ValueError("The judge must return each criteria check with a boolean and a one-line reason.")
             if not set(extra) & set(checks):
@@ -69,10 +70,11 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
     return {
         "schema_version": SCHEMA_VERSION,
         **{key: metadata[key] for key in (
-            "task_id", "task_hash", "skills_hash", "agent", "model", "effort", "mode", "trial", "attempt",
+            "task_id", "task_hash", "skills_hash", "agent", "model", "effort", "mode", "trial", "retry",
             "paid_by", "agent_version", "harbor_version", "time_limit")},
         "completed_at": result.finished_at.isoformat() if result.finished_at else None,
-        "status": "error" if reason else "passed" if all(check["passed"] for check in checks.values()) else "failed",
+        "status": "error" if reason else "passed" if rewards.get("reward") == 1 and criteria_passed else "failed",
+        "rewards": rewards,
         "checks": checks, "error_kind": kind, "error_reason": " ".join(reason.split()) if reason else None,
         "limit": {"type": "time", "limit": metadata["time_limit"], "reason": error.exception_message} if timed_out else None,
         "total_tokens": (n_input or 0) + (n_output or 0),
@@ -97,8 +99,8 @@ def fold_rows(*groups: list[dict]) -> list[dict]:
         for row in group:
             identity = trial_identity(row)
             old = latest.get(identity)
-            if old is None or (row["attempt"], row.get("completed_at") or "", row.get("judge_attempts", 0), (row.get("trajectory_url") or "").startswith("https://")) > (
-                old["attempt"], old.get("completed_at") or "", old.get("judge_attempts", 0), (old.get("trajectory_url") or "").startswith("https://")):
+            if old is None or (row["retry"], row.get("completed_at") or "", row.get("judge_attempts", 0), (row.get("trajectory_url") or "").startswith("https://")) > (
+                old["retry"], old.get("completed_at") or "", old.get("judge_attempts", 0), (old.get("trajectory_url") or "").startswith("https://")):
                 latest[identity] = row
     return sorted(latest.values(), key=lambda row: tuple(str(value or "") for value in trial_identity(row)[:-1]) + (row["trial"],))
 
@@ -110,7 +112,7 @@ def recover_rows(output: Path) -> list[dict]:
         for result in sorted(board_path.parent.glob("*/result.json")):
             try:
                 row = results_row(result.parent, metadata)
-            except (ValueError, OSError) as error:
+            except (ValueError, OSError, KeyError) as error:
                 logging.getLogger(__name__).warning("Skipping unreadable trial %s: %s", result, error)
                 continue
             rows.append(row)

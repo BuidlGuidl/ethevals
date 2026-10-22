@@ -11,7 +11,7 @@ const evaluation = {
   instruction: "How many wei?", motivation: "Check units.", modes: ["internet", "vanilla", "skills"],
 };
 const paid: Row = {
-  schema_version: 7, task_id: "concepts/units", task_hash: "current", skills_hash: null,
+  schema_version: 8, task_id: "concepts/units", task_hash: "current", skills_hash: null,
   model: "model-a", agent: "agent-a", effort: "high", mode: "internet",
   trial: 1, status: "passed", checks: { answer: { passed: true, reason: "Matches." } },
   error_kind: null, error_reason: null, total_tokens: 100,
@@ -64,15 +64,15 @@ test("loader reports duplicate identities even among excluded rows", (t) => {
   }
 });
 
-test("loader accepts v7 rows, ignores unused metadata, and skips older rows", (t) => {
+test("loader accepts v8 rows, ignores unused metadata, and skips older rows", (t) => {
   const f = fixture(t);
-  writeFileSync(f.rows, JSON.stringify({ ...paid, attempt: 2, max_attempts: 2,
+  writeFileSync(f.rows, JSON.stringify({ ...paid, retry: 1,
     model_metered_usd: 9, grader_metered_usd: 8, agent_version: "1.0", images: { default: "image:1" } }));
   const cell = loadBoard({}, f.site).tables.internet.pillars.concepts.evals[0].cells['["model-a","agent-a","high"]'];
   assert.deepEqual([cell.score, cell.total, cell.trials[0].cost], [1, 1, 0.25]);
-  assert.equal("attempt" in cell.trials[0], false);
+  assert.equal("retry" in cell.trials[0], false);
   assert.equal("model_metered_usd" in cell.trials[0], false);
-  assert.deepEqual(parseRows(JSON.stringify({ ...paid, schema_version: 5 }) + "\n" + JSON.stringify(paid), "rows.jsonl", []), [paid]);
+  assert.deepEqual(parseRows(JSON.stringify({ ...paid, schema_version: 7 }) + "\n" + JSON.stringify(paid), "rows.jsonl", []), [paid]);
 });
 
 test("v7 cost limits retain runner reasons and count as failed trials", (t) => {

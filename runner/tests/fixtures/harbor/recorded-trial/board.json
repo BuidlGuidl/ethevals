@@ -13,8 +13,8 @@
   "harbor_version": "0.24.0",
   "paid_by": "free",
   "time_limit": 60,
-  "attempt": 1,
-  "remaining_attempts": 2,
+  "retry": 0,
+  "remaining_executions": 2,
   "agent_reserve_usd": 0.0,
   "judge_reserve_usd": 0.0,
   "worst_case_usd": 0.0

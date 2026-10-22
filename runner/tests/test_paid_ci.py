@@ -47,7 +47,7 @@ def test_ci_plan_leaves_local_judge_evidence_on_the_planning_machine(tmp_path):
     config.agents["local"].name = "oracle"
     config.judge.model, config.judge.paid_by = "openai/gpt-5", "free"
     config_path.write_text(config.model_dump_json())
-    item = plan([task], config, [], trials=1)["missing"][0]
+    item = plan([task], config, [], n_attempts=1)["missing"][0]
     folder = tmp_path / "old/jobs/saved/trial"
     shutil.copytree(ROOT / "runner/tests/fixtures/harbor/recorded-trial", folder)
     private = tmp_path / "host-only.txt"
@@ -61,7 +61,7 @@ def test_ci_plan_leaves_local_judge_evidence_on_the_planning_machine(tmp_path):
         publish_logs(tmp_path / "release", "owner/repo", "17", "a" * 40, rows=rows)
     saved = tmp_path / "plan"
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config_path, "--tasks", task,
-                 "--budget", 1, "--trials", 2, "--rows", previous, "--output", saved)
+                 "--budget", 1, "--n-attempts", 2, "--rows", previous, "--output", saved)
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads((saved / "plan.json").read_text())
     assert [row["trial"] for row in report["rejudge"]] == [1]
@@ -83,15 +83,15 @@ def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, 
     data = json.loads(config_path.read_text())
     data["agents"]["local"]["name"] = "oracle"
     config_path.write_text(json.dumps(data))
-    item = plan([task], load_job(config_path), [], trials=1)["missing"][0]
+    item = plan([task], load_job(config_path), [], n_attempts=1)["missing"][0]
     rows = tmp_path / "previous.jsonl"
-    write_rows(rows, [{**item, "schema_version": 7, "attempt": 2, "status": "error"}])
+    write_rows(rows, [{**item, "schema_version": 8, "retry": 0, "status": "error"}])
     saved = tmp_path / "plan"
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config_path,
-                 "--tasks", task, "--budget", 1, "--trials", 1, "--retry-errors",
+                 "--tasks", task, "--budget", 1, "--n-attempts", 1,
                  "--rows", rows, "--output", saved)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert json.loads((saved / "trials.json").read_text())[0]["missing"][0]["attempt"] == 3
+    assert json.loads((saved / "trials.json").read_text())[0]["missing"][0]["retry"] == 1
     calls = []
 
     async def saved_result(job):
@@ -102,7 +102,7 @@ def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, 
     output = tmp_path / "out"
     assert ci.run_trial(argparse.Namespace(plan=saved, index=0, output=output)) == 0
     row = json.loads((output / "rows.jsonl").read_text())
-    assert (row["trial"], row["attempt"], row["status"]) == (1, 3, "passed")
+    assert (row["trial"], row["retry"], row["status"]) == (1, 1, "passed")
     assert calls == [task.resolve()]
 
 
@@ -186,7 +186,7 @@ def test_ci_plan_groups_plan_trials_and_keeps_key_trials_independent(tmp_path):
 def test_ci_defers_plan_trials_beyond_github_queue_capacity(tmp_path):
     output, github_output = tmp_path / "plan", tmp_path / "github-output"
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", job_config(tmp_path),
-                 "--tasks", task_folder(tmp_path), "--budget", 1, "--trials", 105,
+                 "--tasks", task_folder(tmp_path), "--budget", 1, "--n-attempts", 105,
                  "--rows", tmp_path / "none", "--output", output, "--github-output", github_output)
     assert result.returncode == 0, result.stdout + result.stderr
     emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
@@ -223,18 +223,17 @@ def test_ci_oracle_trial_survives_artifact_download_and_publishes_locally(tmp_pa
         from ethevals.job_config import load_job
         from ethevals.jobs import plan as plan_job
         from ethevals.trial_rows import write_rows
-        item = plan_job([ROOT / "runner/tests/fixtures/harbor/concepts/question"], load_job(config), [], trials=1)["missing"][0]
-        write_rows(previous, [{**item, "schema_version": 7, "attempt": 2, "status": "error"}])
+        item = plan_job([ROOT / "runner/tests/fixtures/harbor/concepts/question"], load_job(config), [], n_attempts=1)["missing"][0]
+        write_rows(previous, [{**item, "schema_version": 8, "retry": 0, "status": "error"}])
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config,
                  "--tasks", ROOT / "runner/tests/fixtures/harbor/concepts/question",
-                 "--budget", 1, "--trials", 1, "--rows", previous, "--output", plan,
-                 *(["--retry-errors"] if retry else []))
+                 "--budget", 1, "--n-attempts", 1, "--rows", previous, "--output", plan)
     assert result.returncode == 0, result.stdout + result.stderr
     output = tmp_path / "original"
     ran = cli(ROOT / "scripts/ci.py", "run-trial", "--plan", plan, "--index", 0, "--output", output)
     assert ran.returncode == 0, ran.stdout + ran.stderr
     row = json.loads((output / "rows.jsonl").read_text())
-    assert (row["trial"], row["attempt"], row["status"], row["paid_by"]) == (1, 3 if retry else 1, "passed", "free")
+    assert (row["trial"], row["retry"], row["status"], row["paid_by"]) == (1, 1 if retry else 0, "passed", "free")
     assert list(private.glob("ethevals-auth-*")) == []
     assert all(b"offline-private-plan-token" not in file.read_bytes()
                for file in output.rglob("*") if file.is_file())
@@ -256,6 +255,6 @@ def test_ci_oracle_trial_survives_artifact_download_and_publishes_locally(tmp_pa
     assert json.loads(Path(trajectory["source"]).read_text())["steps"][-1]["message"] == "metre"
     verifier = next(asset for asset in report["assets"] if asset["name"].endswith(".tar.gz"))
     with tarfile.open(verifier["source"]) as archive:
-        assert json.load(archive.extractfile("checks.json")) == row["checks"]
-        assert archive.extractfile("reward.txt").read().strip() == b"1"
+        assert json.load(archive.extractfile("reward.json")) == row["rewards"]
+        assert "reward-details.json" in archive.getnames()
     assert not (combined / "published").exists()

@@ -93,16 +93,17 @@ def test_completion_options_cannot_add_tools_or_calls(tmp_path, option):
 @pytest.mark.docker
 @pytest.mark.parametrize("model", ["openai/first-model", "openai/another-model"])
 def test_vanilla_quiz_through_harbor_and_board_rows(tmp_path, model):
+    import shutil
     from ethevals.jobs import task_entry
 
-    root = Path(__file__).resolve().parents[2]
-    target_file = next((root / "tasks").glob("*/*/tests/target.json"))
-    task = target_file.parent.parent
-    target = json.loads(target_file.read_text())
+    task = tmp_path / "concepts/question"
+    shutil.copytree(Path(__file__).parent / "fixtures/harbor/concepts/question", task)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('modes = ["internet"]', 'modes = ["vanilla"]'))
     output, config = tmp_path / "out", tmp_path / "job.json"
-    with stand_in(reply=target["target"]) as (completion, requests):
+    with stand_in(reply="metre") as (completion, requests):
         config.write_text(json.dumps({
-            "harbor_version": "0.24.0", "time_limit": 60, "trials": 1, "modes": ["vanilla"],
+            "harbor_version": "0.24.0", "time_limit": 60, "n_attempts": 1, "modes": ["vanilla"],
             "models": {"configured": {"name": model, "effort": "high", "kwargs": {"completion": completion}}},
             "agents": {"bare": {"name": "ethevals.vanilla:VanillaAgent", "version": "0.1.0",
                                   "model": "configured", "modes": ["vanilla"], "paid_by": "free", "cost_limit_usd": 0}}}))
@@ -115,9 +116,9 @@ def test_vanilla_quiz_through_harbor_and_board_rows(tmp_path, model):
     assert (row["task_id"], row["mode"], row["agent"], row["model"], row["status"], row["model_cost_usd"]) == (
         task_entry(task)["id"], "vanilla", None, model, "passed", 0)
     assert (row["total_tokens"], row["paid_by"]) == (110, "free")
-    assert row["checks"] == {target["name"]: {"passed": True, "reason": "Answer matches the target."}}
+    assert row["checks"] == {"unit": {"passed": True, "reason": "The final reply matches."}}
     trajectory = Trajectory.model_validate_json(Path(row["trajectory_file"]).read_text())
-    assert trajectory.steps[-1].message == target["target"]
+    assert trajectory.steps[-1].message == "metre"
     trial = json.loads(next((output / "jobs").glob("*/*/result.json")).read_text())
     assert trial["verifier_environment_mode"] == "separate"
     assert trial["verifier_result"] == {"rewards": {"reward": 1.0}}

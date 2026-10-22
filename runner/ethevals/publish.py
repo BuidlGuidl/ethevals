@@ -29,7 +29,7 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
         if (row.get("trajectory_url") or "").startswith("https://"):
             linked.append(row)
             continue
-        key = hashlib.sha256(json.dumps([trial_identity(row), row["attempt"], row["completed_at"]]).encode()).hexdigest()[:24]
+        key = hashlib.sha256(json.dumps([trial_identity(row), row["retry"], row["completed_at"]]).encode()).hexdigest()[:24]
         asset_dir = root / "assets"
         asset_dir.mkdir(parents=True, exist_ok=True)
         links = {}

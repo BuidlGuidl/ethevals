@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from harbor.utils.env import get_required_host_vars, resolve_env_vars
+from harbor.models.job.config import RetryConfig
 from pydantic import Field, model_validator
 
 from .config import Declaration, parse_file
@@ -45,8 +46,8 @@ class AgentSettings(Declaration):
 class JobSettings(Declaration):
     harbor_version: str
     time_limit: int = Field(gt=0)
-    trials: int = Field(default=3, gt=0)
-    max_attempts: int = Field(default=2, gt=0)
+    n_attempts: int = Field(default=3, gt=0)
+    retry: RetryConfig = Field(default_factory=lambda: RetryConfig(max_retries=1))
     modes: list[Literal["vanilla", "internet", "skills"]]
     models: dict[str, ModelSettings]
     agents: dict[str, AgentSettings]

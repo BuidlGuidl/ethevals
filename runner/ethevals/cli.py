@@ -34,13 +34,13 @@ def parse_args(argv=None):
     parsers["publish-logs"].add_argument("--output", type=Path, required=True)
     for name in ("run", "plan"):
         command = parsers[name]
+        command.description = "Job n_attempts sets scored repeats; retry.max_retries caps reruns after eligible errors."
         command.add_argument("--agents", nargs="+", help="Agent keys from the job config.")
         command.add_argument("--models", nargs="+", help="Model keys from the job config.")
         command.add_argument("--modes", nargs="+", help="Modes from the job config: vanilla, internet, or skills.")
         repeats = command.add_mutually_exclusive_group()
-        repeats.add_argument("--trials", type=positive, help="Number of repeated trials per task, agent, and mode.")
+        repeats.add_argument("--n-attempts", type=positive, help="Number of scored trials per task, agent, and mode.")
         repeats.add_argument("--trial", type=positive, help="One numbered trial with one task, agent, and mode.")
-        command.add_argument("--retry-errors", action="store_true", help="Grant one further attempt to selected errors.")
         command.add_argument("--rows", type=Path, default=Path("results/rows.jsonl"), help="Rows used to find missing trials.")
         command.add_argument("--budget", type=float, help="USD admission budget. Every agent trial requires an explicit budget.")
     parsers["export-hf"].add_argument("--hf-repo")
@@ -72,7 +72,7 @@ def main(argv=None) -> int:
             previous = previous_rows(args.output, args.rows)
             report = jobs.budget_check(jobs.plan(
                 paths, config, previous, agents=args.agents, models=args.models, modes=args.modes,
-                trials=args.trials, trial=args.trial, retry_errors=args.retry_errors, skills_pack=skills_pack,
+                n_attempts=args.n_attempts, trial=args.trial, skills_pack=skills_pack,
             ), args.budget, required=args.command == "run")
             if args.command == "plan":
                 print(json.dumps(report, indent=2))

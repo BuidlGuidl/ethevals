@@ -37,7 +37,7 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
     if (!line.trim()) return [];
     try {
       const value = JSON.parse(line);
-      if (Number.isInteger(value.schema_version) && value.schema_version < 7) return [];
+      if (Number.isInteger(value.schema_version) && value.schema_version < 8) return [];
       const row = rowSchema.parse(value);
       if (row.mode !== "vanilla" && !row.agent) throw new Error("Agent rows require an agent.");
       if (row.mode === "vanilla" && row.agent !== null) throw new Error("Vanilla rows cannot have an agent.");

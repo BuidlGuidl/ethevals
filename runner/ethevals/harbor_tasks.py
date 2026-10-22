@@ -7,7 +7,7 @@ import re
 from harbor.models.task.task import Task
 import yaml
 
-from .checks import validate_checks
+from .checks import read_reward
 from .images.tag import BUILD_INPUTS, image_tag
 from .job_config import JobSettings, load_job
 
@@ -148,18 +148,15 @@ async def free_check(paths: list[Path], output: Path) -> None:
             result = json.loads(result_path.read_text())
             if result.get("exception_info"):
                 raise ValueError(f"{result_path}: {result['exception_info']['exception_message']}")
-            checks_path = result_path.parent / "verifier/checks.json"
-            try:
-                checks = validate_checks(json.loads(checks_path.read_text()))
-            except (ValueError, OSError) as error:
-                raise ValueError(f"{checks_path}: {error}") from error
+            rewards, checks = read_reward(result_path.parent / "verifier")
+            checks_path = result_path.parent / "verifier/reward-details.json"
             path = Path(result["config"]["task"]["path"]).resolve()
             if expected:
                 names[path] = set(checks)
             elif set(checks) != names.get(path):
                 raise ValueError(f"{checks_path}: oracle and nop runs must write the same check names")
             passed = all(check["passed"] for check in checks.values())
-            rewards = (result.get("verifier_result") or {}).get("rewards")
-            if rewards != {"reward": int(expected)} or passed != expected:
+            saved = (result.get("verifier_result") or {}).get("rewards")
+            if saved != rewards or rewards["reward"] != int(expected) or passed != expected:
                 raise ValueError(f"{result_path}: {agent} run must give reward {int(expected)} with matching checks")
             print(f"{path}: {agent} reward {int(expected)}; checks: {checks_path}")

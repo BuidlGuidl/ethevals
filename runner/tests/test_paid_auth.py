@@ -61,7 +61,7 @@ def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, 
         config.agents["selected"].env = {}
         config.agents["selected"].required_env = []
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN")
-    report = budget_check(plan([task], config, [], modes=["internet"], trials=1), 20, required=True)
+    report = budget_check(plan([task], config, [], modes=["internet"], n_attempts=1), 20, required=True)
     with pytest.raises(Captured):
         asyncio.run(run(report, config, tmp_path / "out", []))
     if key == "claude-code-opus-5.5":
@@ -100,7 +100,7 @@ def test_missing_plan_credential_refuses_before_harbor(tmp_path, monkeypatch, ke
 
     monkeypatch.setattr(Job, "create", refuse)
     config.agents = {"selected": config.agents[key]}
-    report = budget_check(plan([task], config, [], modes=["internet"], trials=1), 0, required=True)
+    report = budget_check(plan([task], config, [], modes=["internet"], n_attempts=1), 0, required=True)
     with pytest.raises(ValueError, match="selected: missing"):
         asyncio.run(run(report, config, tmp_path / "out", []))
     assert not (tmp_path / "out/jobs").exists()
@@ -181,7 +181,7 @@ def test_api_key_only_auth_file_is_refused_for_a_codex_plan(tmp_path, monkeypatc
     monkeypatch.delenv("CODEX_AUTH_JSON", raising=False)
     if through_ci == "json":
         monkeypatch.setenv("CODEX_AUTH_JSON", auth.read_text())
-    item = plan([task], config, [], modes=["internet"], trials=1)["missing"][0]
+    item = plan([task], config, [], modes=["internet"], n_attempts=1)["missing"][0]
     assert (item["paid_by"], item["worst_case_usd"]) == ("plan", 0)
 
     async def refuse(*args, **kwargs):
@@ -198,7 +198,7 @@ def test_api_key_only_auth_file_is_refused_for_a_codex_plan(tmp_path, monkeypatc
             (saved / "config.json").write_text(config.model_dump_json())
             ci.run_trial(argparse.Namespace(plan=saved, index=0, output=output))
         else:
-            asyncio.run(run(budget_check(plan([task], config, [], modes=["internet"], trials=1), 0),
+            asyncio.run(run(budget_check(plan([task], config, [], modes=["internet"], n_attempts=1), 0),
                             config, output, []))
     assert not (output / "jobs").exists()
 
@@ -232,7 +232,7 @@ def test_plan_checks_the_auth_file_harbor_uploads(tmp_path, monkeypatch, agent_h
         await agent.run("Name a unit.", Container(), AgentContext())
 
     monkeypatch.setattr(Job, "create", capture)
-    report = budget_check(plan([task], config, [], modes=["internet"], trials=1), 0)
+    report = budget_check(plan([task], config, [], modes=["internet"], n_attempts=1), 0)
     assert report["worst_case_usd"] == 0
     with pytest.raises(Captured if agent_has_plan else ValueError, match=None if agent_has_plan else "plan tokens"):
         asyncio.run(run(report, config, tmp_path / "out", []))

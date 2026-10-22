@@ -4,7 +4,7 @@ const mode = z.enum(["vanilla", "internet", "skills"]);
 const count = z.number().int().nonnegative();
 const measure = z.number().nonnegative().nullable();
 export const rowSchema = z.object({
-  schema_version: z.literal(7),
+  schema_version: z.literal(8),
   task_id: z.string().min(1),
   task_hash: z.string().min(1),
   skills_hash: z.string().min(1).nullable(),

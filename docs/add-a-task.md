@@ -1,5 +1,9 @@
 # Add a task
 
+For Harbor mechanics, read the [create-task skill](../.agents/skills/create-task/SKILL.md).
+Before writing a verifier, read the [RewardKit skill](../.agents/skills/rewardkit/SKILL.md).
+The rules below govern the board.
+
 Start with the closest real task below.
 Its files and shared images are the conventions; free checks keep these examples working.
 
@@ -25,7 +29,7 @@ An outside Harbor run must use the same task as the board, without changes to sh
 
 Use vanilla for questions a bare model can answer in one reply.
 Use internet and skills for work that needs an agent's tools or environment.
-Keep agent selection and the time limit in the board's job config so tasks face the same conditions.
+Keep agent selection, `n_attempts`, and retry limits in the board's job config.
 
 Check the requested outcome, and give each failed check a reason that explains what went wrong.
 Every check must pass for a trial to pass.

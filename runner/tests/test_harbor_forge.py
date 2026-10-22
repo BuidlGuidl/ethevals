@@ -6,6 +6,7 @@ import uuid
 import pytest
 
 from ethevals.images.tag import image_tag
+from ethevals.checks import read_reward
 
 
 pytestmark = pytest.mark.docker
@@ -34,15 +35,18 @@ def run_verifier(tmp_path, image, source, workspace=None):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
     container = "forge-proof-" + uuid.uuid4().hex[:12]
-    docker("run", "-d", "--name", container, "--entrypoint", "sleep", image, "infinity")
+    docker("run", "-d", "--network", "none", "--name", container, "--entrypoint", "sleep", image, "infinity")
     try:
         docker("cp", tests, f"{container}:/tests")
         docker("cp", str(work) + "/.", f"{container}:/workspace")
         docker("exec", "--user", "root", container, "python3", "/opt/forge_checks.py")
+        docker("exec", "--user", "root", container, "sh", "-c",
+              'set -eu; cp /opt/check_records.py /tests/check_records.py; '
+              'printf \'[scoring.check_records]\\naggregation = "all-pass"\\n\' > /tests/reward.toml; '
+              'rewardkit /tests')
         docker("cp", f"{container}:/logs/verifier", tmp_path / "verifier")
-        checks = json.loads((tmp_path / "verifier/checks.json").read_text())
-        reward = int((tmp_path / "verifier/reward.txt").read_text())
-        return checks, reward
+        rewards, checks = read_reward(tmp_path / "verifier")
+        return checks, rewards["reward"]
     finally:
         docker("rm", "-f", container)
 

@@ -8,7 +8,7 @@ import pytest
 def job_config(tmp_path, paid_by="plan"):
     path = tmp_path / "job.json"
     path.write_text(json.dumps({
-        "harbor_version": "0.24.0", "time_limit": 60, "trials": 2, "max_attempts": 2,
+        "harbor_version": "0.24.0", "time_limit": 60, "n_attempts": 2, "retry": {"max_retries": 1},
         "modes": ["internet"],
         "models": {"local": {"name": "local/model", "effort": "high"}},
         "agents": {"local": {"name": "nop", "version": "1.0.0", "model": "local",
@@ -40,8 +40,8 @@ def test_plan_reserves_no_agent_spend_for_a_plan_but_run_requires_budget(tmp_pat
     planned = cli("-m", "ethevals.cli", "plan", *args)
     assert planned.returncode == 0, planned.stderr
     report = json.loads(planned.stdout)
-    assert [(row["trial"], row["attempt"], row["agent_reserve_usd"]) for row in report["missing"]] == [
-        (1, 1, 0), (2, 1, 0)]
+    assert [(row["trial"], row["retry"], row["agent_reserve_usd"]) for row in report["missing"]] == [
+        (1, 0, 0), (2, 0, 0)]
     assert report["worst_case_usd"] == 0
     refused = cli("-m", "ethevals.cli", "run", *args)
     assert refused.returncode == 2
@@ -61,7 +61,7 @@ def test_vanilla_plans_only_declared_tasks_and_configured_models(tmp_path):
     shutil.copytree(task, quiz)
     settings = quiz / "task.toml"
     settings.write_text(settings.read_text().replace('["internet"]', '["vanilla", "internet"]'))
-    args = ["--config", config, "--tasks", task, quiz, "--trials", 1,
+    args = ["--config", config, "--tasks", task, quiz, "--n-attempts", 1,
             "--output", tmp_path / "out", "--rows", tmp_path / "none"]
     result = cli("-m", "ethevals.cli", "plan", *args)
     assert result.returncode == 0, result.stderr
@@ -91,6 +91,23 @@ def test_row_builder_reads_a_recorded_real_trial(tmp_path):
     assert row["total_seconds"] > 0
 
 
+def test_recovery_skips_unreadable_metadata_and_keeps_current_trials(tmp_path):
+    import shutil
+    from ethevals.trial_rows import recover_rows
+
+    fixture = Path(__file__).parent / "fixtures/harbor/recorded-trial"
+    for name in ("current", "unreadable"):
+        job = tmp_path / "jobs" / name
+        shutil.copytree(fixture, job / "trial")
+        metadata = json.loads((fixture / "board.json").read_text())
+        if name == "unreadable":
+            del metadata["retry"]
+        (job / "board.json").write_text(json.dumps(metadata))
+    rows = recover_rows(tmp_path)
+    assert [(row["task_id"], row["retry"], row["status"]) for row in rows] == [
+        ("concepts/question", 0, "passed")]
+
+
 def test_skill_edits_repeat_only_skills_trials(tmp_path, monkeypatch):
     import asyncio
     from ethevals.job_config import load_job
@@ -106,15 +123,15 @@ def test_skill_edits_repeat_only_skills_trials(tmp_path, monkeypatch):
     skill.parent.mkdir(parents=True)
     skill.write_text("---\nname: units\ndescription: Units.\n---\nOne metre.\n")
     monkeypatch.setattr("ethevals.skills.PACK", skill.parent.parent)
-    report = plan([task], config, [], trials=1)
+    report = plan([task], config, [], n_attempts=1)
     before = report["missing"]
     assert [(row["mode"], row["skills_hash"] is not None) for row in before] == [
         ("internet", False), ("skills", True), ("vanilla", False)]
     previous = [{**row, "status": "passed"} for row in before]
-    assert plan([task], config, previous, trials=1)["missing_trials"] == 0
+    assert plan([task], config, previous, n_attempts=1)["missing_trials"] == 0
     skill.write_text(skill.read_text().replace("One metre.", "Two metres."))
-    after = plan([task], config, previous, trials=1)["missing"]
-    assert [(row["mode"], row["trial"], row["attempt"]) for row in after] == [("skills", 1, 1)]
+    after = plan([task], config, previous, n_attempts=1)["missing"]
+    assert [(row["mode"], row["trial"], row["retry"]) for row in after] == [("skills", 1, 0)]
     assert after[0]["task_hash"] == before[1]["task_hash"]
     assert after[0]["skills_hash"] != before[1]["skills_hash"]
     with pytest.raises(ValueError, match="The skills pack differs from the plan"):
@@ -130,8 +147,8 @@ def test_published_trajectory_enriches_the_same_attempt_and_a_later_error_stays_
     published = {**row, "trajectory_url": "https://example.org/trajectory.json"}
     assert fold_rows([row], [published])[0]["trajectory_url"] == "https://example.org/trajectory.json"
     assert fold_rows([published], [row])[0]["trajectory_url"] == "https://example.org/trajectory.json"
-    later = {**row, "attempt": 2, "status": "error", "error_kind": "execution", "error_reason": "Agent stopped."}
-    assert [(item["attempt"], item["status"]) for item in fold_rows([published], [later])] == [(2, "error")]
+    later = {**row, "retry": 1, "status": "error", "error_kind": "execution", "error_reason": "Agent stopped."}
+    assert [(item["retry"], item["status"]) for item in fold_rows([published], [later])] == [(1, "error")]
 
 
 def test_planner_recovers_finished_trials_and_repeats_changed_tasks(tmp_path):
@@ -150,25 +167,54 @@ def test_planner_recovers_finished_trials_and_repeats_changed_tasks(tmp_path):
     (job / "board.json").write_text(json.dumps(metadata))
     prior = previous_rows(tmp_path / "out", tmp_path / "none")
     pending = plan([task], config, prior)
-    assert [(row["trial"], row["attempt"]) for row in pending["missing"]] == [(2, 1)]
+    assert [(row["trial"], row["retry"]) for row in pending["missing"]] == [(2, 0)]
     (task / "instruction.md").write_text("Name a different unit.\n")
-    assert [(row["trial"], row["attempt"]) for row in plan([task], config, prior)["missing"]] == [(1, 1), (2, 1)]
+    assert [(row["trial"], row["retry"]) for row in plan([task], config, prior)["missing"]] == [(1, 0), (2, 0)]
 
 
-def test_api_key_budget_reserves_remaining_attempts_and_retains_exhausted_errors(tmp_path):
+def test_api_key_budget_reserves_remaining_executions_and_retains_exhausted_errors(tmp_path):
     from ethevals.job_config import load_job
     from ethevals.jobs import budget_check, plan
 
     config, task = load_job(job_config(tmp_path, "api_key")), task_folder(tmp_path)
     missing = plan([task], config, [])["missing"]
-    previous = [{**row, "status": "error", "attempt": index + 1} for index, row in enumerate(missing)]
+    previous = [{**row, "status": "error", "retry": index} for index, row in enumerate(missing)]
     report = budget_check(plan([task], config, previous), 2)
-    assert [(row["trial"], row["attempt"], row["remaining_attempts"], row["worst_case_usd"])
-            for row in report["missing"]] == [(1, 2, 1, 3)]
-    assert [(row["trial"], row["attempt"]) for row in report["exhausted_errors"]] == [(2, 2)]
+    assert [(row["trial"], row["retry"], row["remaining_executions"], row["worst_case_usd"])
+            for row in report["missing"]] == [(1, 1, 1, 3)]
+    assert [(row["trial"], row["retry"]) for row in report["exhausted_errors"]] == [(2, 1)]
     assert (report["worst_case_usd"], report["within_budget"]) == (3, False)
-    retried = plan([task], config, previous, retry_errors=True)
-    assert [(row["trial"], row["attempt"]) for row in retried["missing"]] == [(1, 2), (2, 3)]
+
+
+@pytest.mark.parametrize("exception", ["AgentAuthenticationError", "RewardFileNotFoundError", "AgentTimeoutError", "ConnectionError"])
+def test_retry_planning_uses_harbor_exclusions_and_stops_at_the_retry_limit(tmp_path, exception):
+    import shutil
+    from ethevals.job_config import load_job
+    from ethevals.jobs import plan
+    from ethevals.trial_rows import results_row
+
+    config, task = load_job(job_config(tmp_path, "api_key")), task_folder(tmp_path)
+    item = plan([task], config, [], n_attempts=1)["missing"][0]
+    folder = tmp_path / "saved"
+    shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", folder)
+    result_path = folder / "result.json"
+    result = json.loads(result_path.read_text())
+    result["exception_info"] = {
+        "exception_type": exception, "exception_message": "The agent failed.",
+        "exception_traceback": "", "occurred_at": result["finished_at"],
+    }
+    result["verifier_result"] = None
+    result_path.write_text(json.dumps(result))
+    (folder / "verifier/reward.json").unlink()
+    saved = results_row(folder, item)
+    assert (saved["status"], saved["error_kind"], saved["retry"]) == ("error", exception, 0)
+    report = plan([task], config, [saved], n_attempts=1)
+    if exception == "ConnectionError":
+        assert [(row["trial"], row["retry"], row["worst_case_usd"])
+                for row in report["missing"]] == [(1, 1, 3)]
+        saved["retry"] = 1
+        report = plan([task], config, [saved], n_attempts=1)
+    assert (report["missing"], report["exhausted_errors"], report["worst_case_usd"]) == ([], [saved], 0)
 
 
 @pytest.mark.parametrize("partial", ["", '{"job_name":'])
@@ -184,7 +230,7 @@ def test_recovery_restarts_a_job_interrupted_during_its_first_config_write(tmp_p
     task = tmp_path / "concepts/question"
     shutil.copytree(Path(__file__).parent / "fixtures/harbor/concepts/question", task)
     config.agents["local"].name = "oracle"
-    report = budget_check(plan([task], config, [], trials=1), 0)
+    report = budget_check(plan([task], config, [], n_attempts=1), 0)
     output = tmp_path / "out"
 
     async def interrupted(job):
@@ -204,7 +250,7 @@ def test_recovery_restarts_a_job_interrupted_during_its_first_config_write(tmp_p
     monkeypatch.setattr(Job, "run", original_run if real_trial else finished)
     assert asyncio.run(run(report, config, output, [])) is True
     row = json.loads((output / "rows.jsonl").read_text())
-    assert (row["trial"], row["attempt"], row["status"]) == (1, 1, "passed")
+    assert (row["trial"], row["retry"], row["status"]) == (1, 0, "passed")
     assert len(list((output / "jobs").glob("*/*/result.json"))) == 1
 
 
@@ -214,7 +260,7 @@ def test_execution_rejects_task_edits_after_admission(tmp_path):
     from ethevals.jobs import budget_check, plan, run
 
     config, task = load_job(job_config(tmp_path, "free")), task_folder(tmp_path)
-    report = budget_check(plan([task], config, [], trials=1), 0)
+    report = budget_check(plan([task], config, [], n_attempts=1), 0)
     (task / "instruction.md").write_text("Name a different unit.\n")
     with pytest.raises(ValueError, match="The task differs from the plan"):
         asyncio.run(run(report, config, tmp_path / "out", []))
@@ -275,23 +321,23 @@ def test_catalog_contains_only_public_task_fields(tmp_path):
     assert len(entry["hash"]) == 64
 
 
-@pytest.mark.parametrize("checks", [
-    {"unit": {"passed": "true", "reason": "Matches."}},
-    {" ": {"passed": True, "reason": "Matches."}},
+@pytest.mark.parametrize("details", [
+    {"reward": {"criteria": [{"name": "unit", "value": "true", "reasoning": "Matches."}]}},
+    {"reward": {"criteria": [{"name": " ", "value": 1, "reasoning": "Matches."}]}},
     {},
 ])
-def test_invalid_check_records_become_retryable_verification_errors(tmp_path, checks):
+def test_invalid_rewardkit_details_become_verification_errors(tmp_path, details):
     import shutil
     from ethevals.trial_rows import results_row
 
     fixture = Path(__file__).parent / "fixtures/harbor/recorded-trial"
     shutil.copytree(fixture, tmp_path / "trial")
     metadata = json.loads((fixture / "board.json").read_text())
-    (tmp_path / "trial/verifier/checks.json").write_text(json.dumps(checks))
+    path = tmp_path / "trial/verifier/reward-details.json"
+    path.write_text(json.dumps(details))
     row = results_row(tmp_path / "trial", metadata)
-    assert (row["status"], row["error_kind"], row["error_reason"], row["checks"]) == (
-        "error", "verification",
-        f"{tmp_path / 'trial/verifier/checks.json'}: Each check needs a name, boolean passed, and one-line reason.", {})
+    assert (row["status"], row["error_kind"], row["checks"]) == ("error", "verification", {})
+    assert str(path) in row["error_reason"]
 
 
 @pytest.mark.docker
@@ -302,8 +348,8 @@ def test_any_configured_agent_keeps_api_price_cost_when_a_plan_or_key_pays(tmp_p
     config = job_config(tmp_path, paid_by)
     data = json.loads(config.read_text())
     data["agents"]["local"]["name"] = "local_agent:LocalAgent"
-    data["agents"]["local"]["kwargs"] = {"delay": 2}
-    data["time_limit"] = 1
+    data["agents"]["local"]["kwargs"] = {"delay": 6}
+    data["time_limit"] = 5
     config.write_text(json.dumps(data))
     fixture = Path(__file__).parent / "fixtures/harbor"
     monkeypatch.setenv("PYTHONPATH", str(fixture.resolve()) + os.pathsep + os.environ.get("PYTHONPATH", ""))
@@ -315,9 +361,9 @@ def test_any_configured_agent_keeps_api_price_cost_when_a_plan_or_key_pays(tmp_p
     assert (row["trial"], row["status"], row["model_cost_usd"], row["total_tokens"], row["paid_by"]) == (
         2, "passed", 0.01234, 110, paid_by)
     assert row["limit"]["type"] == "time"
-    assert row["limit"]["limit"] == 1
+    assert row["limit"]["limit"] == 5
     trial_config = json.loads(next((tmp_path / "out/jobs").glob("*/*/config.json")).read_text())
-    assert trial_config["agent"]["kwargs"] == {"delay": 2, "version": "1.0.0", "reasoning_effort": "high"}
+    assert trial_config["agent"]["kwargs"] == {"delay": 6, "version": "1.0.0", "reasoning_effort": "high"}
 
 
 @pytest.mark.docker
@@ -343,7 +389,7 @@ def test_skills_trial_loads_captured_pack_through_harbor(tmp_path, monkeypatch, 
     config.modes = config.agents["local"].modes = ["internet", "skills"]
     config.agents["local"].name = "local_agent:SkillsAgent"
     captured = pack_skills()
-    report = budget_check(plan([task], config, [], trials=1, skills_pack=captured), 0)
+    report = budget_check(plan([task], config, [], n_attempts=1, skills_pack=captured), 0)
     # A live pack edit after planning cannot change the bytes that Harbor receives.
     changed = tmp_path / "changed-skills/units/SKILL.md"
     changed.parent.mkdir(parents=True)
@@ -365,9 +411,9 @@ def test_skills_trial_loads_captured_pack_through_harbor(tmp_path, monkeypatch, 
         else:
             assert proof == {"directory": skills_dir, "files": {}}
             assert saved["agent"].get("skills", []) == []
-    assert plan([task], config, rows, trials=1, skills_pack=captured)["missing_trials"] == 0
-    assert [(item["mode"], item["attempt"]) for item in plan([task], config, rows, trials=1)["missing"]] == [
-        ("skills", 1)]
+    assert plan([task], config, rows, n_attempts=1, skills_pack=captured)["missing_trials"] == 0
+    assert [(item["mode"], item["retry"]) for item in plan([task], config, rows, n_attempts=1)["missing"]] == [
+        ("skills", 0)]
 
 
 @pytest.mark.docker
@@ -416,7 +462,7 @@ def test_killed_job_resumes_without_repeating_its_finished_trial(tmp_path):
     assert finished[0].read_bytes() == before
     assert len(list((output / "jobs").glob("*/*/result.json"))) == 2
     rows = [json.loads(line) for line in (output / "rows.jsonl").read_text().splitlines()]
-    assert [(row["trial"], row["attempt"], row["status"]) for row in rows] == [(1, 1, "passed"), (2, 1, "passed")]
+    assert [(row["trial"], row["retry"], row["status"]) for row in rows] == [(1, 0, "passed"), (2, 0, "passed")]
 
 
 @pytest.mark.docker
@@ -426,7 +472,7 @@ def test_cli_runs_a_real_oracle_and_recovers_rows_without_repeating_finished_tri
     config = job_config(tmp_path, "free")
     data = json.loads(config.read_text())
     data["agents"]["local"]["name"] = "oracle"
-    data["trials"] = 1
+    data["n_attempts"] = 1
     config.write_text(json.dumps(data))
     task = Path(__file__).parent / "fixtures/harbor/concepts/question"
     output = tmp_path / "out"

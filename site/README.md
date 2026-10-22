@@ -20,7 +20,7 @@ It defaults to `../results/rows.jsonl`.
 A missing default file produces an empty board.
 A missing explicit file fails the build.
 Malformed rows and duplicate trials fail with their file and line.
-The loader accepts schema version 7 and skips older rows.
+The loader accepts schema version 8 and skips older rows.
 It shows only current task hashes and, for skills-mode rows, the current skills hash.
 The 160 Inspect rows have been removed.
 

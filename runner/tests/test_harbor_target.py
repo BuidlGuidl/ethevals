@@ -1,28 +1,34 @@
 import json
+import os
 from pathlib import Path
+import subprocess
 
 import pytest
 
-from support import cli
+from ethevals.checks import read_reward
 
 
 HELPER = Path(__file__).resolve().parents[1] / "ethevals/images/target_checks.py"
 
 
-@pytest.mark.parametrize("message,tool_calls,target,expected,reason", [
-    ("The unit is metre.", None, {"target": "metre", "location": "end"}, True, "Answer matches the target."),
-    ([{"type": "text", "text": "METRE"}], None, {"target": ["metre", "meter"]}, True, "Answer matches the target."),
-    ("kilometre", None, {"target": "metre"}, False, "Answer does not match the target."),
-    ("metre", [{"tool_call_id": "call-1"}], {"target": "metre"}, False, "The answer is empty."),
-    ("", None, {"target": "metre"}, False, "The answer is empty."),
+@pytest.mark.parametrize("message,tool_calls,expected,reason", [
+    ("metre.", None, True, "Answer matches the target."),
+    ([{"type": "text", "text": "METER"}], None, True, "Answer matches the target."),
+    ("kilometre", None, False, "Answer does not match the target."),
+    ("metre", [{"tool_call_id": "call-1"}], False, "The answer is empty."),
+    ("", None, False, "The answer is empty."),
 ])
-def test_shared_target_verifier_reads_the_final_reply(tmp_path, message, tool_calls, target, expected, reason):
-    trajectory, settings, output = tmp_path / "trajectory.json", tmp_path / "target.json", tmp_path / "verifier"
+def test_shared_target_verifier_reads_the_final_reply(tmp_path, message, tool_calls, expected, reason):
+    trajectory, tests, output = tmp_path / "trajectory.json", tmp_path / "tests", tmp_path / "verifier"
+    tests.mkdir()
     trajectory.write_text(json.dumps({"steps": [
         {"source": "user", "message": "metre"},
         {"source": "agent", "message": message, "tool_calls": tool_calls}]}))
-    settings.write_text(json.dumps({"name": "unit", **target}))
-    result = cli(HELPER, settings, "--trajectory", trajectory, "--output", output)
+    (tests / "answer.py").write_text(
+        'import target_checks\nimport rewardkit as rk\n'
+        f'rk.final_answer(lambda reply: reply.strip(" .").casefold() in ["metre", "meter"], '
+        f'trajectory={str(trajectory)!r}, name="unit")\n')
+    result = subprocess.run(["rewardkit", str(tests), "--output", str(output / "reward.json")],
+        env={**os.environ, "PYTHONPATH": str(HELPER.parent)}, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert json.loads((output / "checks.json").read_text()) == {"unit": {"passed": expected, "reason": reason}}
-    assert (output / "reward.txt").read_text() == f"{int(expected)}\n"
+    assert read_reward(output) == ({"reward": float(expected)}, {"unit": {"passed": expected, "reason": reason}})

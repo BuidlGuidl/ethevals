@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pytest
 import yaml
@@ -48,8 +49,9 @@ def test_free_check_rejects_blank_check_names_like_board_rows(harbor_task, tmp_p
             (folder / "result.json").write_text(json.dumps({
                 "config": {"task": {"path": str(harbor_task)}},
                 "verifier_result": {"rewards": {"reward": int(self.agent == "oracle")}}}))
-            (folder / "verifier/checks.json").write_text(json.dumps({
-                name: {"passed": self.agent == "oracle", "reason": "Matches."}}))
+            (folder / "verifier/reward.json").write_text(json.dumps({"reward": int(self.agent == "oracle")}))
+            (folder / "verifier/reward-details.json").write_text(json.dumps({
+                "reward": {"criteria": [{"name": name, "value": int(self.agent == "oracle"), "reasoning": "Matches."}]}}))
 
     async def create(config):
         return SavedJob(config)
@@ -57,12 +59,13 @@ def test_free_check_rejects_blank_check_names_like_board_rows(harbor_task, tmp_p
     monkeypatch.setattr(Job, "create", create)
     if name.strip():
         asyncio.run(free_check([harbor_task], tmp_path / "out"))
-        assert json.loads((tmp_path / "out/nop/trial/verifier/checks.json").read_text()) == {
-            "unit": {"passed": False, "reason": "Matches."}}
+        from ethevals.checks import read_reward
+        assert read_reward(tmp_path / "out/nop/trial/verifier") == (
+            {"reward": 0}, {"unit": {"passed": False, "reason": "Matches."}})
     else:
         with pytest.raises(ValueError, match="Each check needs a name, boolean passed, and one-line reason.") as error:
             asyncio.run(free_check([harbor_task], tmp_path / "out"))
-        assert str(tmp_path / "out/oracle/trial/verifier/checks.json") in str(error.value)
+        assert str(tmp_path / "out/oracle/trial/verifier/reward-details.json") in str(error.value)
 
 
 @pytest.mark.parametrize("volume", [
@@ -175,7 +178,7 @@ def test_task_cannot_declare_a_job_credential_as_required_env(harbor_task, tmp_p
     from ethevals.cli import main
     from ethevals.job_config import load_job
 
-    config = load_job().model_dump()
+    config = load_job().model_dump(mode="json")
     config["agents"]["codex-gpt-6"]["env"]["CUSTOM_PROVIDER_KEY"] = "${CUSTOM_PROVIDER_KEY:-}"
     job = tmp_path / "job.json"
     import json
@@ -341,13 +344,16 @@ def test_manual_workflow_requires_secrets_and_selects_declared_tasks(harbor_task
 
 @pytest.mark.docker
 def test_free_check_rejects_verifier_that_always_passes(harbor_task, tmp_path):
+    from ethevals.images.tag import image_tag
+    (harbor_task / "environment/Dockerfile").write_text("FROM ghcr.io/buidlguidl/" + image_tag(image="quiz") + "\n")
+    (harbor_task / "tests/answer.py").write_text(
+        'from rewardkit import criterion\n@criterion\ndef unit(workspace):\n'
+        '    return {"score": True, "reasoning": "Always passes."}\n')
     (harbor_task / "tests/test.sh").write_text(
-        '#!/bin/sh\nset -eu\nmkdir -p /logs/verifier\n'
-        'echo \'{"unit":{"passed":true,"reason":"Always passes."}}\' > /logs/verifier/checks.json\n'
-        'echo 1 > /logs/verifier/reward.txt\n'
+        '#!/bin/sh\nset -eu\nrewardkit /tests\n'
     )
     output = tmp_path / "job"
     result = cli("-m", "ethevals.cli", "free-check", "--tasks", harbor_task, "--output", output)
     assert result.returncode == 2, result.stdout + result.stderr
     assert "nop run must give reward 0 with matching checks" in result.stderr
-    assert '"passed":true' in next((output / "nop").glob("*/verifier/checks.json")).read_text()
+    assert json.loads(next((output / "nop").glob("*/verifier/reward.json")).read_text()) == {"reward": 1.0}

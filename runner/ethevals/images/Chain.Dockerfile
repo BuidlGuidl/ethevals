@@ -1,7 +1,11 @@
 FROM ghcr.io/foundry-rs/foundry:v1.5.1@sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e AS foundry
 FROM python:3.13.7-slim-bookworm@sha256:adafcc17694d715c905b4c7bebd96907a1fd5cf183395f0ebc4d3428bd22d92d AS tools
+RUN pip install --no-cache-dir harbor-rewardkit==0.2.3
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git && rm -rf /var/lib/apt/lists/*
 COPY --from=foundry /usr/local/bin/anvil /usr/local/bin/cast /usr/local/bin/forge /usr/local/bin/
+RUN mkdir -p /tmp/compiler/src && \
+    printf 'pragma solidity =0.8.30; contract Compiler {}\n' > /tmp/compiler/src/Compiler.sol && \
+    forge build --root /tmp/compiler --use 0.8.30 && rm -rf /tmp/compiler
 RUN mkdir -p /opt/solidity/lib && \
     git init /opt/solidity/lib/forge-std && \
     git -C /opt/solidity/lib/forge-std fetch --depth 1 https://github.com/foundry-rs/forge-std.git 77041d2ce690e692d6e03cc812b57d1ddaa4d505 && \
@@ -13,6 +17,7 @@ COPY rpc_methods.json /opt/rpc_methods.json
 COPY setup-foundry.toml /opt/setup-foundry.toml
 COPY verify-foundry.toml /opt/verify-foundry.toml
 COPY forge_checks.py /opt/forge_checks.py
+COPY check_records.py /opt/check_records.py
 COPY start_chain.py /opt/start_chain.py
 RUN ln -s /usr/local/bin/python3 /usr/bin/python3 && \
     useradd --create-home agent && mkdir /eval /workspace && chown agent:agent /eval /workspace

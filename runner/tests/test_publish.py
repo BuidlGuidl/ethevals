@@ -28,7 +28,8 @@ def test_release_stages_trajectory_and_all_verifier_output_without_remote_writes
     trajectory, verifier = report["assets"]
     assert Path(trajectory["source"]).read_bytes() == Path(row["trajectory_file"]).read_bytes()
     with tarfile.open(verifier["source"]) as archive:
-        assert json.load(archive.extractfile("checks.json")) == row["checks"]
+        assert json.load(archive.extractfile("reward.json")) == row["rewards"]
+        assert "reward-details.json" in archive.getnames()
         assert archive.extractfile("judge.json").read() == judge.read_bytes()
     assert report["rows"][0]["trajectory_url"] == trajectory["url"]
     assert report["rows"][0]["verifier_url"] == verifier["url"]
@@ -85,7 +86,7 @@ def test_release_rejects_verifier_symlinks(tmp_path):
 def test_release_keeps_output_for_a_trial_with_a_verification_error(tmp_path):
     row = recorded_row(tmp_path)
     folder = Path(row["verifier_files"]).parent
-    (folder / "verifier/checks.json").unlink()
+    (folder / "verifier/reward-details.json").unlink()
     metadata = json.loads((folder / "board.json").read_text())
     row = results_row(folder, metadata)
     assert (row["status"], row["error_kind"]) == ("error", "verification")

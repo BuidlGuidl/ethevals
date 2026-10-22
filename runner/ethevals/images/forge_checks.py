@@ -138,7 +138,6 @@ def main():
                     checks[name] = {"passed": False, "reason": "Compilation failed."}
         checks = {"compile": {"passed": compiled, "reason": reason}, **checks}
         (args.output / "checks.json").write_text(json.dumps(checks, indent=2) + "\n")
-        (args.output / "reward.txt").write_text(str(int(all(check["passed"] for check in checks.values()))) + "\n")
 
 
 if __name__ == "__main__":

@@ -16,11 +16,11 @@ def recorded_trial(tmp_path):
     return trial, json.loads((fixture / "board.json").read_text())
 
 
-@pytest.mark.parametrize("attempt,judge_attempts,retry_errors,expected", [
-    (1, 2, False, 2), (1, 0, False, 2), (2, 2, False, None), (2, 0, True, 3),
+@pytest.mark.parametrize("retry,judge_attempts,expected", [
+    (0, 2, 1), (0, 0, 1), (1, 2, None), (1, 0, None),
 ])
 def test_ci_judge_error_without_a_local_folder_uses_agent_retry_rules(
-    tmp_path, attempt, judge_attempts, retry_errors, expected,
+    tmp_path, retry, judge_attempts, expected,
 ):
     from ethevals.job_config import load_job
     from ethevals.jobs import plan
@@ -28,15 +28,15 @@ def test_ci_judge_error_without_a_local_folder_uses_agent_retry_rules(
     task = task_folder(tmp_path)
     (task / "tests/criteria.md").write_text("## explained\nDid it explain the unit?\n")
     config = load_job(job_config(tmp_path, "api_key"))
-    item = plan([task], config, [], trials=1)["missing"][0]
-    row = {**item, "status": "error", "error_kind": "judge", "attempt": attempt,
+    item = plan([task], config, [], n_attempts=1)["missing"][0]
+    row = {**item, "status": "error", "error_kind": "judge", "retry": retry,
            "judge_attempts": judge_attempts, "verifier_files": "/home/runner/work/old/trial/verifier"}
-    report = plan([task], config, [row], trials=1, retry_errors=retry_errors)
-    assert [entry["attempt"] for entry in report["missing"]] == ([] if expected is None else [expected])
+    report = plan([task], config, [row], n_attempts=1)
+    assert [entry["retry"] for entry in report["missing"]] == ([] if expected is None else [expected])
     if expected:
         assert report["missing"][0]["agent_reserve_usd"] == 3
     else:
-        assert [entry["attempt"] for entry in report["exhausted_errors"]] == [2]
+        assert [entry["retry"] for entry in report["exhausted_errors"]] == [1]
 
 
 def test_published_interrupted_judge_retries_agent_after_artifact_moves(tmp_path):
@@ -48,7 +48,7 @@ def test_published_interrupted_judge_retries_agent_after_artifact_moves(tmp_path
     task = task_folder(tmp_path)
     (task / "tests/criteria.md").write_text("## explained\nDid it explain the unit?\n")
     config = load_job(job_config(tmp_path, "api_key"))
-    item = plan([task], config, [], trials=1)["missing"][0]
+    item = plan([task], config, [], n_attempts=1)["missing"][0]
     folder = tmp_path / "out/jobs/saved/trial"
     shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", folder)
     (folder.parent / "board.json").write_text(json.dumps(item))
@@ -56,8 +56,8 @@ def test_published_interrupted_judge_retries_agent_after_artifact_moves(tmp_path
     assert (rows[0]["error_kind"], rows[0]["judge_attempts"]) == ("judge", 0)
     published = publish_logs(tmp_path / "release", "owner/repo", "16", "a" * 40, rows=rows)
     shutil.move(str(tmp_path / "out"), tmp_path / "downloaded")
-    report = plan([task], config, published["rows"], trials=1, retry_errors=True)
-    assert [(entry["attempt"], entry["agent_reserve_usd"]) for entry in report["missing"]] == [(2, 3)]
+    report = plan([task], config, published["rows"], n_attempts=1)
+    assert [(entry["retry"], entry["agent_reserve_usd"]) for entry in report["missing"]] == [(1, 3)]
     assert len(published["assets"]) == 2
 
 
@@ -75,7 +75,7 @@ def test_changed_judge_and_colliding_check_do_not_abort_or_loop_the_plan(tmp_pat
     config = load_job(job_config(tmp_path, "free"))
     config.agents["local"].name = "oracle"
     config.judge = JudgeSettings(model="openai/gpt-5", paid_by="free")
-    item = plan([task], config, [], trials=1)["missing"][0]
+    item = plan([task], config, [], n_attempts=1)["missing"][0]
     folder = tmp_path / "old/jobs/saved/trial"
     fixture = Path(__file__).parent / "fixtures/harbor/recorded-trial"
     shutil.copytree(fixture, folder)
@@ -101,11 +101,11 @@ def test_changed_judge_and_colliding_check_do_not_abort_or_loop_the_plan(tmp_pat
 
     monkeypatch.setattr(Job, "run", finished)
     monkeypatch.setattr(litellm, "acompletion", completion)
-    report = budget_check(plan([task], config, rows, trials=2), 0)
-    assert [(entry["trial"], entry["attempt"]) for entry in report["missing"]] == [(1, 2), (2, 1)]
+    report = budget_check(plan([task], config, rows, n_attempts=2), 0)
+    assert [(entry["trial"], entry["retry"]) for entry in report["missing"]] == [(1, 1), (2, 0)]
     asyncio.run(run(report, config, tmp_path / "new", rows))
     assert calls == [task.resolve(), task.resolve()]
-    next_plan = plan([task], config, recover_rows(tmp_path / "new"), trials=1)
+    next_plan = plan([task], config, recover_rows(tmp_path / "new"), n_attempts=1)
     assert next_plan["missing"] == []
     assert len(next_plan["exhausted_errors"]) == int(changed == "collision")
 
@@ -150,7 +150,7 @@ def test_recorded_trial_criteria_reach_rows_with_reason_and_judge(tmp_path, monk
     assert "metre" in evidence and "A metre measures length." in evidence
     saved = json.loads((trial / "verifier/judge.json").read_text())
     assert saved["usage"]["cost_usd"] == 0.0123
-    # Recovery never sends a second request for this attempt.
+    # Recovery never sends a second request for this retry.
     asyncio.run(judge_trial(trial, task, settings))
     assert results_row(trial, metadata)["checks"] == row["checks"]
     assert len(requests) == 1
@@ -170,7 +170,7 @@ def test_judge_errors_retry_only_judging_and_stop_at_the_judge_limit(tmp_path, m
     config = load_job(job_config(tmp_path, "free"))
     config.agents["local"].name = "oracle"
     config.judge = JudgeSettings(model="openai/gpt-5", paid_by="free", time_limit=1)
-    planned = plan([task], config, [], trials=1)
+    planned = plan([task], config, [], n_attempts=1)
     metadata = {**planned["missing"][0], "task_hash": task_entry(task)["hash"]}
 
     async def completion(**kwargs):
@@ -189,8 +189,8 @@ def test_judge_errors_retry_only_judging_and_stop_at_the_judge_limit(tmp_path, m
     assert (rows[0]["status"], rows[0]["error_kind"], rows[0]["checks"]) == (
         "error", "judge", {"unit": {"passed": True, "reason": "The final reply matches."}})
     assert rows[0]["error_reason"].startswith("Cannot judge criteria:")
-    again = budget_check(plan([task], config, rows, trials=1), 0)
-    assert [(row["trial"], row["attempt"]) for row in again["missing"]] == [(1, 2)]
+    again = budget_check(plan([task], config, rows, n_attempts=1), 0)
+    assert [(row["trial"], row["retry"]) for row in again["missing"]] == [(1, 1)]
     assert again["rejudge"] == []
     assert json.loads((trial / "verifier/judge.json").read_text())["attempts"] == 2
 
@@ -209,7 +209,7 @@ def test_saved_trial_retries_judge_and_reaches_board_without_an_agent_run(tmp_pa
     config = load_job(job_config(tmp_path, "free"))
     config.agents["local"].name = "oracle"
     config.judge = JudgeSettings(model="openai/gpt-5", paid_by="free")
-    item = plan([task], config, [], trials=1)["missing"][0]
+    item = plan([task], config, [], n_attempts=1)["missing"][0]
     folder = tmp_path / "out/jobs/saved/trial"
     shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", folder)
     (folder.parent / "board.json").write_text(json.dumps(item))
@@ -235,19 +235,19 @@ def test_saved_trial_retries_judge_and_reaches_board_without_an_agent_run(tmp_pa
         with pytest.raises(asyncio.CancelledError):
             asyncio.run(judge_trial(folder, task, config.judge))
     rows = previous_rows(tmp_path / "out", tmp_path / "none")
-    report = budget_check(plan([task], config, rows, trials=1), 0, required=True)
+    report = budget_check(plan([task], config, rows, n_attempts=1), 0, required=True)
     assert report["missing"] == []
-    assert [(entry["attempt"], entry["agent_reserve_usd"]) for entry in report["rejudge"]] == [(1, 0)]
+    assert [(entry["retry"], entry["agent_reserve_usd"]) for entry in report["rejudge"]] == [(0, 0)]
     output = tmp_path / "new-out" if separate_output else tmp_path / "out"
     assert asyncio.run(run(report, config, output, rows)) is True
     row = json.loads((output / "rows.jsonl").read_text())
-    assert (row["status"], row["attempt"], row["checks"]["explained"]) == (
-        "passed", 1, {"passed": True, "reason": "The reply explains the unit."})
+    assert (row["status"], row["retry"], row["checks"]["explained"]) == (
+        "passed", 0, {"passed": True, "reason": "The reply explains the unit."})
     assert (folder / "result.json").read_bytes() == result_before
     assert len(list((tmp_path / "out/jobs").glob("*/*/result.json"))) == 1
     assert len(requests) == 2
     assert json.loads((folder / "verifier/judge.json").read_text())["attempts"] == 2
-    assert plan([task], config, previous_rows(tmp_path / "out", tmp_path / "none"), trials=1)["missing"] == []
+    assert plan([task], config, previous_rows(tmp_path / "out", tmp_path / "none"), n_attempts=1)["missing"] == []
 
 
 def test_judge_retry_costs_add_on_the_same_trial(tmp_path, monkeypatch):
@@ -311,15 +311,15 @@ def test_saved_judge_reserves_only_its_remaining_attempt(tmp_path):
     task = task_folder(tmp_path)
     (task / "tests/criteria.md").write_text("## explained\nDid the reply explain the unit?\n")
     config = load_job(job_config(tmp_path, "api_key"))
-    item = plan([task], config, [], trials=1)["missing"][0]
+    item = plan([task], config, [], n_attempts=1)["missing"][0]
     (folder.parent / "board.json").write_text(json.dumps(item))
-    row = {**item, "status": "error", "error_kind": "judge", "attempt": 2,
+    row = {**item, "status": "error", "error_kind": "judge", "retry": 1,
            "judge_attempts": 1, "verifier_files": str(folder / "verifier")}
-    report = budget_check(plan([task], config, [row], trials=1), 2, required=True)
+    report = budget_check(plan([task], config, [row], n_attempts=1), 2, required=True)
     assert report["missing"] == []
     saved = report["rejudge"][0]
-    assert (saved["attempt"], saved["agent_reserve_usd"], saved["judge_reserve_usd"], report["worst_case_usd"], report["within_budget"]) == (
-        2, 0, 2, 2, True)
+    assert (saved["retry"], saved["agent_reserve_usd"], saved["judge_reserve_usd"], report["worst_case_usd"], report["within_budget"]) == (
+        1, 0, 2, 2, True)
 
 
 def test_judge_checks_reject_blank_names_like_test_checks(tmp_path):
@@ -359,12 +359,12 @@ def test_row_parses_judge_json_once_and_keeps_its_checks(tmp_path, monkeypatch):
     assert reads == [judge_path]
 
 
-@pytest.mark.parametrize("content", ['{" ": {"passed": true, "reason": "Matches."}}', '{"unit":'])
+@pytest.mark.parametrize("content", ['{"reward": {"criteria": [{"name": " ", "value": 1, "reasoning": "Matches."}]}}', '{"reward":'])
 def test_check_errors_include_the_source_file(tmp_path, content):
     from ethevals.trial_rows import results_row
 
     folder, metadata = recorded_trial(tmp_path)
-    path = folder / "verifier/checks.json"
+    path = folder / "verifier/reward-details.json"
     path.write_text(content)
     row = results_row(folder, metadata)
     assert (row["status"], row["error_kind"]) == ("error", "verification")
@@ -378,7 +378,7 @@ def test_criteria_judge_reserves_api_spend_for_a_plan_funded_agent(tmp_path, mon
     task = task_folder(tmp_path)
     (task / "tests/criteria.md").write_text("## explained\nDid the reply explain the unit?\n")
     config = load_job(job_config(tmp_path))
-    report = budget_check(plan([task], config, [], trials=1), 0)
+    report = budget_check(plan([task], config, [], n_attempts=1), 0)
     item = report["missing"][0]
     assert (item["agent_reserve_usd"], item["judge_reserve_usd"], item["worst_case_usd"]) == (0, 4, 8)
     assert item["judge"] == {"model": "anthropic/claude-opus-5-5", "effort": "high"}
@@ -461,7 +461,7 @@ def test_live_judge_refuses_missing_keys_and_plan_tokens_before_calls(tmp_path, 
     monkeypatch.setenv("ANTHROPIC_API_KEY", key)
     monkeypatch.setenv("REWARDKIT_FORCE_SUBSCRIPTION", forced)
     with pytest.raises(ValueError, match="judge requires ANTHROPIC_API_KEY"):
-        asyncio.run(run(budget_check(plan([task], config, [], trials=1), 8), config, tmp_path / "out", []))
+        asyncio.run(run(budget_check(plan([task], config, [], n_attempts=1), 8), config, tmp_path / "out", []))
     assert not (tmp_path / "out/jobs").exists()
 
 
@@ -483,7 +483,7 @@ def test_job_runs_rewardkit_with_a_local_http_judge_and_recovers_criteria(tmp_pa
     solution.write_text(solution.read_text() + '\nprintf "A metre measures length.\\n" > /note.txt\n')
     config = job_config(tmp_path, "free")
     data = json.loads(config.read_text())
-    data["trials"] = 1
+    data["n_attempts"] = 1
     data["agents"]["local"]["name"] = "oracle"
     data["judge"] = {"model": "openai/gpt-5", "paid_by": "free"}
     config.write_text(json.dumps(data))

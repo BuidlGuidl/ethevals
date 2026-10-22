@@ -147,7 +147,7 @@ def main():
     # Anvil can print its upstream URL even with --silent on startup failures.
     process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     open(REFUSALS, "w").close()
-    for attempt in range(250):
+    for retry in range(250):
         try:
             rpc("eth_chainId")
             break

@@ -22,20 +22,20 @@ The same captured bytes supply the skills hash and every skills trial in the com
 Snapshots stay under `OUTPUT/skills/HASH/` beside the jobs that use them.
 
 ```sh
-uv run ethevals plan --modes internet --trials 1 --budget 100
-uv run ethevals run --modes internet --trials 1 --budget 100 --output results/local
+uv run ethevals plan --modes internet --n-attempts 1 --budget 100
+uv run ethevals run --modes internet --n-attempts 1 --budget 100 --output results/local
 ```
 
 Vanilla entries use `ethevals.vanilla:VanillaAgent` and declare `modes: [vanilla]`.
 They use API keys, regardless of how an internet entry pays for the same model.
 The agent sends the instruction in one API call through Harbor's LiteLLM dependency, with no tools or environment access.
-It disables request retries; the job's attempt limit still applies.
+It disables request retries; the job's retry limit still applies.
 Its `kwargs.completion` accepts provider options such as `api_base` and `max_tokens`.
 Model names and effort come from the same model settings as internet entries.
 Vanilla rows have `agent: null` and appear in the knowledge table.
 
 Every missing agent trial requires an explicit `--budget`, including free stand-ins and plan-funded trials.
-API-key trials reserve `cost_limit_usd` for each remaining attempt.
+API-key trials reserve `cost_limit_usd` for the initial execution and each remaining retry.
 Plan-funded trials reserve $0 of agent spend.
 The reserve controls admission.
 For API-key entries whose Harbor options include `max_budget_usd`, the runner sets that cap from `cost_limit_usd`.
@@ -48,10 +48,16 @@ Use `--trial N` with one task, agent, and mode to run one numbered trial.
 Completed passes and failures never repeat for the same task hash, agent, model, effort, mode, and trial number.
 Skills trials also include the skills hash in their identity.
 Internet and vanilla trials record `skills_hash: null`, so a skill edit repeats only skills trials.
-Agent errors repeat up to `max_attempts`; `--retry-errors` grants one further agent attempt per selected error.
+`n_attempts` counts scored trials per task, agent, and mode; `--n-attempts N` overrides it.
+Retries add no scored trials.
+`retry.max_retries` caps reruns after errors, with a default of 1.
+Harbor's `RetryConfig` supplies the exception exclusions and optional inclusion filter.
+Excluded errors never start another agent execution.
+The board schedules retries across jobs and admits their spend before execution.
+Rows count retries from zero for the initial execution.
 The plan lists agent trials under `missing` and judge-only re-runs under `rejudge`; both count toward the budget.
 The runner judges saved folders before starting agent trials.
-A saved folder qualifies only with remaining judge attempts, matching judge settings, and missing or failed judge output.
+A saved folder qualifies only with remaining judge calls, matching judge settings, and missing or failed judge output.
 Without that folder, or after the judge settings change, the agent retry rules apply.
 Criteria headings that match test check names cause a verification error.
 
@@ -59,7 +65,8 @@ Run the same command and output directory after an interruption.
 The runner reads saved Harbor trial folders before planning and rebuilds missing rows.
 Each numbered trial has its own Harbor job under `OUTPUT/jobs/`.
 `board.json` records that trial's board identity and payment source beside Harbor's files.
-Rows use schema version 7 and link a trajectory JSON file when one exists.
+Rows use schema version 8 and link a trajectory JSON file when one exists.
+They retain all reward dimensions; `reward == 1` supplies the test pass bit.
 Cost comes from Harbor's API-price usage record, regardless of the payment source.
 Unknown cost stays null; free stand-ins cost $0.
 Rows record judge model, effort, API-price cost, and payment source separately.
@@ -94,13 +101,19 @@ It then runs Harbor's oracle and nop agents, one trial at a time.
 Use `--tasks` to select task folders.
 `uv run ethevals lint` runs the lint alone.
 
-Each verifier writes `/logs/verifier/checks.json`:
+Test tools can write `/logs/verifier/checks.json`:
 
 ```json
 {"check_name": {"passed": true, "reason": "A one-line reason."}}
 ```
 
-It also writes `reward.txt`, with 1 when every check passes and 0 otherwise.
+`test.sh` copies `/opt/check_records.py` into `/tests/`, then runs `rewardkit /tests`.
+That shared criterion turns each record into a named RewardKit check with its reason.
+Each task's `reward.toml` sets `all-pass` for the record file and the root `reward`.
+RewardKit 0.2.3 ships in both shared images and needs no network for programmatic checks.
+The chain image caches Solidity 0.8.30 at build time; tasks can install other compilers in their images.
+RewardKit alone writes `reward.json` and `reward-details.json` under `/logs/verifier/`.
+Rows and free checks read those files; additional reward dimensions remain available.
 The free check requires every oracle check to pass and at least one nop check to fail.
 Both runs must report the same check names.
 Missing records, execution errors, or rewards that disagree with checks fail the command.
@@ -110,11 +123,11 @@ The task declares that path in `artifacts` so the separate verifier receives it.
 The solution writes a stand-in trajectory for Harbor's oracle agent.
 The nop agent leaves no reply.
 The shared quiz image ships `/opt/target_checks.py`.
-Call it with `/tests/target.json` from `tests/test.sh`.
-The JSON holds `name` and `target`, which accepts one string or a list of accepted strings.
-`location` accepts `exact`, `begin`, `end`, or `any`; it defaults to `exact`.
-The helper trims punctuation around the reply and ignores case unless `ignore_case` is false.
-It writes the named check and reward, without copying a reply reader into each task.
+Import it from a Python criterion file under `/tests/`, with `/opt` on `sys.path`.
+Call `rk.final_answer(accepts, name="check_name")` with the task's answer rule.
+The rule accepts the final reply and returns a boolean.
+The shared criterion supplies the empty-reply check and the reason.
+Answers and matching rules stay inside each task.
 
 Tasks declare sidecars in `environment/docker-compose.yaml`.
 Single-container tasks use `environment/Dockerfile` alone.
@@ -162,15 +175,15 @@ Criteria headings must differ from test check names.
 The judge's model, effort, time limit, payment source, and admission reserve come from the job config's `judge` settings.
 The default judge uses Opus 5.5 through `ANTHROPIC_API_KEY`; it refuses plan tokens.
 The pinned RewardKit version cannot accept an explicit key, so `key_env` accepts only `ANTHROPIC_API_KEY`.
-Each agent attempt reserves two judge attempts at `cost_limit_usd` each, even when a plan pays for the agent.
+Each agent execution reserves two judge calls at `cost_limit_usd` each, even when a plan pays for the agent.
 RewardKit is pinned to 0.2.3, which supports Harbor's ATIF trajectory input and per-question reasons.
 `verifier/judge.json` preserves its output, usage, reasons, and errors beside Harbor's test records.
 Row recovery reads that file without another judge call.
-Judging retries on the saved trial folder, up to two attempts, without another agent run.
-`judge.json` counts attempts before starting them, including an interrupted attempt, and adds their known costs.
-After an interruption, the next run reserves only the remaining judge attempts and keeps the agent attempt number.
-Two unsuccessful attempts leave a judge error on the board.
-An exhausted judge or an unavailable saved folder cannot start another agent attempt.
+Judging retries on the saved trial folder, up to two calls, without another agent run.
+`judge.json` counts calls before starting them, including an interrupted call, and adds their known costs.
+After an interruption, the next run reserves only the remaining judge calls and keeps the retry number.
+Two unsuccessful calls leave a judge error on the board.
+An exhausted judge or an unavailable saved folder cannot start another agent execution.
 Timeouts, invalid answers, and missing reasons count as judge errors, so they never become failed checks.
 Local stand-ins set `judge.paid_by: free` and use a local model endpoint.
 The free check prints a skip note because the judge needs a paid API call.

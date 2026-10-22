@@ -49,7 +49,7 @@ def write_catalog(paths: list[Path], output: Path) -> None:
 
 
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,
-         models=None, modes=None, trials=None, trial=None, retry_errors=False,
+         models=None, modes=None, n_attempts=None, trial=None,
          skills_pack: SkillsPack | None = None) -> dict:
     modes = modes or config.modes
     if set(modes) - set(config.modes):
@@ -80,7 +80,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                 if mode not in task["modes"] or mode not in agent.modes:
                     continue
                 combinations += 1
-                for number in [trial] if trial is not None else range(1, (trials or config.trials) + 1):
+                for number in [trial] if trial is not None else range(1, (n_attempts or config.n_attempts) + 1):
                     metadata = {"task_id": task["id"], "task_hash": task["hash"],
                                 "skills_hash": skills_pack.hash if mode == "skills" else None,
                                 "agent": None if mode == "vanilla" else agent.name, "model": model.name, "effort": model.effort,
@@ -90,7 +90,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                         raise ValueError("Selected agent settings produce duplicate trial identities")
                     selected.append(identity)
                     row = prior.get(identity, {})
-                    attempt = row.get("attempt", 0)
+                    retry = row.get("retry", -1)
                     if row.get("status") in {"passed", "failed"}:
                         continue
                     judge = {"model": config.judge.model, "effort": config.judge.effort} if criteria else None
@@ -112,11 +112,15 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                                 eligible = False
                             if eligible:
                                 reserve = config.judge.cost_limit_usd * remaining_judge if config.judge.paid_by == "api_key" else 0.0
-                                rejudge.append({**item, "trial_path": str(folder.resolve()), "attempt": attempt,
-                                                "remaining_attempts": 1, "agent_reserve_usd": 0.0,
+                                rejudge.append({**item, "trial_path": str(folder.resolve()), "retry": retry,
+                                                "remaining_executions": 1, "agent_reserve_usd": 0.0,
                                                 "judge_reserve_usd": reserve, "worst_case_usd": reserve})
                                 continue
-                    if attempt >= config.max_attempts and not retry_errors:
+                    policy = config.retry
+                    exception = row.get("error_kind")
+                    if row and (retry >= policy.max_retries
+                                or exception in (policy.exclude_exceptions or set())
+                                or policy.include_exceptions and exception not in policy.include_exceptions):
                         exhausted.append(row)
                         continue
                     if missing_env:
@@ -125,8 +129,8 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                         continue
                     reserve = agent.cost_limit_usd if agent.paid_by == "api_key" else 0.0
                     judge_reserve = config.judge.cost_limit_usd * MAX_JUDGE_ATTEMPTS if criteria and config.judge.paid_by == "api_key" else 0.0
-                    remaining = max(1, config.max_attempts - attempt)
-                    missing.append({**item, "attempt": attempt + 1, "remaining_attempts": remaining,
+                    remaining = policy.max_retries - retry
+                    missing.append({**item, "retry": retry + 1, "remaining_executions": remaining,
                                     "agent_reserve_usd": reserve, "judge_reserve_usd": judge_reserve,
                                     "worst_case_usd": (reserve + judge_reserve) * remaining})
     if not selected:

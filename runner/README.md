@@ -12,7 +12,7 @@ Copy a task with similar needs, then run the [free check](../docs/harbor.md#free
 
 ## Verifiers
 
-Each task's `tests/test.sh` writes named checks and an all-checks reward.
+Each task's `tests/test.sh` runs RewardKit, which writes the reward and named check details.
 The [Harbor guide](../docs/harbor.md#free-checks) covers quiz targets, Forge, criteria, and sidecars.
 A new test tool writes the same check records and ships in the task's environment image.
 List shared image build inputs in [images/tag.py](ethevals/images/tag.py).
@@ -23,15 +23,15 @@ Run paid trials only with explicit spending intent and a reviewed budget.
 [Job settings](ethevals/job.yaml) select agents, models, CLI versions, modes, and the time limit.
 Use `--config` for a separate job configuration.
 Use `--tasks`, `--agents`, `--models`, and `--modes` to select trials.
-Use `--trials N` for repeats or `--trial N` for one numbered trial.
+Use `--n-attempts N` for repeats or `--trial N` for one numbered trial.
 
 ```sh
-uv run ethevals plan --modes internet --trials 1 --budget 100
-uv run ethevals run --modes internet --trials 1 --budget 100 --output results/local
+uv run ethevals plan --modes internet --n-attempts 1 --budget 100
+uv run ethevals run --modes internet --n-attempts 1 --budget 100 --output results/local
 ```
 
 Every execution requires an explicit budget.
-The reserve covers remaining API-key attempts and paid criteria.
+The reserve covers remaining API-key executions and paid criteria.
 Plan-funded agents reserve no API spend, but their criteria still need a judge key and budget.
 Read [Board jobs](../docs/harbor.md#board-jobs) for payment sources, recovery, and trajectory links.
 
@@ -42,7 +42,7 @@ It runs the [Harbor free check](../docs/harbor.md).
 [results.yml](../.github/workflows/results.yml) queues paid trials after changes to `main`, except results-only changes.
 A manual budget overrides `ETHEVALS_BUDGET_USD`; the fallback is zero.
 A zero budget saves the plan and schedules no trials, including plan-paid trials with no API reserve.
-A positive budget must cover all missing trials' remaining API attempts, including judge costs.
+A positive budget must cover all missing trials' remaining API executions, including judge costs.
 
 The workflow needs these GitHub secrets:
 
@@ -72,11 +72,11 @@ The run step allows 190 minutes; the job allows 240 minutes for setup, builds, a
 Each job uploads saved trials after success or failure.
 The planning step gets only RPC secrets; the trial step gets model credentials too.
 Each secret has one declaration; YAML aliases share the RPC secrets between those steps.
-Judge errors without a local saved folder follow the agent retry rules, including `--retry-errors`.
+Judge errors without a local saved folder follow the agent retry rules, within the retry cap.
 
 The publisher has no model keys and runs after failed matrix jobs on `main`.
-It downloads every attempt's artifacts and rebuilds rows from saved Harbor trials at their downloaded paths.
-It folds attempts before staging one trajectory JSON and one verifier archive per trial.
+It downloads every workflow retry's artifacts and rebuilds rows from saved Harbor trials at their downloaded paths.
+It folds retries before staging one trajectory JSON and one verifier archive per trial.
 The archive includes check records, reasons, and any `judge.json`.
 Errors also keep their available output.
 
@@ -87,7 +87,7 @@ It folds `origin/main`, `origin/ci/results`, and artifact rows onto current `mai
 The results pull request contains only the rows change.
 The release uses the source commit and the workflow run ID; retries replace assets on that release.
 If an upload fails, recorded rows keep the next plan from repeating completed trials.
-Use "Re-run all jobs" to retry publication from every workflow attempt.
+Use "Re-run all jobs" to retry publication from every workflow retry.
 A retry also reopens a missing results pull request without another push.
 
 `ethevals publish-logs --output DIR --repo OWNER/REPO --run-id ID --commit SHA` stages a trial release locally.

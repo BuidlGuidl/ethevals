@@ -3,9 +3,9 @@ import hashlib
 from pathlib import Path
 
 BUILD_INPUTS = {
-    "quiz": ("Quiz.Dockerfile", "target_checks.py"),
+    "quiz": ("Quiz.Dockerfile", "target_checks.py", "check_records.py"),
     "chain": ("Chain.Dockerfile", "rpc_filter.py", "rpc_methods.json", "ChainSetup.sol",
-              "setup-foundry.toml", "verify-foundry.toml", "forge_checks.py", "start_chain.py"),
+              "setup-foundry.toml", "verify-foundry.toml", "forge_checks.py", "check_records.py", "start_chain.py"),
 }
 
 

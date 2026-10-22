@@ -166,8 +166,8 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
     ci.command("git", "config", "user.name", "Test")
     ci.command("git", "config", "user.email", "test@example.org")
     rows = Path("results/rows.jsonl")
-    first = {"schema_version": 7, "task_id": "concepts/a", "task_hash": "a", "trial": 1, "status": "passed", "attempt": 1}
-    second = {**first, "trial": 2, "status": "error", "attempt": 1}
+    first = {"schema_version": 8, "task_id": "concepts/a", "task_hash": "a", "trial": 1, "status": "passed", "retry": 0}
+    second = {**first, "trial": 2, "status": "error", "retry": 0}
     Path("source.txt").write_text("old source")
     write_rows(rows, [first])
     ci.command("git", "add", ".")
@@ -188,8 +188,8 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
     ci.command("git", "update-ref", "refs/remotes/origin/main", main)
     ci.command("git", "checkout", "--detach", planned, capture_output=True)
     ci.restore_results(rows)
-    assert [(r["trial"], r["status"], r.get("attempt")) for r in read_rows(rows)] == [(1, "passed", 1), (2, "error", 1)]
-    write_rows(rows, fold_rows(read_rows(rows), [{**second, "status": "failed", "attempt": 2}]))
+    assert [(r["trial"], r["status"], r.get("retry")) for r in read_rows(rows)] == [(1, "passed", 0), (2, "error", 0)]
+    write_rows(rows, fold_rows(read_rows(rows), [{**second, "status": "failed", "retry": 1}]))
     real_command, remote = ci.command, []
 
     def local_only(*args, **kwargs):
@@ -235,7 +235,7 @@ def test_retry_opens_pr_after_successful_push(tmp_path, monkeypatch):
             return subprocess.CompletedProcess(args, 0, stdout="[]")
         return command(*args, **kwargs)
     monkeypatch.setattr(ci, "command", remote)
-    row = {"schema_version": 7, "task_id": "test", "trial": 1, "status": "error", "attempt": 1}
+    row = {"schema_version": 8, "task_id": "test", "trial": 1, "status": "error", "retry": 0}
     with pytest.raises(subprocess.CalledProcessError):
         ci.commit_results([row], "owner/repo", True)
     ci.commit_results(ci.result_record(), "owner/repo", True)
@@ -251,11 +251,11 @@ def test_publish_records_downloaded_trials_before_upload_and_retries_release(tmp
     artifact.mkdir(parents=True)
     shutil.copyfile(fixture / "board.json", artifact / "board.json")
     shutil.copytree(fixture, artifact / "trial")
-    # The earlier artifact is superseded by attempt 2, even if download order differs.
+    # The later retry wins even if download order differs.
     later = tmp_path / "trial-run-12-2-0/jobs/job"
     shutil.copytree(artifact, later)
     metadata = json.loads((later / "board.json").read_text())
-    metadata["attempt"] = 2
+    metadata["retry"] = 1
     (later / "board.json").write_text(json.dumps(metadata))
     saved = []
     real_command = ci.command
@@ -286,7 +286,7 @@ def test_publish_records_downloaded_trials_before_upload_and_retries_release(tmp
     def upload(args, **kwargs):
         if args[0] != "gh":
             return real_run(args, **kwargs)
-        assert [(r["trial"], r["attempt"], r["status"]) for r in saved[-1]] == [(1, 2, "passed")]
+        assert [(r["trial"], r["retry"], r["status"]) for r in saved[-1]] == [(1, 1, "passed")]
         assert saved[-1][0]["trajectory_url"].startswith("https://github.com/owner/repo/releases/download/results-12/")
         if args[2] == "view":
             return subprocess.CompletedProcess(args, 0)
@@ -300,7 +300,7 @@ def test_publish_records_downloaded_trials_before_upload_and_retries_release(tmp
     args = argparse.Namespace(output=tmp_path, repo="owner/repo", run_id="12", commit="b" * 40, publish=True)
     assert ci.publish_artifacts(args) == 1
     assert len(saved) == 1
-    assert ci.result_record()[0]["attempt"] == 2
+    assert ci.result_record()[0]["retry"] == 1
     assert ci.publish_artifacts(args) == 0
     assert len(saved) == 1
     assert uploads[0] == uploads[1]

@@ -60,7 +60,7 @@ write_rows(output / "rows.jsonl", [results_row(trial, metadata,
   const { evals } = loadCatalog(path.join(root, "catalog.json"));
   const rows = parseRows(readFileSync(path.join(root, "rows.jsonl"), "utf8"), "rows.jsonl", evals);
   assert.deepEqual(rows.map((row) => [row.task_id, row.schema_version, row.status, row.paid_by, row.model_cost_usd]),
-    [["concepts/question", 7, "passed", "free", 0]]);
+    [["concepts/question", 8, "passed", "free", 0]]);
   assert.deepEqual(rows[0].checks, {
     unit: { passed: true, reason: "The final reply matches." },
     ...(withCriteria ? { named_unit: { passed: true, reason: "The reply names the unit metre." } } : {}),
