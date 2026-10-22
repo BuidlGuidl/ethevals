@@ -34,6 +34,36 @@ def test_pr_checks_run_harbor_without_the_removed_public_tasks(tmp_path, monkeyp
     ]
 
 
+def test_pr_check_parts_cover_the_full_job(tmp_path, monkeypatch):
+    def calls(*argv):
+        recorded = []
+        monkeypatch.setattr(ci, "command", lambda *args, **kwargs: recorded.append(repr((args, kwargs))))
+        monkeypatch.setattr(sys, "argv", ["ci.py", "checks", "--output", str(tmp_path), *argv])
+        assert ci.main() == 0
+        return recorded
+
+    docker_proofs = repr(((sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker"), {}))
+    sharded = repr(((sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker", "--shard=2/3"), {}))
+    unit = calls("--part", "unit")
+    free = calls("--part", "free")
+    docker = calls("--part", "docker", "--shard", "2/3")
+    assert unit[0] == repr(((sys.executable, "-m", "ethevals.cli", "lint"), {}))
+    assert docker[-1] == sharded
+    assert set(calls()) == {*unit[1:], *free, *docker[:-1], docker_proofs}
+
+
+def test_docker_shards_split_the_proofs_without_gaps_or_repeats():
+    def collect(*argv):
+        result = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "--run-docker", "-m", "docker",
+                                 *argv], cwd=ROOT, capture_output=True, text=True, check=True)
+        return [line for line in result.stdout.splitlines() if "::" in line]
+
+    everything = collect()
+    shards = [collect(f"--shard={index}/3") for index in (1, 2, 3)]
+    assert len(everything) > 3 and all(shards)
+    assert sorted(sum(shards, [])) == sorted(everything)
+
+
 def test_release_dry_run_stages_tasks_without_remote_writes(tmp_path, monkeypatch, capsys):
     source = ROOT / "runner/tests/fixtures/harbor/concepts/question"
     shutil.copytree(source, tmp_path / "tasks/concepts/question")

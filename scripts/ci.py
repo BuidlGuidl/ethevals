@@ -209,12 +209,22 @@ def publish_artifacts(args):
 
 
 def checks(args):
-    images(argparse.Namespace(publish=False))
-    command(sys.executable, "-m", "ethevals.cli", "free-check", "--output", args.output / "harbor")
-    command(sys.executable, "-m", "pytest", "-q")
-    command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker")
-    for task in ("test", "typecheck", "lint", "build"):
-        command("pnpm", task, cwd="site")
+    # CI runs the parts as parallel jobs; locally, the default runs them all in order.
+    if args.part in ("all", "free", "docker"):
+        images(argparse.Namespace(publish=False))
+    if args.part in ("all", "free"):
+        command(sys.executable, "-m", "ethevals.cli", "free-check", "--output", args.output / "harbor")
+    if args.part == "unit":
+        command(sys.executable, "-m", "ethevals.cli", "lint")
+    if args.part in ("all", "unit"):
+        command(sys.executable, "-m", "pytest", "-q")
+    if args.part in ("all", "docker"):
+        # Pytest reads a bare "I/N" as a test path before it loads the option, so pass it joined.
+        shard = [f"--shard={args.shard}"] if args.shard else []
+        command(sys.executable, "-m", "pytest", "-q", "--run-docker", "-m", "docker", *shard)
+    if args.part in ("all", "unit"):
+        for task in ("test", "typecheck", "lint", "build"):
+            command("pnpm", task, cwd="site")
     return 0
 
 
@@ -275,6 +285,9 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     checks_parser = commands.add_parser("checks")
     checks_parser.add_argument("--output", type=Path, required=True)
+    checks_parser.add_argument("--part", choices=("all", "unit", "free", "docker"), default="all",
+                               help="Run one part of the PR job: unit and site, the free check, or the Docker proofs.")
+    checks_parser.add_argument("--shard", help="With --part docker, run shard I of N, written I/N.")
     builder = commands.add_parser("images", help="Build shared images with the GHCR tags used by task folders.")
     builder.add_argument("--publish", action="store_true", help="Push multi-architecture images to GHCR.")
     planner = commands.add_parser("plan-trials")

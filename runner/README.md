@@ -177,4 +177,6 @@ The default concurrency is one.
 
 Run `uv run pytest -q --run-docker -m docker` for container checks.
 Run `uv run python scripts/ci.py checks --output results/ci` for the full PR job.
+Pull-request CI runs it as parallel parts: `--part unit`, `--part free`, and `--part docker --shard I/3`.
+It skips the free and Docker parts when a pull request changes only `site/`, `docs/`, or top-level Markdown.
 Use a fresh output directory.

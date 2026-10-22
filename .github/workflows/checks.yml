@@ -7,10 +7,31 @@ concurrency:
   group: checks-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
-  checks:
-    name: Free checks
+  changes:
+    name: Changed paths
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      docker: ${{ steps.paths.outputs.docker }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # Changes only to the site, docs, or top-level Markdown can't change a trial, so they skip Docker.
+      - id: paths
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --name-only "$BASE" HEAD | grep -qvE '^(site/|docs/|[^/]+\.md$)'; then
+            echo docker=true >> "$GITHUB_OUTPUT"
+          else
+            echo docker=false >> "$GITHUB_OUTPUT"
+          fi
+  unit:
+    name: Unit tests and site
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
@@ -29,4 +50,57 @@ jobs:
           package-manager-cache: false
       - run: uv sync --frozen
       - run: pnpm --dir site install --frozen-lockfile
-      - run: uv run python scripts/ci.py checks --output results/ci-checks
+      - run: uv run python scripts/ci.py checks --part unit --output results/ci-checks
+  free:
+    name: Oracle and nop runs
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: false
+      - run: uv sync --frozen
+      - run: uv run python scripts/ci.py checks --part free --output results/ci-checks
+  docker:
+    name: Docker proofs (${{ matrix.shard }} of 3)
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: false
+      - run: uv sync --frozen
+      - run: uv run python scripts/ci.py checks --part docker --shard ${{ matrix.shard }}/3 --output results/ci-checks
+  checks:
+    name: Free checks
+    needs: [changes, unit, free, docker]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          results = {job: need["result"] for job, need in json.loads(os.environ["RESULTS"]).items()}
+          print(results)
+          required = {"changes", "unit"}
+          ok = all(result == "success" or (result == "skipped" and job not in required)
+                   for job, result in results.items())
+          raise SystemExit(0 if ok else 1)
+          EOF
