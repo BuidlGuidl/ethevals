@@ -4,7 +4,7 @@ schema_version = "1.3"
 name = "buidlguidl/supply-usdc-to-aave"
 description = "Check whether an agent can find a live protocol on a mainnet fork and supply an exact amount of USDC."
 authors = [{ name = "BuidlGuidl" }]
-keywords = ["ethereum", "defi", "fork", "rewardkit"]
+keywords = ["ethereum", "defi", "fork"]
 
 [metadata]
 pillar = "transactions"

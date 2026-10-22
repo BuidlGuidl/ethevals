@@ -5,7 +5,7 @@ artifacts = ["/logs/agent/trajectory.json"]
 name = "buidlguidl/agent-registries"
 description = "Check whether a model knows the ERC for agent discovery and trust."
 authors = [{ name = "BuidlGuidl" }]
-keywords = ["ethereum", "erc", "agent-discovery", "rewardkit"]
+keywords = ["ethereum", "erc", "agent-discovery"]
 
 [metadata]
 pillar = "concepts"

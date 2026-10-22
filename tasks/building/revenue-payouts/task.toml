@@ -5,7 +5,7 @@ artifacts = ["/workspace"]
 name = "buidlguidl/revenue-payouts"
 description = "Check whether an agent can split incoming payments while handling token behavior and payee callbacks."
 authors = [{ name = "BuidlGuidl" }]
-keywords = ["ethereum", "solidity", "payments", "rewardkit"]
+keywords = ["ethereum", "solidity", "payments"]
 
 [metadata]
 pillar = "building"

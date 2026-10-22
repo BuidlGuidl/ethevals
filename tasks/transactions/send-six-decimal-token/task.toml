@@ -4,7 +4,7 @@ schema_version = "1.3"
 name = "buidlguidl/send-six-decimal-token"
 description = "Check whether an agent reads token decimals before signing an exact transfer."
 authors = [{ name = "BuidlGuidl" }]
-keywords = ["ethereum", "erc20", "transfers", "rewardkit"]
+keywords = ["ethereum", "erc20", "transfers"]
 
 [metadata]
 pillar = "transactions"
