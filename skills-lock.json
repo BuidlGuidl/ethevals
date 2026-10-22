@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "skills": {
+    "create-task": {
+      "source": "harbor-framework/harbor",
+      "ref": "v0.24.0",
+      "sourceType": "github",
+      "skillPath": "skills/create-task/SKILL.md",
+      "computedHash": "041c4e337aae8db31f2d7672af7b899fa5f2023402ae6948f60ae48d45043a22"
+    },
+    "rewardkit": {
+      "source": "harbor-framework/harbor",
+      "ref": "v0.24.0",
+      "sourceType": "github",
+      "skillPath": "skills/rewardkit/SKILL.md",
+      "computedHash": "d085d43cadbbdcb5ed0685983b943c0baed736a743ab9a5b04ef7b6b382596f8"
+    }
+  }
+}
