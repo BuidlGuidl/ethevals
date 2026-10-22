@@ -58,7 +58,7 @@ def test_ci_failure_still_exports_only_checked_files_with_tokens_available(tmp_p
     (saved / "config.json").write_text(config.model_dump_json())
     item = plan([task], config, [], n_attempts=1)["missing"][0]
     (saved / "trials.json").write_text(json.dumps([{
-        "missing": [item], "rejudge": [], "selected": [], "worst_case_usd": 0}]))
+        "missing": [item], "selected": [], "worst_case_usd": 0}]))
     monkeypatch.setenv("CODEX_AUTH_JSON", json.dumps({"tokens": {"access_token": "offline-ci-access-token"}}))
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
 

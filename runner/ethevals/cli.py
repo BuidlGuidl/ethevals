@@ -93,7 +93,7 @@ def main(argv=None) -> int:
             from .secret_check import secret_values
             from .trial_rows import recover_rows, fold_rows, read_rows
 
-            secrets = secret_values(config, [Path(item["task_path"]) for item in [*report["rejudge"], *report["missing"]]])
+            secrets = secret_values(config, [Path(item["task_path"]) for item in report["missing"]])
             hub_key = os.environ.pop(config.hub.key_env, None) if config.hub else None
             try:
                 success = asyncio.run(jobs.run(report, config, args.output, previous, skills_pack=skills_pack,

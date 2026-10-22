@@ -173,7 +173,7 @@ def check_output(output: Path, secrets: dict[str, set[bytes]], *, require_invent
                    "status": "error", "error_kind": kind, "error_reason": reason,
                    "checks": {}, "rewards": {}, "limit": None, "total_tokens": 0,
                    "model_cost_usd": None, "judge_cost_usd": None, "judge": metadata.get("judge"),
-                   "judge_paid_by": None, "judge_attempts": 0, "cost_source": "unavailable",
+                   "judge_paid_by": None, "cost_source": "unavailable",
                    "total_seconds": None, "working_seconds": None,
                    "trajectory_file": None, "trajectory_url": None, "verifier_files": None}
             # Metadata can contain a leaked value too. Never carry it into the safe row.
