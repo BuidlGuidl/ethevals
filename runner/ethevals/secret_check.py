@@ -42,7 +42,8 @@ def secret_values(config: JobSettings, paths: list[Path]) -> dict[str, set[bytes
             for child in value:
                 auth_tokens(child, name)
 
-    names = config.credential_names() | {name for path in paths for name in task_host_variables(path)}
+    names = ({config.judge.key_env} | {name for agent in config.agents.values() for name in agent.required_env}
+             | {name for path in paths for name in task_host_variables(path)})
     for name in names:
         add(name, os.environ.get(name))
     for agent in config.agents.values():
@@ -53,7 +54,10 @@ def secret_values(config: JobSettings, paths: list[Path]) -> dict[str, set[bytes
                 host, default = hosts[0]
                 value = os.environ.get(host, default)
                 add(host, value)
-            add(name, value)
+                add(name, value)
+            elif is_sensitive_env_key(name):
+                # A literal setting such as a base URL or model name isn't a secret.
+                add(name, value)
             environment[name] = value
         for credential in agent.required_files:
             hosts = get_required_host_vars({"path": credential.path})

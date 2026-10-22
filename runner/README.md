@@ -75,6 +75,7 @@ Local runs use the same check before writing results rows.
 The check matches exact credential values from job settings, including the judge key.
 It also checks each task's declared host variables and the token values inside Codex `auth.json`.
 The check ignores values shorter than eight bytes. Force flags such as `"1"` never match trial files.
+A literal agent setting, such as a base URL, counts only when its name looks like a credential by Harbor's sensitive-key rule.
 Checked folders carry a digest. Release staging refuses missing digests or files changed after the check.
 Interrupted jobs keep private credential fingerprints. If their original credentials are unavailable, the check withholds their files.
 Trials with a match keep an error row that names the variable and omits its value.

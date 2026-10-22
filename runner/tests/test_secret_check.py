@@ -96,6 +96,7 @@ def test_ci_failure_still_exports_only_checked_files_with_tokens_available(tmp_p
     ("auth", "CODEX_AUTH_JSON.tokens.refresh_token", "offline-refresh-token-value"),
     ("auth_override", "CODEX_AUTH_JSON.tokens.refresh_token", "offline-overridden-token-value"),
     ("judge", "CUSTOM_JUDGE_KEY", "offline-judge-key-value"),
+    ("literal", "AGENT_ACCESS_TOKEN", "offline-literal-token-value"),
 ])
 def test_whole_job_check_withholds_artifact_and_release_for_declared_secrets(tmp_path, monkeypatch, source, label, value):
     config = load_job(job_config(tmp_path, "free"))
@@ -116,6 +117,8 @@ def test_whole_job_check_withholds_artifact_and_release_for_declared_secrets(tmp
             config.agents["local"].required_files[0].path = "${AUTH_PATH}"
         # Load through the real config parser, including its file credential declaration.
         config = type(config).model_validate_json(config.model_dump_json())
+    elif source == "literal":
+        config.agents["local"].env[label] = value
     else:
         config.judge.key_env = label
         monkeypatch.setenv(label, value)
@@ -140,11 +143,13 @@ def test_whole_job_check_withholds_artifact_and_release_for_declared_secrets(tmp
 
 def test_clean_checked_artifact_survives_download_and_force_flags(tmp_path):
     config = load_job(job_config(tmp_path, "free"))
-    config.agents["local"].env = {"NEW_FORCE_AUTH": "1"}
+    config.agents["local"].env = {"NEW_FORCE_AUTH": "1", "AGENT_BASE_URL": "https://models.example/v1"}
     raw, artifact = tmp_path / "raw", tmp_path / "artifact"
     folder = raw / "jobs/job/trial"
     shutil.copytree(Path(__file__).parent / "fixtures/harbor/recorded-trial", folder)
     shutil.copyfile(folder / "board.json", folder.parent / "board.json")
+    (folder / "artifacts").mkdir()
+    (folder / "artifacts/settings.txt").write_text("https://models.example/v1")
     check_output(raw, secret_values(config, []))
     stage_artifact(raw, artifact)
     shutil.rmtree(raw)
