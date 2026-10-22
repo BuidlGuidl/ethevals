@@ -9,7 +9,7 @@ Our test helpers wrote their own reward and check files. The judge read `criteri
 So a plain `harbor run` from Hugging Face skipped the criteria, and could give reward 1 to a trial the board failed.
 The board also rejected valid RewardKit output.
 This ADR moves the verifier to Harbor's own recommended shape, RewardKit as the one writer of the reward.
-It also takes Harbor's retry policy and words, drops the board's time limit, and gives every task Harbor's `[task]` table.
+It also takes Harbor's retry policy and words, drops the board's time limit, and gives every task Harbor's `[task]` table, digest, and host-variable declaration.
 It amends ADR 0010.
 
 ## The verifier
@@ -50,10 +50,13 @@ It amends ADR 0010.
 - **Rows and trial identity carry no board-wide limit.**
 - **CI's step timeout for each trial is the backstop.**
 
-## Package info
+## Package info and identity
 
 - **Every task has Harbor's `[task]` table:** a stable `name` under the `buidlguidl` org, a `description`, `authors`, and `keywords`. The description replaces `metadata.motivation`. Pillar and modes stay in metadata.
 - **A task's name is the same everywhere:** in the repo, in the Hugging Face `registry.json`, and in a plain Harbor run of the export.
+- **The task hash is Harbor's package digest.** Harbor's packager computes it with its own file rules, and every trial's lock saves it as `task.digest`. A trial whose lock disagrees with the plan is refused. Hugging Face gets the same files the digest counts, so a stray editor file is neither published nor part of identity. This changes result identity. The board has no Harbor rows yet, so nothing migrates.
+- **The compose file declares a task's host variables.** `metadata.required_env` goes. A sidecar takes a host variable through compose interpolation, written `${VAR:?message}` so a missing value stops with a clear message. The planner, the free check, and lint read the names from there. A sidecar's secret never goes in `[environment.env]`, because Harbor passes that into the agent's container.
+- **`eval.yaml` follows Hugging Face's spec,** as Terminal-Bench's does: a name, a description, `evaluation_framework: harbor`, and one `tasks` entry. `registry.json` carries a description and a version.
 
 ## Known gaps
 
@@ -74,4 +77,5 @@ It amends ADR 0010.
 - **Criteria are a RewardKit judge file,** run by the verifier rather than on the host.
 - **The job config no longer holds a time limit.** "No task sets its own time limit" is reversed: a task sets one when it needs it.
 - **"Attempt" becomes Harbor's "retry",** and `trials` becomes `n_attempts`.
+- **The task hash is Harbor's package digest,** and the published `eval.yaml` follows Hugging Face's spec.
 - **A passing trial now means `reward == 1`,** which is still every check passing.

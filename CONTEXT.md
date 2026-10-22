@@ -124,7 +124,7 @@ _Avoid_: partial score
 The API price of a trial's model calls, recorded the same way whether a plan or an API key paid.
 
 **Task hash**:
-A fingerprint of a task folder's files. Changing a task's files reruns every mode for that task.
+Harbor's package digest of a task's files, saved in each trial's lock. Changing a task's files reruns every mode for that task.
 
 **Skills hash**:
 A fingerprint of the skills pack's files. Only skills-mode trials include it in their identity, so a skills change reruns only skills-mode trials.
