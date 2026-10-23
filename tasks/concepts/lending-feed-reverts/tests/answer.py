@@ -8,7 +8,8 @@ import rewardkit as rk
 
 
 def accepts(reply: str) -> bool:
-    text = reply.strip(string.whitespace + string.punctuation).lower()
+    text = re.sub(r"[*_#`]", "", reply).strip(string.whitespace + string.punctuation).lower()
+    text = re.sub(r"^(?:only|just)\s+", "", text)
     return bool(re.match(r"withdraw(?:ing|al|als)?\b", text))
 
 

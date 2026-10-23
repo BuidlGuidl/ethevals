@@ -8,7 +8,7 @@ import rewardkit as rk
 
 
 def accepts(reply: str) -> bool:
-    text = reply.lower()
+    text = re.sub(r"[*_#`]", "", reply).lower()
     number = re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", text)
     if number:
         return float(number.group()) == 0
