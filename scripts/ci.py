@@ -120,7 +120,9 @@ def run_trial(args):
         try:
             if auth:
                 path = Path(directory) / "auth.json"
-                path.touch(mode=0o600)
+                # Harbor copies this file in as root and keeps its mode, and most task images run as `agent`.
+                # The temporary directory keeps it private on the runner.
+                path.touch(mode=0o644)
                 path.write_text(auth)
                 os.environ["CODEX_AUTH_JSON_PATH"] = str(path)
             success = asyncio.run(run(report, config, args.output, previous, publication_secrets=secrets))

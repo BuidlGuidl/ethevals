@@ -72,7 +72,8 @@ Key-paid trials have separate groups and can run in parallel.
 `scripts/ci.py run-trial` executes one saved plan item with its reserved budget.
 It checks task and skills hashes before Harbor starts.
 Harbor builds each task's environment and starts its declared sidecars.
-Codex credentials use a temporary mode-0600 file outside the artifact directory; the step removes it afterward.
+Codex credentials use a temporary file in a private directory outside the artifact directory; the step removes it afterward.
+The file is readable by others, because Harbor copies it into the task as root and the agent user in most task images must read it.
 Harbor receives `CODEX_AUTH_JSON_PATH` and uploads the file itself.
 The job config forces Codex plan payment and requires plan tokens in its credential file before Harbor starts.
 Local and CI trials use the same credential check.

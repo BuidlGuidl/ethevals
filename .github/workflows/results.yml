@@ -109,6 +109,8 @@ jobs:
           path: results/ci-run/public/
           retention-days: 14
           if-no-files-found: warn
+          # The publication check covers hidden files, such as an agent's .gitignore.
+          include-hidden-files: true
   publish:
     name: Publish results
     needs: [plan, matrix]
