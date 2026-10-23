@@ -1,0 +1,1 @@
+A liquidation takes all of a borrower's collateral and 1,000 USDC of debt stays on the books. If the market does nothing more, who bears the loss: every lender now, the last lenders to leave, or nobody? One phrase.

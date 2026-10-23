@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/lending-idle-interest"
+description = "Check whether a model accrues idle interest before a borrow changes utilization."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "lending", "defi"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/lending-cap-donation"
+description = "Check whether a model sees how a direct donation bypasses a receipt-based lending cap."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "lending", "defi"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

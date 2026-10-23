@@ -1,0 +1,1 @@
+Our market's rate depends on utilization. Nobody has touched it for 30 days. A user then borrows enough to double the utilization. Are the 30 days charged at the utilization before the borrow or after? One word.

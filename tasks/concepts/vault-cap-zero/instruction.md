@@ -1,0 +1,1 @@
+Our curated vault lends into several markets, each under a cap we set. We set one market's cap to zero and withdraw everything the vault had there, but leave the market on the vault's list. Can a stranger still change what our vault's shares are worth through that market? Yes or no, and if yes say how.

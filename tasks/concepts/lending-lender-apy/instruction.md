@@ -1,0 +1,1 @@
+Our market charges borrowers a per-second rate that compounds every second, takes 10% of interest as a protocol fee, and runs at 80% utilization. Our page shows lenders an APY of borrower APY times 0.8 times 0.9. Is that number too high, too low, or exact? One phrase.

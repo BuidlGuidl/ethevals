@@ -1,0 +1,1 @@
+Our market is Compound-style: the receipt token redeems for a growing share of whatever the pool holds, receipts count as collateral, and a supply cap stops deposits once the pool is full. Can someone borrow against more collateral than the cap permits? Answer yes or no, and if yes say how in a few words.
