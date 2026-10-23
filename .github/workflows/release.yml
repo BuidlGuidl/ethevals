@@ -2,6 +2,8 @@ name: Publish task images and HF dataset
 on:
   push:
     branches: [main]
+    # The dataset holds tasks only, so results-only changes have nothing to publish.
+    paths-ignore: ['results/**']
   workflow_dispatch:
 permissions:
   contents: read
