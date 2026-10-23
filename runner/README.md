@@ -149,7 +149,7 @@ Registry entries use each task's `[task].name`.
 `scripts/ci.py release` previews the HF upload; `--publish` performs it.
 The upload removes obsolete task files and the old quiz `data/` exports in the same HF commit.
 [release.yml](../.github/workflows/release.yml) pushes shared images to GHCR before uploading every task to `buidlguidl/ethevals-test`.
-It runs on pushes to `main` with `HF_TOKEN` and the workflow's GHCR token.
+It runs on pushes to `main`, except results-only changes, with `HF_TOKEN` and the workflow's GHCR token.
 It tags dataset changes `gh-<short sha>` and supports manual reruns without inputs.
 `scripts/ci.py images` builds shared images locally with the same pinned GHCR tags used by the source tasks.
 Its `--publish` flag pushes Linux amd64 and arm64 images.
