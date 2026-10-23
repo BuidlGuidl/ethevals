@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ETH Evals · Open evaluations of AI on Ethereum</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=IBM+Plex+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=VT323&display=swap">
+  <!-- The look (clean or geek) is set before the first paint: ?ui= in the URL, else the last one chosen here. -->
+  <script>
+    (function () {
+      let ui = new URLSearchParams(location.search).get("ui");
+      try { if (ui) localStorage.setItem("ethevals-ui", ui); else ui = localStorage.getItem("ethevals-ui"); } catch (e) {}
+      document.documentElement.dataset.ui = ui === "geek" ? "geek" : "clean";
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="report.css">
+  <link rel="stylesheet" href="report-lab.css">
+  <link rel="stylesheet" href="site.css">
+  <link rel="stylesheet" href="site-simple.css">
+  <link rel="stylesheet" href="how-it-works.css">
+  <link rel="stylesheet" href="geek.css">
+  <script defer src="data.js"></script>
+  <script defer src="data-extra.js"></script>
+  <script defer src="how-it-works.js"></script>
+  <script defer src="site-simple.js"></script>
+</head>
+<body data-view="site-simple">
+  <div id="app"></div>
+  <noscript>Enable JavaScript to explore the prototype.</noscript>
+</body>
+</html>
