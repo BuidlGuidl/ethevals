@@ -1,9 +1,6 @@
 #!/bin/sh
 set -eu
 mkdir -p /logs/verifier
-tar --exclude=node_modules --exclude=dist --exclude=.git \
-    -czf /logs/verifier/project.tar.gz -C /workspace .
-cp /chain/chain_context.json /logs/verifier/chain_context.json
 cd /workspace
 build_status=0
 pnpm build > /logs/verifier/build.log 2>&1 || build_status=$?
@@ -26,4 +23,5 @@ Path("/logs/verifier/checks.json").write_text(
     json.dumps({"compile": {"passed": passed, "reason": reason}}) + "\n"
 )
 PY
+cp /opt/check_records.py /tests/check_records.py
 rewardkit /tests

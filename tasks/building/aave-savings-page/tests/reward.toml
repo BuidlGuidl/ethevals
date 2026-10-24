@@ -1,4 +1,4 @@
-[scoring.compile]
+[scoring.check_records]
 aggregation = "all-pass"
 
 [[reward]]

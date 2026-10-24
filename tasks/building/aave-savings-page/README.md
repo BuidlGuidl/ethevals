@@ -34,11 +34,12 @@ The task adds no agent time limit.
 
 ## The checks
 
-The shared verifier first writes `/logs/verifier/project.tar.gz` from `/workspace`.
-The archive excludes `node_modules`, `dist`, and `.git` directories.
-It preserves the chain context link and saves its JSON separately as `/logs/verifier/chain_context.json`.
-The verifier then runs both compile commands and writes `build.log` and `typecheck.log` beside the archive.
-RewardKit turns `checks.json` into the single named check and the reward.
+Harbor saves `/workspace` as an artifact, excluding `node_modules`, `dist`, `.git`, and `chain_context.json`.
+The saved project contains plain files that the publication secret check can scan.
+The exclusion removes the chain context symlink, which the secret check rejects.
+The shared verifier runs both compile commands and writes `build.log`, `typecheck.log`, and `checks.json` under `/logs/verifier/`.
+It copies `/opt/check_records.py` into `/tests/check_records.py`.
+RewardKit uses this shared adapter to turn `checks.json` into the `compile` check and the reward.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
@@ -82,6 +83,5 @@ uv run harbor run -p tasks/building/aave-savings-page -a oracle -e docker --n-co
 uv run harbor run -p tasks/building/aave-savings-page -a nop -e docker --n-concurrent 1
 ```
 
-To inspect a saved project, extract its archive and install dependencies from its lockfile.
-For live chain access, replace the extracted chain context link with a JSON file for your own fork.
-The saved context uses the trial's internal `http://chain:8545` address.
+To inspect a saved project, open the trial's `artifacts/workspace/` directory and install dependencies from its lockfile.
+For live chain access, add a `chain_context.json` file for your own fork.
