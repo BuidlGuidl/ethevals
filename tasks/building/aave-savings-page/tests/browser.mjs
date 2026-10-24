@@ -1,8 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { encodeFunctionData, formatUnits } from './deps.mjs';
-import { reserve, capFixture, funding, requestedSupplies, POOL, USDC, USDT, AUSDC, AUSDT, pool, erc20 } from './chain.mjs';
+import { reserve, prepareCapFixture, funding, requestedSupplies, POOL, USDC, USDT, AUSDC, AUSDT, pool, erc20 } from './chain.mjs';
 import { rpc, balance, send, advanceTime } from './rpc.mjs';
 import { connect, prepareAction, submitAction, dismiss, visibleValues } from './controls.mjs';
 import { CouldNotDrive } from './control-vocabulary.mjs';
@@ -10,8 +9,7 @@ import { walletWrites, walletIdle } from './rpc-policy.mjs';
 import { createHarness, until } from './harness.mjs';
 
 export const CHECKS = ['deposit_usdc', 'shows_deposit', 'shows_apy', 'withdraw_partial', 'withdraw_all',
-  'deposit_usdt_leftover_allowance', 'refuses_over_cap', 'atomic_deposit'];
-const here = path.dirname(fileURLToPath(import.meta.url));
+  'deposit_usdt_leftover_allowance', 'refuses_over_cap'];
 const workspace = path.resolve(process.argv[2] || '/workspace');
 const output = path.resolve(process.argv[3] || '/logs/verifier');
 await fs.mkdir(output, { recursive: true });
@@ -40,7 +38,7 @@ const started = Date.now();
 try {
   harness = await createHarness({ workspace, output, sourceContext: process.argv[4] || '/chain/chain_context.json', funding });
   const { mainRpc, account, sourceBlock } = harness;
-  const initial = await capFixture(mainRpc, account.address);
+  const initial = await reserve(mainRpc);
   await saveJson('fixture.json', { address: account.address, sourceBlock, ...initial });
   async function reset() { await harness.reset(); active = null; }
   const capture = (s, name) => harness.capture(s, name);
@@ -147,8 +145,10 @@ try {
     await capture(s, 'deposit-usdt');
   });
   await reset();
+  const capped = await prepareCapFixture(mainRpc, account.address);
+  await saveJson('cap-setup.json', capped);
   await journey(['refuses_over_cap'], async () => {
-    const market = await capFixture(mainRpc, account.address);
+    const market = capped;
     const { oversized } = market;
     const s = await session();
     const before = s.wallet.requests.length;
@@ -161,28 +161,6 @@ try {
     await capture(s, 'cap');
     await fs.copyFile(path.join(output, 'cap.png'), path.join(output, 'cap-page.png'));
     await saveJson('cap-room.json', { ...market, oversized, supplies });
-  });
-  await reset();
-  await journey(['atomic_deposit'], async () => {
-    const bytecode = (await fs.readFile(path.join(here, 'wallet-bytecode.txt'), 'utf8')).trim();
-    const implementation = '0x0000000000000000000000000000000000007702';
-    await rpc(mainRpc, 'anvil_setCode', [implementation, bytecode]);
-    await rpc(mainRpc, 'anvil_setCode', [account.address, `0xef0100${implementation.slice(2)}`]);
-    const s = await session({ atomic: true });
-    const action = await prepareAction(s.page, 'USDC', 'deposit', '100');
-    const before = s.wallet.requests.length;
-    await drive(s, action, async () => await balance(mainRpc, AUSDC, account.address) > 99_990_000n);
-    const deposited = await until(async () => Math.abs(Number(await balance(mainRpc, AUSDC, account.address)) - 100_000_000) <= 10_000);
-    const requests = s.wallet.requests.slice(before);
-    await walletIdle(s.wallet);
-    const transactions = s.wallet.transactions;
-    const bundles = requests.filter(request => request.method === 'wallet_sendCalls');
-    const signedPermit = requests.some(request => /^eth_signTypedData/.test(request.method));
-    const permitSupply = requestedSupplies(requests).some(call => call.functionName === 'supplyWithPermit');
-    const acceptedMethod = bundles.length === 1 || signedPermit && permitSupply;
-    await record('atomic_deposit', deposited && transactions.length === 1 && acceptedMethod && transactions[0].receipt.status === '0x1',
-      `Atomic-capable wallet: deposited ${Boolean(deposited)}; onchain transactions ${transactions.length}; bundles ${bundles.length}; permit signature ${signedPermit}; supplyWithPermit ${permitSupply}.`);
-    await capture(s, 'atomic');
   });
 } catch (error) {
   await saveJson('browser-error.json', { error: error.stack });

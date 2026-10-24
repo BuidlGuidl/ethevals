@@ -25,21 +25,9 @@ This was a finalized block when checked.
 At that block, Aave v3's main pool has active, unfrozen, unpaused USDC and USDT reserves.
 The pool is `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`.
 Only the chain sidecar receives `MAINNET_RPC_URL`.
-Setup lowers USDC's supply cap through the pool configurator.
-It impersonates the provider's ACL admin after checking its pool admin role.
-That governance contract has no ETH.
-Setup sets the next block's base fee and the transaction's gas price to zero.
-The cap is the aUSDC total supply rounded up to whole USDC, plus 5,000 USDC.
-Aave also counts accrued treasury tokens against the cap.
-The actual deposit room is smaller than 5,000 USDC.
-At this fork, more than 3,000 USDC remains available, so a 100 USDC deposit fits.
-A deposit above the room fails with `SupplyCapExceeded()` and selector `0xf58f733a`.
-Pool revision 11 uses this custom error in place of the older string error `51`.
-The page must refuse an oversized supply before asking the wallet to send it.
-Setup pins Anvil's block timestamp interval to zero before changing the cap.
-Transactions keep the fork timestamp, so interest cannot consume the room during an hour of wall-clock time.
-This also fixes USDT's interest clock, but setup leaves its reserve configuration unchanged.
-Setup writes the chain context without funding any wallet.
+Setup leaves the reserve configuration and block clock unchanged, without funding any wallet.
+The task chain exposes the real market at the pinned block.
+Setup writes the chain context.
 The agent reads `/workspace/chain_context.json` through the existing read-only chain context link.
 
 The task's main image installs Playwright 1.61.1, Chromium, and viem 2.57.11 under root-only directories.
@@ -47,6 +35,15 @@ It extracts Chromium's added shared libraries under `/root/savings-libs` instead
 Only the verifier's browser launch receives that library path.
 An agent-downloaded Chromium cannot launch with the system libraries alone.
 The verifier starts its own Anvil fork of the task chain after the agent stops.
+Before the cap journey, it lowers USDC's supply cap through the pool configurator in that fork alone.
+It impersonates the provider's ACL admin after checking its pool admin role.
+That governance contract has no ETH, so the next block's base fee and transaction gas price are zero.
+The cap is the aUSDC total supply rounded up to whole USDC, plus 5,000 USDC.
+Aave also counts accrued treasury tokens against the cap, which leaves less than 5,000 USDC of room.
+A deposit above the room fails with `SupplyCapExceeded()` and selector `0xf58f733a`.
+Pool revision 11 uses this custom error in place of the older string error `51`.
+The verifier fixes its fork's block interval at zero and advances time only where a journey needs it.
+The cap journey keeps a stable clock; other journeys use the original cap.
 It funds a fresh wallet with ETH and 10,000 units of each token through local chain controls.
 The private key stays in the verifier process and never enters the page or public chain context.
 Playwright injects an EIP-1193 provider and announces it through EIP-6963.
@@ -74,7 +71,7 @@ The browser opens the production build through the verifier's static server.
 It finds token cards or rows by their visible text, then uses accessible control names and amount inputs.
 Missing controls fail the affected checks with `could not drive: ...` and a screenshot.
 Each journey saves page text, a screenshot, and wallet requests with transaction receipts.
-Snapshots isolate the USDT, supply-cap, and atomic-wallet journeys.
+Snapshots isolate the USDT and supply-cap journeys.
 After the USDC deposit, the verifier advances time by 30 days and reloads the page to check accrued interest.
 Withdrawal requests advance another day before mining, so a Max control that sends a balance snapshot leaves dust.
 Each withdrawal journey gets a funded position if its preceding journey fails.
@@ -92,7 +89,6 @@ Broken pages and builds fail their affected checks.
 | `withdraw_all` | Max returns the whole position and leaves exactly zero aUSDC | closing a position | "withdraw ... all of it at any time" | `executeWithdraw`'s [max-uint branch](https://github.com/aave-dao/aave-v3-origin/blob/8305565ae342f1773c42cd2e4593f175fe5968a0/src/contracts/protocol/libraries/logic/SupplyLogic.sol#L124) |
 | `deposit_usdt_leftover_allowance` | Depositing 100 USDT succeeds with an existing 1 USDT Pool allowance | token approvals | "deposit either token" | USDT's verified [approve implementation](https://etherscan.io/address/0xdac17f958d2ee523a2206206994597c13d831ec7#code) |
 | `refuses_over_cap` | When Aave would refuse the deposit, the page asks the wallet for nothing | Aave supply cap | "deposit either token into Aave v3" | Aave [SupplyModalContent.tsx](https://github.com/aave/interface/blob/ae94b94ccdc4f370c53c4c78111413ce9790eb1e/src/components/transactions/Supply/SupplyModalContent.tsx#L187-L196), [validateSupply](https://github.com/aave-dao/aave-v3-origin/blob/8305565ae342f1773c42cd2e4593f175fe5968a0/src/contracts/protocol/libraries/logic/ValidationLogic.sol) |
-| `atomic_deposit` | An atomic-capable wallet completes the deposit in one transaction | wallet capabilities | "deposit either token into Aave v3", with an added wallet requirement | [EIP-5792](https://eips.ethereum.org/EIPS/eip-5792), [Wallet.execute](tests/Wallet.sol), and Pool `supplyWithPermit` |
 | `explains_supply_cap` | The page explains the refused deposit's cap in words | user feedback, judge | "deposit either token into Aave v3" | [cap-explanation.toml](tests/cap-explanation.toml) and Aave's supply UI above |
 | `switches_and_continues` | Deposit or Withdraw switches to Ethereum and carries on without another click | network handling, judge | "Ethereum mainnet" and "The chain to use is in `chain_context.json`" | [network-flow.toml](tests/network-flow.toml) |
 
@@ -106,10 +102,8 @@ A page can simulate the whole supply before its first wallet prompt; no explicit
 Clamping the typed amount to the room still fails if the page asks the wallet for a write.
 It measures the current reserve configuration and includes accrued treasury tokens in the remaining room.
 The room bounds and oversized amount live in `capFixture()` in `tests/chain.mjs`.
-The atomic journey starts with no allowance and advertises `atomic.status = supported` through `wallet_getCapabilities`.
-It uses an EIP-7702 account whose calls execute atomically in one mined transaction.
-The account also validates ERC-1271 signatures so USDC permits work for the delegated wallet.
-The wallet records separate transactions too, so a bundle implemented as sequential transactions cannot pass.
+The reusable wallet still supports atomic bundles and ERC-1271 signatures through an EIP-7702 account.
+Savings runs no atomic journey or observation; its extra page drive and settling time add verifier cost.
 
 The board-only RewardKit judge reads `cap-page.txt` and `cap-page.png`, alongside the required guarded trajectory.
 It checks whether the page explains the supply cap rather than showing a generic failure or selector.
@@ -123,7 +117,6 @@ A compiling project alone gives no evidence that its Savings page works.
 These checks exercise the wallet and Aave contracts behind the page's controls.
 Aave's [supply guide](https://aave.com/help/supplying/supply-tokens) describes interest accruing in the supplied balance.
 Its [withdrawal guide](https://aave.com/help/supplying/withdraw-tokens) describes the liquidity requirement for withdrawals.
-The wallet API's [atomic capability](https://eips.ethereum.org/EIPS/eip-5792) lets a page combine approval and supply in one transaction.
 
 ## Notes
 

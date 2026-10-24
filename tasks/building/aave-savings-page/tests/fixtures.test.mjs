@@ -12,10 +12,10 @@ const context = process.env.SAVINGS_FIXTURE_CHAIN_CONTEXT;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const variants = {
   correct: {}, principal: { shows_deposit: false }, snapshot: { withdraw_all: false },
-  'approve-only': { refuses_over_cap: false, atomic_deposit: false },
-  'deposit-alias': { refuses_over_cap: false, atomic_deposit: false },
-  'wrong-recipient': { withdraw_partial: false, withdraw_all: false, atomic_deposit: false },
-  hardhat: { atomic_deposit: false }, 'non-atomic': {}, 'simulate-first': {}, clamp: { refuses_over_cap: false },
+  'approve-only': { refuses_over_cap: false },
+  'deposit-alias': { refuses_over_cap: false },
+  'wrong-recipient': { withdraw_partial: false, withdraw_all: false },
+  hardhat: {}, 'non-atomic': {}, 'simulate-first': {}, clamp: { refuses_over_cap: false },
 };
 for (const [variant, expected] of Object.entries(variants)) {
   test(`full verifier on ${variant} page`, { skip: !context, timeout: 300_000 }, async () => {
@@ -40,14 +40,15 @@ for (const [variant, expected] of Object.entries(variants)) {
     await log.close();
     assert.equal(exit, 0, root);
     const checks = JSON.parse(await fs.readFile(path.join(output, 'checks.json'), 'utf8'));
-    // Plain fixture sends use two transactions; the bundle fixture uses one on an atomic wallet.
-    const defaults = { atomic_deposit: variant === 'non-atomic' };
-    for (const [name, result] of Object.entries(checks)) assert.equal(result.passed, ({ ...defaults, ...expected })[name] ?? true, `${root}: ${name}: ${result.reason}`);
+    assert.deepEqual(Object.keys(checks).sort(), ['compile', 'deposit_usdc', 'shows_deposit', 'shows_apy', 'withdraw_partial', 'withdraw_all', 'deposit_usdt_leftover_allowance', 'refuses_over_cap'].sort());
+    for (const [name, result] of Object.entries(checks)) assert.equal(result.passed, expected[name] ?? true, `${root}: ${name}: ${result.reason}`);
+    const initial = JSON.parse(await fs.readFile(path.join(output, 'fixture.json')));
+    const capped = JSON.parse(await fs.readFile(path.join(output, 'cap-setup.json')));
+    assert.equal(initial.cap, capped.previousCap);
+    assert.ok(BigInt(initial.cap) > BigInt(capped.cap));
     if (variant === 'non-atomic') {
       const normal = JSON.parse(await fs.readFile(path.join(output, 'deposit-usdc-wallet.json')));
-      const atomic = JSON.parse(await fs.readFile(path.join(output, 'atomic-wallet.json')));
       assert.equal(normal.transactions.length, 2);
-      assert.equal(atomic.transactions.length, 1);
     }
     if (variant === 'simulate-first') {
       const normal = JSON.parse(await fs.readFile(path.join(output, 'deposit-usdc-wallet.json')));

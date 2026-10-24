@@ -1,5 +1,5 @@
 import { encodeFunctionData, decodeFunctionData, parseAbi } from './deps.mjs';
-import { read, balance, tokenAbi as erc20 } from './rpc.mjs';
+import { rpc, read, balance, receipt, tokenAbi as erc20 } from './rpc.mjs';
 export { tokenAbi as erc20 } from './rpc.mjs';
 
 export const POOL = '0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2';
@@ -42,6 +42,36 @@ export async function capFixture(url, owner) {
     throw Object.assign(new Error('Over-cap fixture is unaffordable or outside its room bounds'), { infrastructure: true });
   }
   return { ...market, oversized };
+}
+
+export async function prepareCapFixture(url, owner) {
+  const provider = '0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e';
+  const providerAbi = parseAbi([
+    'function getACLAdmin() view returns (address)',
+    'function getACLManager() view returns (address)',
+    'function getPoolConfigurator() view returns (address)',
+  ]);
+  const address = raw => `0x${raw.slice(-40)}`;
+  const [admin, manager, configurator] = await Promise.all(
+    ['getACLAdmin', 'getACLManager', 'getPoolConfigurator'].map(async method => address(await read(url, provider, providerAbi, method))),
+  );
+  const adminRole = await read(url, manager, parseAbi(['function isPoolAdmin(address) view returns (bool)']), 'isPoolAdmin', [admin]);
+  if (BigInt(adminRole) !== 1n) throw Object.assign(new Error('ACL admin does not hold the pool admin role'), { infrastructure: true });
+  const previous = await reserve(url);
+  const supplyCap = (previous.total + 999_999n) / 1_000_000n + 5000n;
+  await rpc(url, 'anvil_setBlockTimestampInterval', [0]);
+  await rpc(url, 'anvil_setNextBlockBaseFeePerGas', ['0x0']);
+  await rpc(url, 'anvil_impersonateAccount', [admin]);
+  try {
+    const hash = await rpc(url, 'eth_sendTransaction', [{ from: admin, to: configurator, gasPrice: '0x0', gas: '0x493e0',
+      data: encodeFunctionData({ abi: parseAbi(['function setSupplyCap(address,uint256)']), functionName: 'setSupplyCap', args: [USDC, supplyCap] }) }]);
+    if ((await receipt(url, hash)).status !== '0x1') throw Object.assign(new Error('Verifier supply-cap setup failed'), { infrastructure: true });
+  } finally {
+    await rpc(url, 'anvil_stopImpersonatingAccount', [admin]);
+  }
+  const market = await capFixture(url, owner);
+  if (market.cap !== supplyCap * 1_000_000n) throw Object.assign(new Error('Verifier supply cap does not match its fixture'), { infrastructure: true });
+  return { ...market, previousCap: previous.cap, admin, configurator };
 }
 
 export function requestedSupplies(requests) {

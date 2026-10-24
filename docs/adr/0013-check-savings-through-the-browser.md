@@ -11,6 +11,7 @@ Running agent build scripts with verifier privileges also lets those scripts cha
 A task verifier can start its own unfiltered fork beside the filtered task chain.
 It reads the trusted chain context from `/chain`, funds a fresh wallet, and keeps its key outside the page.
 The verifier can advance time and restore snapshots without changing the task chain.
+Check-specific state, such as a full cap, belongs in the verifier fork so agents build against the real market.
 Fork startup, funding, and fixture failures must produce trial errors rather than failed checks.
 
 Verifier-only tools ship in the task's own image.
@@ -34,6 +35,7 @@ The verifier never changes the agent's source.
 The task README defines its checks and tolerances.
 An injected EIP-1193 wallet also announces itself through EIP-6963.
 Its advertised atomic capability uses one transaction for a bundle; non-atomic bundles record separate transactions.
+Savings checks do not require atomic deposits; the instruction sets no wallet batching requirement.
 RewardKit remains the only reward writer, under ADR 0011.
 Guarded criteria can read page evidence or a source snapshot without running the agent's code.
 The Savings source criterion follows Deposit or Withdraw through a network switch and the original action.
