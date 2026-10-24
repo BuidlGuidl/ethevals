@@ -52,5 +52,5 @@ The [ENS discussion of Tally's shutdown](https://discuss.ens.domains/t/tally-is-
 - OpenZeppelin Contracts 5.7.0 is vendored during the image build. A real builder's repository already has its dependencies. This version also includes the [timelock execution fix](https://github.com/OpenZeppelin/openzeppelin-contracts/pull/6386).
 - There is no chain sidecar or RPC dependency. Forge advances the governor's chosen clock and uses seconds for the execution wait.
 - The tests read voting settings and deadlines from the governor. They accept block-number and timestamp clocks.
-- The deploy script runs in-process without a prank. The tests hand Protocol's ownership and the treasury to the holder address it returns.
-- The checks set `PRIVATE_KEY` and `DEPLOYER_PRIVATE_KEY` to Anvil's first account key so scripts that read a key do not fail.
+- The tests call the deploy script's `run` the way `forge script` does: `msg.sender` inside it is the configured sender, and a bare `vm.startBroadcast()` broadcasts from that same account. The tests then hand Protocol's ownership and the treasury to the holder address it returns.
+- The checks set `PRIVATE_KEY` and `DEPLOYER_PRIVATE_KEY` to Anvil's first account key and make that account the sender, so a script that broadcasts with the key and one that broadcasts bare act as the same address.

@@ -23,6 +23,18 @@ interface ITokenGovernor {
     function CLOCK_MODE() external view returns (string memory);
 }
 
+contract Forwarder {
+    function forward(address target, bytes calldata data) external returns (bytes memory) {
+        (bool ok, bytes memory ret) = target.call(data);
+        if (!ok) {
+            assembly {
+                revert(add(ret, 0x20), mload(ret))
+            }
+        }
+        return ret;
+    }
+}
+
 contract TokenGovernorTest is Test {
     address constant A = address(0xA11CE);
     address constant B = address(0xB0B);
@@ -53,8 +65,21 @@ contract TokenGovernorTest is Test {
         vm.roll(1_000_000);
         token = new Token();
         protocol = new Protocol();
+    }
+
+    // Each check deploys from inside its own test function. Foundry gives test
+    // functions the configured sender, so msg.sender inside the script, a bare
+    // vm.startBroadcast() and a broadcast with PRIVATE_KEY all act as the same account,
+    // the way they do under `forge script`. setUp does not get that sender.
+    function deploy() internal {
         deployer = new Deploy();
-        (address governorAddress, address holder) = deployer.run(address(token));
+        vm.startBroadcast();
+        (, address sender,) = vm.readCallers();
+        vm.stopBroadcast();
+        vm.etch(sender, type(Forwarder).runtimeCode);
+        bytes memory result = Forwarder(sender).forward(address(deployer), abi.encodeCall(deployer.run, (address(token))));
+        vm.etch(sender, "");
+        (address governorAddress, address holder) = abi.decode(result, (address, address));
         governor = ITokenGovernor(governorAddress);
         protocol.transferOwnership(holder);
         vm.deal(holder, 3 ether);
@@ -153,6 +178,7 @@ contract TokenGovernorTest is Test {
     }
 
     function test_quorumCountsTheWholeSupply() public {
+        deploy();
         wrap(A, 1_000_000 ether);
         Proposal memory small = feeProposal(1, "one percent");
         vote(small, A, 1, 1_000_000 ether);
@@ -188,6 +214,7 @@ contract TokenGovernorTest is Test {
     }
 
     function test_theDelayGuardsTheMoney() public {
+        deploy();
         wrap(A, 5_000_000 ether);
         address owner = protocol.owner();
         assertTrue(owner.code.length != 0, "Protocol owner is not an executor contract");
@@ -227,6 +254,7 @@ contract TokenGovernorTest is Test {
     }
 
     function test_lateVotesExtendTheVote() public {
+        deploy();
         wrap(A, 1_000_000 ether);
         wrap(B, 4_000_000 ether);
         // Establish that ordinary votes can pass before trying the late vote.
@@ -252,6 +280,7 @@ contract TokenGovernorTest is Test {
     }
 
     function test_snapshotCanRunIt() public {
+        deploy();
         wrap(A, 5_000_000 ether);
         assertEq(votes.delegates(A), A, "delegation view is wrong");
         Proposal memory ordinary = feeProposal(1, "historical votes work");
