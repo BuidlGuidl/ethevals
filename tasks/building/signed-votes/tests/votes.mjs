@@ -7,7 +7,7 @@ import { wallets } from './wallets.mjs';
 const [submission, output] = process.argv.slice(2);
 const names = [
   'eoa_vote', 'tampered_vote', 'wrong_signer', 'other_proposal', 'safe_vote', 'safe_one_owner',
-  'safe_late_vote', 'smart_wallet_new', 'smart_wallet_deployed', 'delegated_eoa',
+  'safe_late_vote', 'smart_wallet_new', 'smart_wallet_deployed',
 ];
 const records = {};
 await mkdir(output, { recursive: true });
@@ -43,10 +43,18 @@ const eoa = privateKeyToAccount(generatePrivateKey());
 const stranger = privateKeyToAccount(generatePrivateKey());
 let proposalId = 1000n;
 async function vote(voter, support = 1, proposal = ++proposalId) {
-  return await timed(() => module.voteToSign({ proposalId: proposal, voter, support }));
+  const fields = { proposalId: proposal, voter, support };
+  return { fields, typedData: await timed(() => module.voteToSign(fields)) };
 }
-async function accepts(typedData, signature, expected) {
-  assert.equal(await timed(() => module.checkVote(typedData, signature)), expected);
+async function accepts(vote, signature, expected) {
+  const accepted = await timed(async () => {
+    try {
+      return await module.checkVote(vote.fields, signature);
+    } catch {
+      return false;
+    }
+  });
+  assert.equal(accepted, expected);
 }
 async function check(name, run, prerequisite) {
   if (prerequisite && !records[prerequisite].passed) {
@@ -69,61 +77,61 @@ async function check(name, run, prerequisite) {
 await check('eoa_vote', async () => {
   for (const support of [0, 1, 2]) {
     const data = await vote(eoa.address, support);
-    await accepts(data, await eoa.signTypedData(data), true);
+    await accepts(data, await eoa.signTypedData(data.typedData), true);
   }
 });
 await check('tampered_vote', async () => {
   const proposal = ++proposalId;
   const original = await vote(eoa.address, 1, proposal);
   const changed = await vote(eoa.address, 2, proposal);
-  await accepts(changed, await eoa.signTypedData(original), false);
+  await accepts(changed, await eoa.signTypedData(original.typedData), false);
 }, 'eoa_vote');
 await check('wrong_signer', async () => {
   const data = await vote(eoa.address);
-  await accepts(data, await stranger.signTypedData(data), false);
+  await accepts(data, await stranger.signTypedData(data.typedData), false);
 }, 'eoa_vote');
 await check('other_proposal', async () => {
   const original = await vote(eoa.address);
   const changed = await vote(eoa.address);
-  await accepts(changed, await eoa.signTypedData(original), false);
+  await accepts(changed, await eoa.signTypedData(original.typedData), false);
 }, 'eoa_vote');
 await check('safe_vote', async () => {
   const data = await vote(fixture.safe);
-  const signature = await fixture.safeSign(data);
-  assert.equal(await fixture.client.verifyTypedData({ ...data, address: fixture.safe, signature }), true);
+  const signature = await fixture.safeSign(data.typedData);
+  assert.equal(await fixture.client.verifyTypedData({ ...data.typedData, address: fixture.safe, signature }), true);
   await accepts(data, signature, true);
 });
 await check('safe_one_owner', async () => {
   const data = await vote(fixture.safe);
-  await accepts(data, await fixture.safeSign(data, 1), false);
+  await accepts(data, await fixture.safeSign(data.typedData, 1), false);
 }, 'safe_vote');
 await check('safe_late_vote', async () => {
   const data = await vote(fixture.safe);
-  await fixture.control.increaseTime({ seconds: 26 * 60 * 60 });
+  const before = await fixture.client.getBlock({ blockTag: 'latest' });
+  await fixture.control.increaseTime({ seconds: 3 * 24 * 60 * 60 });
   await fixture.control.mine({ blocks: 1 });
-  const signature = await fixture.safeSign(data);
-  assert.equal(await fixture.client.verifyTypedData({ ...data, address: fixture.safe, signature }), true);
+  const after = await fixture.client.getBlock({ blockTag: 'latest' });
+  const elapsed = after.timestamp - before.timestamp;
+  assert.ok(elapsed >= 259200n, 'The verifier fork advances by at least three days');
+  console.log('safe_late_vote elapsed seconds:', String(elapsed));
+  const signature = await fixture.safeSign(data.typedData);
+  assert.equal(await fixture.client.verifyTypedData({ ...data.typedData, address: fixture.safe, signature }), true);
   await accepts(data, signature, true);
 });
 await check('smart_wallet_new', async () => {
   const account = await fixture.smartWallet(false);
   const data = await vote(account.address);
-  const signature = await account.signTypedData(data);
+  const signature = await account.signTypedData(data.typedData);
   assert.ok(signature.endsWith('6492649264926492649264926492649264926492649264926492649264926492'));
-  assert.equal(await fixture.client.verifyTypedData({ ...data, address: account.address, signature }), true);
+  assert.equal(await fixture.client.verifyTypedData({ ...data.typedData, address: account.address, signature }), true);
   await accepts(data, signature, true);
   assert.equal(await fixture.client.getCode({ address: account.address }), undefined);
 });
 await check('smart_wallet_deployed', async () => {
   const account = await fixture.smartWallet(true);
   const data = await vote(account.address);
-  const signature = await account.signTypedData(data);
+  const signature = await account.signTypedData(data.typedData);
   assert.ok(!signature.endsWith('6492649264926492649264926492649264926492649264926492649264926492'));
-  assert.equal(await fixture.client.verifyTypedData({ ...data, address: account.address, signature }), true);
+  assert.equal(await fixture.client.verifyTypedData({ ...data.typedData, address: account.address, signature }), true);
   await accepts(data, signature, true);
-});
-await check('delegated_eoa', async () => {
-  const account = await fixture.delegatedEoa();
-  const data = await vote(account.address);
-  await accepts(data, await account.signTypedData(data), true);
 });

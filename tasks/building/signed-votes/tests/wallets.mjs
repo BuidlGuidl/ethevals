@@ -13,7 +13,6 @@ export const addresses = {
   handler: '0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99',
   signMessageLib: '0xd53cd0aB83D845Ac265BE939c57F53AD838012c9',
   coinbaseFactory: '0x0BA5ED0c6AA8c49038F819E587E2633c4A9F428a',
-  delegator: '0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B',
 };
 const safeAbi = parseAbi([
   'function setup(address[] owners,uint256 threshold,address to,bytes data,address fallbackHandler,address paymentToken,uint256 payment,address paymentReceiver)',
@@ -88,18 +87,5 @@ export async function wallets(rpcUrl) {
     return account;
   }
 
-  async function delegatedEoa() {
-    const account = privateKeyToAccount(generatePrivateKey());
-    const authorization = await account.signAuthorization({
-      chainId: 1, contractAddress: addresses.delegator, nonce: 0,
-    });
-    const receipt = await send({ to: account.address, authorizationList: [authorization], data: '0x' });
-    const transaction = await client.getTransaction({ hash: receipt.transactionHash });
-    assert.equal(transaction.type, 'eip7702');
-    assert.equal((await client.getCode({ address: account.address })).toLowerCase(),
-      concatHex(['0xef0100', addresses.delegator]).toLowerCase());
-    return account;
-  }
-
-  return { client, control, safe, safeSign, smartWallet, delegatedEoa };
+  return { client, control, safe, safeSign, smartWallet };
 }

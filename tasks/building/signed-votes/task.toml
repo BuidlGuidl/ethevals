@@ -1,4 +1,5 @@
 schema_version = "1.3"
+artifacts = ["/workspace/src", "/workspace/test"]
 
 [task]
 name = "buidlguidl/signed-votes"

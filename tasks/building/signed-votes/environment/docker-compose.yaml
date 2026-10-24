@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     user: agent
+    command: [sleep, infinity]
     volumes:
       - public-context:/chain:ro
       - private-context:/private:ro

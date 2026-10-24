@@ -19,9 +19,10 @@ export function voteToSign(message: { proposalId: bigint; voter: Address; suppor
   } as const;
 }
 
-export async function checkVote(typedData: ReturnType<typeof voteToSign>, signature: Hex): Promise<boolean> {
+export async function checkVote(fields: Parameters<typeof voteToSign>[0], signature: Hex): Promise<boolean> {
   try {
-    return await client.verifyTypedData({ ...typedData, address: typedData.message.voter, signature });
+    const typedData = voteToSign(fields);
+    return await client.verifyTypedData({ ...typedData, address: fields.voter, signature });
   } catch {
     return false;
   }

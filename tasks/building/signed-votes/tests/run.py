@@ -11,6 +11,20 @@ import time
 import urllib.request
 
 
+CHECKS = [check["name"] for check in (
+    dict(name="compile"),
+    dict(name="eoa_vote"),
+    dict(name="tampered_vote"),
+    dict(name="wrong_signer"),
+    dict(name="other_proposal"),
+    dict(name="safe_vote"),
+    dict(name="safe_one_owner"),
+    dict(name="safe_late_vote"),
+    dict(name="smart_wallet_new"),
+    dict(name="smart_wallet_deployed"),
+)]
+
+
 def main():
     submission = Path(sys.argv[1] if len(sys.argv) > 1 else "/workspace/src/votes.ts").resolve()
     output = Path(sys.argv[2] if len(sys.argv) > 2 else "/logs/verifier").resolve()
@@ -56,6 +70,14 @@ def main():
                 ], env=env, stdout=log, stderr=subprocess.STDOUT, timeout=420)
             if result.returncode:
                 raise RuntimeError("The vote checks failed to run. Read votes.log.")
+            checks_path = output / "checks.json"
+            records = json.loads(checks_path.read_text()) if checks_path.exists() else {}
+            for name in CHECKS:
+                records.setdefault(name, {
+                    "passed": False,
+                    "reason": "The vote checks did not write this record.",
+                })
+            checks_path.write_text(json.dumps(records, indent=2) + "\n")
         finally:
             chain.terminate()
             try:
