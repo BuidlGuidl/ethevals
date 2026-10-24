@@ -18,6 +18,10 @@ const safeAbi = parseAbi([
   'function setup(address[] owners,uint256 threshold,address to,bytes data,address fallbackHandler,address paymentToken,uint256 payment,address paymentReceiver)',
   'function getThreshold() view returns (uint256)',
   'function getOwners() view returns (address[])',
+  'function nonce() view returns (uint256)',
+  'function signedMessages(bytes32) view returns (uint256)',
+  'function getTransactionHash(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce) view returns (bytes32)',
+  'function execTransaction(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes signatures) returns (bool)',
 ]);
 const factoryAbi = parseAbi([
   'function createProxyWithNonce(address singleton,bytes initializer,uint256 saltNonce) returns (address proxy)',
@@ -72,6 +76,35 @@ export async function wallets(rpcUrl) {
     return concatHex(await Promise.all(owners.slice(0, count).map(owner => owner.sign({ hash }))));
   }
 
+  async function approveSafeMessage(typedData) {
+    const digest = hashTypedData(typedData);
+    const data = encodeFunctionData({
+      abi: parseAbi(['function signMessage(bytes message)']), functionName: 'signMessage', args: [digest],
+    });
+    const nonce = await client.readContract({ address: safe, abi: safeAbi, functionName: 'nonce' });
+    const args = [addresses.signMessageLib, 0n, data, 1, 0n, 0n, 0n, zero, zero];
+    const hash = await client.readContract({
+      address: safe, abi: safeAbi, functionName: 'getTransactionHash', args: [...args, nonce],
+    });
+    const signatures = concatHex(await Promise.all(owners.slice(0, 2).map(owner => owner.sign({ hash }))));
+    await send({
+      to: safe,
+      data: encodeFunctionData({ abi: safeAbi, functionName: 'execTransaction', args: [...args, signatures] }),
+    });
+    const messageHash = hashTypedData({
+      domain: { chainId: 1, verifyingContract: safe }, types: safeMessageTypes,
+      primaryType: 'SafeMessage', message: { message: digest },
+    });
+    assert.equal(await client.readContract({
+      address: safe, abi: safeAbi, functionName: 'signedMessages', args: [messageHash],
+    }), 1n, 'The Safe records the approval through SignMessageLib');
+    assert.equal(await client.readContract({ address: safe, abi: safeAbi, functionName: 'nonce' }), nonce + 1n);
+    assert.equal(await client.readContract({
+      address: safe, abi: parseAbi(['function isValidSignature(bytes32 hash,bytes signature) view returns (bytes4)']),
+      functionName: 'isValidSignature', args: [digest, '0x'],
+    }), '0x1626ba7e', 'The Safe accepts the onchain approval through ERC-1271');
+  }
+
   async function smartWallet(deploy) {
     const owner = privateKeyToAccount(generatePrivateKey());
     let account = await toCoinbaseSmartAccount({ client, owners: [owner], version: '1' });
@@ -87,5 +120,5 @@ export async function wallets(rpcUrl) {
     return account;
   }
 
-  return { client, control, safe, safeSign, smartWallet };
+  return { client, control, safe, safeSign, approveSafeMessage, smartWallet };
 }

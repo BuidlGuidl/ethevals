@@ -46,6 +46,7 @@ The agent's `RPC_URL` points at the sidecar during work and at the verifier fork
 | `safe_vote` | Two sorted Safe owner signatures are accepted | "big holders vote from a 2-of-3 Safe" | Safe |
 | `safe_one_owner` | One Safe owner cannot meet the threshold | "big holders vote from a 2-of-3 Safe" | Safe |
 | `safe_late_vote` | A Safe vote remains valid after three days | "so a vote can take them a day or two to finish" | delay |
+| `safe_onchain_approval` | A threshold-approved SafeMessage accepts an empty signature | "big holders vote from a 2-of-3 Safe" | Safe |
 | `smart_wallet_new` | An undeployed Coinbase wallet's ERC-6492 signature is accepted | "many newer holders use smart wallets" | smart wallets |
 | `smart_wallet_deployed` | A deployed Coinbase wallet's signature is accepted | "many newer holders use smart wallets" | smart wallets |
 
@@ -65,6 +66,8 @@ The [siwe contract check](https://github.com/spruceid/siwe/blob/911f6f2/packages
 
 Safe [hashes the app digest inside SafeMessage](https://github.com/safe-global/safe-smart-account/blob/v1.4.1/contracts/handler/CompatibilityFallbackHandler.sol#L56-L80).
 Safe{Wallet} [hands over the signature at threshold](https://github.com/safe-global/safe-wallet-monorepo/blob/d758ef1/apps/web/src/services/safe-messages/safeMsgNotifications.ts#L4-L6).
+Snapshot [routes `0x` signatures to its relayer](https://github.com/snapshot-labs/snapshot.js/blob/v0.17.6/src/sign/index.ts#L95-L96).
+Its relayer [polls the Safe's onchain message approval](https://github.com/snapshot-labs/snapshot-relayer/blob/ed7f18a/src/check.ts#L95-L130).
 Viem [wraps undeployed smart account signatures in ERC-6492](https://github.com/wevm/viem/blob/viem@2.57.11/src/account-abstraction/accounts/toSmartAccount.ts#L113-L137).
 A backend that treats every signer as an EOA rejects these holders even when their wallets sign correctly.
 
@@ -72,7 +75,7 @@ A backend that treats every signer as an EOA rejects these holders even when the
 
 This task needs `MAINNET_RPC_URL` for state at block 23,819,000.
 Without it, the free check skips oracle and nop trials.
-The draft empty-signature onchain approval check is excluded.
 Viem 2.57.11's [ERC-6492 verifier](https://github.com/wevm/viem/blob/viem%402.57.11/contracts/src/ERC6492SignatureVerifier.sol#L71-L77) requires at least 32 signature bytes before checking ERC-1271.
 Its public client action rejects `0x` even when the Safe approves that message onchain.
+The solution calls ERC-1271 directly for `0x` and uses the public client action for other signatures.
 The checks do not enforce a particular domain or message layout.
