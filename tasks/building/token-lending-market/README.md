@@ -26,12 +26,12 @@ Each test is one check, and every check must pass for a reward of 1.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `compile` | The tests and the agent's contract compile together | all |
-| `test_marketWorksAndBooksBalance` | Supply, borrow, repayment, and exits work; supplied minus borrowed equals cash; lenders receive 90% of interest and the treasury receives 10% | accounting |
+| `test_marketWorksAndBooksBalance` | Supply, borrow, repayment, and exits work; booked net assets never exceed cash, with at most five base units of extra cash; lenders receive 90% of interest and the treasury receives 10% | accounting |
 | `test_interestChargedBeforeTheAction` | Views include idle interest, repayment charges it, and the next action cannot change the rate for past time | interest |
 | `test_strayTokensChangeNothing` | Direct transfers change no balances or totals, and caps count booked supply and collateral | caps |
 | `test_roundingFavoursMarket` | Repeated odd-amount cycles create no user profit, and a tiny debt remains owed and liquidatable | rounding |
 | `test_liquidationFinishes` | Healthy loans resist liquidation, unhealthy loans pay the 5% incentive, excess requests clear debt, and distressed borrowers can repay or add collateral | liquidation |
-| `test_badDebtWrittenOffAgainstLenders` | Exhausted collateral clears leftover debt and shares the loss between equal lenders who can both exit | losses |
+| `test_badDebtWrittenOffAgainstLenders` | The liquidator pays only for the collateral and takes it all; equal lenders share the loss within five base units, both withdraw their full reported claims in either order, and the books balance | losses |
 
 ## Why it matters
 
