@@ -47,9 +47,11 @@ The one finished example is [revenue payouts](../tasks/building/revenue-payouts/
 
 Write the instruction as the message that builder would send. A real builder says what they want and why, plus the few things they would mention anyway, such as where the code goes or who will call it. That is usually enough for the checks to reach the work. The rest is the agent's call, and that is where the unsaid things live. If every agent would build something different, the instruction is too loose. If it lists every function and edge case, it has become a spec, and a spec only tests whether the agent can follow it.
 
-### The bar is what a strong model misses
+### The bar is what an open model misses and a strong one works hard for
 
-A good task is one that a strong current model gets wrong without being told, for a reason a senior developer would recognise. Only a trial shows that. An incident or a textbook shows that people got something wrong. That's a reason to try the idea, not proof that a model will miss it.
+A good task is one that a current open model, such as GLM or Kimi, gets wrong without being told, for a reason a senior developer would recognise. A strong model may pass it, but only with hard work. The best tasks make a strong model fail at least one check in at least one of its trials. A good task lets it pass after real reading, testing and fixing, not on its first attempt. Time is not the measure, and an agent may take an hour. Only a trial shows any of this. An incident or a textbook shows that people got something wrong. That's a reason to try the idea, not proof that a model will miss it.
+
+For each check, point to the sentence in the instruction that the failing work breaks, read as a careful builder would read it. If the builder would say "that's not what I asked for", the check is fair however hidden. If they would say "I should have asked for that", fix the request, not the check. Two clauses that pull against each other fail this test too.
 
 Keep these in mind while you shape a task:
 
@@ -70,15 +72,15 @@ Judgment also sets how much you read. Read until you have a few ideas worth filt
 
 1. Pick a big block from the map that you can picture a builder asking for.
 2. Read how it is built today:
-   - Start with two or three apps live on Ethereum mainnet. That is where the most value sits and where the patterns are most tested. Read each app and its GitHub repo as a vertical slice: the contracts, and how the frontend and scripts use them. Take the patterns the best teams use and leave the code.
+   - Start with two or three apps live on Ethereum mainnet. That is where the most value sits and where the patterns are most tested. Read each app and its GitHub repo as a vertical slice: the contracts, and how the frontend and scripts use them. Take the patterns the best teams use and leave the code. Write each one down with the case where it looks satisfied and still breaks; that case is what a check sees. A judge reads what no test or chain state can show, and each of its questions names the sentence it rests on and the code it compares against.
    - Follow what the apps raise into the libraries' source and comments, which show what their authors worry about, and into audit checklists and recent incidents. Go to them with a question from the apps.
-   - Look hardest at what changed after a model's training, because memory can't carry it.
+   - Newness is not a reason to pick a task. An agent with the web reads deployed code and docs in minutes. What changed after training helps a quiz, where a bare model answers from memory.
 3. Write a few builder stories, two lines each: the story, and what it never mentions that a senior developer would handle. Let taste drop most of them and judgment pick one.
 4. Write the quizzes and the build's instruction from that story.
 5. Show the person you're working with the story, the quizzes, the build's instruction and the decisions behind them, including the stories you dropped and why. Agree on them before any trial.
-6. Trial the build cheaply. Give the instruction to a strong agent in a plain project two or three times, and read what it built. Write the hidden checks around what it actually missed.
+6. Trial the build cheaply. Give the instruction to a strong agent and an open one in a plain project, two or three times each, and read what they built. Write the hidden checks around what they actually missed.
 7. Build the task folder. Read [CONTEXT.md](../CONTEXT.md) for the words and [Add a task](add-a-task.md) for the folder.
-8. Calibrate it with the runner, using your own keys in a `.env` at the repo root, passed with `uv run --env-file .env`. Round 1 is one trial each of `claude-code-opus-5.5`, `codex-gpt-6.1-sol` and `opencode-glm-5.3` in the internet mode. If GLM passes every check, the task is too easy. If the failures come from the task itself, such as a vague instruction or a check that accepts only one design, fix the task. Otherwise round 2 is a second trial each for Opus and GPT. [Plan and run](../runner/README.md#plan-and-run) has the commands and budgets.
+8. Calibrate it with the runner, using your own keys in a `.env` at the repo root, passed with `uv run --env-file .env`. Round 1 is one trial each of `claude-code-opus-5.5`, `codex-gpt-6.1-sol`, `opencode-glm-5.3` and `opencode-kimi-k3` in the internet mode, in one job. Before a failure counts, name its reason: the agent's install or its own limits, our verifier, or the work. Only the last is a miss. If both open models pass every check for the right reasons, the task is too easy. If the failures come from the task itself, such as a vague instruction, two clauses that pull against each other, or a check that accepts only one design, fix the task. Read the strong models' trajectories too. A pass with no reading, testing or fixing along the way means the task is too easy for them. Round 2 is a second trial for each agent whose single result decides the verdict. [Plan and run](../runner/README.md#plan-and-run) has the commands and budgets.
 
 ## Sources
 
@@ -94,7 +96,8 @@ How experienced teams build:
 - Apps live on Ethereum mainnet in the use case, and their GitHub repos
 - [wagmi](https://wagmi.sh), [viem](https://viem.sh), [Scaffold-ETH 2](https://github.com/scaffold-eth/scaffold-eth-2)
 - [OpenZeppelin](https://github.com/OpenZeppelin/openzeppelin-contracts), [Solady](https://github.com/vectorized/solady), [Permit2](https://github.com/Uniswap/permit2)
-- [Pashov Audit Group's skills](https://github.com/pashov/skills)
+- Skills where teams write down their patterns: [OpenZeppelin](https://github.com/OpenZeppelin/openzeppelin-skills), [Trail of Bits](https://github.com/trailofbits/skills), [Pashov Audit Group](https://github.com/pashov/skills), [Cyfrin](https://github.com/Cyfrin/solskill), [Uniswap](https://github.com/Uniswap/uniswap-ai), [Paul Berg](https://github.com/PaulRBerg/agent-skills)
+- Audit reports: [Spearbit](https://github.com/spearbit/portfolio), [Trail of Bits](https://github.com/trailofbits/publications), [Pashov Audit Group](https://github.com/pashov/audits)
 
 What went wrong in the wild: [Rekt](https://rekt.news).
 
