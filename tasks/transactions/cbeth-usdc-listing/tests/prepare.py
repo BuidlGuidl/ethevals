@@ -66,8 +66,11 @@ def parse_report(report):
     amount = Decimal(match[1])
     if not amount.is_finite() or amount <= 0 or amount >= Decimal(2) ** 200:
         raise ValueError("Report price is outside the supported range")
+    # A price above 1e12 cannot be USDC per cbETH; read it as the oracle's raw 36-decimal value
+    # (USDC has 6 decimals and cbETH 18, so one cbETH in USDC is price / 1e18 micro-USDC).
+    micro = int(amount / Decimal(10) ** 18) if amount >= Decimal(10) ** 12 else int(amount * 10**6)
     return {"reportMarket": hex_value(market, 64), "reportOracle": hex_value(oracle, 40),
-            "reportPriceMicro": str(int(amount * 10**6)), "reportValid": True}
+            "reportPriceMicro": str(micro), "reportValid": True}
 
 
 def main():
