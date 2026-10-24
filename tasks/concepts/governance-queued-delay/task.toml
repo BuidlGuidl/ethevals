@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/governance-queued-delay"
+description = "Check whether a model preserves the original wait for operations already queued in a timelock."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "governance", "timelock"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

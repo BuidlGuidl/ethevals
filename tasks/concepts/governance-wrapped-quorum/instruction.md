@@ -1,0 +1,1 @@
+Our DAO's token is a plain ERC-20, so holders wrap it one to one into a vote token when they want to vote. The governor sets quorum as 4% of the vote token's total supply. Does that give us a 4% quorum of our token? Answer yes or no, and if no say in a few words what quorum is really measured against.
