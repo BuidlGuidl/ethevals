@@ -1,0 +1,19 @@
+schema_version = "1.3"
+
+[task]
+name = "buidlguidl/aave-savings-page"
+description = "Collect frontend discovery trials for an Aave v3 savings page, with a compile check and a project export for human review."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "aave", "react", "wagmi", "fork"]
+
+[metadata]
+pillar = "building"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 4096
