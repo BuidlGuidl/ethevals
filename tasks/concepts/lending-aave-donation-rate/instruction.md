@@ -1,0 +1,1 @@
+On Aave v3.1 or later, someone transfers 1,000,000 USDC straight to the aUSDC contract without calling supply. Does the USDC reserve's borrow rate change? Answer yes or no first, then say why in one sentence.

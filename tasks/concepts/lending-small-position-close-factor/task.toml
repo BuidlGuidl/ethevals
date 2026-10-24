@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/lending-small-position-close-factor"
+description = "Check the full close factor for small reserve balances in Aave v3.3."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["aave","liquidation","close-factor"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

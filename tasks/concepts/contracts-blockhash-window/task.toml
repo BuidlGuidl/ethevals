@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/contracts-blockhash-window"
+description = "Check the unchanged BLOCKHASH opcode window after EIP-2935."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["blockhash","eip-2935","history"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024
