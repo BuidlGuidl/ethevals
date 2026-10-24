@@ -3,6 +3,7 @@
 - Before writing project prose, read [CONTEXT.md](CONTEXT.md) for the vocabulary.
 - Before changing vocabulary, agree on the change to [CONTEXT.md](CONTEXT.md).
 - Before adding or changing a task, read [Add a task](docs/add-a-task.md).
+- Before finding a new dapp-development task, read [the meta doc](docs/dapp-dev-meta-doc.md).
 - Before changing architecture or scoring contracts, read [the ADRs](docs/adr/) and [the runner reference](runner/README.md).
 - Before changing scoring, result identity, or paid-run admission, record a new decision in [the ADRs](docs/adr/).
 - Before running checks, read [Maintainer checks](runner/README.md#maintainer-checks) for commands and shared Docker limits.
