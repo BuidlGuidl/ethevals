@@ -25,8 +25,19 @@ market_data() {
         python3 -c 'import json, sys; print("(" + ",".join(map(str, json.load(sys.stdin))) + ")")')
     cast abi-encode 'f((address,address,address,address,uint256))' "$tuple"
 }
+wallet=$(context wallet)
 send() {
-    cast send "$vault" "$@" --private-key "$key" --rpc-url "$rpc" --json > /dev/null
+    # Estimate, add half again as margin, send, and refuse to go on if the receipt says the call reverted.
+    estimate=$(cast estimate "$vault" "$@" --from "$wallet" --rpc-url "$rpc")
+    limit=$((estimate * 3 / 2))
+    receipt=$(cast send "$vault" "$@" --private-key "$key" --rpc-url "$rpc" --gas-limit "$limit" --json)
+    status=$(printf '%s' "$receipt" | python3 -c 'import json, sys; r = json.load(sys.stdin); v = r["status"]; print(int(v, 16) if isinstance(v, str) else int(v))')
+    used=$(printf '%s' "$receipt" | python3 -c 'import json, sys; r = json.load(sys.stdin); v = r["gasUsed"]; print(int(v, 16) if isinstance(v, str) else int(v))')
+    echo "sent $1 status=$status gasUsed=$used estimate=$estimate limit=$limit"
+    if [ "$status" != "1" ]; then
+        echo "transaction reverted: $1" >&2
+        exit 1
+    fi
 }
 assets=$(read_uint "$vault" 'totalAssets()(uint256)')
 position=$(read_uint "$adapter" 'expectedSupplyAssets(bytes32)(uint256)' "$market")
