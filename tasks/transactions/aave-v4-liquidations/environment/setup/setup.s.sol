@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {ChainSetup} from "ethevals/ChainSetup.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {FixedPriceFeed} from "./FixedPriceFeed.sol";
 
 interface ISpokeSetup {
     struct Reserve {
@@ -20,32 +21,6 @@ interface ISpokeSetup {
     function supply(uint256, uint256, address) external returns (uint256, uint256);
     function setUsingAsCollateral(uint256, bool, address) external;
     function borrow(uint256, uint256, address) external returns (uint256, uint256);
-}
-
-contract FixedPriceFeed {
-    int256 private immutable answer;
-    uint8 public immutable decimals;
-
-    constructor(int256 price, uint8 feedDecimals) {
-        answer = price;
-        decimals = feedDecimals;
-    }
-
-    function latestAnswer() external view returns (int256) {
-        return answer;
-    }
-
-    function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
-        return (1, answer, block.timestamp, block.timestamp, 1);
-    }
-
-    function description() external pure returns (string memory) {
-        return "WETH / USD";
-    }
-
-    function version() external pure returns (uint256) {
-        return 1;
-    }
 }
 
 contract Setup is ChainSetup {
