@@ -1,9 +1,9 @@
 """Deploy the unchanged contracts and prepare a block-based governance history."""
 import argparse
 from functools import lru_cache
+import hashlib
 import json
 from pathlib import Path
-import secrets
 import subprocess
 import time
 import urllib.request
@@ -20,6 +20,13 @@ DESCRIPTIONS = {
     "twin": "Set the protocol fee to 17 basis points",
     "for_abstain": "Set the protocol fee to 18 basis points",
     "pending": "Set the protocol fee to 19 basis points",
+}
+HISTORY = {
+    "history_executed": "Set the protocol fee to 6 basis points",
+    "history_defeated": "Set the protocol fee to 7 basis points",
+    "history_queued": "Set the protocol fee to 8 basis points",
+    "history_active": "Set the protocol fee to 9 basis points",
+    "history_pending": "Set the protocol fee to 10 basis points",
 }
 
 
@@ -117,8 +124,8 @@ def seed(url, root, public, private):
     private.chmod(0o700)
     rpc(url, "anvil_setBlockTimestampInterval", [12])
     accounts = []
-    for _ in range(5):
-        key = "0x" + secrets.token_hex(32)
+    for index in range(5):
+        key = "0x" + hashlib.sha256(f"voting-page-local-chain-v1:{index}".encode()).hexdigest()
         address = command("cast", "wallet", "address", "--private-key", key)
         rpc(url, "anvil_setBalance", [address, hex(1000 * UNIT)])
         accounts.append(dict(address=address, key=key))
@@ -134,7 +141,22 @@ def seed(url, root, public, private):
         send(url, holder["key"], votes, "depositFor(address,uint256)", holder["address"], amount * UNIT)
         send(url, holder["key"], votes, "delegate(address)", holder["address"])
 
-    proposals = {}
+    context = dict(rpcUrl="http://chain:8545", chainId=31337, token=token, voteToken=votes, governor=governor, timelock=timelock)
+    private_context = dict(deployer=deployer, holders=holders, protocol=protocol, proposals={})
+    seed_proposals(url, context, private_context, checks=False)
+    private_context["setupBlock"] = int(rpc(url, "eth_blockNumber"), 16)
+    write_json(public / "chain_context.json", context, 0o444)
+    write_json(private / "private_chain_context.json", private_context, 0o400)
+    print(f"Governance setup finished in {time.monotonic() - started:.1f}s at block {private_context['setupBlock']}", flush=True)
+
+
+def seed_proposals(url, context, private, *, checks):
+    deployer, holders = private["deployer"], private["holders"]
+    governor, protocol = context["governor"], private["protocol"]
+    proposals = private["proposals"]
+    descriptions = DESCRIPTIONS if checks else HISTORY
+    if proposals.keys() & descriptions.keys():
+        raise RuntimeError("These proposals already exist in private context. Start from the chain before this step.")
 
     def batch(names):
         nonce = int(rpc(url, "eth_getTransactionCount", [deployer["address"], "pending"]), 16)
@@ -142,9 +164,9 @@ def seed(url, root, public, private):
         transactions = []
         try:
             for offset, name in enumerate(names):
-                fee = 11 + list(DESCRIPTIONS).index(name)
+                fee = (11 if checks else 6) + list(descriptions).index(name)
                 action = calldata("setFee(uint256)", fee)
-                description = DESCRIPTIONS[name]
+                description = descriptions[name]
                 description_hash = command("cast", "keccak", description)
                 targets, values, calls = f"[{protocol}]", "[0]", f"[{action}]"
                 proposal_id = read(url, governor, "hashProposal(address[],uint256[],bytes[],bytes32)",
@@ -169,6 +191,28 @@ def seed(url, root, public, private):
         proposal = proposals[name]
         send(url, deployer["key"], governor, f"{method}(address[],uint256[],bytes[],bytes32)",
              f"[{protocol}]", "[0]", f"[{proposal['calldatas'][0]}]", proposal["descriptionHash"])
+
+    if not checks:
+        batch(["history_executed", "history_defeated", "history_queued"])
+        mine_to(url, proposals["history_executed"]["snapshot"] + 1)
+        for name in ("history_executed", "history_queued"):
+            vote(name, holders[2], 1)
+        vote("history_defeated", holders[0], 1)
+        vote("history_defeated", holders[2], 0)
+        mine_to(url, proposals["history_executed"]["originalDeadline"] + 1)
+        action("history_executed", "queue")
+        mine_to(url, int(rpc(url, "eth_blockNumber"), 16) + 14_401)
+        action("history_executed", "execute")
+        votes = context["voteToken"]
+        send(url, holders[3]["key"], votes, "transfer(address,uint256)", holders[0]["address"], 2_000_000 * UNIT)
+        batch(["history_active"])
+        mine_to(url, proposals["history_active"]["snapshot"] + 1)
+        vote("history_active", holders[1], 1)
+        vote("history_active", holders[3], 0)
+        send(url, holders[0]["key"], votes, "transfer(address,uint256)", holders[3]["address"], 2_000_000 * UNIT)
+        action("history_queued", "queue")
+        batch(["history_pending"])
+        return
 
     batch(["defeated", "succeeded", "queued_waiting", "queued_ready", "executed"])
     mine_to(url, proposals["defeated"]["snapshot"] + 1)
@@ -196,18 +240,24 @@ def seed(url, root, public, private):
     action("queued_waiting", "queue")
     batch(["pending"])
 
-    context = dict(rpcUrl="http://chain:8545", chainId=31337, token=token, voteToken=votes, governor=governor, timelock=timelock)
-    private_context = dict(deployer=deployer, holders=holders, protocol=protocol, proposals=proposals,
-                           setupBlock=int(rpc(url, "eth_blockNumber"), 16))
-    write_json(public / "chain_context.json", context, 0o444)
-    write_json(private / "private_chain_context.json", private_context, 0o400)
-    print(f"Governance setup finished in {time.monotonic() - started:.1f}s at block {private_context['setupBlock']}", flush=True)
+
+def checks(url, public, private):
+    context = json.loads((public / "chain_context.json").read_text())
+    private_file = private / "private_chain_context.json"
+    private_context = json.loads(private_file.read_text())
+    if int(rpc(url, "eth_chainId"), 16) != context["chainId"]:
+        raise RuntimeError("The chain ID differs from chain context.")
+    rpc(url, "anvil_setBlockTimestampInterval", [12])
+    seed_proposals(url, context, private_context, checks=True)
+    private_context["checksBlock"] = int(rpc(url, "eth_blockNumber"), 16)
+    write_json(private_file, private_context, 0o400)
+    print(f"Governance checks prepared at block {private_context['checksBlock']}", flush=True)
 
 
-def states(url, private_file):
+def states(url, private_file, public_file=None):
     private = json.loads(private_file.read_text())
     # Keep the public context alongside the private context on the Mac and in Docker.
-    public_file = private_file.parent.parent / "chain/chain_context.json"
+    public_file = public_file or private_file.parent.parent / "chain/chain_context.json"
     context = json.loads(public_file.read_text())
     governor = context["governor"]
     print("name | id | description | state | created | snapshot | deadline | For | Against | Abstain | quorum | ETA | ready", flush=True)
@@ -226,7 +276,7 @@ def states(url, private_file):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("seed", "states"))
+    parser.add_argument("command", choices=("seed", "checks", "states"))
     parser.add_argument("--rpc-url", required=True)
     parser.add_argument("--contracts", type=Path)
     parser.add_argument("--public", type=Path, default=Path("/chain"))
@@ -234,5 +284,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.command == "seed":
         seed(args.rpc_url, args.contracts, args.public, args.private)
+    elif args.command == "checks":
+        checks(args.rpc_url, args.public, args.private)
     else:
-        states(args.rpc_url, args.private / "private_chain_context.json")
+        states(args.rpc_url, args.private / "private_chain_context.json", args.public / "chain_context.json")

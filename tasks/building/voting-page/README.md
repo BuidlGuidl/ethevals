@@ -23,14 +23,22 @@ Four private holders wrap and delegate 12 million of the 100 million TOKEN.
 The deployer keeps 88 million unwrapped TOKEN.
 Default Anvil keys hold no tokens, votes, or timelock roles.
 
-Nine proposals cover Pending, Active, Defeated, Succeeded, Queued, and Executed.
-One Active proposal has 3 million For and 2 million Abstain.
-Only For counts toward the governor's 4 million quorum.
-Another Active proposal reaches quorum late and extends its deadline.
-Its same-block twin stays below quorum and keeps its original deadline.
-Setup stops 53 blocks before that original deadline.
-One queued proposal still waits; another can execute.
+The agent's chain has five proposals: Executed, Defeated, Queued, Active, and Pending.
+The Defeated proposal has more Against votes than For votes.
+The Active proposal has 2 million For and 0.5 million Against, with most of its voting period left.
+The Queued proposal's timelock wait has not ended.
+No proposal has Abstain votes or a late quorum extension.
 Every proposal calls Protocol's `setFee` with a distinct value.
+
+`seed.py checks` adds nine test proposals to a separate fork after the agent finishes.
+The Mac kit exposes the same step through `kit checks`.
+These proposals cover For-only quorum, late quorum extension, and queued proposals before and after their wait.
+The extended proposal and its twin share a creation block.
+The step stops 53 blocks before their original deadline.
+Only For counts toward the governor's 4 million quorum.
+The checks step needs chain controls and holder keys from private chain context.
+It records IDs, descriptions, call data, and blocks in that context.
+It does not deploy contracts or add test proposals to the agent's chain.
 
 Voting uses block numbers; the timelock uses seconds.
 Setup mines with 12-second intervals and leaves automining on.
@@ -41,7 +49,9 @@ No check depends on wall time.
 The task-local chain wrapper uses the shared chain starter and RPC filter unchanged.
 It keeps 128 state snapshots in memory and retains blocks, transactions, and logs.
 It releases the healthcheck only after deployment and seeding finish.
-Private chain context holds proposal IDs, actions, and fresh holder keys.
+Private chain context holds proposal IDs, actions, and holder keys.
+Setup derives deployer and holder keys from a fixed local value.
+Contract addresses match across Docker and Mac chains, including Protocol.
 The agent cannot read that context or the setup files.
 
 ## The checks
@@ -76,6 +86,8 @@ It uses the same `environment/setup/seed.py` as Docker.
 ```sh
 cd /tmp/subagents/voting-page/kit
 ./kit start
+./kit states
+./kit checks
 ./kit states
 ./kit fund WALLET_ADDRESS
 ./kit prepare EXPORTED_PROJECT_TAR NEW_DIRECTORY

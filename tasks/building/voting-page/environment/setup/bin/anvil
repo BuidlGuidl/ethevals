@@ -5,4 +5,4 @@ import sys
 import time
 
 binary = "/usr/local/bin/anvil"
-os.execv(binary, [binary, "--prune-history", "128", "--timestamp", str(int(time.time()) - 129_580 * 12), *sys.argv[1:]])
+os.execv(binary, [binary, "--prune-history", "128", "--timestamp", str(int(time.time()) - 79_239 * 12), *sys.argv[1:]])
