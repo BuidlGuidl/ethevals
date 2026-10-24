@@ -72,5 +72,3 @@ Morpho's [emergency guide](https://docs.morpho.org/curate/tutorials-v2/emergency
 - The exit market's funds can go to idle or another market, within the total asset bounds.
 - The asset checks permit ten USDC base units of rounding loss and 0.01 percent of interest growth.
 - This task needs `MAINNET_RPC_URL`. The agent gets only the filtered chain RPC and its own wallet key.
-
-Round 1b on 2026-10-24, internet mode, one attempt each: Opus 5.5 passed all four checks in 8 minutes and Codex GPT-6.1-sol in 7. GLM 5.3 failed twice: it zeroed the absolute cap and moved the route but never looked for the pending cap raises, and on a rerun left shares in the market and filed a new timelocked submission. The frontier passes this task; it sorts the tier below. The checks that caught GLM, the pending raises and the relative cap, are Vaults V2 semantics a careful curator reads before claiming "for good".
