@@ -6,6 +6,8 @@ import {Vm} from "forge-std/Vm.sol";
 
 interface Token {
     function balanceOf(address) external view returns (uint256);
+    function deposit() external payable;
+    function approve(address, uint256) external returns (bool);
 }
 
 interface Oracle {
@@ -29,14 +31,27 @@ contract Setup is ChainSetup {
 
     function move(uint24 fee, uint256 amount) internal {
         Vm.Wallet memory mover = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));
+        bytes memory swap = abi.encodeWithSignature(
+            "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
+            WETH, USDC, fee, mover.addr, block.timestamp + 1 days, amount, uint256(0), uint160(0)
+        );
+
+        // Fetch swap storage through Forge's fork one slot at a time before Anvil mines it.
+        uint256 snapshot = vm.snapshotState();
+        vm.deal(mover.addr, amount);
+        vm.startPrank(mover.addr);
+        Token(WETH).deposit{value: amount}();
+        require(Token(WETH).approve(ROUTER, amount), "Mover approval must succeed");
+        (bool success,) = ROUTER.call(swap);
+        require(success, "Mover swap simulation must succeed");
+        vm.stopPrank();
+        require(vm.revertToState(snapshot), "Mover simulation must revert");
+
         fund(mover.addr, amount + 10 ether);
         vm.rpc("anvil_impersonateAccount", string.concat('["', vm.toString(mover.addr), '"]'));
         send(mover.addr, WETH, amount, abi.encodeWithSignature("deposit()"));
         send(mover.addr, WETH, 0, abi.encodeWithSignature("approve(address,uint256)", ROUTER, amount));
-        send(mover.addr, ROUTER, 0, abi.encodeWithSignature(
-            "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
-            WETH, USDC, fee, mover.addr, block.timestamp + 1 days, amount, uint256(0), uint160(0)
-        ));
+        send(mover.addr, ROUTER, 0, swap);
         vm.rpc("anvil_stopImpersonatingAccount", string.concat('["', vm.toString(mover.addr), '"]'));
     }
 
