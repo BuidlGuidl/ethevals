@@ -1,0 +1,148 @@
+:root {
+  background-color: #181818;
+  color: rgba(255, 255, 255, 0.87);
+  color-scheme: light dark;
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-synthesis: none;
+  font-weight: 400;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    background-color: #f8f8f8;
+    color: #181818;
+  }
+}
+
+.nav {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.nav a {
+  color: inherit;
+  opacity: 0.6;
+  text-decoration: none;
+}
+.nav a.active {
+  opacity: 1;
+  font-weight: 600;
+}
+
+.swap-card {
+  max-width: 440px;
+  padding: 20px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 12px;
+}
+.swap-card h2 {
+  margin-top: 0;
+}
+.swap-card .field {
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.12);
+}
+.swap-card .field-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+.swap-card .field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.swap-card input,
+.swap-card output {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.6em;
+  background: transparent;
+  border: none;
+  color: inherit;
+  outline: none;
+}
+.swap-card select {
+  font-size: 1em;
+  padding: 4px 8px;
+}
+.swap-card .flip {
+  display: block;
+  margin: 6px auto;
+}
+.swap-card .slippage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0;
+  font-size: 0.9em;
+}
+.swap-card .slippage span {
+  margin-right: auto;
+}
+.swap-card .selected {
+  font-weight: 700;
+  outline: 2px solid currentColor;
+}
+.swap-card .details {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 12px;
+  margin: 12px 0;
+  font-size: 0.9em;
+}
+.swap-card .details dt {
+  opacity: 0.75;
+}
+.swap-card .details dd {
+  margin: 0;
+  text-align: right;
+}
+.swap-card .strong {
+  font-weight: 700;
+  font-size: 1.1em;
+}
+.swap-card .actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.swap-card button.primary {
+  font-weight: 600;
+  padding: 8px 16px;
+}
+.swap-card button.wide {
+  width: 100%;
+}
+.swap-card button.link {
+  border: none;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.swap-card .warn {
+  color: #d29b00;
+}
+.swap-card .error {
+  color: #e5484d;
+}
+.swap-card .good {
+  color: #30a46c;
+}
+.swap-card .progress {
+  font-style: italic;
+}
+.swap-card .tx a {
+  color: inherit;
+}

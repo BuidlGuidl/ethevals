@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "dependencies": {
+    "playwright": "1.61.1",
+    "viem": "2.57.11",
+    "@uniswap/universal-router-sdk": "5.15.2",
+    "@uniswap/v4-sdk": "2.4.3",
+    "solc": "0.8.30"
+  }
+}
