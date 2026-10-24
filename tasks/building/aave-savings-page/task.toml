@@ -3,7 +3,7 @@ artifacts = [{ source = "/workspace", exclude = ["node_modules", "dist", ".git",
 
 [task]
 name = "buidlguidl/aave-savings-page"
-description = "Collect frontend discovery trials for an Aave v3 savings page, with a compile check and a project export for human review."
+description = "Check an Aave v3 savings page through deposits, withdrawals, displayed values, and wallet requests on a mainnet fork."
 authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "aave", "react", "wagmi", "fork"]
 
@@ -14,6 +14,9 @@ modes = ["internet", "skills"]
 [verifier]
 environment_mode = "shared"
 user = "root"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
 
 [environment]
 cpus = 1

@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+started_at=$(date +%s)
 mkdir -p /logs/verifier
 cd /workspace
 build_status=0
@@ -24,4 +25,19 @@ Path("/logs/verifier/checks.json").write_text(
 )
 PY
 cp /opt/check_records.py /tests/check_records.py
+export PLAYWRIGHT_BROWSERS_PATH=/root/savings-browsers
+node --test /tests/*.test.mjs > /logs/verifier/browser-unit-tests.log 2>&1
+python3 /tests/test_source_snapshot.py > /logs/verifier/source-tests.log 2>&1
+node /tests/browser.mjs /workspace /logs/verifier > /logs/verifier/browser.log 2>&1
+python3 /tests/source_snapshot.py /workspace /logs/verifier/project-source.txt
 rewardkit /tests
+STARTED_AT="$started_at" python3 - <<'PY'
+import json
+import os
+import time
+from pathlib import Path
+
+Path('/logs/verifier/total-timing.json').write_text(json.dumps({
+    'verifier_seconds': round(time.time() - int(os.environ['STARTED_AT']), 3),
+}) + '\n')
+PY

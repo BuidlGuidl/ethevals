@@ -10,6 +10,11 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     rm -rf /var/lib/apt/lists/* && \
     npm install --global pnpm@9.14.2 && npm cache clean --force
 WORKDIR /workspace
+COPY verifier/package.json verifier/package-lock.json /root/savings-verifier/
+RUN cd /root/savings-verifier && npm ci --ignore-scripts && \
+    PLAYWRIGHT_BROWSERS_PATH=/root/savings-browsers npx playwright install --with-deps chromium && \
+    chmod 700 /root/savings-verifier /root/savings-browsers && \
+    npm cache clean --force && rm -rf /var/lib/apt/lists/*
 USER agent
 COPY --chown=agent:agent starter/package.json starter/pnpm-lock.yaml starter/.npmrc ./
 RUN pnpm install --frozen-lockfile && rm -rf /home/agent/.local/share/pnpm/store
