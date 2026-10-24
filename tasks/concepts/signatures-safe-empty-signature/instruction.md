@@ -1,0 +1,1 @@
+A Safe smart account (v1.4.1, standard fallback handler) is asked isValidSignature(hash, signature) with an empty signature. When does it return the ERC-1271 magic value? Answer in one short phrase first, then one sentence.
