@@ -13,10 +13,16 @@ def accepts(reply: str) -> bool:
     text = text.translate(str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"', "‑": "-", "–": "-"}))
     text = text.strip(string.whitespace + string.punctuation.replace("-", "").replace("+", ""))
     text = re.sub(r"^short\s+answer\s*:\s*", "", text)
-    return bool(re.match(
-        r"(?:a\s+)?partial(?:ly)?\b|"
-        r"(?:the\s+)?batch\s+(?:partially reverted|reverted partially)\b|"
-        r"some calls (?:reverted|failed)\b.*\bothers (?:succeeded|went through)\b", text
+    first = re.split(r"[.!?\n]", text, maxsplit=1)[0]
+    if re.search(
+        r"\b(?:rejected|undefined|out[- ]of[- ]spec|pending|confirmed)\b|"
+        r"\b(?:whole|entire|full|all)\b.*\b(?:failed|failure|reverted)\b", first
+    ):
+        return False
+    return bool(re.search(
+        r"\bpartial(?:ly)?\b|"
+        r"\bmixed\b.*\b(?:execution|outcomes?)\b|\b(?:execution|outcomes?)\b.*\bmixed\b|"
+        r"\bsome calls (?:reverted|failed)\b.*\bothers (?:succeeded|went through)\b", first
     ))
 
 

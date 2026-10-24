@@ -18,7 +18,7 @@ Some calls can leave changes onchain even though other calls reverted.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `partial_onchain_revert` | Starts with a partial revert or failure, or describes mixed call outcomes first | wallet batch status |
+| `partial_onchain_revert` | Describes partial or mixed execution in the first sentence, without a conflicting batch status | wallet batch status |
 
 The quiz runs in vanilla, internet, and skills modes.
 
