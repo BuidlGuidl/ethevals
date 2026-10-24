@@ -39,6 +39,22 @@ def price_field(row):
     return min(found, key=lambda item: item[0])[1]
 
 
+def price_value(row):
+    """Pick the number out of a price object, preferring a readable USDC figure over the raw oracle value."""
+    for name in ("usdc", "amount", "value", "price", "readable", "human", "formatted", "display", "raw", "raworaclevalue"):
+        try:
+            return field(row, name)
+        except ValueError:
+            pass
+    for key, value in row.items():
+        name = re.sub(r"[^a-z0-9]", "", key.lower())
+        if any(word in name for word in ("decimal", "scale", "note", "unit", "format")):
+            continue
+        if isinstance(value, (int, float, str)) and re.match(r"^\s*\$?\d", str(value)):
+            return value
+    raise ValueError("Missing report field: price")
+
+
 def hex_value(value, size):
     if isinstance(value, dict):
         value = field(value, "address", "id", "value")
@@ -58,7 +74,7 @@ def parse_report(report):
     except ValueError:
         price = price_field(report)
     if isinstance(price, dict):
-        price = field(price, "usdc", "amount", "value", "price")
+        price = price_value(price)
     text = str(price).strip().replace(",", "").removeprefix("$")
     match = re.fullmatch(r"([+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(?:\s*USDC?(?:\s*(?:/|per)\s*(?:1\s*)?cbETH)?)?", text, re.I)
     if not match:
