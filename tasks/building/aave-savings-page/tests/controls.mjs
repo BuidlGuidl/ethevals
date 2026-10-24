@@ -1,23 +1,23 @@
-// Use visible text and accessible control names. Never inspect app source or React state.
-export class CouldNotDrive extends Error {
-  constructor(message) { super(`could not drive: ${message}`); }
-}
+import { CouldNotDrive, firstVisible, amountInputs as inputs, createVocabulary } from './control-vocabulary.mjs';
 
-export async function firstVisible(locator) {
-  for (const item of await locator.all()) if (await item.isVisible()) return item;
-  return null;
-}
+const words = { deposit: '(?:deposit|supply)', withdraw: 'withdraw(?:al)?' };
+const vocabulary = createVocabulary(words, { prerequisites: { deposit: /^(?:approve)(?: USDC| USDT)?(?: to continue)?$/i } });
+const actionName = vocabulary.name;
+const findSubmit = vocabulary.findSubmit;
+export const submitAction = vocabulary.submit;
 
 export async function connect(page, address) {
   await page.waitForFunction(() => document.body.innerText.trim().length > 0);
   let connected = false;
   for (let i = 0; i < 20; i++) {
     const text = await page.locator('body').innerText();
-    if (/status:\s*connected/i.test(text) || text.toLowerCase().includes(address.slice(0, 6).toLowerCase())) { connected = true; break; }
+    if (/status:\s*connected/i.test(text) || text.toLowerCase().includes(address.slice(0, 6).toLowerCase())
+      || await firstVisible(page.getByRole('button', { name: /^disconnect(?: wallet)?$/i }))) { connected = true; break; }
     const wallet = await firstVisible(page.getByRole('button', { name: /test wallet|metamask, rabby|^injected$|^metamask$/i }));
     if (wallet) { await wallet.click(); connected = true; break; }
     const button = await firstVisible(page.getByRole('button', { name: /^connect(?: (?:a |your )?wallet)?$/i }));
     if (button) await button.click();
+    else if (await firstVisible(inputs(page))) { connected = true; break; }
     await page.waitForTimeout(250);
   }
   if (!connected) throw new CouldNotDrive('connect wallet control was not found');
@@ -25,80 +25,77 @@ export async function connect(page, address) {
   if (savings) await savings.click();
 }
 
-export async function tokenBlock(page, token) {
-  const found = await page.evaluate(token => {
+export async function tokenBlock(page, token, { controls = false } = {}) {
+  const found = await page.waitForFunction(({ token, controls }) => {
     for (const el of document.querySelectorAll('[data-savings-token]')) el.removeAttribute('data-savings-token');
     const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
     const other = token === 'USDC' ? 'USDT' : 'USDC';
     const candidates = [...document.querySelectorAll('section,article,tr,div,button')].filter(el => {
       if (!visible(el) || el.closest('[role="dialog"],dialog')) return false;
       const text = el.innerText || '';
-      const names = [...el.querySelectorAll('h1,h2,h3,h4,strong,span,td')].map(child => child.textContent.trim());
+      const names = [...el.querySelectorAll('h1,h2,h3,h4,strong,span,td,p')].filter(visible).map(child => child.textContent.trim());
       if (names.includes(other)) return false;
       const namedToken = names.includes(token);
-      const action = el.tagName === 'BUTTON' || [...el.querySelectorAll('button,[role="tab"]')].some(button => /deposit|supply|withdraw|select/i.test(button.getAttribute('aria-label') || button.innerText));
-      return namedToken && action && /%|APY|deposited|your savings/i.test(text);
+      const hasControls = el.tagName === 'BUTTON' || el.querySelector('button,input,[role="tab"]');
+      return namedToken && (!controls || hasControls) && (/%|APY|deposited|your savings/i.test(text) || el.querySelector('input'));
     });
     const positionLabel = /^(?:your savings|your deposit|deposited|supplied|balance.*interest)$/i;
     const rank = el => {
-      if (el.tagName === 'TR' && [...el.closest('table').querySelectorAll('thead th')].some(header => /savings|deposit|supplied|balance/i.test(header.innerText) && !/wallet/i.test(header.innerText))) return 3;
-      if ([...el.querySelectorAll('dt')].some(label => /deposited|supplied/i.test(label.innerText))) return 3;
+      const controlRank = el.tagName === 'BUTTON' || el.querySelector('button,input,[role="tab"]') ? 10 : 0;
+      if (el.tagName === 'TR' && [...el.closest('table').querySelectorAll('thead th')].some(header => /savings|deposit|supplied|balance/i.test(header.innerText) && !/wallet/i.test(header.innerText))) return controlRank + 3;
+      if ([...el.querySelectorAll('dt')].some(label => /deposited|supplied/i.test(label.innerText))) return controlRank + 3;
       for (const sibling of [...el.parentElement.children].slice(0, [...el.parentElement.children].indexOf(el))) {
-        if (sibling.children.length === el.children.length && [...sibling.children].some(column => positionLabel.test(column.textContent.trim()))) return 3;
+        if (sibling.children.length === el.children.length && [...sibling.children].some(column => positionLabel.test(column.textContent.trim()))) return controlRank + 3;
       }
-      return /\d\s*%/.test(el.innerText) ? 1 : 0;
+      return controlRank + (/\d\s*%/.test(el.innerText) ? 1 : 0);
     };
     candidates.sort((a, b) => rank(b) - rank(a) || a.innerText.length - b.innerText.length);
     if (!candidates.length) return false;
     candidates[0].setAttribute('data-savings-token', token);
     return true;
-  }, token);
+  }, { token, controls }, { timeout: 5000 }).then(handle => handle.jsonValue()).catch(error => {
+    if (error.name === 'TimeoutError') return false;
+    throw error;
+  });
   if (!found) throw new CouldNotDrive(`${token} block was not found`);
   return page.locator(`[data-savings-token="${token}"]`);
 }
 
 async function formScope(page, block, mode, token) {
+  await page.locator('[data-savings-form]').evaluateAll(nodes => nodes.forEach(node => node.removeAttribute('data-savings-form')));
   if (await block.evaluate(el => el.tagName === 'BUTTON')) await block.click();
-  const input = await firstVisible(block.getByRole('textbox').or(block.locator('input[type="number"]')));
-  // Card forms either have one form with tabs, or one form per action.
-  if (input) {
-    const tab = await firstVisible(block.getByRole('tab', { name: new RegExp(`^${mode}$`, 'i') }));
-    if (tab) await tab.click();
-    const forms = block.locator('form').filter({ has: page.getByRole('button', { name: new RegExp(`^${mode}(?: ${token})?$`, 'i') }) });
-    const form = await firstVisible(forms);
-    return form || block;
+  if (!await firstVisible(inputs(block))) {
+    const trigger = await firstVisible(block.getByRole('button', { name: actionName(mode, token, '') }));
+    if (trigger) await trigger.click();
   }
-  const trigger = await firstVisible(block.getByRole('button', { name: new RegExp(`^${mode}(?: ${token})?$`, 'i') }));
-  if (trigger) await trigger.click();
-  // Some pages open a dialog, others select a persistent transaction form.
   const dialog = await firstVisible(page.getByRole('dialog'));
-  if (dialog) {
-    const tab = await firstVisible(dialog.getByRole('button', { name: new RegExp(`^${mode}$`, 'i') }).or(dialog.getByRole('tab', { name: new RegExp(`^${mode}$`, 'i') })));
-    if (tab) await tab.click();
-    return dialog;
-  }
-  const tab = await firstVisible(page.getByRole('button', { name: new RegExp(`^${mode}$`, 'i') }).or(page.getByRole('tab', { name: new RegExp(`^${mode}$`, 'i') })));
+  const base = dialog || (await firstVisible(inputs(block)) ? block : page);
+  const tab = await firstVisible(base.getByRole('tab', { name: actionName(mode, token, '') }));
   if (tab) await tab.click();
-  const forms = page.locator('form').filter({ has: page.locator('input:not([type="hidden"])') });
-  for (const form of await forms.all()) {
-    if (!await form.isVisible()) continue;
-    if (await form.getByRole('button', { name: new RegExp(`^${mode}(?: ${token})?$|^switch to ethereum$`, 'i') }).count()) return form;
-    if (await form.locator('input[inputmode="decimal"]').count() && await form.locator('button[type="submit"]').count()) return form;
+  else if ((await inputs(base).all()).length <= 1) {
+    const modeButton = await firstVisible(base.getByRole('button', { name: new RegExp(`^${words[mode]}$`, 'i') }));
+    const other = await firstVisible(base.getByRole('button', { name: actionName(mode === 'deposit' ? 'withdraw' : 'deposit', token, '') }));
+    const separateSubmit = await firstVisible(base.getByRole('button', { name: /^(?:confirm|review|approve)\b/i }))
+      || await firstVisible(base.locator('form button[type="submit"]'));
+    if (modeButton && other && separateSubmit && !await modeButton.evaluate(el => el.type === 'submit' && Boolean(el.closest('form')))) await modeButton.click();
   }
-  // An action panel can use click handlers without an HTML form element.
-  for (const input of await page.getByRole('textbox').or(page.locator('input[type="number"]')).all()) {
-    if (!await input.isVisible()) continue;
-    const ancestors = await input.locator('xpath=ancestor::*[self::section or self::div]').all();
-    for (const ancestor of ancestors.reverse()) {
-      const submit = await firstVisible(ancestor.getByRole('button', { name: new RegExp(`^(?:review )?${mode === 'withdraw' ? 'withdraw(?:al)?' : mode}(?: USDC| USDT)?$`, 'i') }));
-      if (submit) return ancestor;
+  const submit = await findSubmit(base, mode, token);
+  if (submit) {
+    for (const ancestor of (await submit.locator('xpath=ancestor::*').all()).reverse()) {
+      if (await firstVisible(inputs(ancestor))) {
+        await ancestor.evaluate(el => el.setAttribute('data-savings-form', 'active'));
+        return page.locator('[data-savings-form="active"]');
+      }
     }
   }
+  // A disabled submit can initially say "Enter an amount".
+  for (const form of await base.locator('form').all()) if (await form.isVisible() && await firstVisible(inputs(form))) return form;
+  if (await firstVisible(inputs(base))) return base;
   throw new CouldNotDrive(`${mode} ${token} amount form was not found`);
 }
 
-export async function prepareAction(page, token, mode, amount, max = false) {
-  const block = await tokenBlock(page, token);
+export async function prepareAction(page, token, mode, amount, max = false, { allowRefusal = false } = {}) {
+  const block = await tokenBlock(page, token, { controls: true });
   const scope = await formScope(page, block, mode, token);
   for (const select of await scope.getByRole('combobox').all()) {
     const value = await select.evaluate((el, token) => [...el.options].find(option => option.textContent.trim() === token)?.value, token);
@@ -106,7 +103,7 @@ export async function prepareAction(page, token, mode, amount, max = false) {
   }
   const tokenChoice = await firstVisible(scope.getByRole('button', { name: new RegExp(`^${token}$`, 'i') }));
   if (tokenChoice) await tokenChoice.click();
-  const input = await firstVisible(scope.getByRole('textbox').or(scope.locator('input[type="number"]')));
+  const input = await firstVisible(inputs(scope));
   if (!input) throw new CouldNotDrive(`${mode} ${token} amount input was not found`);
   if (max) {
     const button = await firstVisible(scope.getByRole('button', { name: /^(?:max|all|withdraw all)(?:\b.*)?$/i }));
@@ -115,31 +112,11 @@ export async function prepareAction(page, token, mode, amount, max = false) {
   } else {
     await input.fill(amount);
   }
-  const noun = mode === 'withdraw' ? 'withdraw(?:al)?' : 'deposit';
-  const submit = await firstVisible(scope.getByRole('button', { name: new RegExp(`^(?:review|confirm) ${noun}(?: ${token})?$`, 'i') }))
-    || await firstVisible(scope.getByRole('button', { name: new RegExp(`^${mode}(?: all)? ${token}$`, 'i') }))
-    || await firstVisible(scope.locator('button[type="submit"]').filter({ hasText: new RegExp(`^${mode}$`, 'i') }))
-    || await firstVisible(scope.getByRole('button', { name: new RegExp(`^${mode}$|^confirm$`, 'i') }));
-  if (!submit) throw new CouldNotDrive(`${mode} ${token} submit control was not found`);
+  const submit = await findSubmit(scope, mode, token);
+  if (!submit && !allowRefusal) throw new CouldNotDrive(`${mode} ${token} submit control was not found`);
   console.log(JSON.stringify({ event: 'prepared_action', token, mode, amount, max,
-    input: await input.evaluate(el => el.outerHTML), submit: await submit.evaluate(el => el.outerHTML) }));
-  return { scope, input, submit, page };
-}
-
-export async function submitAction(action) {
-  const label = await action.submit.innerText();
-  try { await action.submit.click({ timeout: 10_000 }); }
-  catch (error) {
-    if (!await action.submit.isEnabled()) return false;
-    throw error;
-  }
-  if (/^review\b/i.test(label)) {
-    const confirm = action.page.getByRole('button', { name: /^confirm(?: (?:deposit|withdrawal|withdraw))?(?: USDC| USDT)?$/i });
-    try { await confirm.first().waitFor({ state: 'visible', timeout: 5000 }); }
-    catch { throw new CouldNotDrive('review confirmation control was not found'); }
-    await confirm.first().click();
-  }
-  return true;
+    input: await input.evaluate(el => el.outerHTML), submit: submit && await submit.evaluate(el => el.outerHTML) }));
+  return { scope, input, submit, page, mode, token, allowRefusal };
 }
 
 export async function dismiss(page) {
@@ -160,25 +137,27 @@ export async function visibleValues(page, token) {
   const block = await tokenBlock(page, token);
   return block.evaluate(el => {
     const text = el.innerText;
-    const percentages = [...text.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map(match => Number(match[1]));
-    const balances = [];
-    const label = /^(?:deposited(?:\s*\(.*\))?|your savings|your deposit|supplied|saved|deposited balance)$/i;
-    for (const child of el.querySelectorAll('dt,label,span,small,div,p')) {
-      if (label.test(child.textContent.trim()) && child.nextElementSibling) balances.push(child.nextElementSibling.innerText);
+    const visible = node => node && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden';
+    const percentages = [];
+    const add = value => { for (const match of value.matchAll(/(\d+(?:\.\d+)?)\s*%/g)) percentages.push(Number(match[1])); };
+    for (const node of el.querySelectorAll('*')) {
+      if (!visible(node) || !/\bAPY\b/i.test(node.innerText || '')) continue;
+      if ([...node.children].some(child => /\bAPY\b/i.test(child.innerText || ''))) continue;
+      const own = node.innerText.trim();
+      if (/%/.test(own)) add(own);
+      else if (node.parentElement && /%/.test([...node.parentElement.childNodes].filter(child => child.nodeType === Node.TEXT_NODE).map(child => child.textContent).join(' '))) {
+        add([...node.parentElement.childNodes].filter(child => child.nodeType === Node.TEXT_NODE).map(child => child.textContent).join(' '));
+      }
+      else if (visible(node.nextElementSibling) && /^\s*\d+(?:\.\d+)?\s*%\s*$/.test(node.nextElementSibling.innerText)) add(node.nextElementSibling.innerText);
+      else if (visible(node.previousElementSibling) && /^\s*\d+(?:\.\d+)?\s*%\s*$/.test(node.previousElementSibling.innerText)) add(node.previousElementSibling.innerText);
     }
-    if (el.tagName === 'TR') {
-      const headers = [...el.closest('table').querySelectorAll('thead th')];
-      const index = headers.findIndex(header => /savings|deposit|supplied|saved|balance/i.test(header.innerText) && !/wallet/i.test(header.innerText));
-      if (index >= 0) balances.push(el.children[index]?.innerText || '');
+    const headers = el.tagName === 'TR' ? [...el.closest('table').querySelectorAll('thead tr')] : [...el.parentElement.children].slice(0, [...el.parentElement.children].indexOf(el));
+    for (const header of headers) {
+      const columns = [...header.children];
+      const index = columns.findIndex(column => visible(column) && /\bAPY\b/i.test(column.innerText));
+      if (index >= 0 && columns.length === el.children.length && visible(el.children[index])) add(el.children[index].innerText);
     }
-    // A div-based table uses the same column order as its visible header row.
-    const siblings = [...el.parentElement.children];
-    for (const sibling of siblings.slice(0, siblings.indexOf(el))) {
-      const columns = [...sibling.children];
-      const index = columns.findIndex(column => /^(?:your savings|your deposit|deposited|supplied|balance.*interest)$/i.test(column.textContent.trim()));
-      if (index >= 0 && columns.length === el.children.length) balances.push(el.children[index].innerText);
-    }
-    const numbers = balances.flatMap(value => [...value.matchAll(/[\d,]+(?:\.\d+)?/g)].map(match => Number(match[0].replaceAll(',', ''))));
-    return { text, percentages, balances, numbers };
+    const numbers = [...text.replace(/\d+(?:\.\d+)?\s*%/g, '').matchAll(/[\d,]+(?:\.\d+)?/g)].map(match => Number(match[0].replaceAll(',', '')));
+    return { text, percentages, numbers };
   });
 }

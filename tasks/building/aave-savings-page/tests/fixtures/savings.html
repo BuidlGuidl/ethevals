@@ -1,0 +1,94 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Savings fixture</title></head>
+<body data-fixture="correct">
+<button id="connect">Connect</button><output id="account"></output>
+<main></main>
+<script>
+const variant = document.body.dataset.fixture;
+const pool = '0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2';
+const assets = {
+  USDC: ['0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', '0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c'],
+  USDT: ['0xdAC17F958D2ee523a2206206994597C13D831ec7', '0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a'],
+};
+const word = value => value.toString(16).replace(/^0x/, '').padStart(64, '0');
+let account;
+const request = (method, params = []) => ethereum.request({ method, params });
+const call = (to, data) => request('eth_call', [{ to, data }, 'latest']);
+const getBalance = token => call(token, '0x70a08231' + word(account));
+const tx = (to, data) => request(variant === 'deposit-alias' ? 'wallet_sendTransaction' : 'eth_sendTransaction', [{ to, data }]);
+async function refresh() {
+  for (const [symbol, [token, aToken]] of Object.entries(assets)) {
+    const position = Number(BigInt(await getBalance(aToken))) / 1e6;
+    document.querySelector('#balance-' + symbol).innerText = (variant === 'principal' ? 100 : position).toFixed(6) + ' ' + symbol;
+    document.querySelector('#wallet-' + symbol).innerText = (Number(BigInt(await getBalance(token))) / 1e6).toFixed(6);
+  }
+}
+async function deposit(symbol) {
+  const section = document.querySelector('#' + symbol);
+  const [token] = assets[symbol];
+  let amount = BigInt(Math.round(Number(section.querySelector('.deposit input').value) * 1e6));
+  if (variant === 'clamp' && amount > 1000_000_000n) {
+    const raw = await call(pool, '__RESERVE_SELECTOR__' + word(token));
+    const words = raw.slice(2).match(/.{64}/g).map(value => BigInt('0x' + value));
+    const cap = ((words[0] >> 116n) & ((1n << 36n) - 1n)) * 1_000_000n;
+    const total = BigInt(await call(assets[symbol][1], '0x18160ddd'));
+    const income = BigInt(await call(pool, '__INCOME_SELECTOR__' + word(token)));
+    amount = cap - total - (words[12] * income + 5n * 10n ** 26n) / 10n ** 27n;
+  }
+  const approval = { to: token, data: '0x095ea7b3' + word(pool) + word(amount) };
+  const supply = { to: pool, data: (variant === 'deposit-alias' ? '0xe8eda9df' : '0x617ba037') + word(token) + word(amount) + word(account) + word(0) };
+  if (amount > 1000_000_000n && !['approve-only', 'deposit-alias', 'simulate-first', 'clamp'].includes(variant)) return;
+  if (variant === 'simulate-first') {
+    const calls = symbol === 'USDT' ? [{ to: token, data: '0x095ea7b3' + word(pool) + word(0) }, approval, supply] : [approval, supply];
+    const tuples = calls.map(({ to, data }) => word(to) + word(0) + word(96) + word((data.length - 2) / 2) + data.slice(2).padEnd(Math.ceil((data.length - 2) / 64) * 64, '0'));
+    let offset = tuples.length * 32;
+    const offsets = tuples.map(tuple => { const result = word(offset); offset += tuple.length / 2; return result; });
+    const data = '__EXECUTE_SELECTOR__' + word(32) + word(tuples.length) + offsets.join('') + tuples.join('');
+    try { await request('eth_call', [{ from: account, to: account, data, gas: '0x2dc6c0' }, 'latest', { [account]: { code: '__SIMULATION_BYTECODE__' } }]); }
+    catch { section.append('Aave refused this deposit.'); return; }
+  }
+  if (variant === 'non-atomic') {
+    const calls = symbol === 'USDT' ? [{ to: token, data: '0x095ea7b3' + word(pool) + word(0) }, approval, supply] : [approval, supply];
+    const result = await request('wallet_sendCalls', [{ version: '2.0.0', chainId: '0x1', atomicRequired: false, calls }]);
+    await request('wallet_getCallsStatus', [result.id]);
+  } else {
+    if (symbol === 'USDT') await tx(token, '0x095ea7b3' + word(pool) + word(0));
+    await tx(approval.to, approval.data);
+    if (!(amount > 1000_000_000n && variant === 'approve-only')) await tx(supply.to, supply.data);
+  }
+  await refresh();
+}
+async function withdraw(symbol) {
+  const section = document.querySelector('#' + symbol);
+  const amount = section.dataset.max === 'true' ? 2n ** 256n - 1n : BigInt(Math.round(Number(section.querySelector('.withdraw input').value) * 1e6));
+  const recipient = variant === 'wrong-recipient' ? '0x1111111111111111111111111111111111111111' : account;
+  await tx(pool, '0x69328dec' + word(assets[symbol][0]) + word(amount) + word(recipient));
+  await refresh();
+}
+for (const symbol of Object.keys(assets)) {
+  const section = document.createElement('section');
+  section.id = symbol;
+  section.innerHTML = `<h3>${symbol}</h3><p>APY: ${symbol === 'USDC' ? '4.04' : '3.43'}%</p>
+    <p>Deposited</p><p id="balance-${symbol}">0</p><p id="wallet-${symbol}">0</p>
+    <div class="deposit"><input aria-label="Deposit amount"><button>Supply ${symbol}</button></div>
+    <div class="withdraw"><input aria-label="Withdraw amount"><button class="max">Max</button><button class="send">Withdraw ${symbol}</button></div>`;
+  section.querySelector('.deposit button').onclick = () => deposit(symbol).catch(error => section.append(error.message));
+  section.querySelector('.withdraw input').oninput = () => { section.dataset.max = 'false'; };
+  section.querySelector('.max').onclick = async () => {
+    section.querySelector('.withdraw input').value = Number(BigInt(await getBalance(assets[symbol][1]))) / 1e6;
+    section.dataset.max = String(variant !== 'snapshot');
+  };
+  section.querySelector('.send').onclick = () => withdraw(symbol).catch(error => section.append(error.message));
+  document.querySelector('main').append(section);
+}
+document.querySelector('#connect').onclick = async () => {
+  [account] = await request('eth_requestAccounts');
+  document.querySelector('#account').innerText = account;
+  if (variant === 'hardhat') {
+    await request('hardhat_setBalance', [account, '0x0']).catch(() => {});
+    await fetch('/rpc', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'hardhat_setCode', params: [assets.USDC[1], '0x00'] }) });
+  }
+  await refresh();
+};
+</script></body></html>

@@ -2,35 +2,40 @@
 status: accepted
 ---
 
-# Check Savings through the browser
+# Isolate browser verification from agent code
 
-The Savings discovery task accepted any compiling project, including its untouched starting files.
-It now checks the page with Chromium and an injected EIP-1193 wallet after the agent stops.
-Shiv approved these checks on 2026-10-24.
+Frontend tasks need to check the page, its wallet requests, and the resulting chain state.
+The filtered task chain blocks the funding controls and snapshots that these checks need.
+Running agent build scripts with verifier privileges also lets those scripts change the checks or read their keys.
 
-The task installs the browser and its dependencies under root-only directories in its own main image.
-The agent gets the same tools as the discovery trials.
-The verifier forks the task chain into a local Anvil process and funds a fresh test wallet there.
-Snapshots isolate journeys without changing the filtered sidecar or the runner.
-Browser RPC requests reach this fork through Playwright routing, including requests to the task's Docker hostname and Vite proxies.
-The verifier never edits the agent's source.
+A task verifier can start its own unfiltered fork beside the filtered task chain.
+It reads the trusted chain context from `/chain`, funds a fresh wallet, and keeps its key outside the page.
+The verifier can advance time and restore snapshots without changing the task chain.
+Fork startup, funding, and fixture failures must produce trial errors rather than failed checks.
 
-Checks use wallet requests, chain balances, and visible page values.
-They cover deposits, interest-inclusive balances, compounded APY, partial withdrawals, and closing a position through the page's Max control.
-They also cover USDT's leftover allowance and refusing a supply above the cap.
-A wallet that advertises atomic calls must complete a deposit in at most one onchain transaction.
-Its bundle executes through a self-authorized account contract in one transaction; separate calls cannot pass as a bundle.
-The cap check fails only for a doomed supply request, rather than an approval request.
-Missing controls fail the affected checks and leave screenshots and page text for review.
+Verifier-only tools ship in the task's own image.
+The browser, its packages, and its added shared libraries live under root-only directories.
+Only the verifier's browser launch receives the library path.
+An agent-downloaded browser must still fail to launch without those libraries.
+This keeps the agent's tools consistent with the discovery trials.
 
-A binary RewardKit judge criterion checks whether the refused deposit explains the supply cap in words.
-It reads the saved page text and screenshot, with the trajectory and guard required by ADR 0011.
-A second criterion reads the project's source and follows Deposit and Withdraw through the network switch and the original transaction.
-Shiv replaced the scripted wrong-network check with this source criterion on 2026-10-24.
-The browser journeys run on mainnet only.
-The source snapshot excludes dependencies and build output.
-Free checks skip both paid criteria and run every scripted check.
-RewardKit remains the only writer of rewards, with all checks required to pass.
+Build scripts and type checks run as the agent user before the verifier starts its fork.
+The verifier kills that user's processes before the build and again after the type check.
+No agent process runs alongside the unfiltered fork.
+The verifier serves built files with its own static server, without loading agent configuration or following external links.
+The tests, evidence, and verifier dependencies remain root-only.
 
-This decision adds task checks only.
-It changes neither result identity nor paid-run admission.
+Browser JSON-RPC traffic reaches the fork through request routing.
+The page and injected wallet share one read allowlist derived from the filtered task chain's policy.
+The wallet handles writes explicitly and records them before execution, including requests that fail or remain pending.
+The browser blocks other network endpoints and WebSockets, so page code cannot contact the unfiltered port directly.
+The verifier never changes the agent's source.
+
+The task README defines its checks and tolerances.
+An injected EIP-1193 wallet also announces itself through EIP-6963.
+Its advertised atomic capability uses one transaction for a bundle; non-atomic bundles record separate transactions.
+RewardKit remains the only reward writer, under ADR 0011.
+Guarded criteria can read page evidence or a source snapshot without running the agent's code.
+The Savings source criterion follows Deposit or Withdraw through a network switch and the original action.
+
+This decision changes neither result identity nor paid-run admission.

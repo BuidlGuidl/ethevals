@@ -5,6 +5,17 @@ import unittest
 
 
 class SourceSnapshotTest(unittest.TestCase):
+    def test_replaces_invalid_utf8_and_caps_each_file(self):
+        script = Path(__file__).with_name("source_snapshot.py")
+        spec = spec_from_file_location("savings_source_snapshot", script)
+        module = module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / "bad.js").write_bytes(b"\xffsource")
+            (project / "large.js").write_text("x" * 200_001)
+            self.assertEqual(module.snapshot(project), "--- bad.js ---\n\ufffdsource\n\n--- large.js ---\n" + "x" * 200_000 + "\n")
+
     def test_reads_nested_source_without_dependencies_or_external_links(self):
         script = Path(__file__).with_name("source_snapshot.py")
         spec = spec_from_file_location("savings_source_snapshot", script)

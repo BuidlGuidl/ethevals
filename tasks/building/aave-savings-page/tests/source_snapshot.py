@@ -14,7 +14,9 @@ def snapshot(project: Path) -> str:
             continue
         if path.suffix not in EXTENSIONS and path.name != "package.json":
             continue
-        sections.append(f"--- {relative.as_posix()} ---\n{path.read_text()}\n")
+        with path.open("r", errors="replace") as source:
+            text = source.read(200_000)
+        sections.append(f"--- {relative.as_posix()} ---\n{text}\n")
     return "\n".join(sections) or "No project source files were found.\n"
 
 
