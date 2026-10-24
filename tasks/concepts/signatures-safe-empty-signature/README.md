@@ -20,7 +20,7 @@ Owner-level `approvedHashes` entries alone do not satisfy this branch.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `safe_message_approved` | The opening phrase names onchain message approval or its signedMessages or SignMessageLib mechanism | Safe and ERC-1271 |
+| `safe_message_approved` | The first two sentences name prior or onchain Safe message approval, including signedMessages or SignMessageLib | Safe and ERC-1271 |
 
 The check rejects an uninitialized Safe, never, always, and owner approval alone as the opening answer.
 The quiz runs in vanilla, internet, and skills modes through a separate RewardKit verifier.
