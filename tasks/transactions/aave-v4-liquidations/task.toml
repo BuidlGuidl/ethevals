@@ -1,0 +1,19 @@
+schema_version = "1.3"
+
+[task]
+name = "buidlguidl/aave-v4-liquidations"
+description = "Check whether an agent liquidates Aave V4 positions through target health factors, dust rules, and multiple collaterals."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "aave", "liquidation", "fork"]
+
+[metadata]
+pillar = "transactions"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 4096
