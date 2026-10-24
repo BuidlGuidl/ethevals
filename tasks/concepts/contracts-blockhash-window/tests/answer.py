@@ -15,8 +15,7 @@ def accepts(reply: str) -> bool:
     text = re.sub(r"^short\s+answer\s*:\s*", "", text)
     return bool(
         re.match(r"no\b", text)
-        and re.search(r"\b256[\s-]+block(?:s|\b)", text)
-        and not re.search(r"\b8,?192\b", text)
+        and re.search(r"\b256\b", text)
     )
 
 

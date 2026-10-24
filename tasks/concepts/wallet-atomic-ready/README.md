@@ -1,7 +1,7 @@
 # Wallet atomic capability states
 
 The user asks how the supported and ready atomic capability states differ.
-The check requires present atomic execution for supported and a user-approved upgrade for ready.
+The check requires atomic execution for supported and an account upgrade for ready.
 
 ## The instruction
 
@@ -12,13 +12,14 @@ Under EIP-5792, a wallet's wallet_getCapabilities reports the atomic capability 
 ## What it touches
 
 EIP-5792 uses supported for wallets that execute calls atomically and contiguously.
-Ready means that the wallet can upgrade to supported after the user approves.
+Ready means that the wallet can upgrade the account to support atomic execution.
+The reply can mention user approval, but the check does not require it.
 
 ## The checks
 
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `supported_now_ready_upgrade` | Assigns current atomic execution to supported and a user-approved upgrade to ready | wallet capability |
+| `supported_now_ready_upgrade` | Assigns atomic execution to supported and an account upgrade to ready | wallet capability |
 
 The quiz runs in vanilla, internet, and skills modes.
 

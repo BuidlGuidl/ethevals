@@ -14,7 +14,7 @@ def accepts(reply: str) -> bool:
     text = text.strip(string.whitespace + string.punctuation.replace("-", "").replace("+", ""))
     text = re.sub(r"^short\s+answer\s*:\s*", "", text)
     return bool(
-        re.match(r"(?:an?\s+)?eip[\s-]?712\b", text)
+        re.match(r"(?:(?:as(?:\s+an?)?|it's|it is|using|via|by|an?)\s+)?eip[\s-]?712\b", text)
         and re.search(r"\bhash\w*\b|\btyped[\s-]+data\b", text)
         or re.match(r"keccak256\s*\(\s*0x1901\b", text)
         and re.search(r"\bdomainseparator\b|\bdomain[\s-]+separator\b", text)

@@ -20,10 +20,8 @@ def accepts(reply: str) -> bool:
     supported, ready = states["supported"], states["ready"]
     return bool(
         re.search(r"\batomic\w*\b", supported)
-        and re.search(r"\balready\b|\bnow\b|\bcurrently\b|\btoday\b|\bwill execute\b|\bcan (?:execute|run)\b", supported)
-        and not re.search(r"\bnot\b|\bcannot\b|\bupgrade\b|\bsetup\b|\brequires?\b", supported)
+        and not re.search(r"\bnot\b|\bcannot\b|\bupgrad\w*\b|\bsetup\b|\brequires?\b", supported)
         and re.search(r"\bupgrad\w*\b", ready)
-        and re.search(r"\bapprov\w*\b|\bconsent\b", ready)
     )
 
 

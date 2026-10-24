@@ -15,7 +15,10 @@ def accepts(reply: str) -> bool:
     text = re.sub(r"^short\s+answer\s*:\s*", "", text)
     return bool(
         re.match(r"yes\b", text)
-        and re.search(r"\b(?:erc|eip)[\s-]*1271\b|\bisvalidsignature\b", text)
+        and re.search(
+            r"\b(?:erc|eip)[\s-]*1271\b|\bisvalidsignature\b|"
+            r"\b(?:smart[\s-]+)?contract signatures?\b|\bsignaturechecker\b|\bv2\.2\b", text
+        )
     )
 
 

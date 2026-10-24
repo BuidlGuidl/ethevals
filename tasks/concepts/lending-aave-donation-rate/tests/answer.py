@@ -15,7 +15,12 @@ def accepts(reply: str) -> bool:
     text = re.sub(r"^short\s+answer\s*:\s*", "", text)
     return bool(
         re.match(r"no\b", text)
-        and re.search(r"\bvirtual(?:underlyingbalance)?\b|\binternally[\s-]+tracked\b", text)
+        and re.search(
+            r"\bvirtual(?:underlyingbalance)?\b|\binternally[\s-]+tracked\b|"
+            r"\binternal accounting\b|\btracked internally\b|\bits own accounting\b|"
+            r"\b(?:doesn't|does not) read (?:the )?(?:token )?balance(?:of)?\b|"
+            r"\bignores (?:the )?token balance\b", text
+        )
     )
 
 

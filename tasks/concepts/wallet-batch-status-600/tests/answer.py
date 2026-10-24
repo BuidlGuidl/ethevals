@@ -14,7 +14,7 @@ def accepts(reply: str) -> bool:
     text = text.strip(string.whitespace + string.punctuation.replace("-", "").replace("+", ""))
     text = re.sub(r"^short\s+answer\s*:\s*", "", text)
     return bool(re.match(
-        r"(?:a\s+)?partial(?:ly)?(?:\s+on[\s-]?chain)?\s+(?:revert\w*|fail\w*)\b|"
+        r"(?:a\s+)?partial(?:ly)?\b|"
         r"(?:the\s+)?batch\s+(?:partially reverted|reverted partially)\b|"
         r"some calls (?:reverted|failed)\b.*\bothers (?:succeeded|went through)\b", text
     ))

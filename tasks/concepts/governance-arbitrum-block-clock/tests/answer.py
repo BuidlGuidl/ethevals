@@ -14,7 +14,7 @@ def accepts(reply: str) -> bool:
     text = text.strip(string.whitespace + string.punctuation.replace("-", "").replace("+", ""))
     text = re.sub(r"^short\s+answer\s*:\s*", "", text)
     return bool(re.match(
-        r"(?:(?:about|approximately|roughly|around)\s+|~\s*)?"
+        r"(?:(?:about|approximately|roughly|around)\s+|[~≈]\s*)?"
         r"(?:7\s+days?|seven\s+days?|(?:1|one|a)\s+week|168\s+hours?|"
         r"604,?800\s+(?:seconds?|s)\b)\b", text
     ))
