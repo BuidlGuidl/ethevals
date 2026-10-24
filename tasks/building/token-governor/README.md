@@ -2,7 +2,8 @@
 
 A protocol team's token is live and plain, and they want token holders rather than the team to control the treasury and the protocol's owner role.
 The message is the one any token team eventually sends: a quorum, a majority rule, a wait before execution, Snapshot for the delegates, and the wrap flow the frontend already uses.
-Hidden Forge tests then check the four things a governor that moves money has to get right, none of which the message spells out.
+Hidden Forge tests then check the four things a governor that moves money has to get right.
+The message says what the team wants and fears, never how to build it.
 
 Governance is where a request looks simplest and the stakes are highest.
 The contracts are OpenZeppelin's, the Wizard writes them in a minute, and the result holds every dollar the protocol has.
@@ -16,8 +17,9 @@ This task checks the gap.
 our token TOKEN is live, a plain ERC-20 with a fixed 100M supply, and we can't change it. we want
 our treasury and the owner role on our protocol contract under token holder control. a proposal
 passes when at least 4% of the supply votes for it, with more for than against, then waits two days
-before anyone can execute it. our delegates vote through snapshot, so it has to be a standard
-governor, and our frontend's wrap flow talks to the vote token through
+before anyone can execute it. we've seen whales tip a vote in its last minutes elsewhere; our
+holders need a real chance to answer before it closes. our delegates vote through snapshot, so it
+has to be a standard governor, and our frontend's wrap flow talks to the vote token through
 src/interfaces/IVoteToken.sol. put the governor in src/TokenGovernor.sol as TokenGovernor, and a
 deploy script in script/Deploy.s.sol whose run(token) returns the governor address and the address
 we should move the protocol's ownership and the treasury to. foundry, solidity 0.8.30.
@@ -25,7 +27,7 @@ we should move the protocol's ownership and the treasury to. foundry, solidity 0
 
 ## What it touches
 
-The instruction leaves out four things. Each has a real incident or an adopted fix behind it, and each is one check.
+The instruction names four needs in a builder's words and none of the mechanics. Each has a real incident or an adopted fix behind it, and each is one check.
 
 - **Which supply the quorum counts.** TOKEN has no vote history, so holders wrap it for a vote token and delegate. OpenZeppelin's quorum module measures a share of the vote token's supply, which is only what people have chosen to wrap. "4% of the supply" quietly becomes 4% of whatever is wrapped today. Term Labs lost $8.47M this way in August 2026, and the module's docs never say so.
 
@@ -37,7 +39,7 @@ The instruction leaves out four things. Each has a real incident or an adopted f
 
 - **Who holds the keys.** The contract that enforces the two-day wait has to own the protocol and hold the treasury. Make the governor itself the owner and a passed proposal can change fees or move funds with no wait at all. The wait also has to be fixed when a proposal is queued, or one vote can shorten every wait behind it. Term's first transaction set its delay to zero, and Moonwell's attacker in March 2026 went straight for the admin rights.
 
-- **Time to answer a late vote.** A proposal can sit at zero votes all week, look dead, and reach quorum in its last hour. If the deadline does not move, the other 96% of holders never get a turn, and the two-day wait does not help because stopping a passed proposal needs another vote. Compound's proposal 289 passed after 18 wallets cast 536,376 COMP in a 23-minute burst at the end of the vote.
+- **Time to answer a late vote.** The team says it has seen whales tip a vote in its last minutes. A proposal can sit at zero votes all week, look dead, and reach quorum in its last hour. If the deadline does not move, the other 96% of holders never get a turn, and the two-day wait does not help because stopping a passed proposal needs another vote. Compound's proposal 289 passed after 18 wallets cast 536,376 COMP in a 23-minute burst at the end of the vote. The fix the message never names is a deadline that moves when quorum lands late.
 
   ```text
   day 0 ──────────────────────────────── day 7
@@ -88,7 +90,7 @@ The [ENS discussion of Tally's shutdown](https://discuss.ens.domains/t/tally-is-
 
 ## Notes
 
-- Every agent can fail this task and the task still earns its place. The bar here is what a strong agent misses when nobody names the thing. In the first trials on 2026-10-24, Opus 5.5, GPT-6.1-sol and Kimi K3 each passed the quorum, control and Snapshot checks and left the vote open to a last-hour swing; a separate Kimi run measured quorum against the wrapped supply, the design Term shipped. Each check has a design behind it that a model actually produced, so a 0 is a finding, not noise. The day an agent protects the vote without being asked, this task is the one that shows it.
+- Every agent can fail this task and the task still earns its place. The bar here is what a strong agent misses when nobody names the thing. In the first trials on 2026-10-24, run before the message mentioned late votes, Opus 5.5, GPT-6.1-sol and Kimi K3 each passed the quorum, control and Snapshot checks and left the vote open to a last-hour swing; a separate Kimi run measured quorum against the wrapped supply, the design Term shipped. Each check has a design behind it that a model actually produced, so a 0 is a finding, not noise. The day an agent protects the vote without being asked, this task is the one that shows it.
 - The checks accept any design that follows the standard. They read the clock mode and voting settings from the governor, accept block numbers or timestamps, any extension length, and any revert reason. They never name a constructor or a library.
 - OpenZeppelin Contracts 5.7.0 is in `lib/` when the agent starts, so nothing needs installing.
 - There is no chain sidecar or RPC dependency. Forge advances the governor's chosen clock and uses seconds for the execution wait.
