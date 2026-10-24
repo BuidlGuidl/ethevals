@@ -45,6 +45,26 @@ def amounts(value, decimals):
     return int(number), int(number * 10**decimals)
 
 
+def token_name(value):
+    """A token given as a symbol, an address, or an object holding one."""
+    if isinstance(value, dict):
+        value = field(value, "symbol", "token", "asset", "address", "name", default=None)
+    return None if value is None else str(value).strip().lower()
+
+
+def scalar(value, decimals):
+    """An amount given as a number, a numeric string with an optional unit, or an object holding one."""
+    if not isinstance(value, dict):
+        return value
+    human = field(value, "amount", "value", "human", "formatted", "amountHuman", "decimal", default=None)
+    if human is not None:
+        return human
+    raw = field(value, "raw", "wei", "amountRaw", "base", "baseUnits", "rawAmount", default=None)
+    if raw is None:
+        raise ValueError("Report amounts must be numbers with optional token units")
+    return str(amount_number(raw) / (Decimal(10) ** decimals))
+
+
 def parse_report(report):
     if isinstance(report, dict):
         report = field(report, "liquidations")
@@ -59,24 +79,38 @@ def parse_report(report):
         if not isinstance(row, dict):
             raise ValueError("Report entries must be objects")
         debt = field(row, "debtRepaidUSDC", "debtRepaid", "repaid", "repaidUSDC", "usdcRepaid",
-                     "amountRepaid", "repayAmount", "debtRepaidAmount", default=0)
+                     "amountRepaid", "repayAmount", "debtRepaidAmount", "debtCovered", "debtToCover", default=0)
+        debt = scalar(debt, 6)
         if debt is None or amount_number(debt) <= 0:
             continue
         borrower = field(row, "borrower", "user", "account", "borrowerAddress", "userAddress")
         collateral = field(row, "collateralSeized", "collateral", "collateralAmount", "seizedCollateral",
-                           "seized", "amountSeized")
+                           "seized", "amountSeized", "collateralReceived")
+        token = None
+        raw = None
         if isinstance(collateral, dict):
-            token = field(collateral, "token", "asset", "symbol", "collateralToken", "collateralAsset", default=None)
-            amount = field(collateral, "amount", "amountSeized", "collateralAmount", "seized", "value")
+            token = token_name(field(collateral, "token", "asset", "symbol", "collateralToken", "collateralAsset",
+                                     "address", default=None))
+            amount = field(collateral, "amount", "amountSeized", "collateralAmount", "seized", "value", "human",
+                           "formatted", default=None)
+            raw = field(collateral, "raw", "wei", "amountRaw", "base", "baseUnits", "rawAmount", default=None)
         else:
-            token = field(row, "collateralToken", "collateralAsset", "token", "asset", "symbol", default=None)
             amount = collateral
+        if token is None:
+            token = token_name(field(row, "collateralToken", "collateralAsset", "token", "asset", "symbol",
+                                     default=None))
         if token is None:
             parts = str(amount).rsplit(maxsplit=1)
             if len(parts) != 2:
                 raise ValueError("Report collateral needs a token or a unit")
-            token = parts[1]
-        reserve, decimals = tokens[str(token).strip().lower()]
+            token = parts[1].lower()
+        if token not in tokens:
+            raise ValueError(f"Unknown collateral token: {token}")
+        reserve, decimals = tokens[token]
+        if amount is None:
+            if raw is None:
+                raise ValueError("Report collateral needs an amount")
+            amount = str(amount_number(raw) / (Decimal(10) ** decimals))
         raw_debt, human_debt = amounts(debt, 6)
         raw_collateral, human_collateral = amounts(amount, decimals)
         rows.append({
