@@ -25,7 +25,21 @@ This was a finalized block when checked.
 At that block, Aave v3's main pool has active, unfrozen, unpaused USDC and USDT reserves.
 The pool is `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`.
 Only the chain sidecar receives `MAINNET_RPC_URL`.
-Setup writes the chain context without funding any wallet or changing protocol state.
+Setup lowers USDC's supply cap through the pool configurator.
+It impersonates the provider's ACL admin after checking its pool admin role.
+That governance contract has no ETH.
+Setup sets the next block's base fee and the transaction's gas price to zero.
+The cap is the aUSDC total supply rounded up to whole USDC, plus 5,000 USDC.
+Aave also counts accrued treasury tokens against the cap.
+The actual deposit room is smaller than 5,000 USDC.
+At this fork, more than 3,000 USDC remains available, so a 100 USDC deposit fits.
+A deposit above the room fails with `SupplyCapExceeded()` and selector `0xf58f733a`.
+Pool revision 11 uses this custom error in place of the older string error `51`.
+The page must read the cap and available room before opening the wallet for a deposit.
+Setup pins Anvil's block timestamp interval to zero before changing the cap.
+Transactions keep the fork timestamp, so interest cannot consume the room during an hour of wall-clock time.
+This also fixes USDT's interest clock, but setup leaves its reserve configuration unchanged.
+Setup writes the chain context without funding any wallet.
 The agent reads `/workspace/chain_context.json` through the existing read-only chain context link.
 
 The main container gets one CPU and 4 GiB of memory.
