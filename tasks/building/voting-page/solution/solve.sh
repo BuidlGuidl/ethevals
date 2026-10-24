@@ -1,4 +1,3 @@
 #!/bin/sh
 set -eu
-# Discovery trials only require the unchanged project to compile.
-exit 0
+cp -R /solution/app/. /workspace/

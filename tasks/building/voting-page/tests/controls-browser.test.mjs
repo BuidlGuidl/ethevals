@@ -1,0 +1,182 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { chromium } from './deps.mjs';
+import { encodeFunctionData } from './deps.mjs';
+import { governorAbi, votesAbi, executedCalls, voteRequests } from './chain.mjs';
+import { oldSnapshotVerdict, forVoteMatches } from './checks.mjs';
+import { wrap, castVote, delegate, connect, proposal, proposalValues, usableChoices, oldVoteView, currentVotes, findDescription, listedDescriptions, settled } from './controls.mjs';
+
+const HOLDER = '0x0000000000000000000000000000000000000001';
+const GOVERNOR = '0x0000000000000000000000000000000000000002';
+const TOKEN = '0x0000000000000000000000000000000000000003';
+
+async function fixture(html, run) {
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  try {
+    const page = await browser.newPage();
+    const wallet = { payloads: [], requests: [], transactions: [], pending: 0, lastActivity: 0 };
+    await page.exposeFunction('recordWrite', payload => {
+      wallet.payloads.push(payload);
+      const vote = 'support' in payload;
+      const method = vote ? 'castVote' : payload.action === 'approve' ? 'delegate' : payload.action;
+      const call = {to: vote ? GOVERNOR : TOKEN, data: encodeFunctionData({abi: vote ? governorAbi : votesAbi, functionName: method, args: vote ? [1n, payload.support] : method === 'depositFor' ? [HOLDER, 1000n] : [HOLDER]})};
+      wallet.requests.push({ method: 'eth_sendTransaction', params: [call] });
+      wallet.transactions.push({ payload });
+      wallet.lastActivity = Date.now();
+    });
+    await page.setContent(html);
+    await run({ page, wallet, governor: GOVERNOR, voteToken: TOKEN });
+  } finally { await browser.close(); }
+}
+
+test('wrap submits the form below the amount instead of its mode tab', async () => {
+  await fixture(`<div role="dialog">
+    <button onclick="document.querySelector('input').value=''">Wrap TOKEN</button>
+    <input aria-label="TOKEN amount">
+    <button onclick="recordWrite({action:'depositFor',amount:document.querySelector('input').value})">wrap TOKEN</button>
+    </div>`, async session => {
+    await wrap(session);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'depositFor', amount: '1000' }]);
+  });
+});
+
+test('wrap drives a separate approval and the wrap into vTOKEN label', async () => {
+  await fixture(`<input placeholder="Amount of TOKEN"><button id="submit" onclick="submitWrap()">Approve TOKEN</button>
+    <script>
+    let approved = false;
+    function submitWrap() {
+      recordWrite({action:approved?'depositFor':'approve',amount:document.querySelector('input').value});
+      approved = true;
+      document.querySelector('#submit').innerText = 'Wrap into vTOKEN';
+    }
+    </script>`, async session => {
+    await wrap(session);
+    assert.deepEqual(session.wallet.payloads.map(payload => payload.action), ['approve', 'depositFor']);
+    assert.equal(session.wallet.payloads[1].amount, '1000');
+  });
+});
+
+test('wrap recognizes the combined approval control after entering an amount', async () => {
+  await fixture(`<input oninput="document.querySelector('button').innerText='Approve & wrap';document.querySelector('button').disabled=false">
+    <button disabled onclick="recordWrite({action:'depositFor',amount:document.querySelector('input').value})">Wrap</button>`, async session => {
+    await wrap(session);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'depositFor', amount: '1000' }]);
+  });
+});
+
+test('voting submits once through either a direct For button or a vote form', async () => {
+  await fixture('<button aria-label="Vote For" onclick="recordWrite({support:1});this.remove()">For</button>', async session => {
+    await castVote(session, session.page);
+    assert.deepEqual(session.wallet.payloads, [{ support: 1 }]);
+  });
+  await fixture('<button>For</button><button onclick="recordWrite({support:1})">Vote For</button>', async session => {
+    await castVote(session, session.page);
+    assert.deepEqual(session.wallet.payloads, [{ support: 1 }]);
+  });
+});
+
+test('a prefixed title identifies its proposal card', async () => {
+  await fixture('<article><h3>#4 · Set the protocol fee</h3><p>Active</p><p>For 12</p><p>Against 2</p></article>', async ({ page }) => {
+    const card = await proposal(page, 'Set the protocol fee');
+    assert.equal(proposalValues(await card.innerText()).for, 12);
+    assert.equal(await findDescription(page, 'Set the protocol fee'), true);
+  });
+});
+test('listing waits for proposals to finish loading after connection', async () => {
+  await fixture('<h1>Governance</h1><section></section><script>setTimeout(()=>document.querySelector("section").innerHTML="<article>#4 · Set the protocol fee<br>Active<br>For 12<br>Against 2</article>",1200)</script>', async ({ page }) => {
+    assert.deepEqual(await listedDescriptions(page, ['Set the protocol fee']), ['Set the protocol fee']);
+  });
+});
+test('a vote confirmation modal reaches castVote', async () => {
+  await fixture(`<button onclick="document.querySelector('dialog').showModal()">Vote For</button>
+    <dialog role="dialog"><button onclick="recordWrite({support:1})">Confirm vote</button></dialog>`, async session => {
+    assert.equal(await castVote(session, session.page), true);
+    assert.deepEqual(voteRequests(session.wallet, GOVERNOR, 1n).map(call => call.args), [[1n, 1]]);
+  });
+});
+test('a vote choice toggle followed by submit reaches castVote', async () => {
+  await fixture('<button onclick="this.ariaPressed=true">For 60%</button><button onclick="recordWrite({support:1})">Cast vote</button>', async session => {
+    assert.equal(await castVote(session, session.page), true);
+    assert.deepEqual(voteRequests(session.wallet, GOVERNOR, 1n).map(call => call.args), [[1n, 1]]);
+  });
+});
+test('activate voting power self-delegates', async () => {
+  await fixture('<button onclick="recordWrite({action:\'delegate\'})">Activate voting power</button>', async session => {
+    await delegate(session, HOLDER);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'delegate' }]);
+  });
+});
+test('Governance tab button reaches proposals', async () => {
+  await fixture(`<p>${HOLDER}</p><button role="tab" onclick="document.querySelector('article').hidden=false">Governance page</button>
+    <article hidden>Set the protocol fee<br>Active<br>For 7<br>Against 1</article>`, async ({ page }) => {
+    await connect(page, HOLDER);
+    const card = await proposal(page, 'Set the protocol fee');
+    assert.equal(proposalValues(await card.innerText()).for, 7);
+  });
+});
+test('navigation waits for the wallet address to return', async () => {
+  await fixture(`<p id="account">${HOLDER}</p><button onclick="document.querySelector('#account').innerText='Connecting';setTimeout(()=>document.querySelector('#account').innerText='${HOLDER}',400)">Governance</button>`, async ({ page }) => {
+    assert.equal(await connect(page, HOLDER), true);
+    assert.equal(await page.locator('#account').innerText(), HOLDER);
+  });
+});
+test('zero snapshot wording accepts an enabled vote button', async () => {
+  await fixture('<article>Voting power at snapshot: 0<button>Vote For</button></article>', async ({ page }) => {
+    const scope = page.locator('article');
+    const shown = proposalValues(await scope.innerText()).snapshot;
+    assert.equal(oldSnapshotVerdict({ shown, current: 1000, usable: (await usableChoices(scope)).length > 0, asked: false }), 'pass');
+  });
+});
+test('Against remains usable when For is disabled', async () => {
+  await fixture('<article>Your snapshot votes: 1000<button disabled>Vote For</button><button onclick="recordWrite({support:0})">Vote Against</button></article>', async session => {
+    const scope = session.page.locator('article');
+    assert.deepEqual(await usableChoices(scope), ['Against']);
+    await castVote(session, scope, 'Against');
+    assert.equal(oldSnapshotVerdict({ shown: 1000, current: 1000, usable: true, asked: voteRequests(session.wallet, GOVERNOR, 1n).length > 0 }), 'fail');
+  });
+});
+test('For requesting support zero fails the For journey', async () => {
+  await fixture('<button onclick="recordWrite({support:0})">Vote For</button>', async session => {
+    await castVote(session, session.page);
+    assert.equal(forVoteMatches(voteRequests(session.wallet, GOVERNOR, 1n), [{ support: 0, weight: 1000n }], 1000n), false);
+    assert.equal(forVoteMatches([{ args: [1n, 1] }], [{ support: 1, weight: 1000n }], 1000n), true);
+  });
+});
+test('wallet panel accepts Voting power and a Votes line', async () => {
+  await fixture('<section>Wrap TOKEN into vTOKEN voting weight</section><section><h2>Voting power</h2><p>Wrapped vTOKEN 1,000</p><p>Votes 0</p></section>', async ({ page }) => {
+    assert.equal(await currentVotes(page), 0);
+  });
+});
+test('settling waits for late controls and values', async () => {
+  await fixture('<article>For 0<script>setTimeout(()=>document.querySelector("article").innerHTML="For 100<button>Vote Against</button>",400)</script></article>', async ({ page }) => {
+    assert.equal((await settled(page.locator('article'))).trim(), 'For 100Vote Against');
+    assert.deepEqual(await usableChoices(page.locator('article')), ['Against']);
+  });
+});
+test('the old view waits for a late usable choice before accepting no controls', async () => {
+  await fixture('<article>Your snapshot votes: 1000<button disabled>Vote For</button><script>setTimeout(()=>document.querySelector("article").insertAdjacentHTML("beforeend","<button>Vote Against</button>"),2500)</script></article>', async ({ page }) => {
+    const view = await oldVoteView(page.locator('article'));
+    assert.deepEqual({ shown: view.shown, choices: view.choices }, { shown: 1000, choices: ['Against'] });
+  });
+});
+test('visits the Closed tab to find a proposal', async () => {
+  await fixture('<button role="tab" onclick="document.querySelector(\'article\').hidden=false">Closed</button><article hidden>#4 · Set the protocol fee<br>Defeated<br>For 3<br>Against 4</article>', async ({ page }) => {
+    assert.equal(await findDescription(page, 'Set the protocol fee'), true);
+    assert.equal(proposalValues(await (await proposal(page, 'Set the protocol fee')).innerText()).status, 3);
+  });
+});
+test('follows a proposal title link to its tallies', async () => {
+  await fixture('<article><a href="#detail" onclick="document.querySelector(\'article\').innerHTML=\'Set the protocol fee<br>Status: Active<br>For 12<br>Against 2\'">#4 · Set the protocol fee</a></article>', async ({ page }) => {
+    assert.equal(proposalValues(await (await proposal(page, 'Set the protocol fee')).innerText()).for, 12);
+  });
+});
+test('opens details only when the card has no tallies', async () => {
+  await fixture('<article>Set the protocol fee<button onclick="document.querySelector(\'dialog\').showModal()">View details</button></article><dialog role="dialog">Set the protocol fee<br>Status: Active<br>For 9<br>Against 2</dialog>', async ({ page }) => {
+    assert.equal(proposalValues(await (await proposal(page, 'Set the protocol fee')).innerText()).for, 9);
+  });
+});
+test('unsettled loading values produce a driver error', async () => {
+  await fixture('<article>Loading votes</article>', async ({ page }) => {
+    await assert.rejects(settled(page.locator('article'), { timeout: 400, quiet: 100 }), { message: 'could not drive: page values or controls did not settle' });
+  });
+});

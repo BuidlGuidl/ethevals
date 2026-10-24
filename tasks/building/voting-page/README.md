@@ -1,8 +1,7 @@
 # Governance voting page
 
 The user asks for a Governance page for TOKEN holders.
-This draft task seeds a local chain and checks only frontend compilation.
-It exports the project for hand trials before browser checks are added.
+The checks compare displayed values, wallet requests, and vote events with the governor on a private fork.
 
 ## The instruction
 
@@ -31,13 +30,12 @@ No proposal has Abstain votes or a late quorum extension.
 Every proposal calls Protocol's `setFee` with a distinct value.
 
 `seed.py checks` adds nine test proposals to a separate fork after the agent finishes.
-The Mac kit exposes the same step through `kit checks`.
 These proposals cover For-only quorum, late quorum extension, and queued proposals before and after their wait.
 The extended proposal and its twin share a creation block.
 The step stops 53 blocks before their original deadline.
 Only For counts toward the governor's 4 million quorum.
-The checks step needs chain controls and holder keys from private chain context.
-It records IDs, descriptions, call data, and blocks in that context.
+The verifier finds holders in DelegateChanged logs and impersonates them on its fork.
+It keeps proposal IDs, call data, and blocks in memory.
 It does not deploy contracts or add test proposals to the agent's chain.
 
 Voting uses block numbers; the timelock uses seconds.
@@ -50,8 +48,7 @@ The task-local chain wrapper uses the shared chain starter and RPC filter unchan
 It keeps 128 state snapshots in memory and retains blocks, transactions, and logs.
 It releases the healthcheck only after deployment and seeding finish.
 Private chain context holds proposal IDs, actions, and holder keys.
-Setup derives deployer and holder keys from a fixed local value.
-Contract addresses match across Docker and Mac chains, including Protocol.
+Setup generates random deployer and holder keys inside the chain container.
 The agent cannot read that context or the setup files.
 
 ## The checks
@@ -59,39 +56,46 @@ The agent cannot read that context or the setup files.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `compile` | `pnpm build` and `pnpm exec tsc --noEmit` both pass | frontend compilation |
+| `lists_every_proposal` | The page lists all five ordinary and nine test proposals | proposal discovery |
+| `status_and_tallies_match` | Every status and For/Against tally matches the chain before and after the twins' original end | governor reads |
+| `quorum_counts_for_only` | For plus Abstain cannot meet quorum; passed and extended proposals show reached | counting rules |
+| `end_moves_with_late_quorum` | The extended proposal ends later, stays open after its twin closes, and accepts a positive-weight vote | voting end |
+| `wrap_then_delegate` | A holder wraps 1,000 TOKEN and sees zero votes until delegation and 1,000 afterward, including a combined action | voting power |
+| `votes_at_snapshot` | A new delegate sees zero weight or no usable control on an old proposal, then casts 1,000 votes on a new proposal | snapshot votes |
 
-There are no browser checks or judges yet.
-The solution does nothing, so both oracle and nop can receive reward 1.
-Free-check then reports its expected nop-pass failure.
+Reward is 1 only when every check passes.
+Each check records an unknown value or unfinished flow as "could not drive" and continues.
+A known failed check gives reward zero, even when another check cannot finish.
+If no check fails, unresolved checks produce a trial error after RewardKit runs.
+An absent Governance page fails the proposal-list check and its dependent checks.
+The verifier reads vote weight from VoteCast events, rather than transaction status.
+The old-proposal journey accepts a displayed zero or no usable voting control.
+The new-proposal journey requires a vote with the holder's full snapshot weight.
+The voting-end comparison uses order alone.
+End comparisons accept blocks, dates, or countdowns when both ends use the same unit.
+No check scores approval amounts, Abstain display, network switching, or team queue and execute controls.
 
 ## Why it matters
 
 The same page must distinguish wrapped balances from delegated votes and read the governor's actual quorum rules.
 Late quorum changes proposal deadlines after creation.
 OpenZeppelin's [governance contracts](https://docs.openzeppelin.com/contracts/5.x/api/governance) define those interfaces.
-Compile checks alone give no evidence that the page handles them.
+A successful transaction can cast zero votes when the holder gained voting power after the proposal's snapshot.
 
 ## Notes
+
+"Holders only" can mean that only holders can vote, or that only holders can view the page.
+Every browser journey connects a wallet that holds TOKEN or its vote wrapper.
+Pages here make many RPC reads per block, which a public RPC would throttle.
+No check covers that load.
+Test state lives in the verifier's fork and never changes the task chain.
+The verifier needs no keys or private chain context.
+Extra agent proposals remain in the list and do not prevent fixture setup.
+Its browser, dependencies, and extra libraries remain root-only.
 
 Run these free commands from the repository root:
 
 ```sh
 uv run ethevals lint --tasks tasks/building/voting-page
 uv run ethevals free-check --tasks tasks/building/voting-page --output /tmp/voting-page-free-check
-```
-
-The Mac hand-trial kit lives at `/tmp/subagents/voting-page/kit/` on this machine.
-It uses the same `environment/setup/seed.py` as Docker.
-
-```sh
-cd /tmp/subagents/voting-page/kit
-./kit start
-./kit states
-./kit checks
-./kit states
-./kit fund WALLET_ADDRESS
-./kit prepare EXPORTED_PROJECT_TAR NEW_DIRECTORY
-./kit run NEW_DIRECTORY
-./kit txlog --since BLOCK
-./kit stop
 ```

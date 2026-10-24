@@ -6,7 +6,6 @@ services:
     user: agent
     volumes:
       - public-context:/chain:ro
-      - private-context:/private:ro
     depends_on:
       chain:
         condition: service_healthy

@@ -3,7 +3,7 @@ artifacts = [{ source = "/workspace", exclude = ["node_modules", "dist", ".git",
 
 [task]
 name = "buidlguidl/voting-page"
-description = "Collect frontend discovery trials for a TOKEN governance page, with a compile check and a project export for human review."
+description = "Build a holder voting page that follows proposal state, quorum, deadlines, and snapshot voting power."
 authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "governance", "react", "wagmi", "anvil"]
 
@@ -14,6 +14,7 @@ modes = ["internet", "skills"]
 [verifier]
 environment_mode = "shared"
 user = "root"
+timeout_sec = 1800
 
 [environment]
 cpus = 1

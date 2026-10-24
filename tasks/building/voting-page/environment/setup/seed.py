@@ -1,7 +1,7 @@
 """Deploy the unchanged contracts and prepare a block-based governance history."""
 import argparse
 from functools import lru_cache
-import hashlib
+import secrets
 import json
 from pathlib import Path
 import subprocess
@@ -73,6 +73,15 @@ def receipt(url, tx):
 
 
 def send(url, key, to, signature, *args, wait=True, value=0, nonce=None):
+    if len(key) == 42:
+        rpc(url, "anvil_impersonateAccount", [key])
+        tx = dict(from_=key, to=to, data=calldata(signature, *args) if signature else "0x",
+                  gas="0x5b8d80", gasPrice=hex(2_000_000_000), value=hex(value))
+        tx["from"] = tx.pop("from_")
+        if nonce is not None:
+            tx["nonce"] = hex(nonce)
+        transaction = rpc(url, "eth_sendTransaction", [tx])
+        return receipt(url, transaction) if wait else transaction
     options = ["--rpc-url", url, "--private-key", key, "--gas-limit", "6000000", "--gas-price", "2000000000", "--async"]
     if nonce is not None:
         options += ["--nonce", str(nonce)]
@@ -85,7 +94,7 @@ def send(url, key, to, signature, *args, wait=True, value=0, nonce=None):
 def mine_to(url, number):
     current = int(rpc(url, "eth_blockNumber"), 16)
     while number > current:
-        count = min(1_000, number - current)
+        count = min(100, number - current)
         rpc(url, "anvil_mine", [hex(count), "0xc"])
         current += count
 
@@ -125,7 +134,7 @@ def seed(url, root, public, private):
     rpc(url, "anvil_setBlockTimestampInterval", [12])
     accounts = []
     for index in range(5):
-        key = "0x" + hashlib.sha256(f"voting-page-local-chain-v1:{index}".encode()).hexdigest()
+        key = "0x" + secrets.token_hex(32)
         address = command("cast", "wallet", "address", "--private-key", key)
         rpc(url, "anvil_setBalance", [address, hex(1000 * UNIT)])
         accounts.append(dict(address=address, key=key))
