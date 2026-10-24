@@ -1,0 +1,6 @@
+[scoring.check_records]
+aggregation = "all-pass"
+
+[[reward]]
+name = "reward"
+aggregation = "all-pass"
