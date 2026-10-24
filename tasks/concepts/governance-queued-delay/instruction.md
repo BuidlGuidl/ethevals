@@ -1,1 +1,0 @@
-We're designing the timelock that will hold our DAO's treasury. If a passed proposal lowers the delay, should proposals that are already queued and waiting get the shorter delay? Answer yes or no, and say in a few words why.
