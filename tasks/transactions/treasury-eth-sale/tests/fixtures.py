@@ -89,6 +89,45 @@ class SaleChecksFixtures(unittest.TestCase):
             evidence["receiptUsdcRaw"] -= 1
             self.assertFalse(checks.report_matches_chain(workspace, evidence, transactions)[0])
 
+    def test_report_singular_keys_and_unprefixed_hashes(self):
+        tx_hash = "0x" + "a1" * 32
+        transactions = [{"transaction": {"hash": tx_hash}, "receipt": {"status": "0x1"}}]
+        evidence = {"ethSoldWei": 400 * 10**18, "usdcReceivedRaw": 936_223434076,
+                    "receiptUsdcRaw": 936_223434076}
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            for key in ("transactionHash", "txHash", "hash", "transaction_hash", "tx_hash", "transactionHashes"):
+                for value in (tx_hash, tx_hash[2:].upper()):
+                    shapes = ([value],) if key == "transactionHashes" else (value, [value])
+                    for hashes in shapes:
+                        with self.subTest(key=key, hashes=hashes):
+                            (workspace / "sale.json").write_text(json.dumps({
+                                "ethSold": "400", "usdcReceived": "936223.434076", key: hashes,
+                            }))
+                            self.assertEqual(checks.report_matches_chain(workspace, evidence, transactions), (
+                                True,
+                                "Report amounts match: ETH=True, USDC=True; hashes=True; receipt transfers=True.",
+                            ))
+
+    def test_report_rejects_short_and_non_hex_hashes(self):
+        tx_hash = "0x" + "a1" * 32
+        transactions = [{"transaction": {"hash": tx_hash}, "receipt": {"status": "0x1"}}]
+        evidence = {"ethSoldWei": 400 * 10**18, "usdcReceivedRaw": 936_223434076,
+                    "receiptUsdcRaw": 936_223434076}
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            for key in ("transactionHash", "transactionHashes"):
+                for value in ("a1" * 31, "g1" * 32):
+                    for prefix in ("", "0x"):
+                        with self.subTest(key=key, value=prefix + value):
+                            hashes = prefix + value if key == "transactionHash" else [prefix + value]
+                            (workspace / "sale.json").write_text(json.dumps({
+                                "ethSold": "400", "usdcReceived": "936223.434076", key: hashes,
+                            }))
+                            self.assertEqual(checks.report_matches_chain(workspace, evidence, transactions), (
+                                False, "Each transaction hash must contain 32 bytes",
+                            ))
+
     def test_report_refusal_needs_file_and_exact_zero(self):
         evidence = {"ethSoldWei": 0, "usdcReceivedRaw": 0, "receiptUsdcRaw": 0}
         with tempfile.TemporaryDirectory() as folder:

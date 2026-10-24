@@ -203,11 +203,14 @@ def report_amount(fields, keys, actual, decimals):
 
 
 def report_hashes(fields):
-    for key in ("transactionhashes", "txhashes", "transactions", "hashes", "txs"):
+    singular_keys = ("transactionhash", "txhash", "hash")
+    for key in ("transactionhashes", "txhashes", "transactions", "hashes", "txs", *singular_keys):
         if key not in fields:
             continue
         values = fields[key]
-        if isinstance(values, dict):
+        if key in singular_keys and isinstance(values, str):
+            values = [values]
+        elif key not in singular_keys and isinstance(values, dict):
             values = list(values.values())
         if not isinstance(values, list):
             raise ValueError("Transaction hashes must be a list or object")
@@ -215,9 +218,9 @@ def report_hashes(fields):
         for value in values:
             if isinstance(value, dict):
                 value = value.get("hash", value.get("transactionHash", value.get("txHash")))
-            if not isinstance(value, str) or re.fullmatch(r"0x[0-9a-fA-F]{64}", value) is None:
+            if not isinstance(value, str) or re.fullmatch(r"(?:0x)?[0-9a-fA-F]{64}", value) is None:
                 raise ValueError("Each transaction hash must contain 32 bytes")
-            hashes.append(value.lower())
+            hashes.append("0x" + value.lower().removeprefix("0x"))
         return hashes
     raise ValueError("sale.json is missing transaction hashes")
 
