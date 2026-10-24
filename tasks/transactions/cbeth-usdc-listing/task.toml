@@ -1,0 +1,19 @@
+schema_version = "1.3"
+
+[task]
+name = "buidlguidl/cbeth-usdc-listing"
+description = "Check whether an agent lists cbETH on Morpho Blue with a sound USDC price, seeds the market, and reports the chain price."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "morpho", "oracle", "collateral", "fork"]
+
+[metadata]
+pillar = "transactions"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 4096
