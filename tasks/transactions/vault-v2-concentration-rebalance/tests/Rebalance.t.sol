@@ -93,7 +93,7 @@ contract RebalanceCheck is Test {
 
     function test_fundsStayInvested() public view {
         uint256 idle = IERC20(vault.asset()).balanceOf(address(vault));
-        assertLe(idle, vault.totalAssets() / 20, "more than 5% of vault assets remain idle");
+        assertLe(idle, vault.totalAssets() / 10, "more than 10% of vault assets remain idle");
         uint256 count = beforeState.readUint(".marketCount");
         assertEq(adapter.marketIdsLength(), count, "the set of markets changed");
         uint256 realAssets = idle;

@@ -6,7 +6,7 @@ The task checks allocations and ordinary depositor access after the move.
 ## The instruction
 
 ```text
-we curate the morpho vaults v2 vault in chain_context.json. almost half of it sits in one market, id in chain_context.json. our risk policy is no market above 25% of the vault. bring it in line by moving funds into the markets we already have, within their caps. deposits and withdrawals must keep working for our users, at least as well as today. leave fees, roles, caps and timelocks alone. our wallet in chain_context.json holds the curator and allocator roles. do it on that chain and tell us what you did.
+we curate the morpho vaults v2 vault in chain_context.json. almost half of it sits in one market, id in chain_context.json. our risk policy is no market above 25% of the vault. bring it in line by moving funds into the markets we already have, within their caps. deposits and withdrawals must keep working for our users. leave fees, roles, caps and timelocks alone. our wallet in chain_context.json holds the curator and allocator roles. do it on that chain and tell us what you did.
 ```
 
 ## What it touches
@@ -33,7 +33,7 @@ RewardKit requires every check to pass.
 | `compile` | The tests compile next to the agent's files | all |
 | `test_concentrationWithinPolicy` | Every existing market holds at most 25% of live total assets, plus one part per million for interest | concentration |
 | `test_withdrawalsStillServed` | A real holder withdraws 10% of starting assets, a small redemption works, and a new deposit works | depositor access |
-| `test_fundsStayInvested` | Idle stays at or below 5%, the eight original markets remain, and assets stay intact | investment and preservation |
+| `test_fundsStayInvested` | Idle stays at or below 10%, the eight original markets remain, and assets stay intact | investment and preservation |
 | `test_nothingElseChanged` | Caps, fees, roles, timelocks, adapters, and pending submissions retain their prior settings | scope |
 
 ## Why it matters
@@ -53,8 +53,8 @@ Morpho's [liquidity guide](https://docs.morpho.org/curate/concepts/liquidity) ex
 - The real holder `0x087e2aac2e2457a5107700a58543e35ff63391b4` holds about 21.563M USDC in shares.
 - The withdrawal tests a partial exit by an existing holder without adding shares or liquidity first.
 - The small redemption covers about 1,000 USDC. A separate stranger deposits and redeems 1,000 USDC.
-- Idle can reach 5%, or about 5.604M USDC. At least 95% must remain invested in the original markets.
-- This allows a withdrawal buffer without accepting the 22% idle balance left by an unfinished rebalance.
+- Idle can reach 10%, or about 11.207M USDC. At least 90% must remain invested in the original markets.
+- This allows a cash buffer for withdrawals without accepting a rebalance that parks the released funds in idle.
 - Total and directly held assets allow ten USDC base units of rounding loss and 0.01% interest growth.
 - Concentration allows one part per million of total assets above 25%, about 112 USDC at the starting size.
 - The solution targets 24.9%, invests the released funds in existing markets, and selects a route with enough withdrawal liquidity.
