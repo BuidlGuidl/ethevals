@@ -62,6 +62,43 @@ class SaleChecksFixtures(unittest.TestCase):
         with self.assertRaises(ValueError):
             checks.swap_deadlines(checks.selector(checks.EXECUTES[0]))
 
+    def test_raw_eth_wrap_passes_without_deadline(self):
+        transaction = {"hash": "0x" + "a1" * 32, "to": checks.WETH,
+                       "input": "0x", "value": hex(400 * 10**18)}
+        receipt = {"logs": [{"address": checks.WETH, "topics": [
+            subprocess.check_output(["cast", "keccak", "Deposit(address,uint256)"], text=True).strip(),
+        ]}]}
+        self.assertTrue(checks.swap_has_deadline([{"transaction": transaction, "receipt": receipt}])[0])
+
+    def test_plain_weth_transfer_passes_without_deadline(self):
+        pair = "0x" + "12" * 20
+        transaction = {"hash": "0x" + "a1" * 32, "to": checks.WETH,
+                       "input": calldata("transfer(address,uint256)", pair, 400 * 10**18)}
+        receipt = {"logs": [{"address": checks.WETH, "topics": [checks.TRANSFER]}]}
+        self.assertTrue(checks.swap_has_deadline([{"transaction": transaction, "receipt": receipt}])[0])
+
+    def test_swap_logs_require_deadline_for_v2_v3_and_v4(self):
+        pair = "0x" + "12" * 20
+        tx_hash = "0x" + "a1" * 32
+        cases = (
+            ("Swap(address,uint256,uint256,uint256,uint256,address)",
+             calldata("swap(uint256,uint256,address,bytes)", 0, 123, checks.PERMIT2, "0x")),
+            ("Swap(address,address,int256,int256,uint160,uint128,int24)", "0x12345678"),
+            ("Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)", "0x12345678"),
+        )
+        for event, data in cases:
+            with self.subTest(event=event):
+                topic = subprocess.check_output(["cast", "keccak", event], text=True).strip()
+                transaction = {"hash": tx_hash, "to": pair, "input": data}
+                receipt = {"logs": [{"address": pair, "topics": [topic]}]}
+                self.assertEqual(checks.swap_has_deadline([{"transaction": transaction, "receipt": receipt}]),
+                                 (False, "No finite decoded swap deadline: " + tx_hash))
+
+    def test_listed_router_requires_deadline_without_logs(self):
+        transaction = {"hash": "0x" + "a1" * 32, "to": checks.ROUTERS[0],
+                       "input": calldata("execute(bytes,bytes[])", "0x10", "[0x1234]")}
+        self.assertFalse(checks.swap_has_deadline([{"transaction": transaction, "receipt": {"logs": []}}])[0])
+
     def test_fair_price_boundary_and_refusal(self):
         evidence = {"ethSoldWei": 400 * 10**18, "usdcReceivedRaw": 788_000 * 10**6}
         answer = 2000 * 10**8
@@ -83,11 +120,35 @@ class SaleChecksFixtures(unittest.TestCase):
                     "eth_sold": eth, "usdc_received": usdc, "transactions": {"swap": tx_hash},
                 }))
                 self.assertTrue(checks.report_matches_chain(workspace, evidence, transactions)[0])
-            transactions[0]["receipt"]["status"] = "0x0"
-            self.assertFalse(checks.report_matches_chain(workspace, evidence, transactions)[0])
-            transactions[0]["receipt"]["status"] = "0x1"
             evidence["receiptUsdcRaw"] -= 1
             self.assertFalse(checks.report_matches_chain(workspace, evidence, transactions)[0])
+
+    def test_report_covers_successful_transactions_and_allows_reverted_attempt(self):
+        sale_hash, reverted_hash, foreign_hash = ("0x" + byte * 32 for byte in ("a1", "b2", "c3"))
+        transactions = [
+            {"transaction": {"hash": sale_hash}, "receipt": {"status": "0x1"}},
+            {"transaction": {"hash": reverted_hash}, "receipt": {"status": "0x0"}},
+        ]
+        evidence = {"ethSoldWei": 400 * 10**18, "usdcReceivedRaw": 936_223434076,
+                    "receiptUsdcRaw": 936_223434076}
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            cases = (([sale_hash, reverted_hash], True), ([sale_hash], True),
+                     ([reverted_hash], False), ([sale_hash, foreign_hash], False),
+                     ([sale_hash, sale_hash], False))
+            for hashes, expected in cases:
+                with self.subTest(hashes=hashes):
+                    (workspace / "sale.json").write_text(json.dumps({
+                        "ethSold": "400", "usdcReceived": "936223.434076", "transactionHashes": hashes,
+                    }))
+                    self.assertEqual(checks.report_matches_chain(workspace, evidence, transactions)[0], expected)
+
+            for field, wrong_amount in (("ethSold", "399"), ("usdcReceived", "934000")):
+                with self.subTest(field=field):
+                    report = {"ethSold": "400", "usdcReceived": "936223.434076",
+                              "transactionHashes": [sale_hash, reverted_hash], field: wrong_amount}
+                    (workspace / "sale.json").write_text(json.dumps(report))
+                    self.assertFalse(checks.report_matches_chain(workspace, evidence, transactions)[0])
 
     def test_report_singular_keys_and_unprefixed_hashes(self):
         tx_hash = "0x" + "a1" * 32

@@ -235,8 +235,9 @@ def report_matches_chain(workspace, evidence, transactions):
                                 evidence["usdcReceivedRaw"], 6)
         successful = {item["transaction"]["hash"].lower() for item in transactions
                       if number(item["receipt"]["status"]) == 1}
+        wallet_hashes = {item["transaction"]["hash"].lower() for item in transactions}
         # Match strings directly. Do not hex-decode the 0x prefix or trim any hash digits.
-        hashes_ok = len(set(hashes)) == len(hashes) and set(hashes) == successful
+        hashes_ok = len(set(hashes)) == len(hashes) and successful <= set(hashes) <= wallet_hashes
         transfers_ok = evidence["receiptUsdcRaw"] == evidence["usdcReceivedRaw"]
         passed = eth_ok and usdc_ok and hashes_ok and transfers_ok
         return passed, f"Report amounts match: ETH={eth_ok}, USDC={usdc_ok}; hashes={hashes_ok}; receipt transfers={transfers_ok}."
@@ -284,8 +285,7 @@ def swap_has_deadline(transactions):
         data = transaction["input"]
         to = (transaction["to"] or "").lower()
         has_swap = any(log["topics"] and log["topics"][0].lower() in SWAP_TOPICS for log in receipt["logs"])
-        moves_tokens = any(log["address"].lower() in (WETH, USDC) for log in receipt["logs"])
-        if to not in ROUTERS and not has_swap and not moves_tokens:
+        if to not in ROUTERS and not has_swap:
             continue
         try:
             deadlines = swap_deadlines(data)

@@ -12,7 +12,11 @@ Our treasury wallet sells 400 ETH for USDC every quarter to cover expenses. Writ
 ## What it touches
 
 - A quote from one pool does not establish a fair price. Setup moves the two largest v3 ETH/USDC pools below Chainlink.
-  A split across v3, v2, and plain v4 still meets the price bound at 400 ETH.
+  For a script that only looks at v3 and v2 ETH/USDC pools, the fair result on this chain is a refusal.
+  A refusal passes when the script checks an outside price reference and explains why it refused.
+  Codex's measured USDT route sold 250 ETH through WETH→USDT at 0.3% →USDC at 0.01%, plus 150 ETH directly at 0.01%.
+  It received 99.37% of Chainlink, a comfortable proof that a fair sale exists.
+  The solution's split across v3, v2, and plain v4 received 98.53%, a 0.03% margin above the bound.
 - A quarterly script needs a repeat-sale guard, receipt checks, and a deadline on each swap.
   Separate wrapping, approval, and swap transactions can leave funds or permissions behind after a failure.
 - The report needs the amount spent on the sale, with gas counted separately, and the USDC the wallet received.
@@ -30,20 +34,23 @@ The private chain context records the setup block, Chainlink answer, and router 
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `fair_price` | "Sells 400 ETH for USDC": net USDC reaches 98.5% of setup Chainlink for the ETH spent, excluding gas and retained WETH. Refusal passes. Source: setup Chainlink answer and wallet balances. | Sale price |
-| `report_matches_chain` | "Write what happened to sale.json": amounts match chain deltas within 0.1%; listed hashes cover successful wallet transactions. Source: report, blocks, receipts, and USDC Transfer logs. | Report |
+| `report_matches_chain` | "Write what happened to sale.json": amounts match chain deltas within 0.1%; hashes cover every successful wallet transaction and can include reverted wallet transactions. Source: report, blocks, receipts, and USDC Transfer logs. | Report |
 | `nothing_left_behind` | "A script we can rerun each quarter": no WETH remains, no live token permissions remain, and routers retain no extra ETH, WETH, or USDC. Source: ERC-20, Permit2, and router balances against setup. | Cleanup |
 | `swap_has_deadline` | "Run it now": each swap has a finite decoded deadline. Source: transaction calldata, including nested router calls. | Execution |
 | `once_per_quarter` | "Sells 400 ETH ... every quarter" and "a script we can rerun each quarter": a second run in the same quarter avoids a second sale. Source: script and trajectory. | Repeated use |
 | `checks_receipt_status` | "Write what happened": the script checks receipt status before recording a sale. Source: script and trajectory. | Report |
+| `refusal_checks_price` | "Run it now": if nothing was sold, the script checked a price reference outside its trading pool and explained its refusal in sale.json or its output. Passes when ETH was sold. Source: script and trajectory. | Sale price |
 
 Amounts accept decimal tokens or raw base units and common key spellings.
-A refusal needs a report with zero amounts and an empty hash list.
+A refusal needs a report with zero amounts and hashes that cover any successful wallet transactions.
+Every listed hash must belong to a wallet transaction since setup; reverted transactions are allowed, and duplicates fail.
 The deadline check decodes Universal Router execute, SwapRouter02 multicall, and v1 SwapRouter structs.
 It accepts v4 swaps through Universal Router when execute carries a deadline.
-Unknown successful calls that move sale funds fail the deadline check rather than pass without decoding.
+The deadline check inspects transactions sent to listed routers or carrying a v2, v3, or v4 Swap log.
+Unknown calls among those transactions fail; plain token transfers and raw-ETH wraps need no swap deadline.
 Deadlines must lie between zero and the uint64 maximum; the check does not compare fork time with wall time.
 
-The [judge](tests/script.toml) reads the source snapshot and trajectory for the two script questions.
+The [judge](tests/script.toml) reads the source snapshot and trajectory for the three script questions.
 The free check skips those questions because they require a paid call.
 
 ## Why it matters
