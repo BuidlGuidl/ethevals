@@ -17,7 +17,7 @@ Unlike MetaMorpho v1.1, a cap decrease leaves pending increases executable.
 The curator must revoke the exact calldata for both pending raises.
 The [cap setters](https://github.com/morpho-org/vault-v2/blob/425f6b1fb3a1d25083a9515348bd5e7bd3ab9017/src/VaultV2.sol#L516-L554) and [timelock functions](https://github.com/morpho-org/vault-v2/blob/425f6b1fb3a1d25083a9515348bd5e7bd3ab9017/src/VaultV2.sol#L342-L377) define these rules.
 
-V2's [deallocate function](https://github.com/morpho-org/vault-v2/blob/425f6b1fb3a1d25083a9515348bd5e7bd3ab9017/src/VaultV2.sol#L595-L618) takes an asset delta.
+V2's [deallocate function](https://github.com/morpho-org/vault-v2/blob/425f6b1fb3a1d25083a9515348bd5e7bd3ab9017/src/VaultV2.sol#L593-L618) takes an asset delta.
 The stored allocation can lag interest, so it cannot name the full withdrawal amount.
 The [adapter](https://github.com/morpho-org/vault-v2/blob/425f6b1fb3a1d25083a9515348bd5e7bd3ab9017/src/adapters/MorphoMarketV1AdapterV2.sol#L194-L256) can leave supply-share dust worth nothing after a full deallocation.
 The checks measure "out" by zero expected supply assets and absence from the adapter's market list.
@@ -39,9 +39,9 @@ The tests read the chain the agent leaves and run depositor and stranger transac
 | --- | --- | --- |
 | `compile` | The tests compile next to the agent's files | all |
 | `test_vaultIsOutForGood` | The market has no valuable supply shares, listing, caps, pending raises, or liquidity route | full exit |
-| `test_strangerCannotReopenIt` | A stranger cannot execute the mature cap raises or put assets back through the public allocator | pending raises and public allocation |
+| `test_strangerCannotReopenIt` | Dust has zero value before the time jump, and strangers cannot execute mature raises or add supply shares | pending raises and public allocation |
 | `test_depositorsStillServed` | A stranger can deposit and withdraw USDC without losing more than one base unit, and the exit preserves vault assets | depositor access |
-| `test_nothingElseChanged` | Other caps, roles, timelocks, fees, adapters, and depositor assets stay intact | scope and asset preservation |
+| `test_nothingElseChanged` | Other settings and per-market assets stay intact, and no new vault or adapter submission remains pending | scope and asset preservation |
 
 ## Why it matters
 
@@ -66,5 +66,9 @@ Morpho's [emergency guide](https://docs.morpho.org/curate/tutorials-v2/emergency
 - The exit market is cbBTC/USDC at 86% LLTV, `0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64`.
 - Its position exceeds free market liquidity at the pinned block. Setup supplies the shortfall plus 2,000,000 USDC from a funded mainnet supplier.
 - Both raises mature during the stranger check. The relative raise restores the existing 100% cap, which the contract accepts.
+- The stranger check measures dust value before the time jump, then requires supply shares to stay unchanged.
+- New vault and adapter submissions must execute or be revoked. The exit check requires revocation of setup's two pending raises.
+- Each other market must retain at least its recorded supply assets minus one USDC base unit.
+- The exit market's funds can go to idle or another market, within the total asset bounds.
 - The asset checks permit ten USDC base units of rounding loss and 0.01 percent of interest growth.
 - This task needs `MAINNET_RPC_URL`. The agent gets only the filtered chain RPC and its own wallet key.

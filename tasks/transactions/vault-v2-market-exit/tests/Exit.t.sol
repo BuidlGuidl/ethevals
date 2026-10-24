@@ -27,12 +27,15 @@ interface IAdapter {
     function expectedSupplyAssets(bytes32) external view returns (uint256);
 }
 
-interface IVault {
+interface ITimelocked {
+    function executableAt(bytes memory) external view returns (uint256);
+}
+
+interface IVault is ITimelocked {
     function asset() external view returns (address);
     function absoluteCap(bytes32) external view returns (uint256);
     function relativeCap(bytes32) external view returns (uint256);
     function allocation(bytes32) external view returns (uint256);
-    function executableAt(bytes memory) external view returns (uint256);
     function liquidityAdapter() external view returns (address);
     function liquidityData() external view returns (bytes memory);
     function totalAssets() external view returns (uint256);
@@ -82,6 +85,8 @@ contract ExitCheck is Test {
     }
 
     function test_strangerCannotReopenIt() public {
+        assertOut();
+        (uint256 exitShares,,) = MORPHO.position(marketId, address(adapter));
         uint256 absoluteMaturity = beforeState.readUint(".absoluteMaturity");
         uint256 relativeMaturity = beforeState.readUint(".relativeMaturity");
         uint256 maturity = absoluteMaturity > relativeMaturity ? absoluteMaturity : relativeMaturity;
@@ -93,7 +98,7 @@ contract ExitCheck is Test {
         vm.stopPrank();
         assertFalse(absoluteOk, "stranger executed the mature absolute raise");
         assertFalse(relativeOk, "stranger executed the mature relative raise");
-        assertOut();
+        assertMarketClosed();
 
         IERC20 usdc = IERC20(params.loanToken);
         deal(address(usdc), address(vault), usdc.balanceOf(address(vault)) + 10e6);
@@ -119,7 +124,9 @@ contract ExitCheck is Test {
             ));
             assertFalse(moved, "public allocator reopened the exit market from another market");
         }
-        assertOut();
+        assertMarketClosed();
+        (uint256 shares,,) = MORPHO.position(marketId, address(adapter));
+        assertEq(shares, exitShares, "stranger added supply shares in the exit market");
     }
 
     function test_depositorsStillServed() public {
@@ -157,6 +164,8 @@ contract ExitCheck is Test {
             assertEq(value, values[i], string.concat("unrelated setting changed at index ", vm.toString(i)));
         }
         assertNoNewRoles();
+        assertNoPendingSubmissions(address(vault));
+        assertNoPendingSubmissions(address(adapter));
 
         bytes32[] memory ids = abi.decode(beforeState.readBytes(".ids"), (bytes32[]));
         bytes32 capsHash;
@@ -178,7 +187,10 @@ contract ExitCheck is Test {
         for (uint256 i; i < count; ++i) {
             bytes32 market = beforeState.readBytes32(string.concat(".market", vm.toString(i)));
             if (market == marketId) continue;
-            realAssets += adapter.expectedSupplyAssets(market);
+            uint256 assets = adapter.expectedSupplyAssets(market);
+            uint256 expected = beforeState.readUint(string.concat(".expected", vm.toString(i)));
+            assertGe(assets + 1, expected, "other market lost supply assets");
+            realAssets += assets;
         }
         uint256 baseline = beforeState.readUint(".totalAssets");
         assertGe(realAssets + 10, baseline, "other markets and idle do not preserve depositor assets");
@@ -190,15 +202,19 @@ contract ExitCheck is Test {
     }
 
     function assertOut() internal {
-        assertEq(vault.absoluteCap(capId), 0, "market absolute cap is nonzero");
-        assertEq(vault.relativeCap(capId), 0, "market relative cap is nonzero");
-        assertEq(vault.allocation(capId), 0, "market allocation remains nonzero");
-        assertEq(adapter.expectedSupplyAssets(marketId), 0, "adapter still has assets in the exit market");
+        assertMarketClosed();
         MORPHO.accrueInterest(params);
         (uint256 shares,,) = MORPHO.position(marketId, address(adapter));
         (uint128 assets, uint128 totalShares,,,,) = MORPHO.market(marketId);
         uint256 positionAssets = shares * (uint256(assets) + 1) / (uint256(totalShares) + 1e6);
         assertEq(positionAssets, 0, "actual Morpho supply shares still have asset value");
+    }
+
+    function assertMarketClosed() internal view {
+        assertEq(vault.absoluteCap(capId), 0, "market absolute cap is nonzero");
+        assertEq(vault.relativeCap(capId), 0, "market relative cap is nonzero");
+        assertEq(vault.allocation(capId), 0, "market allocation remains nonzero");
+        assertEq(adapter.expectedSupplyAssets(marketId), 0, "adapter still has assets in the exit market");
         for (uint256 i; i < adapter.marketIdsLength(); ++i) {
             assertNotEq(adapter.marketIds(i), marketId, "adapter still lists the exit market");
         }
@@ -208,6 +224,17 @@ contract ExitCheck is Test {
         uint256 baseline = beforeState.readUint(".totalAssets");
         assertGe(vault.totalAssets() + 10, baseline, "exit lost depositor assets");
         assertLe(vault.totalAssets(), baseline + baseline / 10_000, "vault assets changed beyond accrued interest");
+    }
+
+    function assertNoPendingSubmissions(address target) internal {
+        bytes32[] memory topics = new bytes32[](1);
+        topics[0] = keccak256("Submit(bytes4,bytes,uint256)");
+        Vm.EthGetLogs[] memory logs =
+            vm.eth_getLogs(beforeState.readUint(".setupBlock"), block.number, target, topics);
+        for (uint256 i; i < logs.length; ++i) {
+            (bytes memory data,) = abi.decode(logs[i].data, (bytes, uint256));
+            assertEq(ITimelocked(target).executableAt(data), 0, "new submission remains pending");
+        }
     }
 
     function assertNoNewRoles() internal {
