@@ -26,8 +26,8 @@ Each test is one check. The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `compile` | The tests and the agent's contracts compile together | all |
-| `test_quorumCountsTheWholeSupply` | One million for-votes fail; five million pass and execute. Abstentions cannot fill the four-million for-vote requirement | quorum |
-| `test_theDelayGuardsTheMoney` | The owner enforces two days for treasury payments and protocol calls, including a proposal that removes the wait | control |
+| `test_quorumCountsTheWholeSupply` | One million for-votes fail; five million pass and execute. Exactly four million for-votes pass, and equal for and against votes fail | quorum |
+| `test_theDelayGuardsTheMoney` | The protocol's owner is a contract other than the governor, direct owner calls revert, and treasury payments and protocol calls execute only after two days | control |
 | `test_lateVotesExtendTheVote` | Crossing quorum in the last hour extends the deadline and leaves the proposal active at its former deadline | late votes |
 | `test_snapshotCanRunIt` | Standard governor and historical vote views work; votes acquired after the snapshot cannot pass that proposal | Snapshot |
 
@@ -39,7 +39,7 @@ The [OpenZeppelin quorum module](https://github.com/OpenZeppelin/openzeppelin-co
 
 The contract that holds the owner role controls the protocol as well as the treasury.
 The [Moonwell governance attack](https://www.theblock.co/news/defi/2026-03-26-moonwell-governance-attack-395272) shows why admin calls belong behind the same wait.
-A proposal that removes a delay must still wait through its own delay.
+A timelock that reads its delay at execution lets one vote shorten every wait behind it.
 The [Zodiac delay contract](https://github.com/zodiaceco/zodiac-modifier-delay/blob/main/contracts/Delay.sol#L217) illustrates the risk of reading the current delay at execution.
 
 Late quorum gives other voters little time to answer.

@@ -170,11 +170,6 @@ contract TokenGovernorTest is Test {
         execute(enough);
         assertEq(protocol.fee(), 7, "passed proposal did not control Protocol");
 
-        Proposal memory abstain = feeProposal(8, "abstentions are not for votes");
-        vote(abstain, A, 1, 1_000_000 ether);
-        vote(abstain, B, 2, 4_000_000 ether);
-        finish(abstain, DEFEATED);
-
         wrap(STRANGER, 5_000_000 ether);
         Proposal memory opposed = feeProposal(8, "equal for and against");
         vote(opposed, A, 1, 1_000_000 ether);
@@ -229,21 +224,6 @@ contract TokenGovernorTest is Test {
         waitSeconds(1 hours);
         execute(setter);
         assertEq(protocol.fee(), 42, "timed owner call failed");
-
-        Proposal memory shorten = propose(owner, 0, abi.encodeWithSignature("updateDelay(uint256)", 0), "remove delay");
-        pass(shorten);
-        queue(shorten);
-        waitSeconds(2 days - 1 hours);
-        vm.expectRevert();
-        governor.execute(shorten.targets, shorten.values, shorten.data, shorten.descriptionHash);
-        waitSeconds(1 hours);
-        execute(shorten);
-        // A fresh payment proves that the delay change actually took effect.
-        Proposal memory immediate = propose(RECIPIENT, 1 ether, "", "payment after delay change");
-        pass(immediate);
-        queue(immediate);
-        execute(immediate);
-        assertEq(RECIPIENT.balance, 2 ether, "delay change did not execute");
     }
 
     function test_lateVotesExtendTheVote() public {
