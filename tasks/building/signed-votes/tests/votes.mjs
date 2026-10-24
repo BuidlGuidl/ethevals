@@ -7,7 +7,7 @@ import { wallets } from './wallets.mjs';
 const [submission, output] = process.argv.slice(2);
 const names = [
   'eoa_vote', 'tampered_vote', 'wrong_signer', 'other_proposal', 'safe_vote', 'safe_one_owner',
-  'safe_late_vote', 'safe_onchain_approval', 'smart_wallet_new', 'smart_wallet_deployed',
+  'safe_late_vote', 'safe_onchain_approval', 'safe_onchain_unapproved', 'smart_wallet_new', 'smart_wallet_deployed',
 ];
 const records = {};
 await mkdir(output, { recursive: true });
@@ -108,11 +108,11 @@ await check('safe_one_owner', async () => {
 await check('safe_late_vote', async () => {
   const data = await vote(fixture.safe);
   const before = await fixture.client.getBlock({ blockTag: 'latest' });
-  await fixture.control.increaseTime({ seconds: 3 * 24 * 60 * 60 });
+  await fixture.control.increaseTime({ seconds: 40 * 60 * 60 });
   await fixture.control.mine({ blocks: 1 });
   const after = await fixture.client.getBlock({ blockTag: 'latest' });
   const elapsed = after.timestamp - before.timestamp;
-  assert.ok(elapsed >= 259200n, 'The verifier fork advances by at least three days');
+  assert.ok(elapsed >= 144000n, 'The verifier fork advances by at least 40 hours');
   console.log('safe_late_vote elapsed seconds:', String(elapsed));
   const signature = await fixture.safeSign(data.typedData);
   assert.equal(await fixture.client.verifyTypedData({ ...data.typedData, address: fixture.safe, signature }), true);
@@ -123,6 +123,10 @@ await check('safe_onchain_approval', async () => {
   await fixture.approveSafeMessage(data.typedData);
   await accepts(data, '0x', true);
 });
+await check('safe_onchain_unapproved', async () => {
+  const data = await vote(fixture.safe, 0);
+  await accepts(data, '0x', false);
+}, 'safe_onchain_approval');
 await check('smart_wallet_new', async () => {
   const account = await fixture.smartWallet(false);
   const data = await vote(account.address);

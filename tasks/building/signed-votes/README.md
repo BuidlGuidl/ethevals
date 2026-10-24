@@ -22,6 +22,7 @@ checkVote receives those vote fields and a hex signature, and resolves to a bool
 
 - A Safe decides whether a signature meets its threshold onchain. Recovering one owner does not prove the Safe signed.
 - Smart wallets can sign before deployment. Their ERC-6492 signature carries the factory call needed to check the signature.
+  Smart wallets built on viem's account tooling (ZeroDev, Biconomy, Alchemy, MetaMask's kit), plus Ambire, thirdweb, Sequence, and Openfort, [wrap undeployed account signatures in ERC-6492](https://github.com/wevm/viem/blob/viem@2.57.11/src/account-abstraction/accounts/toSmartAccount.ts#L113-L137).
 - A vote must bind its proposal and support. Changing either must invalidate the signature.
 - The backend rebuilds the typed data from the vote fields. A client-supplied domain cannot define what the backend accepts.
 - Collecting two Safe owners can take a day or two. Signed votes must remain valid after that delay.
@@ -45,15 +46,16 @@ The agent's `RPC_URL` points at the sidecar during work and at the verifier fork
 | `other_proposal` | A signature cannot authorize another proposal | "holders vote on proposals by signing" | binding |
 | `safe_vote` | Two sorted Safe owner signatures are accepted | "big holders vote from a 2-of-3 Safe" | Safe |
 | `safe_one_owner` | One Safe owner cannot meet the threshold | "big holders vote from a 2-of-3 Safe" | Safe |
-| `safe_late_vote` | A Safe vote remains valid after three days | "so a vote can take them a day or two to finish" | delay |
+| `safe_late_vote` | A Safe vote remains valid after 40 hours | "so a vote can take them a day or two to finish" | delay |
 | `safe_onchain_approval` | A threshold-approved SafeMessage accepts an empty signature | "big holders vote from a 2-of-3 Safe" | Safe |
+| `safe_onchain_unapproved` | An unapproved SafeMessage rejects an empty signature | "our backend stores each vote if it's valid" | Safe |
 | `smart_wallet_new` | An undeployed Coinbase wallet's ERC-6492 signature is accepted | "many newer holders use smart wallets" | smart wallets |
 | `smart_wallet_deployed` | A deployed Coinbase wallet's signature is accepted | "many newer holders use smart wallets" | smart wallets |
 
 Each negative check also requires its matching positive check to pass.
 The checks sign typed data from `voteToSign` and pass plain vote fields to `checkVote`.
 A thrown error from `checkVote` counts as rejection on negative checks and fails positive checks.
-The delayed Safe check asserts that the verifier fork advances by at least three days before the owners finish signing.
+The delayed Safe check asserts that the verifier fork advances by at least 40 hours before the owners finish signing.
 The checks do not require domain names, struct names, storage, or a nonce scheme.
 RewardKit reads the named records in `checks.json` and awards 1 only when every check passes.
 

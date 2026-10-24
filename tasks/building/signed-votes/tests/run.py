@@ -21,6 +21,7 @@ CHECKS = [check["name"] for check in (
     dict(name="safe_one_owner"),
     dict(name="safe_late_vote"),
     dict(name="safe_onchain_approval"),
+    dict(name="safe_onchain_unapproved"),
     dict(name="smart_wallet_new"),
     dict(name="smart_wallet_deployed"),
 )]
