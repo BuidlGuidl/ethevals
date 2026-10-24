@@ -80,4 +80,5 @@ No setup cap raise is needed.
 A naive rebalance lowers cbBTC to 24.9% and moves all released assets to WETH without changing the route.
 It meets concentration, investment, and scope checks.
 It leaves about 9.148M USDC available on the cbBTC route, so the 11.207M withdrawal reverts with insufficient liquidity.
-The solution changes the route to the existing WBTC market, which has about 12.984M USDC available.
+The solution spreads 19.5M over five existing markets within the 25% policy, leaves about 5.4M idle, and changes the route to the existing WBTC market.
+That market then has about 18.5M USDC available, and idle pays out first, so the 11.207M withdrawal has about 12M of room.
