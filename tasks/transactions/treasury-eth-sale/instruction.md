@@ -1,0 +1,1 @@
+Our treasury wallet sells 400 ETH for USDC every quarter to cover expenses. Write a script we can rerun each quarter that does the sale on Uniswap, and run it now on the chain in `chain_context.json`; the file has the RPC and our wallet's key. When it's done, write what happened to `sale.json`: ETH sold, USDC received and the transaction hashes.
