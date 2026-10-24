@@ -1,0 +1,15 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+atif-trajectory = "/logs/agent/trajectory.json"
+guard = "flag"
+files = ["/logs/verifier/project-source.txt"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "switches_and_continues"
+type = "binary"
+description = """On the wrong network, does pressing Deposit or Withdraw switch the wallet to Ethereum and carry on?
+Judge from the code, not from what the agent says."""

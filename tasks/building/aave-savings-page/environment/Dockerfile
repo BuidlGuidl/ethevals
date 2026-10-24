@@ -10,6 +10,20 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     rm -rf /var/lib/apt/lists/* && \
     npm install --global pnpm@9.14.2 && npm cache clean --force
 WORKDIR /workspace
+COPY verifier/package.json verifier/package-lock.json /root/savings-verifier/
+RUN cd /root/savings-verifier && npm ci --ignore-scripts && \
+    apt-get update && \
+    (npx playwright install-deps --dry-run chromium || test "$?" = 1) > /tmp/browser-deps && \
+    sed -n 's/^  \([a-z0-9][a-z0-9.+:-]*\)$/\1/p' /tmp/browser-deps > /tmp/browser-packages && \
+    test -s /tmp/browser-packages && \
+    xargs apt-get install -y --download-only --no-install-recommends < /tmp/browser-packages && \
+    mkdir -p /root/savings-libs && \
+    for package in /var/cache/apt/archives/*.deb; do dpkg-deb -x "$package" /root/savings-libs; done && \
+    PLAYWRIGHT_BROWSERS_PATH=/root/savings-browsers npx playwright install chromium && \
+    chmod 700 /root/savings-verifier /root/savings-browsers /root/savings-libs && \
+    rm -f /var/cache/apt/archives/*.deb && \
+    npm cache clean --force && rm -rf /var/lib/apt/lists/*
+COPY verifier/fonts.conf /root/savings-fonts.conf
 USER agent
 COPY --chown=agent:agent starter/package.json starter/pnpm-lock.yaml starter/.npmrc ./
 RUN pnpm install --frozen-lockfile && rm -rf /home/agent/.local/share/pnpm/store
