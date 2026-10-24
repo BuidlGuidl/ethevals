@@ -1,1 +1,0 @@
-Our borrow page computes what a user owes from the market's stored total debt and total debt shares, which the contract updates only when someone transacts. The market has been quiet for a day. Is the number our page shows too high, too low, or exact? One phrase.

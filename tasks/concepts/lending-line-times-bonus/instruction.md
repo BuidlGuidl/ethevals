@@ -1,1 +1,0 @@
-Our market liquidates once debt passes 95% of the collateral's value and pays the liquidator 10% more collateral than they repay. How far can the price fall after a loan crosses the line before a full liquidation leaves debt that no collateral covers? Give a percentage.
