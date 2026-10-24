@@ -6,7 +6,7 @@ The task checks allocations and ordinary depositor access after the move.
 ## The instruction
 
 ```text
-we curate the morpho vaults v2 vault in chain_context.json. almost half of it sits in one market, id in chain_context.json. our risk policy is no market above 25% of the vault. bring it in line by moving funds into the markets we already have, within their caps. deposits and withdrawals must keep working for our users. leave fees, roles, caps and timelocks alone. our wallet in chain_context.json holds the curator and allocator roles. do it on that chain and tell us what you did.
+we curate the morpho vaults v2 vault in chain_context.json. almost half of it sits in one market, id in chain_context.json. our risk policy is no market above 25% of the vault. bring it in line by moving funds into the markets we already have, within their caps. deposits and withdrawals must keep working for our users: a single withdrawal of a tenth of the vault must still go through. leave fees, roles, caps and timelocks alone. our wallet in chain_context.json holds the curator and allocator roles. do it on that chain and tell us what you did.
 ```
 
 ## What it touches
