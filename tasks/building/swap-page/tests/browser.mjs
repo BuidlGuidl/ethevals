@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHarness, until } from './harness.mjs';
 import { connect, prepareSwap, pressThrough, nextAction } from './controls.mjs';
-import { chainReader, funding, classify, classifyRequest, hasSwapLog, TOKENS } from './chain.mjs';
+import { chainReader, funding, classify, classifyRequest, TOKENS } from './chain.mjs';
 import { createMarket } from './market.mjs';
-import { belief, deltas, feeCheck, finiteDeadline, allowancesEmpty, routersEmpty, minimumCheck, receivedCheck } from './checks.mjs';
+import { belief, confirmedBelief, gradeJourney } from './checks.mjs';
 import { walletIdle } from './rpc-policy.mjs';
 import { rpc } from './rpc.mjs';
 
@@ -47,14 +47,16 @@ try {
     let marketResult;
     let lastDisplay;
     const pressRecords = [];
-    const result = { name, input, output: tokenOut, mode, completed: false, success: false, flags: {} };
+    let moveStarted;
+    let moveEnded;
+    const result = { name, input, output: tokenOut, amount, mode, evidenceOnly: Boolean(seed), completed: false, success: false, flags: {} };
     const isSwapRequest = request => {
-      if (['eth_sendTransaction', 'wallet_sendTransaction'].includes(request.method)) return classify(request.params[0], treasury).kind === 'swap';
-      return request.method === 'wallet_sendCalls' && request.params[0].calls.some(tx => classify(tx, treasury).kind === 'swap');
+      const classification = classifyRequest(request, treasury);
+      return classification.kind === 'swap' || classification.calls?.some(call => call.kind === 'swap');
     };
     const snapshot = async press => {
       pressRecords.push(press);
-      lastDisplay = press.belief;
+      if (press.label !== 'wallet swap request') lastDisplay = confirmedBelief(lastDisplay, press.belief);
       await fs.writeFile(path.join(output, `${name}-press-${pressRecords.length}.txt`), press.text);
       await save(`${name}-presses.json`, pressRecords);
     };
@@ -64,10 +66,9 @@ try {
         entry.classification = classification;
         if (classification.kind !== 'swap') return;
         swapRequests.push(entry);
-        // The page can update during an approval. Save its last visible belief at the actual swap request too.
+        // Wallet-pending views are evidence, not a new user confirmation.
         const text = await session.page.locator('body').innerText();
-        lastDisplay = belief(text, tokenOut);
-        await snapshot({ time: Date.now(), label: 'wallet swap request', text, belief: lastDisplay });
+        await snapshot({ time: Date.now(), label: 'wallet swap request', text, belief: belief(text, tokenOut) });
         if (mode === 'reject') throw Object.assign(new Error('User rejected the swap request'), { code: 4001 });
         if (mode === 'race' && !marketResult) {
           try { marketResult = await market.moveMarket(2, 'eth-buyers'); }
@@ -78,6 +79,15 @@ try {
       await connect(session.page, harness.account.address);
       const action = await prepareSwap(session.page, input, tokenOut, amount);
       if (mode === 'moved') {
+        await session.page.evaluate(() => {
+          window.swapTextEvidence = [];
+          const capture = () => {
+            const text = document.body.innerText;
+            if (window.swapTextEvidence.at(-1)?.text !== text) window.swapTextEvidence.push({ time: Date.now(), text });
+          };
+          new MutationObserver(capture).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
+          capture();
+        });
         const initialButton = await nextAction(session.page);
         // Open a review when the page offers one, so the move happens between quote and confirmation.
         if (initialButton && /^review\b/i.test(await initialButton.innerText())) {
@@ -88,18 +98,20 @@ try {
         }
         const beforeMove = await session.page.locator('body').innerText();
         await fs.writeFile(path.join(output, 'moved-before.txt'), beforeMove);
-        const quotedAt = Date.now();
+        moveStarted = Date.now();
         marketResult = await market.moveMarket(2, 'eth-buyers');
+        moveEnded = Date.now();
         await save('moved-market.json', marketResult);
-        // Keep the saved page's documented 30-second quote expiry observable even when the smaller mover finishes sooner.
-        const remaining = Math.max(0, 32_000 - (Date.now() - quotedAt));
-        if (remaining) await session.page.waitForTimeout(remaining);
+        // Every page gets the same one-minute observation interval after the move.
+        await session.page.waitForTimeout(60_000);
       }
       await pressThrough(action, { wallet: session.wallet, isSwapRequest, snapshot,
         maxPresses: mode === 'moved' && pressRecords.length ? 5 : 6 });
       if (hookError) throw hookError;
       if (!swapRequests.length) throw new Error('could not drive: no classified swap request after six presses or no enabled action');
-      await until(async () => /(?:received|reverted|rejected|failed|cancel)/i.test(await session.page.locator('body').innerText()), 12_000);
+      const requestText = pressRecords.findLast(press => press.label === 'wallet swap request')?.text;
+      await until(async () => (await session.page.locator('body').innerText()) !== requestText, 12_000);
+      await walletIdle(session.wallet);
       await session.page.waitForTimeout(500);
       result.completed = true;
     } catch (error) {
@@ -110,27 +122,11 @@ try {
     const transactions = session ? await reader.transactions(session.wallet) : [];
     if (session) for (const request of session.wallet.requests) request.classification ||= classifyRequest(request, treasury);
     const after = await reader.state();
-    const delta = deltas(before, after, transactions);
-    const swaps = transactions.filter(tx => tx.relevant);
-    const successful = swaps.filter(tx => tx.receipt.status === '0x1' && hasSwapLog(tx.receipt));
-    result.success = successful.length > 0 && delta.user[tokenOut] > 0n && delta.user[input] < 0n;
     const pageText = session ? await session.page.locator('body').innerText() : '';
-    result.delta = delta;
-    result.flags.fee = result.completed && feeCheck(delta, input, tokenOut, result.success);
-    if (mode === 'reject') result.flags.fee &&= swapRequests.some(entry => entry.error?.includes('rejected')) && !result.success;
-    if (mode === 'race') result.flags.fee &&= Boolean(marketResult && swaps.length);
-    result.flags.minimum = result.success && successful.every(tx => minimumCheck(lastDisplay || {}, tx.decoded, tokenOut, delta.user[tokenOut]).passed);
-    result.flags.approvals = result.success && allowancesEmpty(after);
-    result.leftoverAllowances = {
-      erc20: after.erc20Allowances.filter(item => item.amount !== 0n),
-      permit2: after.permit2Allowances.filter(item => item.amount !== 0n && BigInt(item.expiration) > after.timestamp),
-    };
-    result.flags.deadline = swaps.length > 0 && swaps.every(tx => finiteDeadline(tx.decoded));
-    result.flags.native = result.success && (tokenOut !== 'ETH' || (delta.user.ETH > 0n && delta.user.WETH === 0n));
-    result.flags.routers = result.success && routersEmpty(baseline, after);
-    result.flags.received = result.success && receivedCheck(pageText, tokenOut, delta.user[tokenOut]).passed;
-    result.minimum = successful.map(tx => minimumCheck(lastDisplay || {}, tx.decoded, tokenOut, delta.user[tokenOut]));
-    result.received = receivedCheck(pageText, tokenOut, delta.user[tokenOut]);
+    Object.assign(result, gradeJourney({ input, output: tokenOut, amount, mode, completed: result.completed,
+      before, after, baseline, transactions, display: lastDisplay, pageText, marketResult,
+      rejected: swapRequests.some(entry => entry.error?.includes('rejected')) }));
+    result.confirmedDisplay = lastDisplay;
     result.swapRequests = swapRequests.length;
     await save(`${name}-before.json`, before);
     await save(`${name}-after.json`, after);
@@ -139,7 +135,11 @@ try {
     if (session) await harness.capture(session, name);
     if (mode === 'moved') {
       const initial = await fs.readFile(path.join(output, 'moved-before.txt'), 'utf8').catch(() => 'could not drive');
-      await fs.writeFile(path.join(output, 'price-change.txt'), `Before the market move:\n${initial}\n\nAfter the move, at each press and wallet request:\n${pressRecords.map(press => `${press.time} ${press.label}\n${press.text}`).join('\n\n')}\n\nFinal page:\n${pageText}\n${result.error || ''}\n`);
+      const observations = session ? await session.page.evaluate(() => window.swapTextEvidence || []) : [];
+      await save('moved-text-observations.json', observations);
+      const phase = time => time < moveStarted ? 'before move' : time <= moveEnded ? 'during move' : 'after move';
+      const timeline = [...observations.map(item => ({ ...item, label: 'page changed' })), ...pressRecords].sort((a, b) => a.time - b.time);
+      await fs.writeFile(path.join(output, 'price-change.txt'), `Before the market move:\n${initial}\n\nMove started: ${moveStarted}; ended: ${moveEnded}.\nTimeline:\n${timeline.map(press => `${press.time} (${phase(press.time)}) ${press.label}\n${press.text}`).join('\n\n')}\n\nFinal page:\n${pageText}\n${result.error || ''}\n`);
     }
     outcomes.push(result);
     console.log(stringify({ event: 'journey', name, success: result.success, flags: result.flags, error: result.error }));
@@ -148,26 +148,27 @@ try {
   await runSwap({ name: 'usdc-eth', input: 'USDC', output: 'ETH', amount: '500' });
   await runSwap({ name: 'eth-usdc', input: 'ETH', output: 'USDC', amount: '1' });
   // Discover this page's actual spender, then replay from a clean snapshot with that one seeded allowance.
-  const probe = await runSwap({ name: 'usdt-probe', input: 'USDT', output: 'ETH', amount: '1000' });
+  const probe = await runSwap({ name: 'usdt-usdc', input: 'USDT', output: 'USDC', amount: '1000' });
   const approval = probe.transactions.find(tx => tx.tx.to?.toLowerCase() === TOKENS.USDT.toLowerCase() && tx.decoded.function === 'approve');
   const spender = approval?.decoded.spender || approval?.decoded.arg0;
-  if (probe.result.success && !spender) throw new Error('USDT probe has no approval spender');
-  await runSwap({ name: 'usdt-eth', input: 'USDT', output: 'ETH', amount: '1000', seed: spender });
+  if (spender) await runSwap({ name: 'usdt-seeded', input: 'USDT', output: 'USDC', amount: '1000', seed: spender });
   await runSwap({ name: 'moved', input: 'USDC', output: 'ETH', amount: '2000', mode: 'moved' });
   await runSwap({ name: 'rejected', input: 'USDC', output: 'ETH', amount: '500', mode: 'reject' });
   await runSwap({ name: 'reverted', input: 'USDC', output: 'ETH', amount: '500', mode: 'race' });
-  const normal = outcomes.filter(result => ['usdc-eth', 'eth-usdc', 'usdt-eth', 'moved'].includes(result.name));
+  const normal = outcomes.filter(result => ['usdc-eth', 'eth-usdc', 'usdt-usdc'].includes(result.name));
   const flag = { swaps_assets: null, cut_only_on_swap: 'fee', honors_minimum: 'minimum', exact_approvals: 'approvals', finite_deadline: 'deadline', native_eth: 'native', routers_empty: 'routers', shows_received: 'received' };
   for (const name of CHECKS) {
-    const selected = name === 'cut_only_on_swap' ? outcomes.filter(result => result.name !== 'usdt-probe')
-      : name === 'finite_deadline' ? outcomes.filter(result => result.name !== 'usdt-probe' && result.name !== 'rejected') : normal;
-    const passed = selected.every(result => name === 'swaps_assets' ? result.success : result.flags[flag[name]]);
+    const selected = name === 'cut_only_on_swap' ? outcomes.filter(result => !result.evidenceOnly && result.mode !== 'moved')
+      : name === 'finite_deadline' ? outcomes.filter(result => !result.evidenceOnly && !['reject', 'moved'].includes(result.mode))
+      : name === 'honors_minimum' ? [...normal, ...outcomes.filter(result => result.mode === 'moved')] : normal;
+    const passed = selected.every(result => name === 'swaps_assets' ? result.success && result.entered : result.flags[flag[name]]);
     const reasons = selected.map(result => {
       const status = result.error || (name === 'swaps_assets' ? result.success : result.flags[flag[name]]);
       let detail = '';
+      if (name === 'swaps_assets') detail = `entered ${result.amount} ${result.input}; input debit matches: ${result.entered}`;
       if (name === 'honors_minimum') detail = result.minimum.map(item => item.reason).join('; ') || 'could not read a minimum';
       if (name === 'shows_received') detail = result.received.reason;
-      if (name === 'cut_only_on_swap') detail = `swap ${result.success ? 'succeeded' : 'did not happen'}; user deltas ${stringify(result.delta.user).trim()}; treasury deltas ${stringify(result.delta.treasury).trim()} in base units`;
+      if (name === 'cut_only_on_swap') detail = `swap ${result.success ? 'succeeded' : 'did not happen'}; user deltas ${stringify(result.delta.user).trim()}; treasury deltas ${stringify(result.delta.treasury).trim()}; treasury in swap blocks ${stringify(result.swapTreasury).trim()} in base units`;
       if (name === 'exact_approvals' && !result.flags.approvals) detail = `Remaining allowances: ${stringify(result.leftoverAllowances).trim()}`;
       if (name === 'finite_deadline' && !result.flags.deadline) detail = 'A router or Swap-log transaction has no finite decoded deadline.';
       return `${result.name}: ${status}${detail ? `; ${detail}` : ''}`;

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { require, createPublicClient, http, parseAbi, encodeFunctionData, decodeEventLog, keccak256, zeroAddress } from './deps.mjs';
-import { TOKENS, MANAGER, VIEW, ERC20, address } from './lib.mjs';
+import { TOKENS, VIEW, ERC20, address } from './lib.mjs';
 import { rpc as request, receipt } from './rpc.mjs';
 const solc = require('solc');
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -73,11 +73,6 @@ export function createMarket({ url, output }) {
     const ratio = (Number(sqrt) / 2 ** 96) ** 2
     return eth0 ? ratio * 1e12 : 1e12 / ratio
   }
-  function marketPools(discovered) {
-    return discovered.pools
-  }
-  async function discover() { return JSON.parse(fs.readFileSync(path.join(ROOT, 'pools.json'), 'utf8')) }
-
   function compileMover() {
     const source = fs.readFileSync(path.join(ROOT, 'MarketMover.sol'), 'utf8')
     const result = JSON.parse(solc.compile(JSON.stringify({
@@ -128,7 +123,7 @@ export function createMarket({ url, output }) {
   }
   async function moveMarket(pct, against) {
     if (!(pct > 0 && pct < 25)) throw new Error('Choose a percentage above 0 and below 25.')
-    const discovered = await discover()
+    const { pools } = JSON.parse(fs.readFileSync(path.join(ROOT, 'pools.json'), 'utf8'))
     const account = await mover()
     const snapshot = await rpc('evm_snapshot')
     const scale = 1_000_000n
@@ -137,8 +132,7 @@ export function createMarket({ url, output }) {
     const results = []
     await rpc('anvil_impersonateAccount', [account.owner])
     try {
-      const selected = marketPools(discovered)
-      const ordered = [...selected.filter(p => p.key.hooks !== zeroAddress), ...selected.filter(p => p.key.hooks === zeroAddress)]
+      const ordered = [...pools.filter(p => p.key.hooks !== zeroAddress), ...pools.filter(p => p.key.hooks === zeroAddress)]
       for (const pool of ordered) {
         const before = await slot(pool)
         const eth0 = [zeroAddress.toLowerCase(), TOKENS.WETH.toLowerCase()].includes(pool.key.currency0.toLowerCase())
@@ -176,7 +170,7 @@ export function createMarket({ url, output }) {
       throw new Error('Market move failed and restored its snapshot: ' + error.message)
     } finally { await rpc('anvil_stopImpersonatingAccount', [account.owner]) }
     const result = { pct, against, selection: 'Eight active v3 pools and three main hooked v4 pools at block 26260992',
-      excludedHooked: discovered.pools.filter(pool => !marketPools(discovered).includes(pool)), results }
+      results }
     save('market-move-' + Date.now() + '.json', result)
     return result
   }

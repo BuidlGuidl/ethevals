@@ -16,10 +16,9 @@ export const TOKENS = {
   USDT: address('0xdAC17F958D2ee523a2206206994597C13D831ec7'),
 }
 export const PERMIT2 = address('0x000000000022D473030F116dDEE9F6B43aC78BA3')
-export const MANAGER = address('0x000000000004444c5dc75cB358380D2e3dE08A90')
 export const VIEW = address('0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227')
-export const FACTORY = address('0x1F98431c8aD98523631AE4a59f267346ea31F984')
 export const ROUTERS = {
+  'V2 Router02': address('0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D'),
   ...Object.fromEntries(Object.entries(ur.CHAIN_CONFIGS[1].routerConfigs).map(([version, entry]) =>
     ['UniversalRouter ' + version, address(entry.address)])),
   'UniversalRouter legacy': address('0xEf1c6E67703c7BD7107eed8303Fbe6EC2554BF6B'),

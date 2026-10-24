@@ -22,7 +22,7 @@ export const hasSwapLog = receipt => receipt?.logs?.some(log => swapTopics.inclu
 
 export function classify(tx, treasury) {
   const decoded = decode(tx.data || tx.input || '0x', tx.to);
-  if (routerTransaction(tx) || /^(?:execute|multicall|exactInput|exactOutput)/.test(decoded.function)) return { kind: 'swap', decoded };
+  if (routerTransaction(tx) || /^(?:execute|multicall|exactInput|exactOutput|swapExact|swap\w*ForExact)/.test(decoded.function)) return { kind: 'swap', decoded };
   if (decoded.function === 'approve') return { kind: 'approve', decoded };
   if (same(tx.to, PERMIT2) && decoded.function === 'permit') return { kind: 'permit', decoded };
   if (same(tx.to, treasury) && BigInt(tx.value || 0) > 0n) return { kind: 'fee', decoded };
@@ -45,9 +45,9 @@ export function classifyRequest(request, treasury) {
 
 export function chainReader(url, owner, treasury) {
   const client = createPublicClient({ transport: http(url) });
-  async function balances(address) {
+  async function balances(address, blockNumber) {
     return Object.fromEntries(await Promise.all(Object.entries(TOKENS).map(async ([symbol, token]) => [symbol,
-      symbol === 'ETH' ? await client.getBalance({ address }) : await client.readContract({ address: token, abi: ERC20, functionName: 'balanceOf', args: [address] }),
+      symbol === 'ETH' ? await client.getBalance({ address, blockNumber }) : await client.readContract({ address: token, abi: ERC20, functionName: 'balanceOf', args: [address], blockNumber }),
     ])));
   }
   async function state() {
@@ -73,8 +73,15 @@ export function chainReader(url, owner, treasury) {
   async function transactions(wallet) {
     return Promise.all(wallet.transactions.map(async result => {
       const tx = await rpc(url, 'eth_getTransactionByHash', [result.hash]);
-      return { ...result, tx, decoded: decode(tx.input || '0x', tx.to), kind: classify(tx, treasury).kind,
-        relevant: routerTransaction(tx) || hasSwapLog(result.receipt),
+      const relevant = routerTransaction(tx) || hasSwapLog(result.receipt);
+      let treasuryDelta;
+      if (relevant) {
+        const block = BigInt(result.receipt.blockNumber);
+        const [before, after] = await Promise.all([balances(treasury, block - 1n), balances(treasury, block)]);
+        treasuryDelta = Object.fromEntries(Object.keys(TOKENS).map(symbol => [symbol, after[symbol] - before[symbol]]));
+      }
+      return { ...result, tx, treasuryDelta, decoded: decode(tx.input || '0x', tx.to), kind: classify(tx, treasury).kind,
+        relevant,
         gasCost: BigInt(result.receipt.gasUsed) * BigInt(result.receipt.effectiveGasPrice) };
     }));
   }

@@ -33,15 +33,6 @@ export async function read(url, address, abi, functionName, args = []) {
 }
 export const balance = async (url, token, owner) => BigInt(await read(url, token, tokenAbi, 'balanceOf', [owner]));
 
-export async function advanceTime(url, seconds) {
-  const before = await rpc(url, 'eth_getBlockByNumber', ['latest', false]);
-  const timestamp = Number(before.timestamp) + seconds;
-  await rpc(url, 'evm_setNextBlockTimestamp', [timestamp]);
-  await rpc(url, 'evm_mine');
-  const after = await rpc(url, 'eth_getBlockByNumber', ['latest', false]);
-  if (Number(after.timestamp) !== timestamp) throw Object.assign(new Error('Verifier fork time did not advance'), { infrastructure: true });
-}
-
 export async function receipt(url, hash) {
   const deadline = Date.now() + 120_000;
   do {

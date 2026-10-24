@@ -8,6 +8,5 @@ contract Setup is ChainSetup {
         address treasury = address(uint160(vm.randomUint(1, type(uint160).max)));
         require(treasury.code.length == 0, "Treasury must have no code");
         chainRecord("treasury", treasury);
-        privateRecord("treasury", treasury);
     }
 }

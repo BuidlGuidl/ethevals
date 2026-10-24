@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict'
-import { parseAbi, encodeFunctionData, encodeAbiParameters, parseAbiParameters } from './deps.mjs'
+import { encodeFunctionData, encodeAbiParameters, parseAbiParameters } from './deps.mjs'
 import { ur, v4, TOKENS, ROUTERS, PERMIT2, P2ABI } from './lib.mjs'
 import { ABI, decode } from './decode.mjs'
+import { classify, classifyRequest } from './chain.mjs'
+import { finiteDeadline, sentMinimum, minimumCheck, belief } from './checks.mjs'
 
 test('SDK and legacy calldata decode across router versions', () => {
 const recipient = '0x0000000000000000000000000000000000000001'
@@ -59,4 +61,38 @@ assert.equal(decode(data, PERMIT2).permitBatch.details[0].amount, 5n)
 
 console.log('Passed ' + (results.length + 1) + ' decoder cases.')
 
+});
+
+test('classifies and decodes every V2 Router02 function and SwapRouter02 v2 multicalls', () => {
+  const timestamp = 1700000000n;
+  for (const fn of ABI.filter(fn => fn.name?.startsWith('swap'))) {
+    const direct = fn.inputs.some(input => input.name === 'deadline');
+    const router = direct ? ROUTERS['V2 Router02'] : ROUTERS.SwapRouter02;
+    const output = fn.name.includes('ForETH') || fn.name.includes('ForExactETH') ? TOKENS.WETH : TOKENS.USDC;
+    const args = fn.inputs.map(input => ({ amountIn: 500000000n, amountOutMin: 200000000n, amountOut: 200000000n,
+      amountInMax: 500000000n, path: [TOKENS.USDT, output], to: TOKENS.USDC, deadline: timestamp + 1200n })[input.name]);
+    const inner = encodeFunctionData({ abi: [fn], functionName: fn.name, args });
+    const data = direct ? inner : encodeFunctionData({ abi: ABI.filter(fn => fn.name === 'multicall' && fn.inputs[0].type === 'uint256'),
+      functionName: 'multicall', args: [timestamp + 1200n, [inner]] });
+    const decoded = decode(data, router);
+    const symbol = output === TOKENS.WETH ? 'ETH' : 'USDC';
+    assert.equal(classify({ to: router, data }).kind, 'swap', fn.name);
+    assert.equal(classifyRequest({ method: 'eth_sendTransaction', params: [{ to: router, data }] }).kind, 'swap');
+    assert.equal(finiteDeadline(decoded, timestamp), true, fn.name);
+    assert.equal(sentMinimum(decoded, symbol), 200000000n, fn.name);
+    if (!direct) assert.equal(finiteDeadline(decode(inner, router), timestamp), false);
+  }
+});
+
+test('0x8000 cannot use an optional Universal Router swap to enforce the minimum', () => {
+  const router = ROUTERS['UniversalRouter legacy'];
+  const fields = ur.COMMAND_DEFINITION[0].params;
+  const encode = minimum => encodeAbiParameters(parseAbiParameters(fields.map(field => field.type + ' ' + field.name).join(',')),
+    ['0x0000000000000000000000000000000000000001', 500000000n, minimum, TOKENS.USDC + '0001f4' + TOKENS.WETH.slice(2), true]);
+  const data = encodeFunctionData({ abi: ABI, functionName: 'execute', args: ['0x8000', [encode(200000000000000000n), encode(0n)], 1700001200n] });
+  const decoded = decode(data, router);
+  assert.deepEqual(decoded.commands.map(command => command.allowRevert), [true, false]);
+  assert.equal(sentMinimum(decoded, 'ETH'), 0n);
+  assert.equal(minimumCheck(belief('Minimum 0.2 ETH', 'ETH'), decoded, 'ETH', 210000000000000000n).passed, false);
+  assert.equal(sentMinimum({ commands: [{ allowRevert: true, actions: [{ amountOutMinimum: 200000000000000000n }] }, { amountOutMin: 0n }] }, 'ETH'), 0n);
 });

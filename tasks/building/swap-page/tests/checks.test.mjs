@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { belief, labelledAmount, feeCheck, deltas, finiteDeadline, sentMinimum, minimumCheck, allowancesEmpty, receivedCheck, routersEmpty } from './checks.mjs';
+import { belief, labelledAmount, feeCheck, deltas, finiteDeadline, sentMinimum, minimumCheck, allowancesEmpty, receivedCheck, routersEmpty, enteredAmountCheck, gradeJourney } from './checks.mjs';
 import { classify, classifyRequest, routerTransaction, hasSwapLog, swapTopics } from './chain.mjs';
 import { TOKENS, ROUTERS, PERMIT2, ERC20 } from './lib.mjs';
 import { encodeFunctionData } from './deps.mjs';
@@ -19,10 +19,12 @@ test('rejects a premature fee and accepts input or output fees within relative t
   const rejected = { user: { ...balances, USDC: -1250000n }, treasury: { ...balances, USDC: 1250000n } };
   assert.equal(feeCheck(rejected, 'USDC', 'ETH', false), false);
   assert.equal(feeCheck({ user: balances, treasury: balances }, 'USDC', 'ETH', false), true);
-  assert.equal(feeCheck({ user: { ...balances, USDC: -500000000n, ETH: 200000000000000000n }, treasury: { ...balances, USDC: 1250000n } }, 'USDC', 'ETH', true), true);
-  assert.equal(feeCheck({ user: { ...balances, USDC: -500000000n, ETH: 199500000000000000n }, treasury: { ...balances, ETH: 500000000000000n } }, 'USDC', 'ETH', true), true);
-  assert.equal(feeCheck({ user: { ...balances, USDC: -500000000n, ETH: 199500000000000000n }, treasury: { ...balances, WETH: 500000000000000n } }, 'USDC', 'ETH', true), true);
-  assert.equal(feeCheck({ user: { ...balances, USDC: -500000000n, ETH: 199500000000000000n }, treasury: { ...balances, ETH: 1000000000000000n } }, 'USDC', 'ETH', true), false);
+  for (const [asset, amount, expected] of [['USDC', 1250000n, true], ['ETH', 500000000000000n, true], ['WETH', 500000000000000n, true], ['ETH', 1000000000000000n, false]]) {
+    const treasury = { ...balances, [asset]: amount };
+    const delta = { user: { ...balances, USDC: -500000000n, ETH: asset === 'USDC' ? 200000000000000000n : 199500000000000000n }, treasury };
+    assert.equal(feeCheck(delta, 'USDC', 'ETH', true, treasury), expected);
+    assert.equal(feeCheck(delta, 'USDC', 'ETH', true, balances), false, 'a separate fee transaction gets no credit');
+  }
 });
 
 test('subtracts only gas from an unsuccessful journey, including prior approval gas', () => {
@@ -53,9 +55,13 @@ test('compares the submitted minimum and chain output with the last visible mini
 });
 
 test('requires deadlines on nested swaps and excludes transfers and wraps from the trigger', () => {
-  assert.equal(finiteDeadline({ function: 'multicall', deadline: 1234567890n, calls: [{ function: 'exactInputSingle', deadline: 1234567890n }] }), true);
-  assert.equal(finiteDeadline({ function: 'multicall', deadline: 'absent', calls: [{ function: 'exactInputSingle', deadline: 'absent' }] }), false);
-  assert.equal(finiteDeadline({ function: 'exactInputSingle', deadline: (1n << 256n) - 1n }), false);
+  const timestamp = 1234567000n;
+  assert.equal(finiteDeadline({ function: 'multicall', deadline: 1234567890n, calls: [{ function: 'exactInputSingle', deadline: 1234567890n }] }, timestamp), true);
+  assert.equal(finiteDeadline({ function: 'multicall', deadline: 'absent', calls: [{ function: 'exactInputSingle', deadline: 'absent' }] }, timestamp), false);
+  for (const deadline of [(1n << 256n) - 1n, BigInt(Number.MAX_SAFE_INTEGER), timestamp + 365n * 86400n + 1n]) {
+    assert.equal(finiteDeadline({ function: 'exactInputSingle', deadline }, timestamp), false);
+  }
+  assert.equal(finiteDeadline({ function: 'exactInputSingle', deadline: timestamp + 365n * 86400n }, timestamp), true);
   assert.equal(routerTransaction({ to: TOKENS.WETH, input: '0x', value: '0x1' }), false);
   assert.equal(hasSwapLog({ logs: [{ topics: ['0xddf252ad'] }] }), false);
   assert.equal(hasSwapLog({ logs: [{ topics: [swapTopics[1]] }] }), true);
@@ -73,4 +79,36 @@ test('checks both allowance layers and compares router dust with its baseline', 
   const baseline = { routerBalances: [{ balances: { ETH: 0n, WETH: 0n, USDC: 0n, USDT: 2000n } }] };
   assert.equal(routersEmpty(baseline, baseline), true);
   assert.equal(routersEmpty(baseline, { routerBalances: [{ balances: { ...baseline.routerBalances[0].balances, WETH: 1n } }] }), false);
+});
+
+test('reads token-first minima and natural received phrasings', () => {
+  for (const text of ['Minimum received: ETH 0.2', 'Minimum received\nETH\n0.2', 'Minimum received 0.2 ETH']) {
+    assert.equal(belief(text, 'ETH').minimum.value, 200000000000000000n);
+  }
+  for (const text of ['You received ETH 0.21', 'Swapped 500 USDC for 0.21 ETH', '0.21 ETH received', 'ETH 0.21 received']) {
+    assert.equal(receivedCheck(text, 'ETH', 210000000000000000n).passed, true, text);
+    assert.equal(receivedCheck(text, 'ETH', 230000000000000000n).passed, false, text);
+  }
+});
+
+test('compares the entered amount with the debit, including input fees', () => {
+  const zero = { ETH: 0n, WETH: 0n, USDC: 0n, USDT: 0n };
+  const delta = spent => ({ user: { ...zero, USDC: -spent }, treasury: { ...zero, USDC: 1250000n } });
+  assert.equal(enteredAmountCheck('500', 'USDC', delta(500000000n)), true);
+  assert.equal(enteredAmountCheck('500', 'USDC', delta(501250000n)), true);
+  assert.equal(enteredAmountCheck('500', 'USDC', delta(5000000n)), false);
+});
+
+test('a moved-market revert honours the minimum when both parties lose only gas', () => {
+  const zero = { ETH: 0n, WETH: 0n, USDC: 0n, USDT: 0n };
+  const before = { timestamp: 1700000000n, ownerBalances: { ...zero, ETH: 100n, USDC: 500000000n }, treasuryBalances: zero,
+    erc20Allowances: [], permit2Allowances: [], routerBalances: [] };
+  const after = { ...before, ownerBalances: { ...before.ownerBalances, ETH: 95n } };
+  const evidence = { input: 'USDC', output: 'ETH', amount: '500', mode: 'moved', completed: true, before, after, baseline: before,
+    transactions: [{ relevant: true, receipt: { status: '0x0' }, gasCost: 5n, decoded: { function: 'exactInputSingle', amountOutMinimum: 200000000000000000n, deadline: 1700001000n } }],
+    display: belief('Minimum 0.2 ETH', 'ETH'), pageText: 'Swap reverted' };
+  assert.equal(gradeJourney(evidence).flags.minimum, true);
+  assert.equal(gradeJourney(evidence).success, false);
+  assert.equal(gradeJourney({ ...evidence, after: { ...after, treasuryBalances: { ...zero, USDC: 1n } } }).flags.minimum, false);
+  assert.equal(gradeJourney({ ...evidence, display: belief('Minimum 0.3 ETH', 'ETH') }).flags.minimum, false);
 });

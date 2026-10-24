@@ -1,12 +1,23 @@
 import path from 'node:path'
 import {
-  parseAbi, parseAbiParameters, decodeAbiParameters, decodeFunctionData, decodeEventLog, toFunctionSelector,
+  parseAbi, parseAbiParameters, decodeAbiParameters, decodeFunctionData, toFunctionSelector,
 } from './deps.mjs'
-import { ur, v4, require, ERC20, P2ABI, TOKENS, PERMIT2, ROUTERS, label } from './lib.mjs'
+import { ur, v4, require, ERC20, P2ABI, PERMIT2, ROUTERS, label } from './lib.mjs'
 
 const v4dir = path.dirname(require.resolve('@uniswap/v4-sdk'))
 const v4defs = require(path.join(v4dir, 'utils/v4Planner.js'))
 export const ABI = parseAbi([
+  'function swapExactTokensForTokens(uint256 amountIn,uint256 amountOutMin,address[] path,address to,uint256 deadline) returns (uint256[])',
+  'function swapTokensForExactTokens(uint256 amountOut,uint256 amountInMax,address[] path,address to,uint256 deadline) returns (uint256[])',
+  'function swapExactETHForTokens(uint256 amountOutMin,address[] path,address to,uint256 deadline) payable returns (uint256[])',
+  'function swapTokensForExactETH(uint256 amountOut,uint256 amountInMax,address[] path,address to,uint256 deadline) returns (uint256[])',
+  'function swapExactTokensForETH(uint256 amountIn,uint256 amountOutMin,address[] path,address to,uint256 deadline) returns (uint256[])',
+  'function swapETHForExactTokens(uint256 amountOut,address[] path,address to,uint256 deadline) payable returns (uint256[])',
+  'function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn,uint256 amountOutMin,address[] path,address to,uint256 deadline)',
+  'function swapExactETHForTokensSupportingFeeOnTransferTokens(uint256 amountOutMin,address[] path,address to,uint256 deadline) payable',
+  'function swapExactTokensForETHSupportingFeeOnTransferTokens(uint256 amountIn,uint256 amountOutMin,address[] path,address to,uint256 deadline)',
+  'function swapExactTokensForTokens(uint256 amountIn,uint256 amountOutMin,address[] path,address to) payable returns (uint256)',
+  'function swapTokensForExactTokens(uint256 amountOut,uint256 amountInMax,address[] path,address to) payable returns (uint256)',
   'function execute(bytes commands,bytes[] inputs,uint256 deadline) payable',
   'function execute(bytes commands,bytes[] inputs) payable',
   'function multicall(bytes[] data) payable returns (bytes[])',
@@ -26,7 +37,6 @@ export const ABI = parseAbi([
   'function sweepTokenWithFee(address token,uint256 amountMinimum,address recipient,uint256 feeBips,address feeRecipient) payable',
   'function refundETH() payable',
 ])
-const TRANSFER = parseAbi(['event Transfer(address indexed from,address indexed to,uint256 value)'])
 const newer = to => Object.entries(ROUTERS).some(([name, a]) => /2\.1|2\.2/.test(name) && a.toLowerCase() === to?.toLowerCase())
 const decodeFields = (defs, raw) => {
   const params = parseAbiParameters(defs.map(d => d.type + ' ' + d.name).join(','))
@@ -100,12 +110,4 @@ export function decode(data, to, inheritedDeadline = 'absent') {
     .find(f => f.type === 'function' && toFunctionSelector(f) === data.slice(0, 10))
   const fields = Object.fromEntries(args.map((a, i) => [definition?.inputs[i]?.name || 'arg' + i, a]))
   return { function: name, deadline: inheritedDeadline, ...fields }
-}
-export function transfers(receipt, treasury) {
-  return receipt.logs.flatMap(log => {
-    try {
-      const { args } = decodeEventLog({ abi: TRANSFER, data: log.data, topics: log.topics })
-      return [{ token: label(log.address), ...args, treasuryFee: args.to.toLowerCase() === treasury?.toLowerCase() }]
-    } catch { return [] }
-  })
 }

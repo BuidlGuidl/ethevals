@@ -1,10 +1,18 @@
-import { CouldNotDrive, firstVisible, amountInputs } from './control-vocabulary.mjs';
 import { belief } from './checks.mjs';
 import { until } from './harness.mjs';
 import { walletIdle } from './rpc-policy.mjs';
 
 const tokenName = /^(?:ETH|USDC|USDT)$/i;
 const actionName = /^(?:(?:swap|review|confirm|approve|accept|continue|refresh|switch)\b)/i;
+
+export class CouldNotDrive extends Error {
+  constructor(message) { super(`could not drive: ${message}`); }
+}
+export async function firstVisible(locator) {
+  for (const item of await locator.all()) if (await item.isVisible()) return item;
+  return null;
+}
+export const amountInputs = scope => scope.getByRole('textbox').or(scope.locator('input[type="number"]'));
 
 export async function connect(page, address) {
   await page.waitForFunction(() => document.body.innerText.trim().length > 0);
@@ -28,19 +36,33 @@ export async function connect(page, address) {
 }
 
 async function slots(page) {
-  const candidates = page.locator('select,[role="combobox"]').or(page.getByRole('button', { name: /^(?:(?:select|choose|from|to|sell|buy)\s+)?(?:ETH|USDC|USDT)(?:\s*[⌄▾▼])?$/i }));
+  const candidates = page.locator('select,[role="combobox"]').or(page.getByRole('button'));
   const result = [];
   for (const item of await candidates.all()) {
     if (!await item.isVisible()) continue;
-    const valid = await item.evaluate(el => el.tagName === 'SELECT'
-      ? [...el.options].some(option => /^(ETH|USDC|USDT)$/.test(option.textContent.trim()))
-      : /\b(ETH|USDC|USDT)\b/.test(el.innerText || el.getAttribute('aria-label') || ''));
-    if (valid) result.push(item);
+    const rank = await item.evaluate(el => {
+      const text = `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${[...el.querySelectorAll('img[alt]')].map(image => image.alt).join(' ')}`;
+      const token = el.tagName === 'SELECT' ? [...el.options].some(option => /\b(ETH|USDC|USDT)\b/i.test(option.textContent))
+        : /\b(ETH|USDC|USDT)\b|(?:select|choose).*(?:token|input|output)/i.test(text);
+      if (!token || /^(?:swap|approve|review|confirm|switch|refresh)\b/i.test(text.trim())) return null;
+      let distance = 100;
+      for (let parent = el.parentElement, depth = 0; parent && parent.tagName !== 'BODY'; parent = parent.parentElement, depth++) {
+        if (parent.querySelector('input:not([type="hidden"]),output')) { distance = depth; break; }
+      }
+      if (distance === 100) return null;
+      const label = /\b(input|from|sell)\b/i.test(text) ? 0 : /\b(output|to|buy)\b/i.test(text) ? 1 : null;
+      return { label, distance };
+    });
+    if (rank) result.push({ item, order: result.length, ...rank });
   }
-  return result;
+  const nearest = result.sort((a, b) => a.distance - b.distance).slice(0, 2).sort((a, b) => a.order - b.order);
+  // Explicit slot labels take precedence; DOM order resolves unlabeled controls.
+  if (nearest.some(slot => slot.label !== null)) nearest.sort((a, b) => (a.label ?? 0.5) - (b.label ?? 0.5));
+  return nearest.map(slot => slot.item);
 }
 async function slotSymbol(slot) {
-  return slot.evaluate(el => (el.tagName === 'SELECT' ? el.selectedOptions[0]?.textContent : el.innerText || el.getAttribute('aria-label') || '').match(/\b(ETH|USDC|USDT)\b/)?.[1]);
+  return slot.evaluate(el => (el.tagName === 'SELECT' ? el.selectedOptions[0]?.textContent
+    : `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${[...el.querySelectorAll('img[alt]')].map(image => image.alt).join(' ')}`).match(/\b(ETH|USDC|USDT)\b/i)?.[1]?.toUpperCase());
 }
 async function choose(page, index, symbol) {
   const controls = await slots(page);
@@ -48,13 +70,13 @@ async function choose(page, index, symbol) {
   if (slot) {
     if (await slotSymbol(slot) === symbol) return;
     if (await slot.evaluate(el => el.tagName === 'SELECT')) {
-      const value = await slot.evaluate((el, symbol) => [...el.options].find(option => option.textContent.trim() === symbol)?.value, symbol);
+      const value = await slot.evaluate((el, symbol) => [...el.options].find(option => new RegExp(`\\b${symbol}\\b`, 'i').test(option.textContent))?.value, symbol);
       if (value !== undefined) { await slot.selectOption(value); return; }
     }
     await slot.click();
     const popup = await firstVisible(page.getByRole('listbox').or(page.getByRole('dialog')));
     const scope = popup || page;
-    const option = await firstVisible(scope.getByRole('option', { name: new RegExp(`^${symbol}(?:\\b.*)?$`, 'i') }).or(scope.getByRole('button', { name: new RegExp(`^${symbol}$`, 'i') })));
+    const option = await firstVisible(scope.getByRole('option', { name: new RegExp(`\\b${symbol}\\b`, 'i') }).or(scope.getByRole('button', { name: new RegExp(`\\b${symbol}\\b`, 'i') })));
     if (option) { await option.click(); return; }
   }
   for (const role of ['tab', 'radio']) {
@@ -76,7 +98,7 @@ export async function prepareSwap(page, input, output, amount) {
     return selected.map(text => text.trim()).filter(text => tokenName.test(text)).join(',') === `${input},${output}`;
   }
   if (!await correctPair()) {
-    const flip = await firstVisible(page.getByRole('button', { name: /flip|swap direction|switch tokens|↓↑|⇅|↕/i }));
+    const flip = await firstVisible(page.getByRole('button', { name: /flip|swap direction|^switch$|switch tokens|↓↑|⇅|↕/i }));
     if (flip && await flip.isEnabled()) await flip.click();
   }
   if (!await correctPair()) throw new CouldNotDrive(`pair: expected ${input} then ${output}`);
@@ -85,15 +107,16 @@ export async function prepareSwap(page, input, output, amount) {
     if (await item.isVisible() && await item.isEnabled() && await item.isEditable()) inputs.push(item);
   }
   let amountInput;
+  const inputSlot = (await slots(page))[0];
+  const inputControl = inputSlot ? await inputSlot.elementHandle() : null;
   for (const item of inputs) {
-    if (await item.evaluate((el, token) => {
+    if (inputControl && await item.evaluate((el, slot) => {
       for (let parent = el.parentElement; parent && parent.tagName !== 'BODY'; parent = parent.parentElement) {
-        const controls = parent.querySelectorAll('select,[role="combobox"],button');
-        if ([...controls].some(control => new RegExp(`\\b${token}\\b`).test(control.innerText || ''))) return true;
         if (parent.querySelectorAll('input').length > 1) return false;
+        if (parent.contains(slot)) return true;
       }
       return false;
-    }, input)) { amountInput = item; break; }
+    }, inputControl)) { amountInput = item; break; }
   }
   amountInput ||= inputs.length === 1 ? inputs[0] : null;
   if (!amountInput) throw new CouldNotDrive('input amount');
@@ -109,7 +132,7 @@ export async function nextAction(page) {
     if (!await button.isVisible() || !await button.isEnabled()) continue;
     const label = await button.innerText();
     const accessible = await button.getAttribute('aria-label') || label;
-    if (/direction|new swap|another swap|tokens|[↓↑⇅↕]/i.test(`${label} ${accessible}`)) continue;
+    if (/direction|new swap|another swap|tokens|[↓↑⇅↕]/i.test(`${label} ${accessible}`) || /^switch$/i.test(accessible.trim())) continue;
     const depth = await button.evaluate(el => {
       let depth = 0;
       for (let parent = el.parentElement; parent && parent.tagName !== 'BODY'; parent = parent.parentElement) {
@@ -118,30 +141,25 @@ export async function nextAction(page) {
       }
       return 1000;
     });
-    candidates.push({ button, depth, review: /^(?:confirm|refresh|accept|continue|approve|review)\b/i.test(label) });
+    const priority = /^refresh\b/i.test(accessible) ? 2 : /^(?:confirm|accept|continue|approve|review)\b/i.test(accessible) ? 0 : 1;
+    candidates.push({ button, depth, priority });
   }
-  candidates.sort((a, b) => Number(b.review) - Number(a.review) || a.depth - b.depth);
+  candidates.sort((a, b) => a.priority - b.priority || a.depth - b.depth);
   return candidates[0]?.button || null;
 }
 
-export async function pressThrough(action, { wallet, isSwapRequest, snapshot, beforePress = async () => {}, maxPresses = 6 }) {
-  const presses = [];
-  let lastBelief;
+export async function pressThrough(action, { wallet, isSwapRequest, snapshot, maxPresses = 6 }) {
   for (let index = 0; index < maxPresses; index++) {
     const button = await nextAction(action.page);
     if (!button) break;
     const text = await action.page.locator('body').innerText();
     const label = await button.innerText();
-    lastBelief = belief(text, action.output);
-    const press = { index, time: Date.now(), label, text, belief: lastBelief };
-    presses.push(press);
+    const press = { index, time: Date.now(), label, text, belief: belief(text, action.output) };
     await snapshot(press);
-    await beforePress(press);
     await button.click();
     const idle = await walletIdle(wallet, { timeoutMs: 240_000 });
     if (!idle) throw new CouldNotDrive('wallet request did not settle');
     if (wallet.requests.some(isSwapRequest)) break;
     await action.page.waitForTimeout(400);
   }
-  return { presses, belief: lastBelief };
 }
