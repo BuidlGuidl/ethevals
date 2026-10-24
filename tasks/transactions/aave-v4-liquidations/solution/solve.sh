@@ -25,9 +25,15 @@ def call(signature, *args):
 
 
 def send(target, signature, *args):
-    return json.loads(subprocess.check_output(
+    estimate = int(subprocess.check_output(
+        ["cast", "estimate", target, signature, *map(str, args), "--from", chain["wallet"],
+         "--rpc-url", rpc], text=True).strip())
+    receipt = json.loads(subprocess.check_output(
         ["cast", "send", target, signature, *map(str, args), "--private-key", key,
-         "--rpc-url", rpc, "--json"], text=True))
+         "--rpc-url", rpc, "--gas-limit", str(estimate * 3 // 2), "--json"], text=True))
+    if int(receipt["status"], 16) != 1:
+        raise RuntimeError(f"Transaction failed: {receipt['transactionHash']}")
+    return receipt
 
 
 send(usdc, "approve(address,uint256)", spoke, maximum)
