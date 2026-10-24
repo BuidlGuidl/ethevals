@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from decimal import Decimal
 from pathlib import Path
 import subprocess
@@ -18,18 +19,71 @@ def rpc(url, method, params):
     return result["result"]
 
 
-def field(row, *names):
+def field(row, *names, default=...):
+    normalized = {re.sub(r"[^a-z0-9]", "", key.lower()): value for key, value in row.items()}
     for name in names:
-        if name in row:
-            return row[name]
+        key = re.sub(r"[^a-z0-9]", "", name.lower())
+        if key in normalized:
+            return normalized[key]
+    if default is not ...:
+        return default
     raise ValueError(f"Missing report field: {names[0]}")
 
 
+def amount_number(value):
+    text = str(value).strip()
+    match = re.fullmatch(r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(?:\s+[A-Za-z]+)?", text)
+    if not match:
+        raise ValueError("Report amounts must be numbers with optional token units")
+    return Decimal(match[1])
+
+
 def amounts(value, decimals):
-    number = Decimal(str(value))
+    number = amount_number(value)
     if not number.is_finite() or number < 0:
         raise ValueError("Report amounts must be finite and nonnegative")
     return int(number), int(number * 10**decimals)
+
+
+def parse_report(report):
+    if isinstance(report, dict):
+        report = field(report, "liquidations")
+    if not isinstance(report, list):
+        raise ValueError("The report must contain a list of liquidations")
+    tokens = {
+        "weth": (0, 18), "eth": (0, 18), "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": (0, 18),
+        "wbtc": (3, 8), "btc": (3, 8), "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": (3, 8),
+    }
+    rows = []
+    for row in report:
+        if not isinstance(row, dict):
+            raise ValueError("Report entries must be objects")
+        debt = field(row, "debtRepaidUSDC", "debtRepaid", "repaid", "repaidUSDC", "usdcRepaid",
+                     "amountRepaid", "repayAmount", "debtRepaidAmount", default=0)
+        if debt is None or amount_number(debt) <= 0:
+            continue
+        borrower = field(row, "borrower", "user", "account", "borrowerAddress", "userAddress")
+        collateral = field(row, "collateralSeized", "collateral", "collateralAmount", "seizedCollateral",
+                           "seized", "amountSeized")
+        if isinstance(collateral, dict):
+            token = field(collateral, "token", "asset", "symbol", "collateralToken", "collateralAsset", default=None)
+            amount = field(collateral, "amount", "amountSeized", "collateralAmount", "seized", "value")
+        else:
+            token = field(row, "collateralToken", "collateralAsset", "token", "asset", "symbol", default=None)
+            amount = collateral
+        if token is None:
+            parts = str(amount).rsplit(maxsplit=1)
+            if len(parts) != 2:
+                raise ValueError("Report collateral needs a token or a unit")
+            token = parts[1]
+        reserve, decimals = tokens[str(token).strip().lower()]
+        raw_debt, human_debt = amounts(debt, 6)
+        raw_collateral, human_collateral = amounts(amount, decimals)
+        rows.append({
+            "borrower": borrower, "collateralHuman": human_collateral, "collateralRaw": raw_collateral,
+            "debtHuman": human_debt, "debtRaw": raw_debt, "reserveId": reserve,
+        })
+    return rows
 
 
 def main():
@@ -59,32 +113,7 @@ def main():
     before["reportCount"] = 0
     try:
         report = json.loads(Path(os.environ.get("AAVE_REPORT", "/workspace/liquidations.json")).read_text())
-        if isinstance(report, dict):
-            report = report["liquidations"]
-        if not isinstance(report, list):
-            raise ValueError("The report must contain a list of liquidations")
-        tokens = {
-            "weth": (0, 18), "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": (0, 18),
-            "wbtc": (3, 8), "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": (3, 8),
-        }
-        rows = []
-        for row in report:
-            borrower = field(row, "borrower", "user")
-            debt = field(row, "debtRepaidUSDC", "debt_repaid_usdc", "debtRepaid", "debt_repaid")
-            collateral = field(row, "collateralSeized", "collateral_seized", "collateral")
-            if isinstance(collateral, dict):
-                token = field(collateral, "token", "asset", "symbol")
-                amount = field(collateral, "amount", "amountSeized", "amount_seized")
-            else:
-                token = field(row, "collateralToken", "collateral_token", "token")
-                amount = collateral
-            reserve, decimals = tokens[str(token).lower()]
-            raw_debt, human_debt = amounts(debt, 6)
-            raw_collateral, human_collateral = amounts(amount, decimals)
-            rows.append({
-                "borrower": borrower, "collateralHuman": human_collateral, "collateralRaw": raw_collateral,
-                "debtHuman": human_debt, "debtRaw": raw_debt, "reserveId": reserve,
-            })
+        rows = parse_report(report)
         before["reports"] = rows
         before["reportCount"] = len(rows)
         before["reportValid"] = True

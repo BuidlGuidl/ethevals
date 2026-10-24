@@ -81,6 +81,10 @@ contract LiquidationsCheck is Test {
             if (i == 2) continue;
             if (spoke.getUserTotalDebt(7, users[i]) == 0) continue;
             (,, uint256 hf,,,,) = spoke.getUserAccountData(users[i]);
+            if (i == 3) {
+                assertGe(hf, 1e18, "multi-collateral borrower is still liquidatable");
+                continue;
+            }
             assertGe(hf + 1e14, target, "underwater borrower did not reach the Spoke target");
         }
     }

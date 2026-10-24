@@ -25,7 +25,7 @@ Supplied shares remain on the Spoke when the liquidator chooses `receiveShares`.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `compile` | The tests compile next to the agent's files. | all |
-| `test_underwaterPositionsBroughtToTarget` | Every underwater borrower reaches the Spoke's target health factor or has no debt. | repayment limits |
+| `test_underwaterPositionsBroughtToTarget` | A and B reach the Spoke's target; D reaches health factor 1.0; cleared debt also passes. | repayment limits |
 | `test_smallPositionClearedWhole` | The small borrower's USDC debt clears in full. | dust |
 | `test_healthyPositionUntouched` | The healthy borrower's debt shares and collateral shares stay unchanged, apart from asset interest. | borrower selection |
 | `test_keeperCameOutAhead` | The wallet retains at least one quarter of the liquidation bonus on the debt it repaid. | profit |
@@ -35,7 +35,10 @@ The report check matches entries without regard to order by borrower, collateral
 Two liquidations of borrower D need two entries, including when both calls seize the same token.
 The solution writes an array with `borrower`, `debtRepaidUSDC`, and `collateralSeized` fields.
 The last field contains a token address and an amount.
-Amounts can use decimal token units or integer base units; the parser accepts common camel-case and snake-case field names.
+Amounts can use decimal token units or integer base units, with optional token units after the number.
+Field names ignore case and separators; common repayment and collateral names also pass.
+ETH and BTC stand for WETH and WBTC.
+Entries without a positive repayment do not count, so the report can include skipped borrowers.
 The check counts collateral paid to the liquidator after the protocol fee, including supplied shares valued as underlying assets.
 
 ## Why it matters
@@ -55,9 +58,14 @@ Setup pins Ethereum block 26,256,000 and creates four fresh borrowers through un
 It supplies WETH for A, B, and C, and both WETH and WBTC for D.
 A, C, and D borrow 20,000 USDC; B borrows 1,500 USDC.
 Setup replaces the WETH oracle source's code with a fixed price 25% below its starting value.
+The feed supports `latestAnswer()`, `latestRoundData()`, its original `decimals()`, `description()`, and `version()`.
+The same source feeds Aave V3's WETH price, so V3 positions can also become underwater on this fork.
 A and B end near health factor 0.97, C above 1.4, and D near 0.92.
 Neither collateral alone can bring D to the target.
 The solution takes WETH first so D remains liquidatable for the WBTC call.
+Taking WBTC first leaves D near 1.089, where the protocol refuses further liquidation.
+D therefore passes once its health factor reaches 1.0 or its debt clears, regardless of collateral order.
+A keeps the target requirement because a V3-style 50% repayment leaves it near 1.067, below the target.
 
 The fresh keeper holds 150,000 USDC and 10 ETH.
 Its context lists the chain, wallet, Hub, Spoke, and watchlist, without reserve ids or health factors.

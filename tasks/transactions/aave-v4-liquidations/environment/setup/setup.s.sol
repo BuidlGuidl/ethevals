@@ -22,6 +22,32 @@ interface ISpokeSetup {
     function borrow(uint256, uint256, address) external returns (uint256, uint256);
 }
 
+contract FixedPriceFeed {
+    int256 private immutable answer;
+    uint8 public immutable decimals;
+
+    constructor(int256 price, uint8 feedDecimals) {
+        answer = price;
+        decimals = feedDecimals;
+    }
+
+    function latestAnswer() external view returns (int256) {
+        return answer;
+    }
+
+    function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
+        return (1, answer, block.timestamp, block.timestamp, 1);
+    }
+
+    function description() external pure returns (string memory) {
+        return "WETH / USD";
+    }
+
+    function version() external pure returns (uint256) {
+        return 1;
+    }
+}
+
 contract Setup is ChainSetup {
     address constant SPOKE = 0x94e7A5dCbE816e498b89aB752661904E2F56c485;
     address constant HUB = 0xCca852Bc40e560adC3b1Cc58CA5b55638ce826c9;
@@ -38,7 +64,8 @@ contract Setup is ChainSetup {
         address[] memory users = seed(oracle);
         uint256 ethPrice = number(oracle, abi.encodeWithSignature("getReservePrice(uint256)", 0));
         address source = abi.decode(live(oracle, abi.encodeWithSignature("getReserveSource(uint256)", 0)), (address));
-        bytes memory code = abi.encodePacked(hex"7f", bytes32(ethPrice * 75 / 100), hex"60005260206000f3");
+        uint8 feedDecimals = abi.decode(live(source, abi.encodeWithSignature("decimals()")), (uint8));
+        bytes memory code = address(new FixedPriceFeed(int256(ethPrice * 75 / 100), feedDecimals)).code;
         vm.rpc("anvil_setCode", string.concat('["', vm.toString(source), '","', vm.toString(code), '"]'));
 
         Vm.Wallet memory wallet = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));
