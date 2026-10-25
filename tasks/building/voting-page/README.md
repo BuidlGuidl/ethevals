@@ -105,7 +105,7 @@ A page that reads them shows holders what the governor will do. A page that gues
 - Setup makes its keys at random inside the chain container. The agent can't read them or the setup files, and the verifier needs no keys.
 - The test proposals exist only on the verifier's fork, so the agent's chain never shows the cases the checks use.
 - Pages here make many RPC reads per block, which a public RPC would throttle. No check covers that load.
-- The browser and its libraries are root-only. A browser the agent downloads can't start.
+- The verifier's browser and its libraries are root-only, so the agent can't use or change them. With internet access, an agent can still download a browser and the system libraries it needs, and test its own page.
 
 Run these free commands from the repository root:
 
