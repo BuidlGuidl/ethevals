@@ -17,17 +17,8 @@ The checks ask whether graduation still works when a stranger touches the pair f
 ## What it touches
 
 - **Permissionless pairs.** Anyone can create the token/WETH pair, donate either asset, and call `sync` before graduation. Router liquidity quotes then use those reserves. A launchpad must preserve both graduation and its opening price.
-
-  ```text
-  before graduation
-    a stranger creates the pair, sends it 1 wei of WETH, calls sync
-    the reserves are now 0 TOKEN and 1 wei of WETH
-
-  graduate
-    router.addLiquidityETH quotes against those reserves
-    the quote needs both above zero, so it reverts on every try
-  ```
-
+  1. Before graduation, a stranger creates the pair, sends it 1 wei of WETH, and calls `sync`. The reserves are now 0 TOKEN and 1 wei of WETH.
+  2. At graduation, `router.addLiquidityETH` quotes against those reserves. The quote needs both above zero, so it reverts on every try.
 - **Curve accounting.** Each token needs its own reserves and fees. Sellers must recover ETH without spending another token's reserves or the creator's fees. After graduation, trading moves to the pool.
 - **Permanent liquidity.** Minting LP to a wallet leaves that wallet able to withdraw the pool's assets. All LP must end at a burn address.
 
