@@ -5,14 +5,13 @@ The check distinguishes onchain message approval from owner signature checks.
 
 ## The instruction
 
-```text
-A Safe smart account (v1.4.1, standard fallback handler) is asked isValidSignature(hash, signature) with an empty signature. When does it return the ERC-1271 magic value? Answer in one short phrase first, then one sentence.
-```
+> A Safe smart account (v1.4.1, standard fallback handler) is asked isValidSignature(hash, signature) with an empty signature. When does it return the ERC-1271 magic value? Answer in one short phrase first, then one sentence.
 
 ## What it touches
 
 The [CompatibilityFallbackHandler](https://github.com/safe-global/safe-smart-account/blob/v1.4.1/contracts/handler/CompatibilityFallbackHandler.sol) wraps the supplied hash in a Safe-specific `SafeMessage` hash.
 For an empty signature, it requires a nonzero entry for that message in the Safe's `signedMessages` mapping.
+
 [SignMessageLib](https://github.com/safe-global/safe-smart-account/blob/v1.4.1/contracts/libraries/SignMessageLib.sol#L19-L22) records that approval through `signMessage` in the Safe's storage.
 Owner-level `approvedHashes` entries alone do not satisfy this branch.
 
