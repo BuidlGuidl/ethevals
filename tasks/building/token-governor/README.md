@@ -12,16 +12,14 @@ This task checks the gap.
 
 ## The instruction
 
-```text
-our token TOKEN is live, a plain ERC-20 with a fixed 100M supply, and we can't change it. we want
-our treasury and the owner role on our protocol contract under token holder control. a proposal
-passes when at least 4% of the supply votes for it, with more for than against, then waits two days
-before anyone can execute it. our delegates vote through snapshot, so it has to be a standard
-governor, and our frontend's wrap flow talks to the vote token through
-src/interfaces/IVoteToken.sol. put the governor in src/TokenGovernor.sol as TokenGovernor, and a
-deploy script in script/Deploy.s.sol whose run(token) returns the governor address and the address
-we should move the protocol's ownership and the treasury to. foundry, solidity 0.8.30.
-```
+> our token TOKEN is live, a plain ERC-20 with a fixed 100M supply, and we can't change it. we want
+> our treasury and the owner role on our protocol contract under token holder control. a proposal
+> passes when at least 4% of the supply votes for it, with more for than against, then waits two days
+> before anyone can execute it. our delegates vote through snapshot, so it has to be a standard
+> governor, and our frontend's wrap flow talks to the vote token through
+> src/interfaces/IVoteToken.sol. put the governor in src/TokenGovernor.sol as TokenGovernor, and a
+> deploy script in script/Deploy.s.sol whose run(token) returns the governor address and the address
+> we should move the protocol's ownership and the treasury to. foundry, solidity 0.8.30.
 
 ## What it touches
 
@@ -29,24 +27,18 @@ The instruction leaves out four things. Each has a real incident or an adopted f
 
 - **Which supply the quorum counts.** TOKEN has no vote history, so holders wrap it for a vote token and delegate. OpenZeppelin's quorum module measures a share of the vote token's supply, which is only what people have chosen to wrap. "4% of the supply" quietly becomes 4% of whatever is wrapped today. Term Labs lost $8.47M this way in August 2026, and the module's docs never say so.
 
-  ```text
-  TOKEN supply          100,000,000   the team's 4%            = 4,000,000 votes
-  wrapped so far          5,000,000   the module's 4%          =   200,000 votes
-  one holder votes for    1,000,000   passes against the wrapper, fails against TOKEN
-  ```
+  | Quorum measured against | Supply | 4% of it |
+  | --- | ---: | ---: |
+  | TOKEN | 100,000,000 | 4,000,000 votes |
+  | the wrapped supply | 5,000,000 | 200,000 votes |
+
+  One holder voting 1,000,000 for passes against the wrapped supply and fails against TOKEN.
 
 - **Who holds the keys.** The contract that enforces the two-day wait has to own the protocol and hold the treasury. Make the governor itself the owner and a passed proposal can change fees or move funds with no wait at all. The wait also has to be fixed when a proposal is queued, or one vote can shorten every wait behind it. Term's first transaction set its delay to zero, and Moonwell's attacker in March 2026 went straight for the admin rights.
 
 - **Time to answer a late vote.** A proposal can sit at zero votes all week, look dead, and reach quorum in its last hour. If the deadline does not move, the other 96% of holders never get a turn, and the two-day wait does not help because stopping a passed proposal needs another vote. Compound's proposal 289 passed after 18 wallets cast 536,376 COMP in a 23-minute burst at the end of the vote.
-
-  ```text
-  day 0 ──────────────────────────────── day 7
-  votes   0 ........................... 0 │ 4M for, cast in the last hour
-                                          └ closes. 4% spoke. 96% never got a turn.
-
-  with the extension
-  votes   0 .................... 4M for │ deadline moves out │ 30M against → defeated
-  ```
+  - Without the extension, votes sit at zero for seven days, 4M for arrive in the last hour, and the vote closes. 4% spoke. 96% never got a turn.
+  - With the extension, the same 4M arrive, the deadline moves out, 30M against follow, and the proposal is defeated.
 
 - **The standard surface.** Delegates vote through Snapshot and the frontend wraps through `IVoteToken`. Both need the standard governor and vote-token views: who delegates to whom, past votes and past supply at a snapshot, and one-to-one withdrawal. A governor that only works through its own frontend fails the team's actual setup. Snapshot voting also means voting power is read at the proposal's snapshot, so nobody can buy votes after seeing a live proposal.
 
@@ -88,7 +80,10 @@ The [ENS discussion of Tally's shutdown](https://discuss.ens.domains/t/tally-is-
 
 ## Notes
 
-- Every agent can fail this task and the task still earns its place. The bar here is what a strong agent misses when nobody names the thing. In the first trials on 2026-10-24, Opus 5.5, GPT-6.1-sol and Kimi K3 each passed the quorum, control and Snapshot checks and left the vote open to a last-hour swing, while listing OpenZeppelin's extension for it; a separate Kimi run measured quorum against the wrapped supply, the design Term shipped. In a variant of the message that named the fear of late votes, all four agents built the extension and GLM still measured quorum against the wrapped supply. A developer who leaves the extension out and writes down why would also fail the late-vote check, since the check only reads code; that is the one unfairness we know of, and nobody has flagged it yet. Each check has a design behind it that a model actually produced, so a 0 is a finding, not noise. The day an agent protects the vote without being asked, this task is the one that shows it.
+- Every agent can fail this task and the task still earns its place. The bar is what a strong agent misses when nobody names the thing. The day an agent protects the vote without being asked, this task is the one that shows it.
+- Each check has a design behind it that an agent produced in a trial, so a 0 is a finding, not noise. Strong agents have passed the quorum, control and Snapshot checks and left the vote open to a last-hour swing, while listing OpenZeppelin's extension for it. An open model has measured quorum against the wrapped supply, the design Term shipped.
+- A variant of the message that named the fear of late votes got the extension from every agent. The miss is about what nobody said, not what nobody knows, so the shipped message stays unprompted.
+- A developer who leaves the extension out and writes down why would also fail the late-vote check, since the check only reads code. That is the one unfairness we know of, and nobody has flagged it yet.
 - The checks accept any design that follows the standard. They read the clock mode and voting settings from the governor, accept block numbers or timestamps, any extension length, and any revert reason. They never name a constructor or a library.
 - OpenZeppelin Contracts 5.7.0 is in `lib/` when the agent starts, so nothing needs installing.
 - There is no chain sidecar or RPC dependency. Forge advances the governor's chosen clock and uses seconds for the execution wait.
