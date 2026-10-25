@@ -43,13 +43,14 @@ Each test is one check, and the reward is 1 only when every check passes.
 
 ## Why it matters
 
-Clanker's [Cantina v4 audit, findings 3.2.1 and 3.2.8](https://github.com/clanker-devco/v4-contracts/blob/b004c2edda29fa282a16d5d1441a26484f70b37f/audits/cantina_v4_audit_1.pdf) reports incorrect starting ticks and a launch blocked by prior pool initialization.
+Launches have broken at the pool itself.
+Clanker's [Cantina v4 audit](https://github.com/clanker-devco/v4-contracts/blob/b004c2edda29fa282a16d5d1441a26484f70b37f/audits/cantina_v4_audit_1.pdf) reports incorrect starting ticks in finding 3.2.1 and a launch blocked by prior pool initialization in 3.2.8.
 Verichains' [four.meme analysis](https://blog.verichains.io/p/fourmeme-hack-analysis) describes a pre-existing pool whose wrong price let an attacker drain WBNB after migration.
-Both happen at launch: a wrong tick puts the supply on the side buyers never reach, and a pool someone else created first either blocks the launch or sets its price.
+A wrong tick puts the supply on the side buyers never reach, and a pool someone else created first either blocks the launch or sets its price.
 
-Zora's [August 2025 Cantina audit, finding 3.2.3](https://github.com/ourzora/zora-protocol/blob/32c2931a444b4405b107a49016dff0059b05b06f/packages/coins/audits/report-cantinacode-zora-0827.pdf) reports unauthorized coin registration through weak pool-key validation.
-Uniswap liquidity-launcher's [OpenZeppelin v3 audit, M-01](https://github.com/Uniswap/liquidity-launcher/blob/266c18786c58822b72a7a9490f4e319294df0548/docs/audit/OpenZeppelin_v3.0.0.pdf) reports fee splitting from the contract's whole ETH balance instead of the collected position's amount.
-In both, the contract trusted the wrong source: Zora's hook accepted a pool key it had not created, and the launcher split its whole balance instead of what one position collected.
+Code around the pool has also trusted the wrong source.
+Zora's [August 2025 Cantina audit](https://github.com/ourzora/zora-protocol/blob/32c2931a444b4405b107a49016dff0059b05b06f/packages/coins/audits/report-cantinacode-zora-0827.pdf) reports unauthorized coin registration in finding 3.2.3, because its hook accepted a pool key it had not created.
+Uniswap liquidity-launcher's [OpenZeppelin v3 audit](https://github.com/Uniswap/liquidity-launcher/blob/266c18786c58822b72a7a9490f4e319294df0548/docs/audit/OpenZeppelin_v3.0.0.pdf) reports in M-01 that the launcher split fees from its whole ETH balance instead of what one position collected.
 
 ## Notes
 
