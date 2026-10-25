@@ -46,19 +46,17 @@ Each test is one check, and the reward is 1 only when every check passes.
 
 Clanker's [Cantina v4 audit, findings 3.2.1 and 3.2.8](https://github.com/clanker-devco/v4-contracts/blob/b004c2edda29fa282a16d5d1441a26484f70b37f/audits/cantina_v4_audit_1.pdf) reports incorrect starting ticks and a launch blocked by prior pool initialization.
 Verichains' [four.meme analysis](https://blog.verichains.io/p/fourmeme-hack-analysis) describes a pre-existing pool whose wrong price let an attacker drain WBNB after migration.
-These cases show why a launch must handle both price math and pool state left by strangers.
+Both happen at launch: a wrong tick puts the supply on the side buyers never reach, and a pool someone else created first either blocks the launch or sets its price.
 
 Zora's [August 2025 Cantina audit, finding 3.2.3](https://github.com/ourzora/zora-protocol/blob/32c2931a444b4405b107a49016dff0059b05b06f/packages/coins/audits/report-cantinacode-zora-0827.pdf) reports unauthorized coin registration through weak pool-key validation.
 Uniswap liquidity-launcher's [OpenZeppelin v3 audit, M-01](https://github.com/Uniswap/liquidity-launcher/blob/266c18786c58822b72a7a9490f4e319294df0548/docs/audit/OpenZeppelin_v3.0.0.pdf) reports fee splitting from the contract's whole ETH balance instead of the collected position's amount.
-Both findings concern keeping a pool's identity and funds tied to the right beneficiaries.
+In both, the contract trusted the wrong source: Zora's hook accepted a pool key it had not created, and the launcher split its whole balance instead of what one position collected.
 
 ## Notes
 
-The tests accept direct pool positions and position-manager NFTs, multiple ranges, either token ordering, and coin fees paid as coin or converted to WETH.
-The opening-price band allows one 200-tick spacing in either direction from the expected price, including the 1% trading fee.
-The liquidity control runs the same swaps without collections or recipient changes.
-The test trades back to each control price after the required calls, so fee conversion and range crossings remain valid.
-The stranger check keeps the pool empty and stays in the same block, including its randomness.
-It makes no claim about recovery through liquidity that an attacker has already deposited.
-A launch that refuses to proceed after a stranger creates the coin's pool fails `test_strangerCreatedPoolFirst`, because the coin's predictable address lets a stranger block every attempt.
-The liquidity check covers the required calls. It cannot prove the absence of every extra withdrawal function an agent adds.
+- The tests accept direct pool positions and position-manager NFTs, multiple ranges, either token ordering, and coin fees paid as coin or converted to WETH.
+- The opening-price band allows one 200-tick spacing in either direction from the expected price, including the 1% trading fee.
+- The liquidity control runs the same swaps without collections or recipient changes. The test trades back to each control price after the required calls, so fee conversion and range crossings remain valid. It covers the required calls only, so it cannot prove an agent added no other withdrawal function.
+- The stranger check keeps the pool empty and stays in the same block, including its randomness. It makes no claim about recovery through liquidity an attacker has already deposited.
+- A launch that refuses to proceed after a stranger creates the coin's pool fails `test_strangerCreatedPoolFirst`, because the coin's predictable address lets a stranger block every attempt.
+- The verifier needs no RPC, so a contract that hardcodes a wrong mainnet address, such as WETH's, fails.
