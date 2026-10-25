@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { chromium } from './deps.mjs';
 import { encodeFunctionData } from './deps.mjs';
 import { governorAbi, votesAbi, executedCalls, voteRequests } from './chain.mjs';
-import { oldSnapshotVerdict, forVoteMatches, proposalListVerdict } from './checks.mjs';
-import { wrap, castVote, delegate, connect, proposal, proposalValues, usableChoices, oldVoteView, currentVotes, findDescription, listedDescriptions, settled, ambiguousWeight, emptyProposals } from './controls.mjs';
+import { oldSnapshotVerdict, forVoteMatches, proposalListVerdict, statusAndTalliesMatch, journey, verdict } from './checks.mjs';
+import { wrap, castVote, delegate, connect, proposal, proposalValues, votingScope, usableChoices, oldVoteView, currentVotes, findDescription, listedDescriptions, settled, ambiguousWeight, emptyProposals } from './controls.mjs';
 
 const HOLDER = '0x0000000000000000000000000000000000000001';
 const GOVERNOR = '0x0000000000000000000000000000000000000002';
@@ -61,6 +61,160 @@ test('wrap recognizes the combined approval control after entering an amount', a
     <button disabled onclick="recordWrite({action:'depositFor',amount:document.querySelector('input').value})">Wrap</button>`, async session => {
     await wrap(session);
     assert.deepEqual(session.wallet.payloads, [{ action: 'depositFor', amount: '1000' }]);
+  });
+});
+
+test('wrap waits for a delayed trigger before opening its amount dialog', async () => {
+  await fixture(`<button id="open" disabled onclick="document.querySelector('dialog').showModal()">Wrap TOKEN</button>
+    <dialog role="dialog"><input placeholder="0.00"><button onclick="recordWrite({action:'depositFor',amount:document.querySelector('input').value})">Wrap</button></dialog>
+    <script>setTimeout(()=>document.querySelector('#open').disabled=false,400)</script>`, async session => {
+    await wrap(session);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'depositFor', amount: '1000' }]);
+  });
+});
+
+test('delegate waits for its delayed dialog trigger and submit', async () => {
+  await fixture(`<button id="open" disabled onclick="document.querySelector('dialog').showModal();setTimeout(()=>document.querySelector('#submit').disabled=false,400)">Delegate</button>
+    <dialog role="dialog"><input placeholder="Delegate address"><button id="submit" disabled onclick="recordWrite({action:'delegate',address:document.querySelector('input').value})">Delegate</button></dialog>
+    <script>setTimeout(()=>document.querySelector('#open').disabled=false,400)</script>`, async session => {
+    await delegate(session, HOLDER);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'delegate', address: HOLDER }]);
+  });
+});
+
+test('self-delegation waits for a delayed direct control', async () => {
+  await fixture(`<button disabled onclick="recordWrite({action:'delegate'})">Delegate to myself</button>
+    <script>setTimeout(()=>document.querySelector('button').disabled=false,400)</script>`, async session => {
+    await delegate(session, HOLDER);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'delegate' }]);
+  });
+});
+
+test('completed direct delegation does not wait for a disabled submit', async () => {
+  await fixture(`<button onclick="recordWrite({action:'delegate'});this.disabled=true">Delegate to yourself</button>
+    <button disabled>Delegate</button>`, async session => {
+    await delegate(session, HOLDER);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'delegate' }]);
+  });
+  await fixture(`<button onclick="recordWrite({action:'delegate'});document.querySelector('#self').hidden=false">Delegate</button>
+    <button id="self" hidden disabled>Delegate to yourself</button>`, async session => {
+    await delegate(session, HOLDER);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'delegate' }]);
+  });
+});
+
+test('Delegate voting power opens delegation without clicking a status label', async () => {
+  await fixture(`<button onclick="recordWrite({action:'wrong'})">Delegated to yourself</button>
+    <button onclick="document.querySelector('dialog').showModal()">Delegate voting power</button>
+    <dialog role="dialog"><input placeholder="Delegate address"><button onclick="recordWrite({action:'delegate',address:document.querySelector('input').value})">Delegate</button></dialog>`, async session => {
+    await delegate(session, HOLDER);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'delegate', address: HOLDER }]);
+  });
+});
+
+for (const tag of ['button', 'a href="#vote"', 'div role="button"']) {
+  test(`a clickable ${tag} card opens its voting dialog`, async () => {
+    await fixture(`<article><${tag} onclick="document.querySelector('dialog').showModal()">Set the protocol fee<br>Active<br>For 3M<br>Against 0</${tag.split(' ')[0]}></article>
+      <dialog role="dialog"><p>1,000 snapshot votes</p><button onclick="recordWrite({support:1})">For</button></dialog>`, async session => {
+      const scope = await votingScope(session.page, 'Set the protocol fee');
+      assert.equal(await scope.getAttribute('role'), 'dialog');
+      await castVote(session, scope);
+      assert.deepEqual(session.wallet.payloads, [{ support: 1 }]);
+    });
+    if (tag.startsWith('a ')) await fixture(`<a href="#vote" onclick="document.querySelector('dialog').showModal()">Set the protocol fee<br>Active<br>For 3M<br>Against 0</a>
+      <dialog role="dialog"><button onclick="recordWrite({support:1})">For</button></dialog>`, async session => {
+      const scope = await votingScope(session.page, 'Set the protocol fee');
+      assert.equal(await scope.getAttribute('role'), 'dialog');
+      await castVote(session, scope);
+      assert.deepEqual(session.wallet.payloads, [{ support: 1 }]);
+    });
+  });
+}
+
+test('Submit For vote drives the saved Codex dialog', async () => {
+  await fixture(`<div role="dialog"><p>1,000 snapshot votes</p><button>For</button>
+    <button onclick="recordWrite({support:1})">Submit For vote</button></div>`, async session => {
+    const scope = session.page.getByRole('dialog');
+    await castVote(session, scope);
+    assert.deepEqual(session.wallet.payloads, [{ support: 1 }]);
+  });
+});
+
+for (const wrong of [false, true]) {
+  test(`button cards read their own values with ${wrong ? 'a wrong' : 'the right'} tally`, async () => {
+    const descriptions = ['Set the protocol fee', 'Change the treasury allocation'];
+    await fixture(`<div><button class="proposal-card">${descriptions[0]}<br>Active<br>For 3M<br>Against 0<br>Ends at block 200</button>
+      <button class="proposal-card">${descriptions[1]}<br>Defeated<br>For ${wrong ? '4M' : '3M'}<br>Against 4.5M<br>Ends at block 100</button></div>`, async ({ page }) => {
+      const checks = {}, values = [];
+      await journey(checks, 'status_and_tallies_match', async () => {
+        for (const [index, description] of descriptions.entries()) {
+          const shown = proposalValues(await (await proposal(page, description, { descriptions })).innerText());
+          values.push([shown.status, shown.for, shown.against, shown.end]);
+          const passed = statusAndTalliesMatch(shown, { status: index ? 3 : 1, for: 3000000, against: index ? 4500000 : 0 });
+          if (!passed) checks.status_and_tallies_match = { passed: false };
+        }
+        checks.status_and_tallies_match ||= { passed: true };
+      }, async () => {});
+      assert.deepEqual(values, [[1, 3000000, 0, 200], [3, wrong ? 4000000 : 3000000, 4500000, 100]]);
+      assert.equal(verdict(checks), wrong ? 'fail' : 'pass');
+    });
+  });
+}
+
+test('a scope containing two proposal titles records could not drive', async () => {
+  const descriptions = ['Set the protocol fee', 'Change the treasury allocation'];
+  await fixture(`<div><h3>${descriptions[0]}</h3><h3>${descriptions[1]}</h3><p>Active<br>For 3M<br>Against 0</p></div>`, async ({ page }) => {
+    const checks = {};
+    await journey(checks, 'status_and_tallies_match', async () => {
+      const shown = proposalValues(await (await proposal(page, descriptions[0], { descriptions })).innerText());
+      checks.status_and_tallies_match = { passed: statusAndTalliesMatch(shown, { status: 1, for: 3000000, against: 0 }) };
+    }, async () => {});
+    assert.equal(verdict(checks), 'trial-error');
+    assert.equal(checks.status_and_tallies_match.couldNotDrive, true);
+    assert.match(checks.status_and_tallies_match.reason, /could not drive: proposal card.*contains another proposal/);
+  });
+});
+
+// Text from the Opus r4 wrapped-undelegated holder panel.
+const opusHolder = `Your votes
+TOKEN balance
+0
+Wrapped (vTOKEN)
+1,000
+Delegated to
+Nobody
+Current votes
+0
+
+Your vTOKEN carries no votes until you delegate it. Delegate to yourself to vote directly.
+
+Current votes include votes others have delegated to you. Each proposal counts the votes you had at its snapshot block, so wrap and delegate before a proposal's snapshot.`;
+
+test('reads the saved Opus Current votes panel before and after delegation', async () => {
+  await fixture(`<article>For 3M<br>Against 0</article><section>${opusHolder.replaceAll('\n', '<br>')}</section>`, async ({ page }) => {
+    assert.equal(await currentVotes(page), 0);
+    await page.locator('section').evaluate((el, text) => el.innerText = text, opusHolder.replace('Current votes\n0', 'Current votes\n1,000'));
+    assert.equal(await currentVotes(page), 1000);
+  });
+});
+
+test('wrong Opus Current votes after wrapping fails wrap_then_delegate', async () => {
+  await fixture(`<section>${opusHolder.replace('Current votes\n0', 'Current votes\n1,000').replaceAll('\n', '<br>')}</section>`, async ({ page }) => {
+    const afterWrap = await currentVotes(page);
+    assert.equal(afterWrap, 1000);
+    // The wrap journey allows zero or an unread value before delegation.
+    assert.equal(afterWrap === null || afterWrap === 0, false);
+  });
+});
+
+test('wrong Opus can-cast wording and a vote fail votes_at_snapshot at zero weight', async () => {
+  await fixture(`<article>For 0<br>Against 0<br>You can cast 1,000 votes (your votes at the snapshot).
+    <button onclick="recordWrite({support:1})">Vote For</button></article>`, async session => {
+    const view = await oldVoteView(session.page.locator('article'));
+    await castVote(session, session.page.locator('article'));
+    assert.equal(view.shown, 1000);
+    assert.equal(oldSnapshotVerdict({ shown: view.shown, current: 1000, usable: view.choices.length > 0,
+      ambiguous: ambiguousWeight(view.text, view.shown), asked: voteRequests(session.wallet, GOVERNOR, 1n).length > 0 }), 'fail');
   });
 });
 

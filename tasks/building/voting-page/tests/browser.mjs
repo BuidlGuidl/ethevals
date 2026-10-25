@@ -52,7 +52,7 @@ try {
       await connect(s.page, wallet.address);
     }
     async function readCard(s, description) {
-      return proposalValues(await settled(await proposal(s.page, description)));
+      return proposalValues(await settled(await proposal(s.page, description, { descriptions: all.map(p => p.description) })));
     }
     const selected = name => ({ ...fixture.proposals[name], id: BigInt(fixture.proposals[name].id) });
     const all = await proposals(url, context.governor);
@@ -120,7 +120,7 @@ try {
         const states = [2, 3, 4, 5, 6, 7].includes(twinAfter.status) && extendedAfter.status === 1;
         if (!states) await record('end_moves_with_late_quorum', false, 'The twins do not show closed and active states after the original end.');
         s = await session(localAccounts[1]);
-        const scope = await votingScope(s.page, extended.description);
+        const scope = await votingScope(s.page, extended.description, { descriptions: all.map(p => p.description) });
         await settled(scope);
         await castVote(s, scope);
         const events = voteEvents(s.wallet, context.governor, localAccounts[1].address, extended.id);
@@ -153,7 +153,7 @@ try {
       await check('votes_at_snapshot', async () => {
         if (!wrappedReady) { await harness.reset(); s = await session(); await wrap(s); await delegate(s, account.address); await dismiss(s.page); await reload(s); }
         const old = selected('for_abstain');
-        const oldScope = await votingScope(s.page, old.description);
+        const oldScope = await votingScope(s.page, old.description, { descriptions: all.map(p => p.description) });
         const { text: oldText, shown: oldShown, choices } = await oldVoteView(oldScope);
         const ambiguous = ambiguousWeight(oldText, oldShown);
         const current = await currentVotes(s.page);
@@ -171,7 +171,7 @@ try {
         await dismiss(s.page);
         const fresh = await createProposal(url, context, fixture);
         await reload(s);
-        const newScope = await votingScope(s.page, fresh.description);
+        const newScope = await votingScope(s.page, fresh.description, { descriptions: all.map(p => p.description) });
         const newShown = proposalValues(await settled(newScope)).snapshot;
         if (newShown === null) throw new CouldNotDrive('holder weight on the new proposal');
         await castVote(s, newScope);

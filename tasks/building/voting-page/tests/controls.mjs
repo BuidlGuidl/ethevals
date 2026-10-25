@@ -23,7 +23,7 @@ export function proposalValues(text) {
   const statusValues = (statusLine ? [statusLine.replace(/^status\s*:\s*/i, '')] : lines.filter(line => !/^(?:queued|executed|cancel(?:l)?ed)\s+(?:at|on)\b/i.test(line)))
     .map(line => statuses.findIndex(expression => expression.test(line))).filter(value => value >= 0);
   const status = new Set(statusValues).size === 1 ? statusValues[0] : null;
-  const quorumLine = text.match(/quorum[^\n]*(?:\n[^\n]+){0,2}/i)?.[0] || '';
+  const quorumLine = text.match(/^[^\n]*\bquorum\b[^\n]*(?:\n(?![^\n]*\b(?:left|remaining)\b)[^\n]+){0,2}/im)?.[0] || '';
   const progress = quorumLine.match(new RegExp(`${quantity}\\s*(?:of|/)\\s*${quantity}`, 'i'));
   const reached = /\bnot\s+(?:yet\s+)?(?:reached|met)\b|\bunmet\b|\bbelow\b/i.test(quorumLine) ? false
     : /(?:reached|met)\b/i.test(quorumLine) ? true
@@ -33,8 +33,8 @@ export function proposalValues(text) {
       : null;
   const quorumMatch = quorumLine.match(new RegExp(`(?:of|/)\\s*${quantity}`, 'i'))
     || quorumLine.match(new RegExp(`${quantity}\\s*required`, 'i'))
-    || quorumLine.match(new RegExp(`quorum\\s*:?\\s*${quantity}(?![\\d.,]|\\s*%)`, 'i'));
-  const endLine = text.match(/(?:\bends?\b|\bended\b|\bdeadline\b|\bcloses\b)[^\n]*(?:\n[^\n]+){0,1}/i)?.[0]
+    || quorumLine.match(new RegExp(`quorum\\s*:?\\s*${quantity}(?![\\d.,]|\\s*%|\\s*(?:days?|hours?|minutes?|seconds?|[dhms])\\b)`, 'i'));
+  const endLine = text.match(/^[^\n]*(?:\bends?\b|\bended\b|\bdeadline\b|\bcloses\b)[^\n]*(?:\n[^\n]+){0,1}/im)?.[0]
     || text.match(/^[^\n]*\b(?:left|remaining)\b[^\n]*$/im)?.[0] || '';
   const endMatch = endLine.match(/\bblock\s*([\d,]+)/i);
   const duration = [...endLine.matchAll(/(\d+)\s*(days?|hours?|minutes?|seconds?|[dhms])\b/gi)];
@@ -47,10 +47,12 @@ export function proposalValues(text) {
     ?? (text.match(new RegExp(`you have\\s*${quantity}\\s*votes? (?:on|for) this proposal`, 'i'))?.[1]
       ? number(text.match(new RegExp(`you have\\s*${quantity}\\s*votes? (?:on|for) this proposal`, 'i'))[1]) : null)
     ?? (text.match(new RegExp(`you had\\s*${quantity}\\s*votes?[^\\n]*snapshot`, 'i'))?.[1]
-      ? number(text.match(new RegExp(`you had\\s*${quantity}\\s*votes?[^\\n]*snapshot`, 'i'))[1]) : null);
+      ? number(text.match(new RegExp(`you had\\s*${quantity}\\s*votes?[^\\n]*snapshot`, 'i'))[1]) : null)
+    ?? (text.match(new RegExp(`${quantity}\\s+snapshot votes\\b`, 'i'))?.[1]
+      ? number(text.match(new RegExp(`${quantity}\\s+snapshot votes\\b`, 'i'))[1]) : null);
   const noVotes = /\bno (?:votes?|voting power)\b[^\n]*(?:snapshot|at block|(?:on|for) this proposal)|(?:snapshot|this proposal)[^\n]*\bno (?:votes?|voting power)\b/i.test(text);
   const weightMatch = text.match(new RegExp(`\\b${holderWeightLabel}\\s*:?\\s*${quantity}`, 'i'))
-    || text.match(new RegExp(`\\byou can vote with\\s*${quantity}\\s*votes?\\b`, 'i'));
+    || text.match(new RegExp(`\\byou can (?:vote with|cast)\\s*${quantity}\\s*votes?\\b`, 'i'));
   const shownWeight = snapshot ?? (noVotes ? 0 : null) ?? (weightMatch ? number(weightMatch[1]) : null);
   return { status, for: labelled(text, '(?:votes? )?for'),
     against: labelled(text, '(?:votes? )?against'), reached,
@@ -98,7 +100,7 @@ export async function settled(scope, { timeout = 8000, quiet = 800 } = {}) {
   return text;
 }
 
-export async function proposal(page, description, { required = true } = {}) {
+export async function proposal(page, description, { required = true, descriptions = [] } = {}) {
   await findDescription(page, description);
   const candidate = page.locator('article,section,li,tr').filter({ hasText: description }).first();
   const text = await candidate.count() ? await candidate.innerText() : '';
@@ -111,17 +113,20 @@ export async function proposal(page, description, { required = true } = {}) {
       if (open) await open.click();
     }
   }
-  const found = await until(() => page.evaluate(description => {
+  const found = await until(() => page.evaluate(({ description, descriptions }) => {
     document.querySelectorAll('[data-voting-proposal]').forEach(el => el.removeAttribute('data-voting-proposal'));
-    const candidates = [...document.querySelectorAll('article,section,li,tr,div,dialog,[role="dialog"]')].filter(el =>
-      el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden'
+    const candidates = [...document.querySelectorAll('body *')].filter(el =>
+      el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden' && typeof el.innerText === 'string'
       && el.innerText.includes(description)
       && /\bfor\b/i.test(el.innerText) && /\bagainst\b/i.test(el.innerText));
-    candidates.sort((a, b) => a.innerText.length - b.innerText.length);
+    candidates.sort((a, b) => a.innerText.length - b.innerText.length
+      || Number(b.matches('button,a[href],[role="button"]')) - Number(a.matches('button,a[href],[role="button"]')));
     if (!candidates.length) return false;
+    if (descriptions.some(other => other !== description && candidates[0].innerText.includes(other))) return 'ambiguous';
     candidates[0].setAttribute('data-voting-proposal', '');
     return true;
-  }, description), 8000);
+  }, { description, descriptions }), 8000);
+  if (found === 'ambiguous') throw new CouldNotDrive(`proposal card for ${description} contains another proposal`);
   if (!found) {
     if (required) throw new CouldNotDrive(`proposal card for ${description} was not found`);
     return null;
@@ -179,10 +184,14 @@ export async function dismiss(page) {
   else await page.keyboard.press('Escape');
 }
 
-export async function votingScope(page, description) {
-  const card = await proposal(page, description);
+export async function votingScope(page, description, options) {
+  const card = await proposal(page, description, options);
+  const dialog = await firstVisible(page.getByRole('dialog'));
+  if (dialog) return dialog;
   const open = await firstVisible(card.getByRole('button', { name: /^(?:vote on|view)\b/i }));
   if (open) await open.click();
+  else if (!(await voteControl(card, 'For') || await voteControl(card, 'Against') || await voteControl(card, 'Abstain'))
+    && await card.evaluate(el => el.matches('button,a[href],[role="button"]'))) await card.click();
   return await firstVisible(page.getByRole('dialog')) || card;
 }
 
@@ -226,7 +235,7 @@ export async function castVote(session, scope, name = 'For') {
   const done = await until(async () => {
     if (count() > before) return true;
     const dialog = await firstVisible(session.page.getByRole('dialog'));
-    const submit = await firstVisible((dialog || scope).getByRole('button', { name: /^(?:(?:cast|submit|confirm)(?: (?:your )?vote)?(?: for)?|vote(?: for)?)$/i }));
+    const submit = await firstVisible((dialog || scope).getByRole('button', { name: /^(?:(?:cast|submit|confirm)(?: (?:your )?vote(?: for)?| for(?: vote)?)?|vote(?: for)?)$/i }));
     if (submit && await submit.isEnabled()) {
       const label = await submit.innerText();
       if (!clicked.has(label)) { clicked.add(label); await submit.click(); }
@@ -240,7 +249,7 @@ export async function castVote(session, scope, name = 'For') {
 
 export async function currentVotes(page) {
   const read = text => {
-    const direct = labelled(text, 'your votes|votes|voting weight|voting power');
+    const direct = labelled(text, '(?:your )?current votes|your votes|votes|voting weight|voting power');
     const before = text.match(new RegExp(`(?:your voting power)\\s*${quantity}\\s*votes`, 'i'));
     return direct ?? (before ? number(before[1]) : null);
   };
@@ -249,7 +258,7 @@ export async function currentVotes(page) {
     const texts = await page.evaluate(() => {
       const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
       const candidates = [...document.querySelectorAll('section,article,div,table')].filter(el => visible(el)
-        && /voting power|voting weight|your votes/i.test(el.innerText) && /wrapped|vtoken/i.test(el.innerText));
+        && /current votes|voting power|voting weight|your votes/i.test(el.innerText) && /wrapped|vtoken/i.test(el.innerText));
       candidates.sort((a,b) => a.innerText.length - b.innerText.length);
       document.querySelectorAll('[data-voting-power]').forEach(el => el.removeAttribute('data-voting-power'));
       candidates.forEach((el, index) => el.setAttribute('data-voting-power', String(index)));
@@ -267,7 +276,7 @@ export async function wrap(session) {
   const page = session.page;
   const wrapNames = /^(?:(?:approve\s*(?:&|and)\s*)?wrap(?:\s.*)?|deposit(?: TOKEN)?|confirm(?: wrap| deposit)?)$/i;
   const trigger = await firstVisible(page.getByRole('button', { name: wrapNames }));
-  if (trigger && await trigger.isEnabled()) await trigger.click();
+  if (trigger && await until(() => trigger.isEnabled(), 8000)) await trigger.click();
   const base = await firstVisible(page.getByRole('dialog')) || page;
   await until(() => base.locator('input').evaluateAll(inputs => {
     document.querySelectorAll('[data-wrap-input]').forEach(el => el.removeAttribute('data-wrap-input'));
@@ -311,19 +320,30 @@ export async function delegate(session, address) {
   const self = /^(?:delegate(?: votes)? to (?:yourself|myself|me|self)|self[ -]delegate|activate (?:my |your )?(?:votes|voting power))(?:\s.*)?$/i;
   let direct = await firstVisible(page.getByRole('button', { name: self }));
   if (!direct) {
-    const open = await firstVisible(page.getByRole('button', { name: /^delegate(?: votes)?$/i }));
-    if (open) await open.click();
-    direct = await firstVisible(page.getByRole('button', { name: self }));
+    const open = await firstVisible(page.getByRole('button', { name: /^delegate(?: votes| voting power)?$/i }));
+    if (open) {
+      if (!await until(() => open.isEnabled(), 8000)) throw new CouldNotDrive('delegate control stayed disabled');
+      await open.click();
+    }
+    if (count() === before) direct = await firstVisible(page.getByRole('button', { name: self }));
   }
-  if (direct && await direct.isEnabled()) await direct.click();
-  else {
+  if (direct) {
+    if (!await until(() => direct.isEnabled(), 8000)) throw new CouldNotDrive('self-delegate control stayed disabled');
+    await direct.click();
+  }
+  else if (count() === before) {
     const input = await firstVisible(page.getByRole('textbox', { name: /delegate|address/i }))
       || await firstVisible(page.locator('input[placeholder*="address" i]'));
     if (input) await input.fill(address);
   }
-  const dialog = await firstVisible(page.getByRole('dialog'));
-  const submit = await firstVisible((dialog || page).getByRole('button', { name: /^(?:confirm delegation|delegate)$/i }));
-  if (submit && await submit.isEnabled()) await submit.click();
+  if (count() === before) {
+    const dialog = await firstVisible(page.getByRole('dialog'));
+    const submit = await firstVisible((dialog || page).getByRole('button', { name: /^(?:confirm delegation|delegate)$/i }));
+    if (submit) {
+      if (!await until(() => count() > before || submit.isEnabled(), 8000)) throw new CouldNotDrive('delegate control stayed disabled');
+      if (count() === before) await submit.click();
+    }
+  }
   await walletIdle(session.wallet);
   if (count() === before) throw new CouldNotDrive('delegation flow did not ask the wallet to delegate');
 }

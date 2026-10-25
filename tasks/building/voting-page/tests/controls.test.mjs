@@ -1,6 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { proposalValues, labelled, ambiguousWeight } from './controls.mjs';
+import { quorumMatches } from './checks.mjs';
+
+for (const progress of [3, 5]) {
+  test(`reads ${progress}M / 4M quorum before a duration as ${progress === 3 ? 'right' : 'wrong'} For-only quorum`, () => {
+    const shown = proposalValues(`Active\nFor 3M\nAgainst 0\n${progress}M / 4M quorum\n6d 14h left`);
+    assert.deepEqual([shown.quorumProgress, shown.quorum, shown.reached, shown.end], [progress * 1000000, 4000000, progress >= 4, 568800]);
+    assert.equal(quorumMatches(shown, { for: 3000000, quorum: 4000000 }), progress === 3);
+  });
+}
+
+test('a duration after quorum never supplies its amount', () => {
+  assert.equal(proposalValues('Quorum not reached\n6d 14h left').quorum, null);
+  assert.equal(proposalValues('Quorum\n6d 14h').quorum, null);
+  assert.equal(proposalValues('Quorum 4M').quorum, 4000000);
+});
+
+test('end reads the amount before its keyword on the same line', () => {
+  assert.equal(proposalValues('Block 250 voting ends').end, 250);
+});
+
+test('reads the saved Codex amount before snapshot votes', () => {
+  assert.equal(proposalValues('1,000 snapshot votes').snapshot, 1000);
+  assert.equal(proposalValues('0 snapshot votes').snapshot, 0);
+  assert.equal(proposalValues('1,000 current votes').snapshot, null);
+});
+
+test('reads the saved Opus can-cast snapshot weight', () => {
+  assert.equal(proposalValues('For\n0\nAgainst\n0\nYou can cast 1,000 votes (your votes at the snapshot).\nVote For\nVote Against\nAbstain').snapshot, 1000);
+  assert.equal(proposalValues('Current votes\n1,000').snapshot, null);
+  assert.equal(proposalValues('Holders can cast 1,000 votes').snapshot, null);
+});
 
 test('reads proposal weight labels and tallies', () => {
   assert.deepEqual(proposalValues('Active\nFor\n2M\nAgainst\n500K\nQuorum 50%\n4M required\nVoting ends at Block 129,633'),
