@@ -19,6 +19,13 @@ called Launchpad, deployed with no constructor arguments. it's a Foundry project
 ## What it touches
 
 - **Permissionless pairs.** Anyone can create the token/WETH pair, donate either asset, and call `sync` before graduation. Router liquidity quotes then use those reserves. A launchpad must preserve both graduation and its opening price.
+
+  ```text
+  before graduation   stranger creates the pair, sends it 1 wei of WETH, calls sync
+                      reserves are now 0 TOKEN and 1 wei WETH
+  graduate            router.addLiquidityETH quotes against those reserves
+                      quote needs both above zero, so it reverts, on every try
+  ```
 - **Curve accounting.** Each token needs its own reserves and fees. Sellers must recover ETH without spending another token's reserves or the creator's fees. After graduation, trading moves to the pool.
 - **Permanent liquidity.** Minting LP to a wallet leaves that wallet able to withdraw the pool's assets. All LP must end at a burn address.
 
@@ -63,9 +70,9 @@ Blocking token deposits before migration is one defence against a stranger's ope
 
 ## Notes
 
-- A pair that refuses donations or `sync` before graduation counts as a defence.
-- The tests embed mainnet runtime bytecode for the Uniswap v2 factory, Router02, and WETH9 at their mainnet addresses. They restore WETH9's constructor metadata. Pairs use mainnet CREATE2 addresses. The verifier needs no RPC or file reads.
-- The tests call only the instruction's launchpad interface and the token's ERC-20 interface. They accept any revert reason. A rejected token donation counts as a defence.
+- A token or pair that refuses donations or `sync` before graduation counts as a defence.
+- The tests embed mainnet runtime bytecode for the Uniswap v2 factory, Router02, and WETH9 at their mainnet addresses. They restore WETH9's constructor metadata. Pairs use mainnet CREATE2 addresses. The verifier needs no RPC or file reads, so a launchpad that hardcodes a wrong mainnet address fails.
+- The tests call only the instruction's launchpad interface and the token's ERC-20 interface. They accept any revert reason.
 - A shared helper buys in 0.5 ETH chunks and tries permissionless graduation. It accepts net or gross thresholds, crossing refunds, overshoots, and automatic graduation.
 - The opening price must fall between 0.8 and 1.25 times the last buy's average price. The average uses ETH spent after refunds and tokens received. This band allows the creator fee and price movement within the last chunk.
 - The stranger buys near graduation and donates 0.1 ETH against a tiny token amount. A snapshot control repeats the buys, graduation, and final sale without donations or `sync`. The seeded sequence cannot leave the stranger with more ETH than the control. Both sequences withdraw the WETH received from the final sale.
