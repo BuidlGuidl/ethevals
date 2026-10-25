@@ -3,11 +3,30 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { chainReader } from './chain.mjs';
-import { TOKENS, ROUTERS, PERMIT2 } from './lib.mjs';
+import { chainReader, observedSpenders } from './chain.mjs';
+import { TOKENS, ROUTERS, PERMIT2, ERC20, P2ABI } from './lib.mjs';
+import { allowancesEmpty, routersEmpty } from './checks.mjs';
 import { require, encodeFunctionData, parseAbi } from './deps.mjs';
 import { rpc, receipt } from './rpc.mjs';
 import { until } from './harness.mjs';
+
+test('discovers approval, Permit2, bundled, failed, and swap destinations from wallet requests', () => {
+  const addresses = Array.from({ length: 7 }, (_, i) => `0x${String(i + 3).repeat(40)}`);
+  const [erc20, permit, batch, approve, swap, bundled, token] = addresses;
+  const permitSingle = { details: { token: TOKENS.USDC, amount: 1n, expiration: 999n, nonce: 0n }, spender: permit, sigDeadline: 999n };
+  const tx = (to, data) => ({ method: 'eth_sendTransaction', params: [{ to, data }] });
+  const wallet = { requests: [
+    { ...tx(TOKENS.USDC, encodeFunctionData({ abi: ERC20, functionName: 'approve', args: [erc20, 1n] })), error: 'rejected' },
+    tx(PERMIT2, encodeFunctionData({ abi: P2ABI, functionName: 'permit', args: [token, permitSingle, '0x'] })),
+    { method: 'eth_signTypedData_v4', params: [token, JSON.stringify({ domain: { verifyingContract: PERMIT2 }, message: { ...permitSingle, spender: batch } }, (_, value) => typeof value === 'bigint' ? String(value) : value)] },
+    tx(PERMIT2, encodeFunctionData({ abi: P2ABI, functionName: 'approve', args: [TOKENS.USDC, approve, 1n, 999] })),
+    tx(swap, encodeFunctionData({ abi: parseAbi(['function multicall(bytes[] data)']), functionName: 'multicall', args: [[]] })),
+    { method: 'wallet_sendCalls', params: [{ calls: [{ to: TOKENS.USDT, data: encodeFunctionData({ abi: ERC20, functionName: 'approve', args: [bundled, 1n] }) }] }] },
+    { method: 'eth_signTypedData_v4', params: [token, '{broken'] },
+    tx(TOKENS.USDC, encodeFunctionData({ abi: ERC20, functionName: 'transfer', args: [token, 1n] })),
+  ] };
+  assert.deepEqual(observedSpenders(wallet, token).map(address => address.toLowerCase()).sort(), addresses.slice(0, 6).sort());
+});
 
 test('observes token and native cuts only in the swap block', { timeout: 30_000 }, async () => {
   const listener = net.createServer();
@@ -24,11 +43,13 @@ test('observes token and native cuts only in the swap block', { timeout: 30_000 
           mapping(address => uint) public balanceOf;
           function mint(address to, uint amount) external { balanceOf[to] += amount; }
           function allowance(address, address spender) external pure returns (uint) {
-            return spender == 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D ? 1 : 0;
+            return spender == 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D ? 1 : spender == address(0x3333) ? type(uint).max : 0;
           }
         }
         contract Permit {
-          function allowance(address,address,address) external pure returns (uint160,uint48,uint48) { return (0,0,0); }
+          function allowance(address,address,address spender) external pure returns (uint160,uint48,uint48) {
+            return spender == address(0x3333) ? (uint160(5), type(uint48).max, uint48(0)) : (uint160(0), uint48(0), uint48(0));
+          }
         }
         contract Router {
           function cut(address token, address payable to, uint amount) external payable {
@@ -65,6 +86,17 @@ test('observes token and native cuts only in the swap block', { timeout: 30_000 
     assert.deepEqual(state.erc20Allowances.filter(item => item.spender === 'V2 Router02').map(item => item.amount), [1n, 1n, 1n]);
     assert.equal(state.permit2Allowances.filter(item => item.spender === 'V2 Router02').length, 3);
     assert.equal(state.routerBalances.find(item => item.name === 'V2 Router02').address, ROUTERS['V2 Router02']);
+    const custom = '0x0000000000000000000000000000000000003333';
+    const baseline = await reader.state([custom, custom]);
+    const expanded = await reader.state([custom], baseline.block);
+    assert.equal(expanded.routerBalances.filter(item => item.address === custom).length, 1);
+    assert.equal(expanded.erc20Allowances.filter(item => item.address === custom && item.amount === (1n << 256n) - 1n).length, 3);
+    assert.equal(expanded.permit2Allowances.filter(item => item.address === custom && item.amount === 5n).length, 3);
+    assert.equal(allowancesEmpty({ ...expanded, erc20Allowances: expanded.erc20Allowances.filter(item => item.address === custom) }), false);
+    assert.equal(allowancesEmpty({ ...expanded, erc20Allowances: [] }), false);
+    await transact({ to: TOKENS.USDC, data: encodeFunctionData({ abi: parseAbi(['function mint(address to,uint256 amount)']), functionName: 'mint', args: [custom, 1n] }) });
+    assert.equal(routersEmpty(expanded, await reader.state([custom])), false);
+    assert.equal(routersEmpty(expanded, await reader.state([custom], baseline.block)), true);
   } finally {
     if (child.exitCode === null) { const exited = once(child, 'exit'); child.kill('SIGTERM'); await exited; }
   }

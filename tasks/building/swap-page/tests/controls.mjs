@@ -141,6 +141,16 @@ export async function prepareSwap(page, input, output, amount) {
   return { page, input, output, amount, amountInput };
 }
 
+const actionDepth = button => button.evaluate(el => {
+  if (el.closest('nav,[role="navigation"]')) return Infinity;
+  let depth = 0;
+  for (let parent = el.parentElement; parent && parent.tagName !== 'BODY'; parent = parent.parentElement) {
+    depth++;
+    if ([...parent.querySelectorAll('input,output,dl')].some(input => input.getClientRects().length)) return depth;
+  }
+  return 1000;
+});
+
 export async function nextAction(page) {
   const dialog = await firstVisible(page.getByRole('dialog'));
   const candidates = [];
@@ -148,28 +158,61 @@ export async function nextAction(page) {
     if (!await button.isVisible() || !await button.isEnabled()) continue;
     const label = await button.innerText();
     const accessible = await button.getAttribute('aria-label') || label;
+    if ((!label.trim() && !/^refresh\b/i.test(accessible.trim())) || !actionName.test(accessible.trim())) continue;
     if (/direction|new swap|another swap|tokens|[↓↑⇅↕]/i.test(`${label} ${accessible}`) || /^switch$/i.test(accessible.trim())) continue;
-    const depth = await button.evaluate(el => {
-      let depth = 0;
-      for (let parent = el.parentElement; parent && parent.tagName !== 'BODY'; parent = parent.parentElement) {
-        depth++;
-        if ([...parent.querySelectorAll('input,output,dl')].some(input => input.getClientRects().length)) return depth;
-      }
-      return 1000;
-    });
+    const depth = await actionDepth(button);
+    if (!Number.isFinite(depth)) continue;
     const priority = /^refresh\b/i.test(accessible) ? 2 : /^(?:confirm|accept|continue|approve|review)\b/i.test(accessible) ? 0 : 1;
     candidates.push({ button, depth, priority });
   }
   candidates.sort((a, b) => a.priority - b.priority || a.depth - b.depth);
-  return candidates[0]?.button || null;
+  if (candidates.length) return candidates[0].button;
+  if (dialog && /quote[^\n]*expired[^\n]*close[^\n]*refresh/i.test(await dialog.innerText())) {
+    const close = await firstVisible(dialog.getByRole('button', { name: /^close\b/i }));
+    if (close && await close.isEnabled()) return close;
+  }
+  return null;
+}
+
+export async function waitForQuote(page, output, timeout = 20_000) {
+  if (!await until(async () => {
+    const display = belief(await page.locator('body').innerText(), output);
+    if (display.expected?.value > 0n || display.minimum?.value > 0n) return true;
+    for (const button of await page.getByRole('button', { name: /^(?:review|swap|confirm)\b/i }).all()) {
+      if (await button.isVisible() && await button.isEnabled()
+        && /^(?:review|swap|confirm)\b/i.test((await button.innerText()).trim())
+        && await actionDepth(button) < 1000) return true;
+    }
+    return false;
+  }, timeout)) throw new CouldNotDrive('swap quote or named confirmation action');
+}
+
+export async function openDetails(action) {
+  if (action.detailsOpened) return;
+  const page = action.page;
+  const dialog = await firstVisible(page.getByRole('dialog'));
+  const scope = dialog || page;
+  const name = /^(?:(?:show|more|view)\s+)?(?:details|more)(?:\s+(?:details|about (?:this )?swap))?$|^show$/i;
+  const candidates = scope.getByRole('button', { name }).or(scope.locator('summary').filter({ hasText: name }));
+  for (const button of await candidates.all()) {
+    const label = (await button.innerText()).trim();
+    if (!name.test(label)
+      || await button.getAttribute('aria-expanded') === 'true'
+      || await button.evaluate(el => el.tagName === 'SUMMARY' && el.parentElement.open)
+      || !await button.isVisible() || !await button.isEnabled()) continue;
+    await button.click();
+    action.detailsOpened = true;
+    return;
+  }
 }
 
 export async function pressThrough(action, { wallet, isSwapRequest, snapshot, maxPresses = 6 }) {
   for (let index = 0; index < maxPresses; index++) {
+    await openDetails(action);
     const button = await nextAction(action.page);
     if (!button) break;
     const text = await action.page.locator('body').innerText();
-    const label = await button.innerText();
+    const label = (await button.innerText()).trim() || await button.getAttribute('aria-label');
     const press = { index, time: Date.now(), label, text, belief: belief(text, action.output) };
     await snapshot(press);
     await button.click();

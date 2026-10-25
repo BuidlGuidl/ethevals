@@ -2,8 +2,84 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { chromium } from './deps.mjs';
-import { connect, prepareSwap, pressThrough, nextAction } from './controls.mjs';
+import { connect, prepareSwap, pressThrough, nextAction, waitForQuote, openDetails } from './controls.mjs';
 import { belief, confirmedBelief, minimumCheck } from './checks.mjs';
+
+test('waits for a delayed quote and opens Review before the market move despite icon buttons', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<main><input><button aria-label="Swap"><svg></svg></button>
+      <p id="quote">Finding your quote…</p><button id="review" disabled onclick="document.querySelector('dialog').showModal()">Review swap</button></main>
+      <dialog><p>Minimum received 0.19 ETH</p><button>Confirm swap</button></dialog>`);
+    assert.equal(await nextAction(page), null);
+    await page.evaluate(() => {
+      const app = document.createElement('div');
+      app.append(...document.body.childNodes);
+      const nav = document.createElement('nav');
+      nav.innerHTML = '<button>Swap</button>';
+      app.prepend(nav);
+      document.body.append(app);
+    });
+    assert.equal(await nextAction(page), null);
+    await assert.rejects(waitForQuote(page, 'ETH', 200), /swap quote or named confirmation action/);
+    await page.evaluate(() => setTimeout(() => {
+      document.getElementById('quote').textContent = 'Expected output: 0.2 ETH';
+      document.getElementById('review').disabled = false;
+    }, 500));
+    await waitForQuote(page, 'ETH');
+    await (await nextAction(page)).click();
+    assert.equal(await page.getByRole('dialog').isVisible(), true);
+    assert.match(await page.getByRole('dialog').innerText(), /Confirm swap/);
+    await page.setContent('<p>Expected output: 12 USDC</p>');
+    await waitForQuote(page, 'USDC', 200);
+    await page.setContent('<main><input><button>Swap</button></main>');
+    await waitForQuote(page, 'ETH', 200);
+  } finally { await browser.close(); }
+});
+
+test('opens a minimum disclosure once without pressing a committing control', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    for (const label of ['Details', 'More', 'Show', 'Show more', 'Show details']) {
+      await page.setContent(`<dialog open><button aria-expanded="false" onclick="this.setAttribute('aria-expanded',this.getAttribute('aria-expanded')!=='true');document.querySelector('p').hidden=!document.querySelector('p').hidden">${label}</button>
+        <p hidden>Minimum received 0.2 ETH</p><button onclick="window.committed=true">Confirm swap</button></dialog>`);
+      const action = { page };
+      await openDetails(action);
+      await openDetails(action);
+      assert.equal(belief(await page.locator('body').innerText(), 'ETH').minimum.value, 200000000000000000n, label);
+      assert.equal(await page.evaluate(() => window.committed), undefined);
+    }
+    await page.setContent('<button>Show and confirm swap</button>');
+    const action = { page };
+    await openDetails(action);
+    assert.equal(action.detailsOpened, undefined);
+    await page.setContent('<details><summary>Show more</summary><p>Minimum received 0.2 ETH</p></details>');
+    await openDetails({ page });
+    await openDetails({ page });
+    assert.equal(belief(await page.locator('body').innerText(), 'ETH').minimum.value, 200000000000000000n);
+  } finally { await browser.close(); }
+});
+
+test('closes an expired review only when the page asks for that step to refresh', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<div><nav><button onclick="throw Error('Navigation is not a swap action')">Swap</button></nav>
+      <main><input><button id="review" disabled onclick="document.querySelector('dialog').showModal();document.querySelector('#confirm').disabled=false;document.querySelector('#confirm').textContent='Confirm swap'">Review swap</button>
+        <button aria-label="Refresh quote" onclick="document.querySelector('#review').disabled=false"><svg></svg></button></main>
+      <dialog open><button aria-label="Close swap preview" onclick="document.querySelector('dialog').close()"><svg></svg></button>
+        <p>Minimum received 0.2 ETH</p><button id="confirm" disabled onclick="document.querySelector('output').textContent='sent'">Quote expired · close to refresh</button></dialog><output></output></div>`);
+    const saved = [];
+    await pressThrough({ page, output: 'ETH' }, { wallet: { requests: [], pending: 0, lastActivity: 0 }, isSwapRequest: () => false,
+      maxPresses: 4, snapshot: async press => saved.push(press) });
+    assert.deepEqual(saved.map(press => press.label), ['Close swap preview', 'Refresh quote', 'Review swap', 'Confirm swap']);
+    assert.equal(await page.locator('output').innerText(), 'sent');
+    await page.setContent('<dialog open><button aria-label="Close swap preview"><svg></svg></button><button disabled>Confirm swap</button></dialog>');
+    assert.equal(await nextAction(page), null);
+  } finally { await browser.close(); }
+});
 
 test('drives the GLM TokenRow radio layout with full token names and disabled opposite choices', async () => {
   const browser = await chromium.launch({ headless: true });

@@ -43,6 +43,35 @@ export function classifyRequest(request, treasury) {
   return { kind: 'other' };
 }
 
+export function observedSpenders(wallet, treasury) {
+  const addresses = new Map();
+  const add = value => {
+    if (typeof value === 'string' && /^0x[0-9a-f]{40}$/i.test(value)) addresses.set(value.toLowerCase(), value);
+  };
+  const visit = value => {
+    if (!value || typeof value !== 'object') return;
+    add(value.spender);
+    for (const child of Object.values(value)) if (child && typeof child === 'object') {
+      if (Array.isArray(child)) child.forEach(visit);
+      else visit(child);
+    }
+  };
+  for (const request of wallet.requests) {
+    const classification = classifyRequest(request, treasury);
+    if (classification.kind === 'permit') visit(classification);
+    const calls = request.method === 'wallet_sendCalls' ? request.params[0].calls
+      : ['eth_sendTransaction', 'wallet_sendTransaction'].includes(request.method) ? [request.params[0]] : [];
+    for (const tx of calls) {
+      const item = classify(tx, treasury);
+      if (item.kind === 'swap') add(tx.to);
+      if (['approve', 'permit'].includes(item.kind)) visit(item.decoded);
+      // Router commands can carry a Permit2 permit inside the swap calldata.
+      if (item.kind === 'swap') visit(item.decoded);
+    }
+  }
+  return [...addresses.values()];
+}
+
 export function chainReader(url, owner, treasury) {
   const client = createPublicClient({ transport: http(url) });
   async function balances(address, blockNumber) {
@@ -50,24 +79,27 @@ export function chainReader(url, owner, treasury) {
       symbol === 'ETH' ? await client.getBalance({ address, blockNumber }) : await client.readContract({ address: token, abi: ERC20, functionName: 'balanceOf', args: [address], blockNumber }),
     ])));
   }
-  async function state() {
+  async function state(spenders = [], blockNumber) {
+    const routers = Object.entries(ROUTERS);
+    for (const address of spenders) if (!routers.some(([, known]) => same(known, address))) routers.push([address, address]);
+    const approvals = [['Permit2', PERMIT2], ...routers.filter(([, address]) => !same(address, PERMIT2))];
     const tokens = Object.entries(TOKENS).filter(([symbol]) => symbol !== 'ETH');
     const erc20Allowances = [];
     const permit2Allowances = [];
     for (const [symbol, token] of tokens) {
-      for (const [name, spender] of [['Permit2', PERMIT2], ...Object.entries(ROUTERS)]) {
+      for (const [name, spender] of approvals) {
         erc20Allowances.push({ token: symbol, spender: name, address: spender,
-          amount: await client.readContract({ address: token, abi: ERC20, functionName: 'allowance', args: [owner, spender] }) });
+          amount: await client.readContract({ address: token, abi: ERC20, functionName: 'allowance', args: [owner, spender], blockNumber }) });
       }
-      for (const [name, spender] of Object.entries(ROUTERS)) {
-        const [amount, expiration, nonce] = await client.readContract({ address: PERMIT2, abi: P2ABI, functionName: 'allowance', args: [owner, token, spender] });
+      for (const [name, spender] of routers) {
+        const [amount, expiration, nonce] = await client.readContract({ address: PERMIT2, abi: P2ABI, functionName: 'allowance', args: [owner, token, spender], blockNumber });
         permit2Allowances.push({ token: symbol, spender: name, address: spender, amount, expiration, nonce });
       }
     }
-    const block = await client.getBlock();
+    const block = await client.getBlock({ blockNumber });
     return { owner, treasury, block: block.number, timestamp: block.timestamp,
-      ownerBalances: await balances(owner), treasuryBalances: await balances(treasury),
-      routerBalances: await Promise.all(Object.entries(ROUTERS).map(async ([name, address]) => ({ name, address, balances: await balances(address) }))),
+      ownerBalances: await balances(owner, blockNumber), treasuryBalances: await balances(treasury, blockNumber),
+      routerBalances: await Promise.all(routers.map(async ([name, address]) => ({ name, address, balances: await balances(address, blockNumber) }))),
       erc20Allowances, permit2Allowances };
   }
   async function transactions(wallet) {

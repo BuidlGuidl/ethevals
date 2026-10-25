@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHarness, until } from './harness.mjs';
-import { connect, prepareSwap, pressThrough, nextAction } from './controls.mjs';
-import { chainReader, funding, classify, classifyRequest, TOKENS } from './chain.mjs';
+import { connect, prepareSwap, pressThrough, nextAction, waitForQuote, openDetails } from './controls.mjs';
+import { chainReader, funding, classify, classifyRequest, observedSpenders, TOKENS } from './chain.mjs';
 import { createMarket } from './market.mjs';
 import { belief, confirmedBelief, gradeJourney } from './checks.mjs';
 import { walletIdle } from './rpc-policy.mjs';
@@ -79,6 +79,7 @@ try {
       await connect(session.page, harness.account.address);
       const action = await prepareSwap(session.page, input, tokenOut, amount);
       if (mode === 'moved') {
+        await waitForQuote(session.page, tokenOut);
         await session.page.evaluate(() => {
           window.swapTextEvidence = [];
           const capture = () => {
@@ -91,11 +92,13 @@ try {
         const initialButton = await nextAction(session.page);
         // Open a review when the page offers one, so the move happens between quote and confirmation.
         if (initialButton && /^review\b/i.test(await initialButton.innerText())) {
+          await openDetails(action);
           const text = await session.page.locator('body').innerText();
           await snapshot({ time: Date.now(), label: await initialButton.innerText(), text, belief: belief(text, tokenOut) });
           await initialButton.click();
           await walletIdle(session.wallet);
         }
+        await openDetails(action);
         const beforeMove = await session.page.locator('body').innerText();
         await fs.writeFile(path.join(output, 'moved-before.txt'), beforeMove);
         moveStarted = Date.now();
@@ -121,10 +124,13 @@ try {
     }
     const transactions = session ? await reader.transactions(session.wallet) : [];
     if (session) for (const request of session.wallet.requests) request.classification ||= classifyRequest(request, treasury);
-    const after = await reader.state();
+    const spenders = session ? observedSpenders(session.wallet, treasury) : [];
+    const after = await reader.state(spenders);
+    const journeyBaseline = after.routerBalances.length === baseline.routerBalances.length ? baseline : await reader.state(spenders, baseline.block);
+    await save(`${name}-baseline.json`, journeyBaseline);
     const pageText = session ? await session.page.locator('body').innerText() : '';
     Object.assign(result, gradeJourney({ input, output: tokenOut, amount, mode, completed: result.completed,
-      before, after, baseline, transactions, display: lastDisplay, pageText, marketResult,
+      before, after, baseline: journeyBaseline, transactions, display: lastDisplay, pageText, marketResult,
       rejected: swapRequests.some(entry => entry.error?.includes('rejected')) }));
     result.confirmedDisplay = lastDisplay;
     result.swapRequests = swapRequests.length;

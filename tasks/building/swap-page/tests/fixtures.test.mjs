@@ -21,7 +21,8 @@ for (const [page, badFee] of [['opus-final', false], ['kimi-final', true], ['sol
       }
       const wallet = await read(`${name}-wallet.json`);
       const grade = gradeJourney({ input, output, amount: String(result.amount), mode, completed: result.completed,
-        before: await read(`${name}-before.json`), after: await read(`${name}-after.json`), baseline,
+        before: await read(`${name}-before.json`), after: await read(`${name}-after.json`),
+        baseline: await read(`${name}-baseline.json`).catch(error => { if (error.code === 'ENOENT') return baseline; throw error; }),
         transactions: await read(`${name}-transactions.json`), display,
         pageText: await fs.readFile(path.join(directory, `${name}-page.txt`), 'utf8'),
         marketResult: ['moved', 'race'].includes(mode),
