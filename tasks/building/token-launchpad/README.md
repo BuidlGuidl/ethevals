@@ -6,26 +6,28 @@ The checks ask whether graduation still works when a stranger touches the pair f
 
 ## The instruction
 
-```text
-we're building a launchpad for community tokens. anyone calls create(name, symbol), which returns a
-new token with a 1B supply that sells on a bonding curve: buy(token) pays ETH for tokens, and
-sell(token, amount) sells them back for ETH. the token's creator earns 1% of every curve trade and
-claims it with claimFees(token). once a curve has taken in 10 ETH, anyone can call graduate(token),
-which puts the curve's ETH and as many tokens as it needs into a Uniswap v2 pool against WETH,
-opening at the curve's last price, and burns the LP. put it in src/Launchpad.sol as a contract
-called Launchpad, deployed with no constructor arguments. it's a Foundry project on solidity 0.8.30, for mainnet.
-```
+> we're building a launchpad for community tokens. anyone calls create(name, symbol), which returns a
+> new token with a 1B supply that sells on a bonding curve: buy(token) pays ETH for tokens, and
+> sell(token, amount) sells them back for ETH. the token's creator earns 1% of every curve trade and
+> claims it with claimFees(token). once a curve has taken in 10 ETH, anyone can call graduate(token),
+> which puts the curve's ETH and as many tokens as it needs into a Uniswap v2 pool against WETH,
+> opening at the curve's last price, and burns the LP. put it in src/Launchpad.sol as a contract
+> called Launchpad, deployed with no constructor arguments. it's a Foundry project on solidity 0.8.30, for mainnet.
 
 ## What it touches
 
 - **Permissionless pairs.** Anyone can create the token/WETH pair, donate either asset, and call `sync` before graduation. Router liquidity quotes then use those reserves. A launchpad must preserve both graduation and its opening price.
 
   ```text
-  before graduation   stranger creates the pair, sends it 1 wei of WETH, calls sync
-                      reserves are now 0 TOKEN and 1 wei WETH
-  graduate            router.addLiquidityETH quotes against those reserves
-                      quote needs both above zero, so it reverts, on every try
+  before graduation
+    a stranger creates the pair, sends it 1 wei of WETH, calls sync
+    the reserves are now 0 TOKEN and 1 wei of WETH
+
+  graduate
+    router.addLiquidityETH quotes against those reserves
+    the quote needs both above zero, so it reverts on every try
   ```
+
 - **Curve accounting.** Each token needs its own reserves and fees. Sellers must recover ETH without spending another token's reserves or the creator's fees. After graduation, trading moves to the pool.
 - **Permanent liquidity.** Minting LP to a wallet leaves that wallet able to withdraw the pool's assets. All LP must end at a burn address.
 
@@ -50,23 +52,21 @@ Each test is one check. The reward is 1 only when every check passes.
 
 ## Why it matters
 
-Code4rena's GTE report found that a synced single-sided donation could block graduation in H-09.
-Its M-21 finding showed how a transfer-check bypass let a stranger seed the real pair and set its price.
-Both failures come from trusting pair state that anyone can change.
-[GTE report](https://code4rena.com/reports/2025-08-gte-perps-and-launchpad).
+Pair state that a stranger changed has blocked launches before.
+In Code4rena's [GTE report](https://code4rena.com/reports/2025-08-gte-perps-and-launchpad), finding H-09 showed that a synced single-sided donation could block graduation.
+In its [Lambo.win report](https://code4rena.com/reports/2024-12-lambowin), finding H-02 showed that assuming a pair did not exist could permanently block token creation.
 
-Lambo.win's H-02 finding showed that assuming a pair did not exist could permanently block token creation.
-[Lambo.win report](https://code4rena.com/reports/2024-12-lambowin).
-Zellic also found that GTE's router used a stranger's reserves when sizing graduation liquidity.
-The stranger could then sell tokens at the wrong opening price.
-[Zellic GTE finding](https://reports.zellic.io/publications/gte/findings/critical-launchpad-attacker-can-manipulate-the-initial-price-in-the-uniswap-pool/).
+It has also set the opening price.
+GTE's M-21 finding showed how a transfer-check bypass let a stranger seed the real pair and set its price.
+[Zellic found](https://reports.zellic.io/publications/gte/findings/critical-launchpad-attacker-can-manipulate-the-initial-price-in-the-uniswap-pool/) that GTE's router used a stranger's reserves when sizing graduation liquidity, so the stranger could sell tokens at the wrong opening price.
 
-Four.meme lost about $183,000 after migration accepted an existing pool's manipulated price, according to Verichains.
+It has cost money.
+Four.meme lost about $183,000 after migration accepted an existing pool's manipulated price, according to [Verichains](https://blog.verichains.io/p/fourmeme-hack-analysis).
 That pool used a different AMM, but the same trust error let the attacker drain its quote asset.
-[Four.meme analysis](https://blog.verichains.io/p/fourmeme-hack-analysis).
-Doppler's token exposes `lockPool` to prevent the pool from receiving tokens while locked.
+
+Every one of these trusted pair state that anyone can change.
+Doppler's token exposes [`lockPool`](https://github.com/whetstoneresearch/doppler/blob/5754c7ee01f1bdbd6f07c62be721e1223b725ecd/src/tokens/DopplerERC20V1.sol#L300-L315) to stop the pool receiving tokens while locked.
 Blocking token deposits before migration is one defence against a stranger's opening ratio.
-[Doppler token](https://github.com/whetstoneresearch/doppler/blob/5754c7ee01f1bdbd6f07c62be721e1223b725ecd/src/tokens/DopplerERC20V1.sol#L300-L315).
 
 ## Notes
 
