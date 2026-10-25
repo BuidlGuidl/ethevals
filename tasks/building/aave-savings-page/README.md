@@ -16,7 +16,7 @@ A savings page looks like a few buttons and two numbers, but each part has a det
 
 ## The instruction
 
-> Our users hold USDC and USDT on Ethereum mainnet and want to earn on them without leaving our app. Add a Savings page to this project where a connected user can deposit either token into Aave v3, see how much they have deposited including interest so far and the current APY, and withdraw part or all of it at any time. The chain to use is in `chain_context.json`.
+> Hi! Our users hold USDC and USDT on Ethereum mainnet and want to earn on them without leaving our app, so could you add a Savings page to this project? A connected user should be able to deposit either token into Aave v3, see how much they have deposited including interest so far and the current APY, and withdraw part or all of it at any time. The chain to use is in `chain_context.json`.
 
 ## What it touches
 
@@ -130,7 +130,7 @@ How it scores:
 
 Each check rests on words in the instruction and on reference code:
 
-- `compile` rests on "Add a Savings page to this project". Reference: the project's build script and `tsc` in [test.sh](tests/test.sh).
+- `compile` rests on "add a Savings page to this project". Reference: the project's build script and `tsc` in [test.sh](tests/test.sh).
 - `deposit_usdc` rests on "deposit either token into Aave v3". Reference: Aave [SupplyLogic.executeSupply](https://github.com/aave-dao/aave-v3-origin/blob/8305565ae342f1773c42cd2e4593f175fe5968a0/src/contracts/protocol/libraries/logic/SupplyLogic.sol).
 - `shows_deposit` rests on "including interest so far". Reference: Aave [AToken.balanceOf](https://github.com/aave-dao/aave-v3-origin/blob/8305565ae342f1773c42cd2e4593f175fe5968a0/src/contracts/protocol/tokenization/AToken.sol).
 - `shows_apy` rests on "the current APY". Reference: Aave [formatReserve](https://github.com/aave/aave-utilities/blob/2d0db501009fdb34824cbc9a486c3e9fd7191ec7/packages/math-utils/src/formatters/reserve/index.ts), compared by [reserve()](tests/chain.mjs).
