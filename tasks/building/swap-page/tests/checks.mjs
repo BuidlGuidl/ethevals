@@ -48,7 +48,8 @@ export function sentMinimum(decoded, output) {
 }
 const numberPattern = '([0-9][0-9,]*(?:\\.[0-9]+)?)';
 export function labelledAmount(text, label, symbol) {
-  const expression = new RegExp(`(?:${label})[\\s:≈~≥=-]*(?:${symbol}\\b\\s*${numberPattern}|${numberPattern}\\s*${symbol}\\b)`, 'ig');
+  const decoration = '[\\s\\p{S}\\p{P}]*';
+  const expression = new RegExp(`(?:${label})${decoration}(?:${symbol}\\b${decoration}${numberPattern}|${numberPattern}\\s*${symbol}\\b)`, 'igu');
   const results = [...text.matchAll(expression)].map(match => {
     const raw = (match[1] || match[2]).replaceAll(',', '');
     const precision = (raw.split('.')[1] || '').length;
@@ -120,7 +121,7 @@ export function minimumCheck(display, decoded, output, received, reverted = fals
 }
 export function receivedCheck(text, output, received) {
   const amountFirst = text.replace(new RegExp(`(${numberPattern}\\s*${output}|${output}\\s*${numberPattern})\\s+received\\b`, 'ig'), 'You received $1');
-  const display = labelledAmount(amountFirst, 'you\\s+(?:received|got)|(?:^|\\n)\\s*received|actual(?:ly)?(?: received| output)?|swapped[^\\n]*?\\bfor', output);
+  const display = labelledAmount(amountFirst, 'you\\s+(?:received|got)|\\band\\s+received|(?:^|\\n)\\s*received|actual(?:ly)?(?: received| output)?|swapped[^\\n]*?\\bfor', output);
   return { passed: Boolean(display && received > 0n && abs(display.value - received) <= display.tolerance),
     reason: `Received ${received} base units of ${output}; page amount ${display?.raw ?? 'could not read received amount'}.` };
 }

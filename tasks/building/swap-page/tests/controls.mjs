@@ -2,7 +2,9 @@ import { belief } from './checks.mjs';
 import { until } from './harness.mjs';
 import { walletIdle } from './rpc-policy.mjs';
 
-const tokenName = /^(?:ETH|USDC|USDT)$/i;
+const tokenAliases = { ETH: 'ETH|Ether', USDC: 'USDC|USD Coin', USDT: 'USDT|Tether USD|Tether' };
+const tokenPattern = Object.values(tokenAliases).join('|');
+const tokenSymbol = text => Object.keys(tokenAliases).find(symbol => new RegExp(`\\b(?:${tokenAliases[symbol]})\\b`, 'i').test(text || ''));
 const actionName = /^(?:(?:swap|review|confirm|approve|accept|continue|refresh|switch)\b)/i;
 
 export class CouldNotDrive extends Error {
@@ -16,12 +18,16 @@ export const amountInputs = scope => scope.getByRole('textbox').or(scope.locator
 
 export async function connect(page, address) {
   await page.waitForFunction(() => document.body.innerText.trim().length > 0);
+  await page.evaluate(() => window.dispatchEvent(new Event('eip6963:requestProvider')));
+  const accountName = new RegExp(`${address}\\b|${address.slice(0, 6)}[a-f0-9]*(?:…|\\.\\.\\.)[a-f0-9]*${address.slice(-4)}\\b`, 'i');
+  let connected = false;
   for (let i = 0; i < 25; i++) {
     const text = await page.locator('body').innerText();
-    if (/status:\s*connected/i.test(text) || text.toLowerCase().includes(address.slice(0, 6).toLowerCase())
-      || await firstVisible(page.getByRole('button', { name: /^disconnect(?: wallet)?$/i }))) break;
-    const wallet = await firstVisible(page.getByRole('button', { name: /test wallet|metamask, rabby|^injected$|^metamask$/i }));
-    const button = wallet || await firstVisible(page.getByRole('button', { name: /^connect(?: (?:a |your )?wallet)?$/i }));
+    if (accountName.test(text)) { connected = true; break; }
+    const wallet = await firstVisible(page.getByRole('button', { name: /^(?:connect\s+)?test wallet$/i }));
+    const legacy = i >= 4 ? await firstVisible(page.getByRole('button', { name: /^(?:connect\s+)?(?:injected|browser wallet|metamask)$/i })) : null;
+    const disconnect = await firstVisible(page.getByRole('button', { name: /^disconnect(?: wallet)?$/i }));
+    const button = disconnect || wallet || legacy || await firstVisible(page.getByRole('button', { name: /^connect(?: (?:a |your )?wallet)?$/i }));
     if (button && await button.isEnabled()) await button.click();
     else {
       const connection = await firstVisible(page.getByRole('button', { name: /^(?:connection|wallet)$/i }).or(page.getByRole('link', { name: /^(?:connection|wallet)$/i })));
@@ -29,6 +35,7 @@ export async function connect(page, address) {
     }
     await page.waitForTimeout(250);
   }
+  if (!connected) throw new CouldNotDrive('injected Test Wallet account was not connected');
   const swapLink = await firstVisible(page.getByRole('link', { name: /^swap$/i }));
   const swapButton = await firstVisible(page.getByRole('button', { name: /^swap$/i }));
   if (swapLink) await swapLink.click();
@@ -40,10 +47,11 @@ async function slots(page) {
   const result = [];
   for (const item of await candidates.all()) {
     if (!await item.isVisible()) continue;
-    const rank = await item.evaluate(el => {
+    const rank = await item.evaluate((el, pattern) => {
       const text = `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${[...el.querySelectorAll('img[alt]')].map(image => image.alt).join(' ')}`;
-      const token = el.tagName === 'SELECT' ? [...el.options].some(option => /\b(ETH|USDC|USDT)\b/i.test(option.textContent))
-        : /\b(ETH|USDC|USDT)\b|(?:select|choose).*(?:token|input|output)/i.test(text);
+      const names = new RegExp(`\\b(?:${pattern})\\b`, 'i');
+      const token = el.tagName === 'SELECT' ? [...el.options].some(option => names.test(option.textContent))
+        : names.test(text) || /(?:select|choose).*(?:token|input|output)/i.test(text);
       if (!token || /^(?:swap|approve|review|confirm|switch|refresh)\b/i.test(text.trim())) return null;
       let distance = 100;
       for (let parent = el.parentElement, depth = 0; parent && parent.tagName !== 'BODY'; parent = parent.parentElement, depth++) {
@@ -52,7 +60,7 @@ async function slots(page) {
       if (distance === 100) return null;
       const label = /\b(input|from|sell)\b/i.test(text) ? 0 : /\b(output|to|buy)\b/i.test(text) ? 1 : null;
       return { label, distance };
-    });
+    }, tokenPattern);
     if (rank) result.push({ item, order: result.length, ...rank });
   }
   const nearest = result.sort((a, b) => a.distance - b.distance).slice(0, 2).sort((a, b) => a.order - b.order);
@@ -61,8 +69,8 @@ async function slots(page) {
   return nearest.map(slot => slot.item);
 }
 async function slotSymbol(slot) {
-  return slot.evaluate(el => (el.tagName === 'SELECT' ? el.selectedOptions[0]?.textContent
-    : `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${[...el.querySelectorAll('img[alt]')].map(image => image.alt).join(' ')}`).match(/\b(ETH|USDC|USDT)\b/i)?.[1]?.toUpperCase());
+  return tokenSymbol(await slot.evaluate(el => el.tagName === 'SELECT' ? el.selectedOptions[0]?.textContent
+    : `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${[...el.querySelectorAll('img[alt]')].map(image => image.alt).join(' ')}`));
 }
 async function choose(page, index, symbol) {
   const controls = await slots(page);
@@ -70,24 +78,32 @@ async function choose(page, index, symbol) {
   if (slot) {
     if (await slotSymbol(slot) === symbol) return;
     if (await slot.evaluate(el => el.tagName === 'SELECT')) {
-      const value = await slot.evaluate((el, symbol) => [...el.options].find(option => new RegExp(`\\b${symbol}\\b`, 'i').test(option.textContent))?.value, symbol);
+      const value = await slot.evaluate((el, aliases) => [...el.options].find(option => new RegExp(`\\b(?:${aliases})\\b`, 'i').test(option.textContent))?.value, tokenAliases[symbol]);
       if (value !== undefined) { await slot.selectOption(value); return; }
     }
     await slot.click();
     const popup = await firstVisible(page.getByRole('listbox').or(page.getByRole('dialog')));
     const scope = popup || page;
-    const option = await firstVisible(scope.getByRole('option', { name: new RegExp(`\\b${symbol}\\b`, 'i') }).or(scope.getByRole('button', { name: new RegExp(`\\b${symbol}\\b`, 'i') })));
+    const name = new RegExp(`\\b(?:${tokenAliases[symbol]})\\b`, 'i');
+    const option = await firstVisible(scope.getByRole('option', { name }).or(scope.getByRole('button', { name })));
     if (option) { await option.click(); return; }
   }
   for (const role of ['tab', 'radio']) {
-    const options = page.getByRole(role, { name: new RegExp(`^${symbol}$`, 'i') });
+    const options = page.getByRole(role, { name: new RegExp(`^(?:${tokenAliases[symbol]})$`, 'i') });
     const option = await firstVisible(options.nth(Math.min(index, await options.count() - 1)));
-    if (option) { await option.click(); return; }
+    if (option) {
+      if (!await option.isEnabled()) {
+        const flip = await firstVisible(page.getByRole('button', { name: /flip|(?:swap|switch) direction|^switch$|switch tokens|↓↑|⇅|↕/i }));
+        if (!flip || !await flip.isEnabled()) throw new CouldNotDrive(`pair: ${symbol} choice was disabled`);
+        await flip.click();
+      }
+      await option.click(); return;
+    }
   }
   throw new CouldNotDrive(`pair: ${symbol} choice was not found`);
 }
 export async function prepareSwap(page, input, output, amount) {
-  await until(async () => (await slots(page)).length >= 2, 8000);
+  await until(async () => (await slots(page)).length >= 2 || await page.getByRole('radio').count() >= 2 || await page.getByRole('tab').count() >= 2, 8000);
   await choose(page, 0, input);
   await choose(page, 1, output);
   async function correctPair() {
@@ -95,10 +111,10 @@ export async function prepareSwap(page, input, output, amount) {
     if (controls.length >= 2) return await slotSymbol(controls[0]) === input && await slotSymbol(controls[1]) === output;
     const selected = await page.locator('[role="tab"][aria-selected="true"],[role="radio"][aria-checked="true"],input[type="radio"]:checked').evaluateAll(nodes => nodes.map(el =>
       el.getAttribute('aria-label') || (el.labels ? [...el.labels].map(label => label.innerText).join(' ') : el.innerText)));
-    return selected.map(text => text.trim()).filter(text => tokenName.test(text)).join(',') === `${input},${output}`;
+    return selected.map(tokenSymbol).filter(Boolean).join(',') === `${input},${output}`;
   }
   if (!await correctPair()) {
-    const flip = await firstVisible(page.getByRole('button', { name: /flip|swap direction|^switch$|switch tokens|↓↑|⇅|↕/i }));
+    const flip = await firstVisible(page.getByRole('button', { name: /flip|(?:swap|switch) direction|^switch$|switch tokens|↓↑|⇅|↕/i }));
     if (flip && await flip.isEnabled()) await flip.click();
   }
   if (!await correctPair()) throw new CouldNotDrive(`pair: expected ${input} then ${output}`);

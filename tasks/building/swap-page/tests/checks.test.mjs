@@ -1,9 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import { belief, labelledAmount, feeCheck, deltas, finiteDeadline, sentMinimum, minimumCheck, allowancesEmpty, receivedCheck, routersEmpty, enteredAmountCheck, gradeJourney } from './checks.mjs';
 import { classify, classifyRequest, routerTransaction, hasSwapLog, swapTopics } from './chain.mjs';
 import { TOKENS, ROUTERS, PERMIT2, ERC20 } from './lib.mjs';
 import { encodeFunctionData } from './deps.mjs';
+
+test('reads saved receipts across decorative icons and sold-and-received summaries', async () => {
+  const pages = JSON.parse(await fs.readFile(new URL('./fixtures/receipt-pages.json', import.meta.url), 'utf8'));
+  for (const { source, text, output, received } of pages) {
+    const amount = BigInt(received);
+    assert.equal(receivedCheck(text, output, amount).passed, amount > 0n, source);
+    assert.equal(receivedCheck(text, output, amount + 10n ** BigInt(output === 'ETH' ? 18 : 6)).passed, false, source);
+  }
+  assert.equal(receivedCheck('You sold 500 USDC and received 0.21 ETH', 'ETH', 210000000000000000n).passed, true);
+  assert.equal(receivedCheck('You sold 500 USDC and received 0.21 ETH', 'USDC', 500000000n).passed, false);
+  assert.equal(receivedCheck('You actually received\n$\n2,370.135044 USDC', 'USDC', 2370135044n).passed, true);
+  assert.equal(receivedCheck('You received\nMinimum received 0.21 ETH', 'ETH', 210000000000000000n).passed, false);
+});
 
 test('reads the last minimum, token, percentage qualifier, and explicit fallback', () => {
   assert.equal(belief('Minimum received (0.5% slippage)\n0.208806 ETH', 'ETH').minimum.value, 208806000000000000n);

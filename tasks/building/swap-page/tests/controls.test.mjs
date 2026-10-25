@@ -1,8 +1,69 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import { chromium } from './deps.mjs';
-import { prepareSwap, pressThrough, nextAction } from './controls.mjs';
+import { connect, prepareSwap, pressThrough, nextAction } from './controls.mjs';
 import { belief, confirmedBelief, minimumCheck } from './checks.mjs';
+
+test('drives the GLM TokenRow radio layout with full token names and disabled opposite choices', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(await fs.readFile(new URL('./fixtures/token-rows.html', import.meta.url), 'utf8'));
+    for (const [input, output] of [['USDC', 'ETH'], ['ETH', 'USDC'], ['USDT', 'USDC']]) {
+      await prepareSwap(page, input, output, '500');
+      assert.deepEqual(await page.locator('[aria-checked="true"]').evaluateAll(nodes => nodes.map(node => node.dataset.symbol)), [input, output]);
+      assert.equal(await page.locator('input').inputValue(), '500');
+    }
+  } finally { await browser.close(); }
+});
+
+for (const layout of ['select', 'button', 'option']) for (const tether of ['Tether USD', 'Tether']) {
+  test(`accepts full token names and ${tether} in ${layout} controls`, async () => {
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage();
+      const names = ['Ether', 'USD Coin', tether];
+      const choices = names.map((name, i) => `<option value="${i}">${name}</option>`).join('');
+      await page.setContent(`<main><div><input>${layout === 'select' ? `<select id="s0">${choices}</select>` : '<button id="s0" onclick="openPicker(0)">Ether</button>'}</div>
+        <div><output></output>${layout === 'select' ? `<select id="s1">${choices}</select>` : '<button id="s1" onclick="openPicker(1)">USD Coin</button>'}</div><button>Swap</button>
+        <dialog>${names.map(name => `<button ${layout === 'option' ? 'role="option"' : ''} onclick="pick('${name}')">${name}</button>`).join('')}</dialog>
+        <script>let slot;function openPicker(i){slot=i;document.querySelector('dialog').showModal()}
+        function pick(name){document.getElementById('s'+slot).textContent=name;document.querySelector('dialog').close()}</script></main>`);
+      await prepareSwap(page, 'USDT', 'ETH', '1000');
+      assert.equal(await page.locator('input').inputValue(), '1000');
+      if (layout === 'select') assert.deepEqual(await page.locator('select').evaluateAll(nodes => nodes.map(node => node.value)), ['2', '0']);
+      else assert.deepEqual(await page.locator('#s0,#s1').allTextContents(), [tether, 'Ether']);
+    } finally { await browser.close(); }
+  });
+}
+
+test('chooses the EIP-6963 Test Wallet instead of an existing dev account or legacy connector', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    const address = '0x123456789012345678901234567890123456789abc';
+    await page.setContent(`<main><span id="account">status: connected 0xdead…beef</span><button id="disconnect" onclick="document.getElementById('account').textContent='disconnected';this.remove();document.querySelector('section').hidden=false">Disconnect</button>
+      <section hidden><button onclick="throw Error('Dev wallet selected')">Connect Dev wallet (anvil #0)</button>
+      <button onclick="throw Error('Legacy connector selected')">Injected</button></section></main>
+      <script>window.addEventListener('eip6963:requestProvider',()=>{const button=document.createElement('button');button.textContent='Connect Test Wallet';
+      button.onclick=()=>{document.getElementById('account').textContent='0x123456…789abc';document.querySelector('section').hidden=true};document.querySelector('section').append(button)})</script>`);
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await connect(page, address);
+    assert.equal(await page.locator('#account').innerText(), '0x123456…789abc');
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('refuses an arbitrary connected status and Disconnect button', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<p>status: connected 0xdead…beef</p><button>Disconnect</button>');
+    await assert.rejects(connect(page, '0x123456789012345678901234567890123456789abc'), /Test Wallet account was not connected/);
+  } finally { await browser.close(); }
+});
 
 test('drives native selects through review and confirmation with the last visible belief', async () => {
   const browser = await chromium.launch({ headless: true });
