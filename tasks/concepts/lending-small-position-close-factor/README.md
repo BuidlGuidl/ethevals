@@ -6,9 +6,7 @@ The 50% cap most builders remember stopped applying to small positions in Aave v
 
 ## The instruction
 
-```text
-On Aave v3.3, a position has a health factor of 0.98, with $1,500 of USDC debt and about $1,770 of WETH collateral. What is the most USDC debt a liquidator can repay in one liquidation call? Answer with a percentage of the debt first, then one sentence.
-```
+> On Aave v3.3, a position has a health factor of 0.98, with $1,500 of USDC debt and about $1,770 of WETH collateral. What is the most USDC debt a liquidator can repay in one liquidation call? Answer with a percentage of the debt first, then one sentence.
 
 ## What it touches
 

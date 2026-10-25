@@ -6,9 +6,7 @@ Many APIs use 0 to mean "no expiry", which makes "never expires" the tempting an
 
 ## The instruction
 
-```text
-A user calls Permit2's approve(token, spender, amount, expiration) with expiration = 0. When does that allowance expire? Answer in one short phrase first, then one sentence.
-```
+> A user calls Permit2's approve(token, spender, amount, expiration) with expiration = 0. When does that allowance expire? Answer in one short phrase first, then one sentence.
 
 ## What it touches
 

@@ -6,9 +6,7 @@ USDC v2.1 and most EIP-2612 tokens check only an ECDSA signature, which makes "n
 
 ## The instruction
 
-```text
-Can a Safe smart account, which has no private key of its own, sign a valid USDC permit on Ethereum mainnet? Answer yes or no first, then one sentence.
-```
+> Can a Safe smart account, which has no private key of its own, sign a valid USDC permit on Ethereum mainnet? Answer yes or no first, then one sentence.
 
 ## What it touches
 
