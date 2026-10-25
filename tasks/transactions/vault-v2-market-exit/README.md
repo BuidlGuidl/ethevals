@@ -5,9 +5,7 @@ The task checks that pending cap raises cannot reopen it and that depositors can
 
 ## The instruction
 
-```text
-we curate the morpho vaults v2 vault in chain_context.json. one of its markets, id also in chain_context.json, has an oracle we no longer trust after yesterday's incident. get our depositors fully out of that market, for good: nobody should be able to put the vault back in. move the funds to the other markets or leave them idle, your call. deposits and withdrawals must keep working, and nothing else about the vault changes. our wallet in chain_context.json holds the curator and allocator roles. do it on that chain and tell us what you did.
-```
+> we curate the morpho vaults v2 vault in chain_context.json. one of its markets, id also in chain_context.json, has an oracle we no longer trust after yesterday's incident. get our depositors fully out of that market, for good: nobody should be able to put the vault back in. move the funds to the other markets or leave them idle, your call. deposits and withdrawals must keep working, and nothing else about the vault changes. our wallet in chain_context.json holds the curator and allocator roles. do it on that chain and tell us what you did.
 
 ## What it touches
 
@@ -20,6 +18,7 @@ The [cap setters](https://github.com/morpho-org/vault-v2/blob/425f6b1fb3a1d25083
 V2's [deallocate function](https://github.com/morpho-org/vault-v2/blob/425f6b1fb3a1d25083a9515348bd5e7bd3ab9017/src/VaultV2.sol#L593-L618) takes an asset delta.
 The stored allocation can lag interest, so it cannot name the full withdrawal amount.
 The [adapter](https://github.com/morpho-org/vault-v2/blob/425f6b1fb3a1d25083a9515348bd5e7bd3ab9017/src/adapters/MorphoMarketV1AdapterV2.sol#L194-L256) can leave supply-share dust worth nothing after a full deallocation.
+
 The checks measure "out" by zero expected supply assets and absence from the adapter's market list.
 They read Morpho's actual position and accept leftover supply shares only when they are worth zero base units and the adapter no longer lists the market.
 Caps and pending raises must be exactly zero, and the liquidity route must no longer point at the market.
@@ -52,10 +51,11 @@ The [Steakhouse migration announcement](https://forum.morpho.org/t/steakhouse-va
 Its [April 9 depositor guide](https://kitchen.steakhouse.financial/p/morpho-v2-is-the-new-standard) also describes upgrades from V1 to V2.
 
 Mainnet adapter events show the migration dates.
-For [steakUSDC V2](https://etherscan.io/address/0xbeef088055857739C12CD3765F20b7679Def0f51#events), the direct adapter arrived April 20, 2026 at block 24,923,943.
-Its route moved April 23 at block 24,942,643, and its V1 adapter left May 1 at block 24,998,920.
-[Gauntlet USDC Prime V2](https://etherscan.io/address/0x8c106EEDAd96553e64287A5A6839c3Cc78afA3D0#events) added its direct adapter April 24 and removed its wrapper June 2.
-[Sentora RLUSD V2](https://etherscan.io/address/0x6dC58a0FdfC8D694e571DC59B9A52EEEa780E6bf#events) added its direct adapter April 29 and removed its V1.1 wrapper July 3.
+
+- [steakUSDC V2](https://etherscan.io/address/0xbeef088055857739C12CD3765F20b7679Def0f51#events): the direct adapter arrived April 20, 2026 at block 24,923,943. Its route moved April 23 at block 24,942,643, and its V1 adapter left May 1 at block 24,998,920.
+- [Gauntlet USDC Prime V2](https://etherscan.io/address/0x8c106EEDAd96553e64287A5A6839c3Cc78afA3D0#events) added its direct adapter April 24 and removed its wrapper June 2.
+- [Sentora RLUSD V2](https://etherscan.io/address/0x6dC58a0FdfC8D694e571DC59B9A52EEEa780E6bf#events) added its direct adapter April 29 and removed its V1.1 wrapper July 3.
+
 An exit procedure copied from V1.1 misses pending V2 raises and its single deposit route.
 Morpho's [emergency guide](https://docs.morpho.org/curate/tutorials-v2/emergency/) calls for revoking pending raises before lowering caps and moving funds.
 

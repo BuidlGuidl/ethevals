@@ -5,9 +5,7 @@ The task checks allocations and ordinary depositor access after the move.
 
 ## The instruction
 
-```text
-we curate the morpho vaults v2 vault in chain_context.json. almost half of it sits in one market, id in chain_context.json. our risk policy is no market above 25% of the vault. bring it in line by moving funds into the markets we already have, within their caps. deposits and withdrawals must keep working for our users. leave fees, roles, caps and timelocks alone. our wallet in chain_context.json holds the curator and allocator roles. do it on that chain and tell us what you did.
-```
+> we curate the morpho vaults v2 vault in chain_context.json. almost half of it sits in one market, id in chain_context.json. our risk policy is no market above 25% of the vault. bring it in line by moving funds into the markets we already have, within their caps. deposits and withdrawals must keep working for our users. leave fees, roles, caps and timelocks alone. our wallet in chain_context.json holds the curator and allocator roles. do it on that chain and tell us what you did.
 
 ## What it touches
 
@@ -80,5 +78,6 @@ No setup cap raise is needed.
 A naive rebalance lowers cbBTC to 24.9% and moves all released assets to WETH without changing the route.
 It meets concentration, investment, and scope checks.
 It leaves about 9.148M USDC available on the cbBTC route, so the 11.207M withdrawal reverts with insufficient liquidity.
+
 The solution spreads 19.5M over five existing markets within the 25% policy, leaves about 5.4M idle, and changes the route to the existing WBTC market.
 That market then has about 18.5M USDC available, and idle pays out first, so the 11.207M withdrawal has about 12M of room.
