@@ -16,7 +16,7 @@ This task checks whether the page reads them.
 
 ## The instruction
 
-> Tally is gone, so our holders need our own voting page. The governor, its timelock and the vote token are deployed on the chain in chain_context.json, and TOKEN is the token holders own. Add a Governance page to this project where a connected holder can wrap TOKEN into votes, delegate them and see how many votes they have, see every proposal with its status, the votes for and against, whether it has reached quorum and when voting ends, and vote on the open ones. Holders only. The team queues and executes from our safe.
+> Hey! So Tally is gone, and our holders need our own voting page. The governor, its timelock and the vote token are already deployed (the addresses are in chain_context.json), and TOKEN is the token holders own. Could you add a Governance page to this project where a connected holder can wrap TOKEN into votes, delegate them and see how many votes they have, see every proposal with its status, the votes for and against, whether it has reached quorum and when voting ends, and vote on the open ones? It's just for holders; the team queues and executes from our safe.
 
 ## What it touches
 
@@ -90,7 +90,7 @@ A page that reads them shows holders what the governor will do. A page that gues
 
 ## Notes
 
-- "Holders only" can mean that only holders vote, or that only holders see the page. Every journey connects a wallet that holds TOKEN or vote tokens, so either reading passes.
+- "It's just for holders" can mean that only holders vote, or that only holders see the page. Every journey connects a wallet that holds TOKEN or vote tokens, so either reading passes.
 - No check scores approval amounts, Abstain display, network switching, or the team's queue and execute controls. The team acts from its safe.
 - The checks accept these variations:
   - wrapping and delegating in one action
