@@ -1,7 +1,8 @@
 # Mainnet P-256 precompile
 
-The user asks whether Ethereum mainnet has a P-256 verification precompile and where it lives.
-The check requires yes and address 0x100.
+A passkey wallet builder asks whether Ethereum mainnet has a precompile for verifying P-256 signatures.
+Yes. EIP-7951's `P256VERIFY` is at `0x100`, live since the Fusaka upgrade.
+Before that upgrade the answer was "only on L2s".
 
 ## The instruction
 
@@ -11,10 +12,21 @@ Is there a precompile on Ethereum mainnet today for verifying secp256r1 (P-256, 
 
 ## What it touches
 
-EIP-7951 adds P256VERIFY at address 0x100 on Ethereum mainnet through Fusaka.
-The address also appears in RIP-7212 deployments on L2s, but the mainnet precompile now exists too.
+Passkeys sign with the secp256r1 curve, also called P-256.
+RIP-7212 added a verifier for it at `0x100` on several L2s.
+EIP-7951 added `P256VERIFY` to Ethereum mainnet at the same address.
+
+```text
+before Fusaka:  no P-256 precompile on mainnet, 0x100 on some L2s
+since Fusaka:   P256VERIFY at 0x100 on mainnet, 6,900 gas per check
+```
+
+Fusaka activated on mainnet on 2025-12-03.
 
 ## The checks
+
+The rule needs a yes at the start of the reply and `0x100` as the first hexadecimal address.
+It refuses no, and it refuses a different first address.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
@@ -24,5 +36,15 @@ The quiz runs in vanilla, internet, and skills modes.
 
 ## Why it matters
 
-Wallets need the deployed mainnet address to verify passkey signatures through the precompile.
-[EIP-7951](https://eips.ethereum.org/EIPS/eip-7951) defines P256VERIFY at 0x100, and [Fusaka's meta EIP](https://eips.ethereum.org/EIPS/eip-7607) records its activation.
+A passkey wallet that believes mainnet has no precompile ships a Solidity P-256 verifier and pays for the curve math in EVM code.
+The precompile does the same check for a fixed 6,900 gas.
+[EIP-7951](https://eips.ethereum.org/EIPS/eip-7951) defines `P256VERIFY` and its gas cost, and [Fusaka's meta EIP](https://eips.ethereum.org/EIPS/eip-7607#activation) records when mainnet got it.
+
+## Notes
+
+The rule accepts `0x100` or its zero-padded form after an opening yes.
+It refuses a different first hexadecimal value even if `0x100` appears later.
+It does not run a signature check or require the upgrade's name.
+
+"Today" in the question means after Fusaka.
+Before 2025-12-03 the right answer was no.

@@ -1,7 +1,8 @@
 # Wallet batch status 600
 
-The user asks what wallet_getCallsStatus status 600 means.
-The check requires a partial revert or failure.
+A dapp builder asks what status 600 from `wallet_getCallsStatus` means for a batch.
+It means the batch reverted partially, so some calls' changes may be onchain.
+Reading it as a full rollback confuses it with status 500.
 
 ## The instruction
 
@@ -11,10 +12,23 @@ Under EIP-5792, wallet_getCallsStatus returns status 600 for a batch of calls. W
 
 ## What it touches
 
-EIP-5792 status 600 means that the batch reverted partially.
-Some calls can leave changes onchain even though other calls reverted.
+The Final EIP-5792 defines five batch statuses:
+
+```text
+100  received by the wallet, not yet executed onchain (pending)
+200  included onchain without reverts (confirmed)
+400  not included onchain, and the wallet will not retry (offchain failure)
+500  reverted completely, only gas charges may be onchain
+600  reverted partially, some calls' changes may be onchain
+```
+
+Status 600 is an onchain outcome.
+It is not a user rejection, which `wallet_sendCalls` reports as error 4001, and it is not a pending batch.
 
 ## The checks
+
+The rule reads only the first sentence of the reply.
+It needs partial or mixed execution there, and it refuses a first sentence that also names another outcome.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
@@ -24,5 +38,11 @@ The quiz runs in vanilla, internet, and skills modes.
 
 ## Why it matters
 
-A dapp that treats partial failure as a complete rollback can repeat calls that already changed state.
-[EIP-5792](https://eips.ethereum.org/EIPS/eip-5792) defines status 600 and warns that some changes can remain onchain.
+A dapp that treats 600 as a full rollback can resubmit calls that already ran, such as a payment or a mint.
+[EIP-5792's status codes](https://eips.ethereum.org/EIPS/eip-5792#status-codes-for-status-field) keep 500 and 600 apart so the app checks the receipts before it retries.
+
+## Notes
+
+The rule accepts "partial failure", "partially reverted", "mixed execution", or "some calls failed while others succeeded" in the first sentence.
+It refuses "rejected", "pending", "confirmed", "undefined", or a whole-batch failure there, even next to "partial".
+A right second sentence does not rescue a wrong first one.
