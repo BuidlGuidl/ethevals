@@ -1,8 +1,12 @@
 # Aave savings page
 
-The user asks for a Savings page for USDC and USDT on Aave v3.
-The verifier drives the page with an injected wallet on a local fork.
-It checks visible values, wallet requests, and the resulting chain balances.
+A wallet app wants a Savings page where its users put USDC and USDT into Aave v3, watch the balance grow, and take it back out.
+The agent adds that page to a fresh create-wagmi project.
+The checks open the built page in a browser with a test wallet, use it the way a person would, and score what the page asked the wallet for and what changed on chain.
+
+A savings page looks like a few buttons and two numbers.
+Each part has a detail that the request doesn't mention and a quick page gets wrong.
+The balance has to include interest, the APY has to be compounded, Max has to empty the position, USDT needs its allowance reset, and a full supply cap has to stop the page before it asks the wallet for anything.
 
 ## The instruction
 
@@ -12,72 +16,67 @@ Our users hold USDC and USDT on Ethereum mainnet and want to earn on them withou
 
 ## What it touches
 
-The agent starts in `/workspace` with the create-wagmi 2.0.19 vite-react project.
-Its lockfile pins wagmi 3.7.9, viem 2.57.11, React 19.3.1, and Vite 8.3.5.
-The main image adds Node.js 22 and pnpm 9.14.2 to the shared Debian chain image.
-It installs project dependencies from the lockfile during the image build.
-The project needs no npm download during a trial.
-The image includes curl, bash, procps, and ripgrep for Harbor's agent installers.
-Harbor can still download the selected agent CLI during setup.
+The instruction names the tokens, the protocol, and what the user can do.
+It leaves out the details below, and each one is a check.
 
-The chain forks Ethereum mainnet at block `26260992`, dated 2026-10-24 at 07:25:11 UTC.
-This was a finalized block when checked.
-At that block, Aave v3's main pool has active, unfrozen, unpaused USDC and USDT reserves.
-The pool is `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`.
-Only the chain sidecar receives `MAINNET_RPC_URL`.
-Setup leaves the reserve configuration and block clock unchanged, without funding any wallet.
-The task chain exposes the real market at the pinned block.
-Setup writes the chain context.
-The agent reads `/workspace/chain_context.json` through the existing read-only chain context link.
+- **Interest that keeps growing.** Aave holds a deposit as aTokens, and the aToken balance grows every second. A page that shows the amount deposited, or a number it read once, is wrong a block later. The checks move the clock forward 30 days and reload the page.
 
-The task's main image installs Playwright 1.61.1, Chromium, and viem 2.57.11 under root-only directories.
-It extracts Chromium's added shared libraries under `/root/savings-libs` instead of installing them system-wide.
-Only the verifier's browser launch receives that library path.
-An agent-downloaded Chromium cannot launch with the system libraries alone.
-The verifier starts its own Anvil fork of the task chain after the agent stops.
-Before the cap journey, it lowers USDC's supply cap through the pool configurator in that fork alone.
-It impersonates the provider's ACL admin after checking its pool admin role.
-That governance contract has no ETH, so the next block's base fee and transaction gas price are zero.
-The cap is the aUSDC total supply rounded up to whole USDC, plus 5,000 USDC.
-Aave also counts accrued treasury tokens against the cap, which leaves less than 5,000 USDC of room.
-A deposit above the room fails with `SupplyCapExceeded()` and selector `0xf58f733a`.
-Pool revision 11 uses this custom error in place of the older string error `51`.
-The verifier fixes its fork's block interval at zero and advances time only where a journey needs it.
-The cap journey keeps a stable clock; other journeys use the original cap.
-It funds a fresh wallet with ETH and 10,000 units of each token through local chain controls.
-The private key stays in the verifier process and never enters the page or public chain context.
-Playwright injects an EIP-1193 provider and announces it through EIP-6963.
-Browser JSON-RPC reads, including `/rpc` requests and Docker hostnames, reach the verifier's fork through request routing.
-The verifier does not change the agent's source.
-The page and wallet share a read allowlist that mirrors the task chain, excluding raw transaction submission.
-Other browser endpoints and WebSockets are blocked.
-The verifier kills leftover agent processes before building and again before starting its fork.
-Both compile commands run as `agent`, with verifier credentials removed from their environment.
-The verifier serves built files with its own static server, without loading Vite configuration.
+  ```text
+  deposit 100 USDC, 30 days later    100.325312 aUSDC    the page must show this, not 100
+  ```
 
-The main container gets one CPU and 4 GiB of memory.
-The chain sidecar has a 3 GiB memory limit.
-The task adds no agent time limit.
+- **APY, not APR.** Aave publishes each reserve's `currentLiquidityRate`, a yearly rate without compounding. Interest compounds every second, so the rate the user earns is higher.
+
+  ```text
+  USDC at block 26260992
+  currentLiquidityRate as a percent    3.96%    the APR
+  compounded every second for a year   4.04%    the APY
+  ```
+
+- **Withdrawing everything.** Interest keeps growing between the moment a page reads the balance and the moment the withdrawal is mined. A Max button that sends the last balance it read leaves that interest behind. Aave's pool treats the largest `uint256` as the whole balance, which closes the position exactly. The checks mine each withdrawal a day after the click.
+
+  ```text
+  about 60.34 USDC in Aave when Max is pressed, mined a day later
+  withdraw(USDC, last balance read, user)     returns 60.336156, leaves 0.006595 aUSDC
+  withdraw(USDC, type(uint256).max, user)     returns 60.342751, leaves 0
+  ```
+
+- **USDT's approve.** USDT refuses to change an allowance from one non-zero value to another. If the pool already holds a small USDT allowance, the page has to set it to 0 before approving the new amount. The checks start the USDT deposit with 1 USDT already approved.
+
+  ```text
+  allowance 1 USDT, approve(pool, 100 USDT)                     reverts
+  allowance 1 USDT, approve(pool, 0), approve(pool, 100 USDT)   works
+  ```
+
+- **A full supply cap.** Every Aave reserve has a supply cap, and Aave reverts a deposit that would go over it with `SupplyCapExceeded()`. Aave's own app reads the room left, limits the amount, and asks the wallet for nothing. A page that asks for an approve first costs the user gas and leaves a live allowance for a deposit that can't happen. The page should also say why in words, not show the raw error code `0xf58f733a`. The market the agent builds against has plenty of room. The checks fill the cap only on their own copy of the chain, so a page passes only if it handles a full cap it never saw.
+
+  ```text
+  room left under the cap    3,647.67 USDC
+  the check types            6,000.10 USDC
+  a careful page             asks the wallet for nothing and says the cap is full
+  a quick page               asks to approve 6,000.10 USDC, then the supply reverts
+  ```
+
+- **The wrong network.** Users arrive on whatever chain their wallet used last. The instruction names Ethereum mainnet. When the user presses Deposit or Withdraw on another chain, the page should switch the wallet to Ethereum and carry on with the action. It shouldn't send the transaction to the other chain, or stop after the switch and wait for a second click.
 
 ## The checks
 
-Harbor saves `/workspace` as an artifact, excluding `node_modules`, `dist`, `.git`, and `chain_context.json`.
-The saved project contains plain files that the publication secret check can scan.
-The exclusion removes the chain context symlink, which the secret check rejects.
-The verifier runs both compile commands and writes `build.log`, `typecheck.log`, and `checks.json` under `/logs/verifier/`.
-It copies `/opt/check_records.py` into `/tests/check_records.py`.
-RewardKit uses this shared adapter to turn `checks.json` into named checks and the reward.
-The browser opens the production build through the verifier's static server.
-It finds token cards or rows by their visible text, then uses accessible control names and amount inputs.
-Missing controls fail the affected checks with `could not drive: ...` and a screenshot.
-Each journey saves page text, a screenshot, and wallet requests with transaction receipts.
-Snapshots isolate the USDT and supply-cap journeys.
-After the USDC deposit, the verifier advances time by 30 days and reloads the page to check accrued interest.
-Withdrawal requests advance another day before mining, so a Max control that sends a balance snapshot leaves dust.
-Each withdrawal journey gets a funded position if its preceding journey fails.
-The APY check runs before any deposit action.
-Fork startup, funding, and invalid fixtures cause trial errors.
-Broken pages and builds fail their affected checks.
+The verifier builds the project as the agent's user, serves the build with its own static server, and opens it in headless Chromium with an injected test wallet.
+It runs its own copy of the task chain and funds a fresh wallet with ETH and 10,000 USDC and USDT.
+Then it uses the page the way a person would:
+
+```text
+read the APY                          before any action
+deposit 100 USDC, wait 30 days, reload, read the balance
+withdraw 40 USDC, then press Max      each mined a day after the click
+deposit 100 USDT                      with 1 USDT already approved
+fill USDC's cap, deposit 6,000 USDC   the wallet must get no request
+```
+
+It scores from the page's text, the requests the page sent the wallet, and the balances on chain.
+It finds controls by their visible words and the page's structure.
+A control it can't find fails only the checks that need it, with "could not drive" and a screenshot.
+The reward is 1 only when every check passes.
 
 | Check | What it proves | Area | Instruction words | Reference code |
 | --- | --- | --- | --- | --- |
@@ -92,47 +91,100 @@ Broken pages and builds fail their affected checks.
 | `explains_supply_cap` | The page explains the refused deposit's cap in words | user feedback, judge | "deposit either token into Aave v3" | [cap-explanation.toml](tests/cap-explanation.toml) and Aave's supply UI above |
 | `switches_and_continues` | Deposit or Withdraw switches to Ethereum and carries on without another click | network handling, judge | "Ethereum mainnet" and "The chain to use is in `chain_context.json`" | [network-flow.toml](tests/network-flow.toml) |
 
-The reward is 1 only when every check passes.
-The cap check fails any wallet write request, including an approval alone, regardless of the Pool entry point.
-It waits for three seconds of wallet inactivity, with a twenty-second ceiling.
-A pending request at that ceiling still counts as asked.
-Disabled, missing, or relabelled controls after typing count as no wallet request.
-The same page must first complete an in-room deposit.
-A page can simulate the whole supply before its first wallet prompt; no explicit cap read is required.
-Clamping the typed amount to the room still fails if the page asks the wallet for a write.
-It measures the current reserve configuration and includes accrued treasury tokens in the remaining room.
-The room bounds and oversized amount live in `capFixture()` in `tests/chain.mjs`.
-The reusable wallet still supports atomic bundles and ERC-1271 signatures through an EIP-7702 account.
-Savings runs no atomic journey or observation; its extra page drive and settling time add verifier cost.
+The cap check counts any wallet write as asking: a transaction, an approval alone, a signature, or a bundle.
+It waits until the wallet has been idle for three seconds, up to twenty seconds, and a request still pending at that point counts.
+A page may simulate the supply before its first wallet prompt, so it needs no explicit cap read.
+A page that cuts the typed amount down to the room and then asks the wallet still fails.
+A control that is disabled, missing, or relabelled after typing counts as no request.
+The same page must first finish a deposit inside the room, so a page that can't deposit at all doesn't pass.
+The room counts the treasury's accrued tokens, as Aave does, and its bounds and the oversized amount live in `capFixture()` in [chain.mjs](tests/chain.mjs).
 
-The board-only RewardKit judge reads `cap-page.txt` and `cap-page.png`, alongside the required guarded trajectory.
-It checks whether the page explains the supply cap rather than showing a generic failure or selector.
-A second judge reads a source snapshot with file paths, excluding dependencies and build output.
-It follows Deposit or Withdraw through a network switch and the transaction that follows.
-Free checks and PR CI skip both paid criteria.
+The two judges run only on the board, not in free checks or PR CI.
+`explains_supply_cap` reads the page's text and screenshot after the refused deposit.
+`switches_and_continues` reads the page's source, without dependencies or build output, and follows Deposit and Withdraw through a network switch to the transaction that follows.
 
 ## Why it matters
 
-A compiling project alone gives no evidence that its Savings page works.
-These checks exercise the wallet and Aave contracts behind the page's controls.
-Aave's [supply guide](https://aave.com/help/supplying/supply-tokens) describes interest accruing in the supplied balance.
-Its [withdrawal guide](https://aave.com/help/supplying/withdraw-tokens) describes the liquidity requirement for withdrawals.
+Each detail is one that Aave's own app or the token contract already handles, so a page built on the happy path alone misses it.
+
+- Aave's [supply guide](https://aave.com/help/supplying/supply-tokens) says interest accrues in the supplied balance, and [formatReserve](https://github.com/aave/aave-utilities/blob/2d0db501009fdb34824cbc9a486c3e9fd7191ec7/packages/math-utils/src/formatters/reserve/index.ts) is how Aave's app turns the liquidity rate into the APY it shows.
+- Aave's [withdrawal guide](https://aave.com/help/supplying/withdraw-tokens) covers withdrawals, and the pool's [max-uint branch](https://github.com/aave-dao/aave-v3-origin/blob/8305565ae342f1773c42cd2e4593f175fe5968a0/src/contracts/protocol/libraries/logic/SupplyLogic.sol#L124) is what closes a position without dust.
+- USDT's [verified contract](https://etherscan.io/address/0xdac17f958d2ee523a2206206994597c13d831ec7#code) rejects a non-zero approve over a non-zero allowance. USDT is one of the two tokens the user asked for, so skipping the reset breaks the deposit for anyone with a leftover allowance.
+- Aave's [Supply modal](https://github.com/aave/interface/blob/ae94b94ccdc4f370c53c4c78111413ce9790eb1e/src/components/transactions/Supply/SupplyModalContent.tsx#L187-L196) checks the cap's room before any wallet prompt, mirroring the contract's [validateSupply](https://github.com/aave-dao/aave-v3-origin/blob/8305565ae342f1773c42cd2e4593f175fe5968a0/src/contracts/protocol/libraries/logic/ValidationLogic.sol).
+- [EIP-3326](https://eips.ethereum.org/EIPS/eip-3326) defines `wallet_switchEthereumChain`, the request a page sends to move the wallet to the right network.
 
 ## Notes
 
-`solution/solve.sh` installs a Savings page based on the claude-2 discovery trial.
-It adds atomic calls to that page's deposits.
-The untouched starting project compiles but has no Savings controls, so its browser checks fail.
+- Two practices are deliberately not checked. Aave's own app approves the largest `uint256` when it supplies without a permit, through `useApprovalTx` in `SupplyActions.tsx` and `poolSlice.ts`, so the task doesn't require exact approvals. The instruction sets no rule on wallet prompts, and the reference apps disagree on one-transaction deposits. Aave's app uses a permit, while MetaMask Mobile's lending batched approve and supply and then turned batching off. So the task doesn't require a one-transaction deposit either.
+- The controls are found by words and page structure, tested on ten pages built by agents and ten fixture pages. A page laid out in a way they don't cover fails with "could not drive" and a screenshot, so a person should look at such a fail before it is published.
+- `solution/solve.sh` copies a working Savings page into the project. When the wallet supports atomic batching, it sends approve and supply as one bundle. The untouched starter compiles but has no Savings controls, so its browser checks fail.
 
-The environment files hold the project, image definitions, and chain setup.
-The tests directory holds the browser journeys, wallet, compile commands, and RewardKit settings.
-The solution directory holds the working page.
+### The project and the chain
+
+The agent starts in `/workspace` with the create-wagmi 2.0.19 vite-react project.
+Its lockfile pins wagmi 3.7.9, viem 2.57.11, React 19.3.1, and Vite 8.3.5, and the image installs those dependencies during the build, so the project needs no npm download during a trial.
+The main image adds Node.js 22 and pnpm 9.14.2 to the shared chain image, plus curl, bash, procps, and ripgrep for Harbor's agent installers.
+Harbor can still download the selected agent CLI during setup.
+
+The chain forks Ethereum mainnet at block `26260992`, from 2026-10-24 at 07:25:11 UTC, which was finalized when checked.
+At that block, Aave v3's main pool, `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`, has active, unfrozen, unpaused USDC and USDT reserves.
+USDC's cap there is 3,000,000,000 USDC with about 609.6M of room.
+Setup changes nothing on the chain and funds no wallet.
+It writes the chain context, which the agent reads at `/workspace/chain_context.json`.
+Only the chain sidecar receives `MAINNET_RPC_URL`.
+
+The main container gets one CPU and 4 GiB of memory, and the chain sidecar has a 3 GiB limit.
+The task adds no agent time limit.
+
+### How the verifier runs
+
+The verifier's browser and packages, Playwright 1.61.1, Chromium, and viem 2.57.11, live in root-only directories.
+The image extracts Chromium's extra shared libraries under `/root/savings-libs` instead of installing them system-wide, and only the verifier's browser launch gets that path.
+A Chromium the agent downloads can't launch with the system libraries alone.
+
+`test.sh` kills leftover agent processes, runs `pnpm build` and `tsc --noEmit` as `agent` with verifier credentials removed, and kills agent processes again.
+Then it starts its own Anvil fork of the task chain.
+That fork is unfiltered so the verifier can fund wallets, take snapshots, and move the clock, and no agent process runs beside it.
+The wallet's private key stays in the verifier process and never reaches the page or the public chain context.
+
+Playwright injects an EIP-1193 provider and announces it through EIP-6963.
+Browser JSON-RPC reads, including `/rpc` paths and Docker hostnames, reach the verifier's fork through request routing.
+The page and the wallet share a read allowlist that mirrors the task chain's, without raw transaction submission.
+Other endpoints and WebSockets are blocked.
+The static server serves `dist/` without loading the Vite config or package scripts, and the verifier never changes the agent's source.
+
+The fork's block interval is zero, and the verifier moves time only where a journey needs it.
+Snapshots isolate the USDT and cap journeys, and each withdrawal journey gets a funded position if the one before it failed.
+For the cap journey alone, the verifier impersonates the provider's ACL admin, after checking its pool admin role, and lowers USDC's cap through the pool configurator.
+The new cap is the aUSDC total supply rounded up to whole USDC plus 5,000 USDC, and accrued treasury tokens leave less than that as room.
+The admin holds no ETH, so that block's base fee and gas price are zero, and the clock stays still during the journey.
+Pool revision 11 reverts with `SupplyCapExceeded()`, selector `0xf58f733a`, where older pools used the string error `51`.
+
+Each journey saves page text, a screenshot, and the wallet requests with their receipts.
+The verifier writes `build.log`, `typecheck.log`, and `checks.json` under `/logs/verifier/`, and copies `/opt/check_records.py` into `/tests/check_records.py`.
+RewardKit uses that shared adapter to turn `checks.json` into named checks and the reward.
+Fork startup, funding, and fixture failures are trial errors, while broken pages and builds fail their checks.
+
+Harbor saves `/workspace` as an artifact, without `node_modules`, `dist`, `.git`, and `chain_context.json`.
+Dropping the chain context symlink lets the publication secret check scan the saved project, since it rejects symlinks.
+
+The wallet also supports atomic bundles and ERC-1271 signatures through an EIP-7702 account, for later page tasks.
+Savings runs no atomic journey.
+
+### Running the checks
 
 With `MAINNET_RPC_URL` set, run the free check from the repository root:
 
 ```sh
 uv run ethevals lint --tasks tasks/building/aave-savings-page
 uv run ethevals free-check --tasks tasks/building/aave-savings-page --output /tmp/aave-savings-free-check
+```
+
+To run either free agent directly through Harbor:
+
+```sh
+uv run harbor run -p tasks/building/aave-savings-page -a oracle -e docker --n-concurrent 1
+uv run harbor run -p tasks/building/aave-savings-page -a nop -e docker --n-concurrent 1
 ```
 
 Verifier self-tests run outside scored trials.
@@ -146,6 +198,9 @@ python3 tasks/building/aave-savings-page/tests/test_source_snapshot.py
 The Node tests need Anvil and a Playwright Chromium installation.
 The package versions are in `environment/verifier/package.json`.
 Set `PLAYWRIGHT_BROWSERS_PATH` if your browser installation uses a custom directory.
+
+To look at a saved project, open the trial's `artifacts/workspace/` directory and install dependencies from its lockfile.
+For live chain access, add a `chain_context.json` file for your own fork.
 
 ### Copying the verifier to another page task
 
@@ -163,7 +218,8 @@ The wallet records requests before execution and transactions after mining.
 `createVocabulary(words, {prerequisites})` supplies matching and submission helpers for the new task's action words.
 
 Supply the new task's journeys, chain setup, funding addresses, expected values, and page-specific control scopes.
-For Savings, those live in `browser.mjs`, `chain.mjs`, `controls.mjs`, and `environment/setup/`.
+For Savings, those live in `browser.mjs`, `chain.mjs`, and `controls.mjs`.
+State that only a check needs, like the full cap here, belongs in the verifier's fork, so the agent builds against the real chain.
 Copy and adapt the check-record and RewardKit wiring in `test.sh`.
 The new task must define its own check names and decide which failures are trial errors.
 
@@ -173,13 +229,3 @@ That block downloads library packages, extracts them under `/root/savings-libs`,
 Keep the `COPY verifier/fonts.conf /root/savings-fonts.conf` line and the `chmod 700` paths.
 Keep those paths consistent with `deps.mjs`, `harness.mjs`, and `test.sh`.
 No shared-image change is needed.
-
-To run either free agent directly through Harbor:
-
-```sh
-uv run harbor run -p tasks/building/aave-savings-page -a oracle -e docker --n-concurrent 1
-uv run harbor run -p tasks/building/aave-savings-page -a nop -e docker --n-concurrent 1
-```
-
-To inspect a saved project, open the trial's `artifacts/workspace/` directory and install dependencies from its lockfile.
-For live chain access, add a `chain_context.json` file for your own fork.
