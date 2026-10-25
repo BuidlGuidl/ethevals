@@ -128,7 +128,7 @@ ETH settlement, empty routers, and receipt amounts partly repeat checks in other
 
 The main container has one CPU and 4 GiB of memory; the chain sidecar has a 3 GiB limit.
 The task sets no agent time limit.
-The solution adapts the saved Opus page and adds an explicit fresh-price review.
+The solution is a reference page with an explicit fresh-price review.
 Its token picker uses buttons and a dialog to exercise a different control shape.
 It uses exact approvals and takes the fee from output inside the router transaction.
 The task-local wallet adds transaction classification arguments to its `beforeSend` callback.
