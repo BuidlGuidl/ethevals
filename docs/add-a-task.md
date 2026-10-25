@@ -77,7 +77,7 @@ Use these sections, in this order:
 | Section               | Holds                                                                         |
 | --------------------- | ----------------------------------------------------------------------------- |
 | `# <title>`           | two or three sentences on what the user asks and what the task checks        |
-| `## The instruction`  | `instruction.md`, word for word, in a `text` block                             |
+| `## The instruction`  | `instruction.md`, word for word, as a blockquote (`> ` on every line) so it wraps |
 | `## What it touches`  | the areas the task touches, and the gotchas in each that the instruction leaves out |
 | `## The checks`       | a table with every check by name, what it proves, and its area                |
 | `## Why it matters`   | where the same gotchas hurt real projects, with links                         |
