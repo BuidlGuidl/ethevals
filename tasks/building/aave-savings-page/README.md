@@ -30,7 +30,7 @@ A page that shows the amount deposited, or a number it read once, is wrong a blo
 The checks move the clock forward 30 days and reload the page.
 
 ```text
-100 USDC, 30 days later   100.325312 aUSDC   show this, not 100
+100 USDC after 30 days   show 100.325312, not 100
 ```
 
 ### APY, not APR
@@ -83,10 +83,10 @@ The market the agent builds against has plenty of room.
 The checks fill the cap only on their own copy of the chain, so a page passes only if it handles a full cap it never saw.
 
 ```text
-room under the cap   3,647.67 USDC
-the check types      6,000.10 USDC
-a careful page       asks for nothing and says the cap is full
-a quick page         asks for an approve, then the supply reverts
+room left        3,647.67 USDC
+the check types  6,000.10 USDC
+careful page     asks for nothing, says the cap is full
+quick page       sends an approve, then the supply reverts
 ```
 
 ### The wrong network
@@ -102,11 +102,11 @@ It runs its own copy of the task chain and funds a fresh wallet with ETH and 10,
 Then it uses the page the way a person would:
 
 ```text
-read the APY                       before any action
-deposit 100 USDC, wait 30 days     reload, read the balance
-withdraw 40 USDC, then press Max   each mined a day later
-deposit 100 USDT                   1 USDT already approved
-fill USDC's cap, deposit 6,000     the wallet must get no request
+read the APY                      before any action
+deposit 100 USDC, wait 30 days    reload, read the balance
+withdraw 40 USDC, then Max        each mined a day later
+deposit 100 USDT                  1 USDT already approved
+fill USDC's cap, try 6,000 USDC   no wallet request allowed
 ```
 
 How it scores:
@@ -246,7 +246,8 @@ Savings runs no atomic journey.
 With `MAINNET_RPC_URL` set, run the free check from the repository root:
 
 ```sh
-uv run ethevals lint --tasks tasks/building/aave-savings-page
+uv run ethevals lint \
+  --tasks tasks/building/aave-savings-page
 uv run ethevals free-check \
   --tasks tasks/building/aave-savings-page \
   --output /tmp/aave-savings-free-check
@@ -265,10 +266,10 @@ Verifier self-tests run outside scored trials.
 Install the pinned verifier packages in a directory you own, then run these commands from the repository root:
 
 ```sh
+T=tasks/building/aave-savings-page/tests
 VERIFIER_DEPS=/path/to/verifier-packages \
-  node --test tasks/building/aave-savings-page/tests/*.test.mjs
-python3 \
-  tasks/building/aave-savings-page/tests/test_source_snapshot.py
+  node --test $T/*.test.mjs
+python3 $T/test_source_snapshot.py
 ```
 
 - The Node tests need Anvil and a Playwright Chromium installation.
