@@ -3,11 +3,11 @@ import path from 'node:path';
 import { createHarness } from './harness.mjs';
 import { CouldNotDrive } from './control-vocabulary.mjs';
 import { connect, proposal, proposalValues, currentVotes, votingScope, oldVoteView, castVote, wrap, delegate, dismiss,
-  listedDescriptions, governanceControls, settled } from './controls.mjs';
+  listedDescriptions, governanceControls, settled, ambiguousWeight, emptyProposals } from './controls.mjs';
 import { UNIT, prepareFork, discoverAccounts, localAccounts, proposals, proposalState, governorAbi, votesAbi,
   value, mineTo, voteEvents, voteRequests, executedCalls, createProposal } from './chain.mjs';
 import { balance } from './rpc.mjs';
-import { journey, verdict, oldSnapshotVerdict, forVoteMatches } from './checks.mjs';
+import { journey, verdict, oldSnapshotVerdict, forVoteMatches, quorumMatches, endOrder, proposalListVerdict, statusAndTalliesMatch } from './checks.mjs';
 
 export const CHECKS = ['lists_every_proposal', 'status_and_tallies_match', 'quorum_counts_for_only',
   'end_moves_with_late_quorum', 'wrap_then_delegate', 'votes_at_snapshot'];
@@ -45,13 +45,11 @@ try {
       const s = await harness.session({ account: wallet });
       Object.assign(s, { governor: context.governor, voteToken: context.voteToken });
       s.governanceFound = await connect(s.page, wallet.address);
-      await settled(s.page.locator('body'));
       return s;
     }
     async function reload(s, wallet = account) {
       await s.page.reload({ waitUntil: 'domcontentloaded' });
       await connect(s.page, wallet.address);
-      await settled(s.page.locator('body'));
     }
     async function readCard(s, description) {
       return proposalValues(await settled(await proposal(s.page, description)));
@@ -61,17 +59,23 @@ try {
     let s;
     const listed = [];
     let absent = false;
+    let empty = false;
     await check('lists_every_proposal', async () => {
       s = await session();
       listed.push(...await listedDescriptions(s.page, all.map(p => p.description)));
       await harness.capture(s, 'initial');
-      if (!listed.length && (s.governanceFound || await governanceControls(s.page).count())) throw new CouldNotDrive('governance navigation showed no readable proposals');
-      absent = !listed.length;
-      await record('lists_every_proposal', listed.length === all.length,
+      empty = !listed.length && await emptyProposals(s.page);
+      const result = proposalListVerdict({ shown: listed.length, total: all.length,
+        governance: s.governanceFound || await governanceControls(s.page).count() > 0, empty });
+      if (result === 'could-not-drive') throw new CouldNotDrive('governance navigation showed no readable proposals');
+      absent = !listed.length && !empty;
+      await record('lists_every_proposal', result === 'pass',
         `The fork has ${all.length} proposals; the page lists ${listed.length}. See initial-page.txt.`);
     });
     if (absent) {
       for (const name of CHECKS.slice(1)) await record(name, false, 'The page has no governance control and shows no proposals.');
+    } else if (empty) {
+      for (const name of CHECKS.slice(1)) await check(name, async () => { throw new CouldNotDrive('the Governance page shows an empty proposal list'); });
     } else {
       await check('status_and_tallies_match', async () => {
         s = await session();
@@ -80,8 +84,7 @@ try {
           for (const p of all) {
             const shown = await readCard(s, p.description);
             const chain = await proposalState(url, context, p);
-            if ([shown.status, shown.for, shown.against].some(v => v === null)) throw new CouldNotDrive(`status or tallies for ${p.description}`);
-            const passed = shown.status === chain.state && shown.for === Number(chain.for / UNIT) && shown.against === Number(chain.against / UNIT);
+            const passed = statusAndTalliesMatch(shown, { status: chain.state, for: Number(chain.for / UNIT), against: Number(chain.against / UNIT) });
             rows.push({ stage, description: p.description, shown, chain, passed });
             await save('status-comparisons.json', rows);
             if (!passed) await record('status_and_tallies_match', false, 'A visible status or tally differs from the chain. See status-comparisons.json.');
@@ -96,8 +99,7 @@ try {
         const rows = [];
         for (const name of ['for_abstain', 'succeeded', 'extended']) {
           const p = selected(name), shown = await readCard(s, p.description), chain = await proposalState(url, context, p);
-          if (shown.reached === null) throw new CouldNotDrive(`quorum label for ${p.description}`);
-          const passed = shown.reached === (chain.for >= chain.quorum) && (shown.quorum === null || shown.quorum === Number(chain.quorum / UNIT));
+          const passed = quorumMatches(shown, { for: Number(chain.for / UNIT), quorum: Number(chain.quorum / UNIT) });
           rows.push({ name, shown, chain, passed });
           await save('quorum-comparisons.json', rows);
           if (!passed) await record('quorum_counts_for_only', false, 'A visible quorum value differs from For-only quorum.');
@@ -109,8 +111,7 @@ try {
         s = await session();
         const extended = selected('extended'), twin = selected('twin');
         const extendedBefore = await readCard(s, extended.description), twinBefore = await readCard(s, twin.description);
-        if (extendedBefore.end === null || twinBefore.end === null || extendedBefore.endUnit !== twinBefore.endUnit) throw new CouldNotDrive('comparable labelled voting ends for the twins');
-        const order = extendedBefore.end > twinBefore.end;
+        const order = endOrder(extendedBefore, twinBefore);
         if (!order) await record('end_moves_with_late_quorum', false, 'The extended end does not follow its twin.');
         await mineTo(url, twin.originalDeadline + 2);
         await reload(s);
@@ -154,7 +155,7 @@ try {
         const old = selected('for_abstain');
         const oldScope = await votingScope(s.page, old.description);
         const { text: oldText, shown: oldShown, choices } = await oldVoteView(oldScope);
-        const ambiguous = oldShown === null && /snapshot|eligible|\bweight\b|voting power|your votes/i.test(oldText);
+        const ambiguous = ambiguousWeight(oldText, oldShown);
         const current = await currentVotes(s.page);
         const oldChain = await value(url, context.governor, governorAbi, 'getVotes', [account.address, BigInt(old.snapshot)]);
         if (oldChain !== 0n) throw new Error('Old fixture weight is not zero');

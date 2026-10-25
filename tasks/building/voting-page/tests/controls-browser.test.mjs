@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { chromium } from './deps.mjs';
 import { encodeFunctionData } from './deps.mjs';
 import { governorAbi, votesAbi, executedCalls, voteRequests } from './chain.mjs';
-import { oldSnapshotVerdict, forVoteMatches } from './checks.mjs';
-import { wrap, castVote, delegate, connect, proposal, proposalValues, usableChoices, oldVoteView, currentVotes, findDescription, listedDescriptions, settled } from './controls.mjs';
+import { oldSnapshotVerdict, forVoteMatches, proposalListVerdict } from './checks.mjs';
+import { wrap, castVote, delegate, connect, proposal, proposalValues, usableChoices, oldVoteView, currentVotes, findDescription, listedDescriptions, settled, ambiguousWeight, emptyProposals } from './controls.mjs';
 
 const HOLDER = '0x0000000000000000000000000000000000000001';
 const GOVERNOR = '0x0000000000000000000000000000000000000002';
@@ -147,6 +147,12 @@ test('wallet panel accepts Voting power and a Votes line', async () => {
     assert.equal(await currentVotes(page), 0);
   });
 });
+test('the holder summary settles after reload despite an outside ticker', async () => {
+  await fixture(`<aside>Loading news <span id="ticker">0</span></aside><section>Voting power<br>Wrapped vTOKEN 1,000<br>Your votes <span id="votes">0</span></section>
+    <script>setTimeout(()=>document.querySelector('#votes').innerText='1,000',400);setInterval(()=>document.querySelector('#ticker').innerText=String(Date.now()),500)</script>`, async ({ page }) => {
+    assert.equal(await currentVotes(page), 1000);
+  });
+});
 test('settling waits for late controls and values', async () => {
   await fixture('<article>For 0<script>setTimeout(()=>document.querySelector("article").innerHTML="For 100<button>Vote Against</button>",400)</script></article>', async ({ page }) => {
     assert.equal((await settled(page.locator('article'))).trim(), 'For 100Vote Against');
@@ -178,5 +184,50 @@ test('opens details only when the card has no tallies', async () => {
 test('unsettled loading values produce a driver error', async () => {
   await fixture('<article>Loading votes</article>', async ({ page }) => {
     await assert.rejects(settled(page.locator('article'), { timeout: 400, quiet: 100 }), { message: 'could not drive: page values or controls did not settle' });
+  });
+});
+for (const extra of ['Snapshot block 208,700', 'Your voting power: 1,000']) {
+  test(`a zero-weight request fails with ${extra} on the old card`, async () => {
+    await fixture(`<section>Your votes: 1,000</section><article>Set the protocol fee<br>Active<br>For 3M<br>Against 0<br>${extra}<button onclick="recordWrite({support:1})">Vote For</button></article>`, async session => {
+      const scope = await proposal(session.page, 'Set the protocol fee');
+      const { text, shown, choices } = await oldVoteView(scope);
+      const ambiguous = ambiguousWeight(text, shown);
+      await castVote(session, scope);
+      assert.equal(oldSnapshotVerdict({ shown, current: 1000, usable: choices.length > 0, ambiguous, asked: voteRequests(session.wallet, GOVERNOR, 1n).length > 0 }), 'fail');
+      assert.equal(ambiguous, false);
+      assert.equal(shown, extra.startsWith('Snapshot') ? null : 1000);
+    });
+  });
+}
+test('an external proposal title with tallies reads without navigation', async () => {
+  await fixture('<article><a href="https://explorer.example/proposal/1">Set the protocol fee</a><p>Status: Active</p><p>For 12</p><p>Against 2</p></article>', async ({ page }) => {
+    const before = page.url();
+    const text = await settled(await proposal(page, 'Set the protocol fee'));
+    assert.deepEqual([proposalValues(text).for, proposalValues(text).against, page.url()], [12, 2, before]);
+  });
+});
+test('a ticker and Loading outside the card do not block reading a closed proposal', async () => {
+  await fixture(`<aside>Loading news <span id="ticker">0</span></aside><button role="tab" onclick="document.querySelector('article').hidden=false">Closed</button>
+    <article hidden>Set the protocol fee<br>Defeated<br>For 3<br>Against 4</article>
+    <script>setInterval(()=>document.querySelector('#ticker').innerText=String(Date.now()),500)</script>`, async ({ page }) => {
+    const card = await proposal(page, 'Set the protocol fee');
+    const shown = proposalValues(await settled(card));
+    assert.deepEqual([shown.status, shown.for, shown.against], [3, 3, 4]);
+  });
+});
+test('a settled empty Governance list is evidence of missing proposals', async () => {
+  for (const message of ['No proposals', '0 proposals', 'Proposals: 0']) {
+    await fixture(`<h1>Governance</h1><p>${message}</p>`, async ({ page }) => {
+      const empty = await emptyProposals(page);
+      const descriptions = await listedDescriptions(page, ['Set the protocol fee']);
+      assert.equal(empty, true);
+      assert.deepEqual(descriptions, []);
+      assert.equal(proposalListVerdict({ shown: descriptions.length, total: 1, governance: true, empty }), 'fail');
+      assert.equal(proposalListVerdict({ shown: 0, total: 1, governance: true, empty: false }), 'could-not-drive');
+    });
+  }
+  await fixture('<article>Set the protocol fee<br>For 3<br>Against 4</article>', async ({ page }) => {
+    assert.equal(await emptyProposals(page), false);
+    assert.deepEqual(await listedDescriptions(page, ['Set the protocol fee']), ['Set the protocol fee']);
   });
 });

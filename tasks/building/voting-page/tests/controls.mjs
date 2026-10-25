@@ -19,16 +19,17 @@ const statuses = [ /^(?:pending|upcoming)$/i, /^(?:active|open|open for voting)$
 export function proposalValues(text) {
   const lines = text.split('\n').map(line => line.trim());
   const statusLine = lines.find(line => /^status\s*:/i.test(line));
-  let status = -1;
-  for (const line of statusLine ? [statusLine.replace(/^status\s*:\s*/i, '')] : lines) {
-    status = statuses.findIndex(expression => expression.test(line));
-    if (status >= 0) break;
-  }
+  const statusValues = (statusLine ? [statusLine.replace(/^status\s*:\s*/i, '')] : lines.filter(line => !/^(?:queued|executed|cancel(?:l)?ed)\s+(?:at|on)\b/i.test(line)))
+    .map(line => statuses.findIndex(expression => expression.test(line))).filter(value => value >= 0);
+  const status = new Set(statusValues).size === 1 ? statusValues[0] : null;
   const quorumLine = text.match(/quorum[^\n]*(?:\n[^\n]+){0,2}/i)?.[0] || '';
+  const progress = quorumLine.match(new RegExp(`${quantity}\\s*(?:of|/)\\s*${quantity}`, 'i'));
   const reached = /\bnot\s+(?:yet\s+)?(?:reached|met)\b|\bunmet\b|\bbelow\b/i.test(quorumLine) ? false
     : /(?:reached|met)\b/i.test(quorumLine) ? true
+    : progress ? number(progress[1]) >= number(progress[2])
     : /quorum\s*(\d+(?:\.\d+)?)\s*%/i.test(quorumLine)
-      ? Number(quorumLine.match(/quorum\s*(\d+(?:\.\d+)?)\s*%/i)[1]) >= 100 : null;
+      ? Number(quorumLine.match(/quorum\s*(\d+(?:\.\d+)?)\s*%/i)[1]) >= 100
+      : null;
   const quorumMatch = quorumLine.match(new RegExp(`(?:of|/)\\s*${quantity}`, 'i'))
     || quorumLine.match(new RegExp(`${quantity}\\s*required`, 'i'))
     || quorumLine.match(new RegExp(`quorum\\s*:?\\s*${quantity}(?![\\d.,]|\\s*%)`, 'i'));
@@ -47,11 +48,18 @@ export function proposalValues(text) {
     ?? (text.match(new RegExp(`you had\\s*${quantity}\\s*votes?[^\\n]*snapshot`, 'i'))?.[1]
       ? number(text.match(new RegExp(`you had\\s*${quantity}\\s*votes?[^\\n]*snapshot`, 'i'))[1]) : null);
   const noVotes = /you (?:had|have) no votes[^\n]*(?:snapshot|at block)|(?:snapshot[^\n]*no votes)/i.test(text);
-  return { status: status < 0 ? null : status, for: labelled(text, '(?:votes? )?for'),
+  const weightMatch = text.match(new RegExp(`\\b(?:voting power|(?:vote )?weight|votes?)\\s*:?\\s*${quantity}`, 'i'));
+  const shownWeight = snapshot ?? (noVotes ? 0 : null) ?? (weightMatch ? number(weightMatch[1]) : null);
+  return { status, for: labelled(text, '(?:votes? )?for'),
     against: labelled(text, '(?:votes? )?against'), reached,
     quorum: quorumMatch ? number(quorumMatch[1]) : null,
+    quorumProgress: progress ? number(progress[1]) : null,
     end, endUnit: end === null ? null : endMatch ? 'block' : duration.length ? 'seconds' : 'date',
-    snapshot: snapshot ?? (noVotes ? 0 : null) };
+    snapshot: shownWeight };
+}
+
+export function ambiguousWeight(text, shown) {
+  return shown === null && /eligible|\bweight\b|voting power|\bvotes\b/i.test(text);
 }
 
 export async function connect(page, address) {
@@ -81,7 +89,7 @@ export async function settled(scope, { timeout = 8000, quiet = 800 } = {}) {
     const controls = await scope.locator('button,input,[role="radio"]').evaluateAll(elements =>
       elements.map(el => [el.textContent, el.disabled, el.getAttribute('aria-checked')]));
     const fingerprint = JSON.stringify([text, controls]);
-    if (fingerprint !== previous || /\bloading\b|please wait/i.test(text)) { previous = fingerprint; since = Date.now(); }
+    if (fingerprint !== previous || /\bloading\b/i.test(text)) { previous = fingerprint; since = Date.now(); }
     return Date.now() - since >= quiet;
   }, timeout);
   if (!stable) throw new CouldNotDrive('page values or controls did not settle');
@@ -90,14 +98,15 @@ export async function settled(scope, { timeout = 8000, quiet = 800 } = {}) {
 
 export async function proposal(page, description, { required = true } = {}) {
   await findDescription(page, description);
-  const detail = await firstVisible(page.getByRole('link').filter({ hasText: description }));
-  if (detail) await detail.click();
-  else {
-    const candidate = page.locator('article,section,li,tr').filter({ hasText: description }).first();
-    if (await candidate.count()) {
+  const candidate = page.locator('article,section,li,tr').filter({ hasText: description }).first();
+  const text = await candidate.count() ? await candidate.innerText() : '';
+  if (!/\bfor\b/i.test(text) || !/\bagainst\b/i.test(text)) {
+    const detail = await firstVisible(page.getByRole('link').filter({ hasText: description }));
+    const href = detail && await detail.getAttribute('href');
+    if (href && new URL(href, page.url()).origin === new URL(page.url()).origin) await detail.click();
+    else if (await candidate.count()) {
       const open = await firstVisible(candidate.getByRole('button', { name: /^(?:view|details|vote on)\b/i }));
-      const text = await candidate.innerText();
-      if (open && (!/\bfor\b/i.test(text) || !/\bagainst\b/i.test(text))) await open.click();
+      if (open) await open.click();
     }
   }
   const found = await until(() => page.evaluate(description => {
@@ -126,7 +135,7 @@ export async function findDescription(page, description) {
     await page.goto(root.origin, { waitUntil: 'domcontentloaded' });
     const governance = await firstVisible(governanceControls(page));
     if (governance) await governance.click();
-    await settled(page.locator('body'));
+    await until(visible, 1000);
     if (await visible()) return true;
   }
   const visited = new Set();
@@ -140,16 +149,24 @@ export async function findDescription(page, description) {
     }
     if (!next) break;
     await next.click();
-    await settled(page.locator('body'));
+    await until(visible, 1000);
     if (await visible()) return true;
   }
   return false;
 }
 export async function listedDescriptions(page, descriptions) {
-  await until(() => page.evaluate(descriptions => descriptions.some(description => document.body.innerText.includes(description)), descriptions), 15000);
+  await until(async () => await page.evaluate(descriptions => descriptions.some(description => document.body.innerText.includes(description)), descriptions)
+    || await emptyProposals(page), 15000);
   const listed = [];
   for (const description of descriptions) if (await findDescription(page, description)) listed.push(description);
   return listed;
+}
+
+export async function emptyProposals(page) {
+  const message = await firstVisible(page.getByText(/^(?:no proposals(?:\s+(?:yet|found|available))?[.!]?|0 proposals|proposals\s*[:(]?\s*0\)?)$/i));
+  if (!message) return false;
+  const text = await settled(message);
+  return /^(?:no proposals(?:\s+(?:yet|found|available))?[.!]?|0 proposals|proposals\s*[:(]?\s*0\)?)$/i.test(text.trim());
 }
 
 export async function dismiss(page) {
@@ -220,17 +237,28 @@ export async function castVote(session, scope, name = 'For') {
 }
 
 export async function currentVotes(page) {
-  return page.evaluate(() => {
-    const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
-    const candidates = [...document.querySelectorAll('section,article,div,table')].filter(el => visible(el)
-      && /voting power|voting weight|your votes/i.test(el.innerText) && /wrapped|vtoken/i.test(el.innerText));
-    candidates.sort((a,b) => a.innerText.length - b.innerText.length);
-    return candidates.map(el => el.innerText);
-  }).then(texts => texts.map(text => {
+  const read = text => {
     const direct = labelled(text, 'your votes|votes|voting weight|voting power');
     const before = text.match(new RegExp(`(?:your voting power)\\s*${quantity}\\s*votes`, 'i'));
     return direct ?? (before ? number(before[1]) : null);
-  }).find(value => value !== null) ?? null);
+  };
+  let scope;
+  await until(async () => {
+    const texts = await page.evaluate(() => {
+      const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
+      const candidates = [...document.querySelectorAll('section,article,div,table')].filter(el => visible(el)
+        && /voting power|voting weight|your votes/i.test(el.innerText) && /wrapped|vtoken/i.test(el.innerText));
+      candidates.sort((a,b) => a.innerText.length - b.innerText.length);
+      document.querySelectorAll('[data-voting-power]').forEach(el => el.removeAttribute('data-voting-power'));
+      candidates.forEach((el, index) => el.setAttribute('data-voting-power', String(index)));
+      return candidates.map(el => el.innerText);
+    });
+    const index = texts.findIndex(text => read(text) !== null);
+    if (index < 0) return false;
+    scope = page.locator(`[data-voting-power="${index}"]`);
+    return true;
+  }, 8000);
+  return scope ? read(await settled(scope, { quiet: 1500 })) : null;
 }
 
 export async function wrap(session) {

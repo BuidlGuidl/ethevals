@@ -12,7 +12,7 @@ has_failure = any(not record["passed"] and not record.get("couldNotDrive") for r
 
 @criterion(description="{check}")
 def check_record(workspace: Path, check: str) -> dict:
-    record = records[check]
+    record = records.get(check, {"passed": False, "couldNotDrive": True, "reason": f"could not drive: no record for {check}"})
     if record.get("couldNotDrive") and not has_failure:
         raise RuntimeError(record["reason"])
     if type(record["passed"]) is not bool or not isinstance(record["reason"], str) or not record["reason"].strip():

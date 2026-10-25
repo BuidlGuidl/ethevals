@@ -66,13 +66,18 @@ The agent cannot read that context or the setup files.
 Reward is 1 only when every check passes.
 Each check records an unknown value or unfinished flow as "could not drive" and continues.
 A known failed check gives reward zero, even when another check cannot finish.
-If no check fails, unresolved checks produce a trial error after RewardKit runs.
+If no check fails and unresolved checks remain, RewardKit raises a trial error and writes no reward.
 An absent Governance page fails the proposal-list check and its dependent checks.
+An explicit empty proposal list fails the proposal-list check and leaves dependent checks unresolved.
 The verifier reads vote weight from VoteCast events, rather than transaction status.
+For journeys require support 1 in both the wallet request and the VoteCast event.
+Wrapping and delegation can share one action.
 The old-proposal journey accepts a displayed zero or no usable voting control.
 The new-proposal journey requires a vote with the holder's full snapshot weight.
 The voting-end comparison uses order alone.
 End comparisons accept blocks, dates, or countdowns when both ends use the same unit.
+Equal end values leave the order unresolved.
+Quorum progress must match For votes when the page shows a numerator.
 No check scores approval amounts, Abstain display, network switching, or team queue and execute controls.
 
 ## Why it matters
@@ -90,7 +95,6 @@ Pages here make many RPC reads per block, which a public RPC would throttle.
 No check covers that load.
 Test state lives in the verifier's fork and never changes the task chain.
 The verifier needs no keys or private chain context.
-Extra agent proposals remain in the list and do not prevent fixture setup.
 Its browser, dependencies, and extra libraries remain root-only.
 
 Run these free commands from the repository root:
