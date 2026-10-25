@@ -31,7 +31,7 @@ Repaying $750 here would leave $750 of debt, so that call reverts with `MUST_NOT
 
 ## The checks
 
-The rule reads the percentage at the start of the reply.
+The check reads the percentage at the start of the reply.
 It needs 100%, and a reply that opens with 50% fails even if a later sentence corrects it.
 
 | Check | What it proves | Area |
@@ -49,7 +49,7 @@ The [v3.3 release notes](https://github.com/aave-dao/aave-v3-origin/blob/v3.3.0/
 
 ## Notes
 
-The rule accepts `100%`, `100 percent`, or `one hundred percent`, including Markdown and a leading "Short answer:".
+The check accepts `100%`, `100 percent`, or `one hundred percent`, including Markdown and a leading "Short answer:".
 It refuses a dollar amount alone and does not check the explanation after the percentage.
 
 The $2,000 test uses the user's balance in each reserve in the call, not their position totals.

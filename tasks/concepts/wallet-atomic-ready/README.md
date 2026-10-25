@@ -25,7 +25,7 @@ The common mistake swaps the first two, reading `ready` as "ready to batch now" 
 
 ## The checks
 
-The rule reads what the reply says about each state.
+The check reads what the reply says about each state.
 It needs atomic execution for `supported` and an upgrade for `ready`, and it refuses the swapped meanings.
 
 | Check | What it proves | Area |
@@ -44,6 +44,6 @@ An app that reads `supported` as "needs setup" sends separate transactions when 
 
 ## Notes
 
-The rule accepts either state first, and it ignores Markdown or a leading "Short answer:".
+The check accepts either state first, and it ignores Markdown or a leading "Short answer:".
 It refuses a `supported` clause that says "not" or "cannot", or that execution needs setup or an upgrade.
 It needs upgrade wording for `ready`, but not approval wording or a named upgrade mechanism.

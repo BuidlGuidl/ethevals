@@ -25,7 +25,7 @@ The second is the tempting wrong answer.
 
 ## The checks
 
-The rule reads the duration at the start of the reply.
+The check reads the duration at the start of the reply.
 It needs about a week, and a reply that opens with hours fails even if a later sentence corrects it.
 
 | Check | What it proves | Area |
@@ -43,7 +43,7 @@ Arbitrum's docs on [block numbers and time](https://docs.arbitrum.io/build-decen
 
 ## Notes
 
-The rule accepts seven days, one week, 168 hours, or 604,800 seconds at the start of the reply.
+The check accepts seven days, one week, 168 hours, or 604,800 seconds at the start of the reply.
 It also accepts words such as "about" and the `~` or `≈` symbols.
 It refuses a right duration that comes after another answer, and it does not check the explanation.
 

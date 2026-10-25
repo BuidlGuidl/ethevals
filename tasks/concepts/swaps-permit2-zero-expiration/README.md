@@ -27,7 +27,7 @@ There are two wrong readings.
 
 ## The checks
 
-The rule reads the first sentence of the reply.
+The check reads the first sentence of the reply.
 It needs the current block or its timestamp there, and it refuses a reply that says the allowance never expires or can't be used.
 
 | Check | What it proves | Area |
@@ -44,7 +44,7 @@ The approve transaction succeeds, and the user's swap in a later block reverts w
 
 ## Notes
 
-The rule accepts `block.timestamp`, "current block", "same block", or "end of the block" anywhere in the first sentence.
+The check accepts `block.timestamp`, "current block", "same block", or "end of the block" anywhere in the first sentence.
 It refuses phrases such as "never expires", "already expired", or "unusable" anywhere in the reply, even in a denial.
 It does not run a transfer or check other allowance conditions.
 

@@ -27,7 +27,7 @@ It is not a user rejection, which `wallet_sendCalls` reports as error 4001, and 
 
 ## The checks
 
-The rule reads only the first sentence of the reply.
+The check reads only the first sentence of the reply.
 It needs partial or mixed execution there, and it refuses a first sentence that also names another outcome.
 
 | Check | What it proves | Area |
@@ -43,6 +43,6 @@ A dapp that treats 600 as a full rollback can resubmit calls that already ran, s
 
 ## Notes
 
-The rule accepts "partial failure", "partially reverted", "mixed execution", or "some calls failed while others succeeded" in the first sentence.
+The check accepts "partial failure", "partially reverted", "mixed execution", or "some calls failed while others succeeded" in the first sentence.
 It refuses "rejected", "pending", "confirmed", "undefined", or a whole-batch failure there, even next to "partial".
 A right second sentence does not rescue a wrong first one.

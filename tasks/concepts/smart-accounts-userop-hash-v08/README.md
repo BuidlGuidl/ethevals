@@ -26,7 +26,7 @@ The live v0.8 EntryPoint at `0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108` reports
 
 ## The checks
 
-The rule reads the start of the reply.
+The check reads the start of the reply.
 It needs EIP-712 or the domain-separated `0x1901` formula there, and the old formula alone fails.
 
 | Check | What it proves | Area |
@@ -43,6 +43,6 @@ The typed-data format also lets a wallet show the user what they sign.
 
 ## Notes
 
-The rule accepts an opening that names EIP-712 with hash or typed-data wording, after lead-ins such as "using" or "it is".
+The check accepts an opening that names EIP-712 with hash or typed-data wording, after lead-ins such as "using" or "it is".
 It also accepts an opening `keccak256(0x1901 ...)` formula that names the domain separator.
 It refuses the old formula alone, and it does not check every domain field or the operation's encoding.

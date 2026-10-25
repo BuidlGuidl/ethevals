@@ -25,7 +25,7 @@ Fusaka activated on mainnet on 2025-12-03.
 
 ## The checks
 
-The rule needs a yes at the start of the reply and `0x100` as the first hexadecimal address.
+The check needs a yes at the start of the reply and `0x100` as the first hexadecimal address.
 It refuses no, and it refuses a different first address.
 
 | Check | What it proves | Area |
@@ -42,7 +42,7 @@ The precompile does the same check for a fixed 6,900 gas.
 
 ## Notes
 
-The rule accepts `0x100` or its zero-padded form after an opening yes.
+The check accepts `0x100` or its zero-padded form after an opening yes.
 It refuses a different first hexadecimal value even if `0x100` appears later.
 It does not run a signature check or require the upgrade's name.
 

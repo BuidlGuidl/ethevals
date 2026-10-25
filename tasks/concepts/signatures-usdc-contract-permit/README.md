@@ -23,7 +23,7 @@ FiatToken v2.2:  permit calls SignatureChecker, which uses ERC-1271 for contract
 
 ## The checks
 
-The rule needs a yes at the start of the reply and contract-signature support named somewhere in it.
+The check needs a yes at the start of the reply and contract-signature support named somewhere in it.
 It refuses no, and it refuses a bare yes.
 
 | Check | What it proves | Area |
@@ -41,7 +41,7 @@ The [v2.1.0 permit](https://github.com/circlefin/stablecoin-evm/blob/v2.1.0/cont
 
 ## Notes
 
-After yes, the rule accepts ERC-1271, `isValidSignature`, contract signatures, `SignatureChecker`, or `v2.2`.
+After yes, the check accepts ERC-1271, `isValidSignature`, contract signatures, `SignatureChecker`, or `v2.2`.
 It refuses yes without one of those terms, and it does not test a signature against a live Safe.
 
 The Safe needs the standard `CompatibilityFallbackHandler` for ERC-1271.
