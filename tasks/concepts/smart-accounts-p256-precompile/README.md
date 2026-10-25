@@ -14,10 +14,10 @@ Passkeys sign with the secp256r1 curve, also called P-256.
 RIP-7212 added a verifier for it at `0x100` on several L2s.
 EIP-7951 added `P256VERIFY` to Ethereum mainnet at the same address.
 
-```text
-before Fusaka:  no P-256 precompile on mainnet, 0x100 on some L2s
-since Fusaka:   P256VERIFY at 0x100 on mainnet, 6,900 gas per check
-```
+| When | P-256 verification on mainnet |
+| --- | --- |
+| Before Fusaka | no precompile, though some L2s had one at `0x100` |
+| Since Fusaka | `P256VERIFY` at `0x100`, 6,900 gas per check |
 
 Fusaka activated on mainnet on 2025-12-03.
 

@@ -14,8 +14,11 @@ EntryPoint v0.6 and v0.7 hashed the operation, then hashed that together with th
 Version 0.8 replaces that with an EIP-712 domain.
 
 ```text
-v0.6, v0.7:  keccak256(abi.encode(userOp.hash(), entryPoint, chainId))
-v0.8:        keccak256(0x1901 || domainSeparator || userOpStructHash)
+v0.6 and v0.7:
+keccak256(abi.encode(userOp.hash(), entryPoint, chainId))
+
+v0.8:
+keccak256(0x1901 || domainSeparator || userOpStructHash)
 ```
 
 The v0.8 domain has the name "ERC4337", the version "1", the chain id, and the EntryPoint's address.

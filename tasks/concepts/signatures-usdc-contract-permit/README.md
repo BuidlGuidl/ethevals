@@ -14,10 +14,10 @@ Mainnet USDC runs FiatToken v2.2, which sends both `permit` overloads through `S
 When the owner is a contract, `SignatureChecker` calls the owner's ERC-1271 `isValidSignature`.
 The Safe approves the signature through its own logic, with its owners' keys, so it never needs a key of its own.
 
-```text
-FiatToken v2.1:  permit checks EIP712.recover(...) == owner, so ECDSA only
-FiatToken v2.2:  permit calls SignatureChecker, which uses ERC-1271 for contracts
-```
+| FiatToken version | How `permit` checks the signature |
+| --- | --- |
+| v2.1 | `EIP712.recover(...) == owner`, so ECDSA only |
+| v2.2 | through `SignatureChecker`, which uses ERC-1271 for contract owners |
 
 ## The checks
 
@@ -34,7 +34,7 @@ The quiz runs in vanilla, internet, and skills modes.
 
 A dapp that believes permit is ECDSA-only sends Safe users through a separate `approve` transaction, or turns them away.
 USDC already supports the one-signature path for them.
-[USDC's permit](https://github.com/circlefin/stablecoin-evm/blob/master/contracts/v2/EIP2612.sol#L102-L109) calls [SignatureChecker](https://github.com/circlefin/stablecoin-evm/blob/master/contracts/util/SignatureChecker.sol#L43-L46), which hands contract owners to ERC-1271.
+[USDC's permit](https://github.com/circlefin/stablecoin-evm/blob/fc85788bc7c23cefe3df1a757133048bfddadeaa/contracts/v2/EIP2612.sol#L102-L109) calls [SignatureChecker](https://github.com/circlefin/stablecoin-evm/blob/fc85788bc7c23cefe3df1a757133048bfddadeaa/contracts/util/SignatureChecker.sol#L43-L46), which hands contract owners to ERC-1271.
 The [v2.1.0 permit](https://github.com/circlefin/stablecoin-evm/blob/v2.1.0/contracts/v2/EIP2612.sol#L81) only recovered an ECDSA signer.
 
 ## Notes

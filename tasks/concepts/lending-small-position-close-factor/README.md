@@ -16,12 +16,11 @@ Aave v3.3 keeps that cap only for larger positions.
 The user's debt and collateral in the two reserves of the call must both be at least $2,000.
 This debt is $1,500, so one call can repay all of it.
 
-```text
-debt >= $2,000, collateral >= $2,000, health factor > 0.95:   50% cap
-anything else:                                                up to 100%
-
-this position: $1,500 debt, about $1,770 collateral, 0.98:    up to 100%
-```
+| Position | Most one call can repay |
+| --- | --- |
+| Debt and collateral each at least $2,000, health factor above 0.95 | 50% |
+| Anything else | 100% |
+| This one: $1,500 debt, about $1,770 collateral, health factor 0.98 | 100% |
 
 Aave v3.3 also rules out the 50% answer directly.
 A partial liquidation must leave at least $1,000 of debt and $1,000 of collateral in those reserves.
@@ -42,6 +41,7 @@ The quiz runs in vanilla, internet, and skills modes.
 
 A bot that sizes every liquidation at 50% sends a call that reverts on positions like this one, so small debts stay open.
 Aave added the rule because small positions cut in half become dust that nobody can liquidate at a profit.
+
 The [v3.3 release notes](https://github.com/aave-dao/aave-v3-origin/blob/v3.3.0/docs/3.3/Aave-v3.3-features.md) say "most of these dust debt positions are caused by the 50% close factor being applied to already small positions".
 [LiquidationLogic at v3.3.0](https://github.com/aave-dao/aave-v3-origin/blob/v3.3.0/src/contracts/protocol/libraries/logic/LiquidationLogic.sol#L74-L82) sets the $2,000 and $1,000 thresholds, and [its dust check](https://github.com/aave-dao/aave-v3-origin/blob/v3.3.0/src/contracts/protocol/libraries/logic/LiquidationLogic.sol#L320-L343) reverts the half-size call.
 

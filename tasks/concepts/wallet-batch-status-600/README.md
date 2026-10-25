@@ -12,13 +12,13 @@ Reading it as a full rollback confuses it with status 500.
 
 The Final EIP-5792 defines five batch statuses:
 
-```text
-100  received by the wallet, not yet executed onchain (pending)
-200  included onchain without reverts (confirmed)
-400  not included onchain, and the wallet will not retry (offchain failure)
-500  reverted completely, only gas charges may be onchain
-600  reverted partially, some calls' changes may be onchain
-```
+| Status | EIP name | Meaning |
+| --- | --- | --- |
+| 100 | pending | received by the wallet, not yet executed onchain |
+| 200 | confirmed | included onchain without reverts |
+| 400 | offchain failure | not included onchain, and the wallet will not retry |
+| 500 | chain rules failure | reverted completely, only gas charges may be onchain |
+| 600 | partial chain rules failure | reverted partially, some calls' changes may be onchain |
 
 Status 600 is an onchain outcome.
 It is not a user rejection, which `wallet_sendCalls` reports as error 4001, and it is not a pending batch.

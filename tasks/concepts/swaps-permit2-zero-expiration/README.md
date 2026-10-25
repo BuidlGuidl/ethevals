@@ -13,15 +13,16 @@ Many APIs use 0 to mean "no expiry", which makes "never expires" the tempting an
 Permit2 stores `block.timestamp` when the expiration passed in is 0.
 Its transfer check reverts only when `block.timestamp > expiration`, so a transfer in the same block still works.
 
-```text
-block N:      approve(..., expiration = 0) stores block N's timestamp
-block N:      transferFrom uses the allowance
-block N + 1:  transferFrom reverts with AllowanceExpired
-```
+| Block | Call | Result |
+| --- | --- | --- |
+| N | `approve(..., expiration = 0)` | stores block N's timestamp as the expiration |
+| N | `transferFrom` | spends the allowance |
+| N + 1 | `transferFrom` | reverts with `AllowanceExpired` |
 
-There are two wrong readings.
-"Never expires" misses that Permit2 swaps the 0 for the timestamp.
-"Already expired" or "unusable" misses that the check is a strict greater-than, so the approving block can still spend it.
+There are two wrong readings:
+
+- "Never expires" misses that Permit2 swaps the 0 for the timestamp.
+- "Already expired" or "unusable" misses that the check is a strict greater-than, so the approving block can still spend it.
 
 ## The checks
 
@@ -38,7 +39,7 @@ The quiz runs in vanilla, internet, and skills modes.
 
 A frontend that passes 0 to mean "no expiry" gives the user an allowance that ends with the block.
 The approve transaction succeeds, and the user's swap in a later block reverts with `AllowanceExpired`.
-[Permit2's allowance library](https://github.com/Uniswap/permit2/blob/main/src/libraries/Allowance.sol#L39) stores the timestamp, and its [transfer check](https://github.com/Uniswap/permit2/blob/main/src/AllowanceTransfer.sol#L79) enforces it.
+[Permit2's allowance library](https://github.com/Uniswap/permit2/blob/cc56ad0f3439c502c246fc5cfcc3db92bb8b7219/src/libraries/Allowance.sol#L39-L40) stores the timestamp, and its [transfer check](https://github.com/Uniswap/permit2/blob/cc56ad0f3439c502c246fc5cfcc3db92bb8b7219/src/AllowanceTransfer.sol#L79) enforces it.
 
 ## Notes
 

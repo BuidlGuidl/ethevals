@@ -12,11 +12,11 @@ A dapp builder asks what separates the `supported` and `ready` states of EIP-579
 
 EIP-5792 defines three states for the atomic capability:
 
-```text
-supported:    the wallet will execute the calls atomically and contiguously
-ready:        the wallet can upgrade to supported, pending user approval
-unsupported:  no atomic guarantee, and the wallet won't suggest an upgrade
-```
+| Status | Meaning |
+| --- | --- |
+| `supported` | the wallet will execute the calls atomically and contiguously |
+| `ready` | the wallet can upgrade to `supported`, pending user approval |
+| `unsupported` | no atomic guarantee, and the wallet won't suggest an upgrade |
 
 An EIP-7702 account upgrade is one way a wallet gets from `ready` to `supported`, but EIP-5792 doesn't name a mechanism.
 The common mistake swaps the first two, reading `ready` as "ready to batch now" and `supported` as "possible after setup".
@@ -34,9 +34,11 @@ The quiz runs in vanilla, internet, and skills modes.
 
 ## Why it matters
 
-An app that reads `ready` as "atomic now" plans for one step and gets something else.
-With `atomicRequired: true`, the wallet must upgrade first, so the user sees an upgrade prompt the app didn't plan for.
-With `atomicRequired: false`, the wallet may run the calls one by one, so an approval can land while the swap after it reverts.
+An app that reads `ready` as "atomic now" plans for one step and gets something else:
+
+- With `atomicRequired: true`, the wallet must upgrade first, so the user sees an upgrade prompt the app didn't plan for.
+- With `atomicRequired: false`, the wallet may run the calls one by one, so an approval can land while the swap after it reverts.
+
 An app that reads `supported` as "needs setup" sends separate transactions when one atomic batch was available.
 [EIP-5792](https://eips.ethereum.org/EIPS/eip-5792) defines the states and these rules for `wallet_sendCalls`.
 

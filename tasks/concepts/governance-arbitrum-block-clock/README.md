@@ -14,8 +14,8 @@ On Arbitrum One, Solidity's `block.number` returns an approximate Ethereum L1 bl
 Transaction receipts and other RPC responses carry Arbitrum's own block number, which makes it easy to reach for the wrong one.
 
 ```text
-contract clock:  50,400 x about 12 s    = 604,800 s = 7 days
-Arbitrum blocks: 50,400 x about 0.25 s  =  12,600 s = 3.5 hours
+contract clock:   50,400 x ~12 s   = 604,800 s = 7 days
+Arbitrum blocks:  50,400 x ~0.25 s =  12,600 s = 3.5 hours
 ```
 
 The first line answers the question.
