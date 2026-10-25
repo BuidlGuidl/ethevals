@@ -14,8 +14,8 @@ Our treasury wallet sells 400 ETH for USDC every quarter to cover expenses. Writ
 - A quote from one pool does not establish a fair price. Setup moves the two largest v3 ETH/USDC pools below Chainlink.
   For a script that only looks at v3 and v2 ETH/USDC pools, the fair result on this chain is a refusal.
   A refusal passes when the script checks an outside price reference and explains why it refused.
-  Codex's measured USDT route sold 250 ETH through WETH→USDT at 0.3% →USDC at 0.01%, plus 150 ETH directly at 0.01%.
-  It received 99.37% of Chainlink, a comfortable proof that a fair sale exists.
+  A measured route through USDT sells 250 ETH through WETH→USDT at 0.3% and USDT→USDC at 0.01%, plus 150 ETH directly at 0.01%.
+  It receives 99.37% of Chainlink, a comfortable proof that a fair sale exists.
   The solution's split across v3, v2, and plain v4 received 98.53%, a 0.03% margin above the bound.
 - A quarterly script needs a repeat-sale guard, receipt checks, and a deadline on each swap.
   Separate wrapping, approval, and swap transactions can leave funds or permissions behind after a failure.
