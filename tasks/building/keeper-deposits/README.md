@@ -21,7 +21,7 @@ The task checks pending deposits, signatures submitted before the keeper call, a
 
 - USDC authorizations. A permit grants an allowance; it does not complete the deposit. Another account can submit it first.
 - Pending signatures. Reading the token's current sequential nonce twice can produce two signatures for the same nonce.
-- Contract signatures. A Safe's signature contains its owners' signatures. USDC's bytes overloads support ERC-1271 validation.
+- Contract signatures. A Safe asked to sign typed data from a page returns an ERC-1271 signature over that typed data, built from its owners' signatures. A design that needs owners to sign a Safe transaction has nothing the page can hand it. USDC's bytes overloads support ERC-1271 validation.
 
 ## The checks
 
@@ -44,7 +44,6 @@ How the checks judge:
 
 - Every positive deposit checks the exact USDC debit, the depositor's shares, and zero USDC and shares left in the contract.
 - The keeper supplies no USDC and receives no shares.
-- Every `keeperTx(signature).to` must be the deployed contract.
 - A reverted keeper transaction fails a positive check and counts as no movement on the replay check.
 - The replay check counts only after `deposit_lands` passes.
 - The reward is 1 only when every check passes.
