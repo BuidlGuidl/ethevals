@@ -4,6 +4,7 @@ import { walletIdle } from './rpc-policy.mjs';
 import { requestedCalls, governorAbi, votesAbi } from './chain.mjs';
 
 const quantity = '(\\d[\\d,]*(?:\\.\\d+)?\\s*[KMB]?)';
+const holderWeightLabel = '(?:(?:your|my) (?:votes?|voting power|(?:vote )?weight)|voting power|eligible votes|votes you will cast)';
 export function number(text) {
   const match = text.trim().match(/^(\d[\d,]*(?:\.\d+)?)\s*([KMB])?$/i);
   if (!match) return null;
@@ -42,13 +43,14 @@ export function proposalValues(text) {
   const end = endMatch ? Number(endMatch[1].replaceAll(',', '')) : duration.length
     ? duration.reduce((sum, match) => sum + Number(match[1]) * ({ d: 86400, h: 3600, m: 60, s: 1 }[match[2][0].toLowerCase()]), 0)
     : Number.isFinite(date) ? date : null;
-  const snapshot = labelled(text, '(?:your snapshot votes|(?:your )?(?:votes|voting power|weight) (?:at|for) (?:the )?(?:snapshot|this proposal)|votes you will cast|your votes (?:on|for) this proposal|eligible votes|(?:your )?(?:vote )?weight)')
+  const snapshot = labelled(text, '(?:(?:(?:your|my) )?snapshot (?:votes|voting power|weight)|(?:(?:your|my) )?(?:votes|voting power|weight) (?:at|for) (?:the )?(?:snapshot|this proposal)|(?:your|my) votes (?:on|for) this proposal|at (?:the )?snapshot)')
     ?? (text.match(new RegExp(`you have\\s*${quantity}\\s*votes? (?:on|for) this proposal`, 'i'))?.[1]
       ? number(text.match(new RegExp(`you have\\s*${quantity}\\s*votes? (?:on|for) this proposal`, 'i'))[1]) : null)
     ?? (text.match(new RegExp(`you had\\s*${quantity}\\s*votes?[^\\n]*snapshot`, 'i'))?.[1]
       ? number(text.match(new RegExp(`you had\\s*${quantity}\\s*votes?[^\\n]*snapshot`, 'i'))[1]) : null);
-  const noVotes = /you (?:had|have) no votes[^\n]*(?:snapshot|at block)|(?:snapshot[^\n]*no votes)/i.test(text);
-  const weightMatch = text.match(new RegExp(`\\b(?:voting power|(?:vote )?weight|votes?)\\s*:?\\s*${quantity}`, 'i'));
+  const noVotes = /\bno (?:votes?|voting power)\b[^\n]*(?:snapshot|at block|(?:on|for) this proposal)|(?:snapshot|this proposal)[^\n]*\bno (?:votes?|voting power)\b/i.test(text);
+  const weightMatch = text.match(new RegExp(`\\b${holderWeightLabel}\\s*:?\\s*${quantity}`, 'i'))
+    || text.match(new RegExp(`\\byou can vote with\\s*${quantity}\\s*votes?\\b`, 'i'));
   const shownWeight = snapshot ?? (noVotes ? 0 : null) ?? (weightMatch ? number(weightMatch[1]) : null);
   return { status, for: labelled(text, '(?:votes? )?for'),
     against: labelled(text, '(?:votes? )?against'), reached,
@@ -59,7 +61,7 @@ export function proposalValues(text) {
 }
 
 export function ambiguousWeight(text, shown) {
-  return shown === null && /eligible|\bweight\b|voting power|\bvotes\b/i.test(text);
+  return shown === null && new RegExp(`\\b${holderWeightLabel}\\b|\\b(?:ineligible|eligible)\\b|\\b(?:you|your|my)\\b[^\\n]*\\b(?:votes?|voting power|weight)\\b|\\b(?:votes|voting power|weight) (?:at|for) (?:the )?(?:snapshot|this proposal)\\b|\\bat (?:the )?snapshot\\b`, 'i').test(text);
 }
 
 export async function connect(page, address) {

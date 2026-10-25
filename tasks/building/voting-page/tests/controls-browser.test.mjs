@@ -199,6 +199,27 @@ for (const extra of ['Snapshot block 208,700', 'Your voting power: 1,000']) {
     });
   });
 }
+for (const { name, text, shown, ambiguous, verdict } of [
+  { name: 'old card with Total votes and no snapshot power', text: 'For 3,000,000\nAgainst 0\nTotal votes: 3,000,000\nYou had no voting power at the snapshot.', shown: 0, ambiguous: false, verdict: 'pass' },
+  { name: 'old card with For votes and unnumbered eligibility', text: 'For votes 3,000,000\nAgainst 0\nNot eligible: you held no votes when voting opened', shown: null, ambiguous: true, verdict: 'could-not-drive' },
+  { name: 'old card with current power and snapshot zero', text: 'For 3,000,000\nAgainst 0\nYour voting power: 1,000 · At snapshot: 0', shown: 0, ambiguous: false, verdict: 'pass' },
+  { name: 'new card with Total votes before holder votes', text: 'For 0\nAgainst 0\nTotal votes: 0\nYou can vote with 1,000 votes', shown: 1000, ambiguous: false },
+  { name: 'old card with votes after tallies and no holder wording', text: 'For 3,000,000 votes\nAgainst 0 votes', shown: null, ambiguous: false, verdict: 'fail' },
+]) {
+  test(`holder weight on ${name}`, async () => {
+    await fixture(`<article><p>${text.replaceAll('\n', '<br>')}</p><button onclick="recordWrite({support:1})">Vote For</button></article>`, async session => {
+      const scope = session.page.locator('article');
+      const view = await oldVoteView(scope);
+      const unresolved = ambiguousWeight(view.text, view.shown);
+      await castVote(session, scope);
+      assert.deepEqual(voteRequests(session.wallet, GOVERNOR, 1n).map(call => call.args), [[1n, 1]]);
+      assert.equal(view.shown, shown);
+      assert.equal(unresolved, ambiguous);
+      if (verdict) assert.equal(oldSnapshotVerdict({ shown: view.shown, current: 1000, usable: view.choices.length > 0,
+        ambiguous: unresolved, asked: voteRequests(session.wallet, GOVERNOR, 1n).length > 0 }), verdict);
+    });
+  });
+}
 test('an external proposal title with tallies reads without navigation', async () => {
   await fixture('<article><a href="https://explorer.example/proposal/1">Set the protocol fee</a><p>Status: Active</p><p>For 12</p><p>Against 2</p></article>', async ({ page }) => {
     const before = page.url();

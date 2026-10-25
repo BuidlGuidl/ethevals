@@ -47,3 +47,10 @@ test('unnumbered zero-weight wording remains unresolved', () => {
   assert.equal(ambiguousWeight('You have no votes', null), true);
   assert.equal(ambiguousWeight('Snapshot block 208,700', null), false);
 });
+test('reads zero in words only for the snapshot or this proposal', () => {
+  for (const text of ['No votes at snapshot', 'No voting power on this proposal', 'At snapshot: no voting power', 'Your voting power: 1,000 · No votes for this proposal']) {
+    assert.equal(proposalValues(text).snapshot, 0);
+  }
+  assert.equal(proposalValues('You have no votes').snapshot, null);
+  assert.equal(ambiguousWeight('Your snapshot votes: unknown', null), true);
+});
