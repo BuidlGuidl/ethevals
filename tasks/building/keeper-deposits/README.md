@@ -33,9 +33,9 @@ It runs each check on a private fork with fresh depositors and a separate funded
 
 | Check | What it proves | Instruction sentence | Area |
 | --- | --- | --- | --- |
-| `compile` | The contract builds and the helper returns signable typed data and a keeper transaction | "put the contract in src/KeeperDeposits.sol" / "export prepareDeposit" | interface |
-| `deposit_lands` | One EOA signature lets the keeper deposit the exact amount and gives the depositor at least the mined block's `previewDeposit(amount)` shares | "let them sign once from our page, and our keeper deposits it into our vault ... shares to the depositor" | deposit |
-| `signature_used_first` | Submitting the signed token authorization before the keeper call still leaves the depositor with the shares and no contract residue | "our keeper deposits it into our vault ... for them" | authorization |
+| `compile` | The contract builds and the helper returns signable typed data and a keeper transaction | "export prepareDeposit" | interface |
+| `deposit_lands` | One EOA signature lets the keeper deposit the exact amount and gives the depositor at least the shares the vault previews at the mined block | "let them sign once from our page, and our keeper deposits it into our vault ... shares to the depositor" | deposit |
+| `signature_used_first` | Submitting the signed token authorization before the keeper call still leaves the depositor with the shares and no contract residue | "our keeper deposits it into our vault ... for them" | front-run |
 | `two_pending` | Two deposits prepared and signed before either fill both land in signing order | "people may sign a few now and we fill them later" | nonces |
 | `safe_depositor` | Two owners of a real 2-of-3 Safe sign its SafeMessage digest and the keeper deposits the Safe's USDC | "some depositors are Safes" | signatures |
 | `no_replay` | Repeating a filled keeper transaction moves no USDC or shares | "let them sign once" | replay |
