@@ -5,14 +5,13 @@ The check catches missing type definitions and incorrect ordering.
 
 ## The instruction
 
-```text
-You call Permit2's permitWitnessTransferFrom with a witness struct VaultDeposit(address receiver). Write the exact witnessTypeString argument you pass. Give the string first, then one sentence.
-```
+> You call Permit2's permitWitnessTransferFrom with a witness struct VaultDeposit(address receiver). Write the exact witnessTypeString argument you pass. Give the string first, then one sentence.
 
 ## What it touches
 
 Permit2 appends `witnessTypeString` to an existing primary type stub in [PermitHash](https://github.com/Uniswap/permit2/blob/cc56ad0f3439c502c246fc5cfcc3db92bb8b7219/src/libraries/PermitHash.sol).
 The argument closes that stub with `VaultDeposit witness)` and adds both referenced type definitions.
+
 [EIP-712](https://eips.ethereum.org/EIPS/eip-712#definition-of-encodetype) sorts those definitions by name, so `TokenPermissions` comes before `VaultDeposit`.
 The [interface](https://github.com/Uniswap/permit2/blob/cc56ad0f3439c502c246fc5cfcc3db92bb8b7219/src/interfaces/ISignatureTransfer.sol) requires the `TokenPermissions` definition even though the witness itself has no nested struct.
 

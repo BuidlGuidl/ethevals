@@ -207,8 +207,11 @@ def test_every_real_task_readme_quotes_its_instruction_and_names_every_check():
         assert readme.startswith("# "), task
         assert sections in (["The instruction", "What it touches", "The checks", "Why it matters"],
                             ["The instruction", "What it touches", "The checks", "Why it matters", "Notes"]), task
-        quoted = re.search(r"^## The instruction\n\n```text\n(.*?)```$", readme, re.MULTILINE | re.DOTALL)
-        assert quoted and quoted[1] == (task / "instruction.md").read_text(), task
+        # A blockquote wraps on GitHub; older READMEs quote the instruction in a text block.
+        quoted = re.search(r"^## The instruction\n\n((?:>.*\n)+)", readme, re.MULTILINE)
+        fenced = re.search(r"^## The instruction\n\n```text\n(.*?)```$", readme, re.MULTILINE | re.DOTALL)
+        instruction = re.sub(r"^> ?", "", quoted[1], flags=re.MULTILINE) if quoted else fenced and fenced[1]
+        assert instruction == (task / "instruction.md").read_text(), task
         tests = task / "tests"
         names = set(re.findall(r"\bfunction (test\w*)\(", "".join(file.read_text() for file in tests.glob("*.t.sol"))))
         names |= {"compile"} if names else set()
