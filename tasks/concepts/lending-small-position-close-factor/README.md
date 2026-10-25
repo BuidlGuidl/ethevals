@@ -12,6 +12,7 @@ The 50% cap most builders remember stopped applying to small positions in Aave v
 
 A close factor limits how much of a borrower's debt one liquidation can repay.
 Before v3.3, any position with a health factor above 0.95 had a 50% cap.
+
 Aave v3.3 keeps that cap only for larger positions.
 The user's debt and collateral in the two reserves of the call must both be at least $2,000.
 This debt is $1,500, so one call can repay all of it.
