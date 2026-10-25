@@ -1,7 +1,13 @@
 # Governance voting page
 
 Tally has shut down, and a protocol's token holders need their own page to wrap, delegate and vote.
-The agent adds a Governance page to a create-wagmi project. The page works against a deployed OpenZeppelin governor with three rules that differ from what most pages assume: only For votes count toward quorum, a late quorum moves the end of voting, and votes count at each proposal's snapshot.
+The agent adds a Governance page to a create-wagmi project, for a deployed OpenZeppelin governor.
+Three of the governor's rules differ from what most pages assume:
+
+- Only For votes count toward quorum.
+- A late quorum moves the end of voting.
+- Votes count at each proposal's snapshot.
+
 The checks drive the built page in a browser. They compare what it shows, and what it asks the wallet to sign, with the governor.
 
 Every number on a voting page has a source on chain, and a page can guess each one from events and defaults instead.
@@ -21,12 +27,12 @@ It doesn't say where each value comes from, and four of them go wrong when a pag
 
 - **When voting ends.** The first time For votes reach quorum late, this governor extends voting by 7,200 blocks and emits `ProposalExtended`. The end block in `ProposalCreated` is then stale, and only `proposalDeadline()` is right.
 
-- **Quorum.** `COUNTING_MODE()` here is `support=bravo&quorum=for`, so Abstain votes don't count toward the 4 million quorum. OpenZeppelin's default counts For and Abstain together. So does any page that hard-codes that default, and it shows "reached" for a proposal the governor will defeat:
+- **Quorum.** `COUNTING_MODE()` here is `support=bravo&quorum=for`, so Abstain votes don't count toward the 4 million quorum. OpenZeppelin's default counts For and Abstain together. So does any page that hard-codes that default. With For 3M and Abstain 2M, it shows "reached" for a proposal the governor will defeat:
 
-  | Counted toward quorum | For 3M, Abstain 2M | Quorum 4M |
+  | Counting | Counted toward the 4M quorum | Quorum |
   | --- | --- | --- |
-  | For and Abstain (OpenZeppelin's default) | 5M | reached |
-  | For only (this governor) | 3M | not reached, so Defeated |
+  | For and Abstain, OpenZeppelin's default | 5M | reached |
+  | For only, this governor | 3M | not reached, so the proposal is Defeated |
 
 - **Whose votes count.** Wrapping TOKEN gives vote tokens but no votes, because the wrapper doesn't delegate for the holder. A vote on a proposal weighs what the holder had delegated at its snapshot, not what they hold now. A holder who delegates late goes through this:
 
