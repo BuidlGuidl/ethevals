@@ -77,12 +77,13 @@ Use these sections, in this order:
 | Section               | Holds                                                                         |
 | --------------------- | ----------------------------------------------------------------------------- |
 | `# <title>`           | two or three sentences on what the user asks and what the task checks        |
-| `## The instruction`  | `instruction.md`, word for word, in a `text` block                             |
+| `## The instruction`  | `instruction.md`, word for word, in a blockquote so it wraps on GitHub         |
 | `## What it touches`  | the areas the task touches, and the gotchas in each that the instruction leaves out |
 | `## The checks`       | a table with every check by name, what it proves, and its area                |
 | `## Why it matters`   | where the same gotchas hurt real projects, with links                         |
 | `## Notes`            | optional caveats, such as a known contract that passes every check            |
 
+In the blockquote, start every line with `> ` and put a lone `>` line between paragraphs.
 A unit test fails the pull request if a section is missing, if the quoted instruction differs from `instruction.md`, or if the table leaves out a check.
 Write the README before the tests.
 If you can't name a gotcha that the instruction leaves out, the task probably won't tell agents apart.
