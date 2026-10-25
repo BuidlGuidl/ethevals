@@ -5,19 +5,17 @@ The task checks pending deposits, signatures submitted before the keeper call, a
 
 ## The instruction
 
-```text
-our depositors hold USDC and haven't approved anything. let them sign once from our page, and our
-keeper deposits it into our vault at 0xBc65ad17c5C0a2A4D159fa5a503f4992c7B545FE for them, shares to the
-depositor. people may sign a few now and we fill them later. some depositors are Safes. put the contract
-in src/KeeperDeposits.sol, we'll deploy it with forge create, nothing to pass in; it's for mainnet. in
-script/deposits.ts, export prepareDeposit({ contract, depositor, amount }), returning the typed data the
-depositor signs and a keeperTx(signature) that gives our keeper's { to, data }.
-
-amount is a bigint in USDC base units (6 decimals). contract and depositor are addresses.
-prepareDeposit can be async. return { typedData, keeperTx }, with typedData in viem's signTypedData
-format (domain, types, primaryType, message). the RPC URL is in RPC_URL. chain_context.json has a funded
-account with USDC and no approvals for your own testing.
-```
+> our depositors hold USDC and haven't approved anything. let them sign once from our page, and our
+> keeper deposits it into our vault at 0xBc65ad17c5C0a2A4D159fa5a503f4992c7B545FE for them, shares to the
+> depositor. people may sign a few now and we fill them later. some depositors are Safes. put the contract
+> in src/KeeperDeposits.sol, we'll deploy it with forge create, nothing to pass in; it's for mainnet. in
+> script/deposits.ts, export prepareDeposit({ contract, depositor, amount }), returning the typed data the
+> depositor signs and a keeperTx(signature) that gives our keeper's { to, data }.
+>
+> amount is a bigint in USDC base units (6 decimals). contract and depositor are addresses.
+> prepareDeposit can be async. return { typedData, keeperTx }, with typedData in viem's signTypedData
+> format (domain, types, primaryType, message). the RPC URL is in RPC_URL. chain_context.json has a funded
+> account with USDC and no approvals for your own testing.
 
 ## What it touches
 
@@ -27,11 +25,11 @@ account with USDC and no approvals for your own testing.
 
 ## The checks
 
-The environment has Foundry, Solidity 0.8.30, Node 22, viem, TypeScript, and tsx.
-Its chain forks Ethereum mainnet at block 23,819,000 and gives the agent a funded account with USDC and no approvals.
 The verifier rebuilds the submitted source with FFI disabled, imports the helper, and deploys the contract without constructor arguments.
 It runs each check on a private fork with fresh depositors and a separate funded keeper.
-The reward is 1 only when every check passes.
+
+- The environment has Foundry, Solidity 0.8.30, Node 22, viem, TypeScript, and tsx.
+- Its chain forks Ethereum mainnet at block 23,819,000 and gives the agent a funded account with USDC and no approvals.
 
 | Check | What it proves | Instruction sentence | Area |
 | --- | --- | --- | --- |
@@ -42,11 +40,14 @@ The reward is 1 only when every check passes.
 | `safe_depositor` | Two owners of a real 2-of-3 Safe sign its SafeMessage digest and the keeper deposits the Safe's USDC | "some depositors are Safes" | signatures |
 | `no_replay` | Repeating a filled keeper transaction moves no USDC or shares | "let them sign once" | replay |
 
-Every positive deposit checks the exact USDC debit, the depositor's shares, and zero USDC and shares left in the contract.
-The keeper supplies no USDC and receives no shares.
-Every `keeperTx(signature).to` must be the deployed contract.
-A reverted keeper transaction fails a positive check and counts as no movement on the replay check.
-The replay check counts only after `deposit_lands` passes.
+How the checks judge:
+
+- Every positive deposit checks the exact USDC debit, the depositor's shares, and zero USDC and shares left in the contract.
+- The keeper supplies no USDC and receives no shares.
+- Every `keeperTx(signature).to` must be the deployed contract.
+- A reverted keeper transaction fails a positive check and counts as no movement on the replay check.
+- The replay check counts only after `deposit_lands` passes.
+- The reward is 1 only when every check passes.
 
 ## Why it matters
 
@@ -62,13 +63,8 @@ These sources explain why a token authorization's success and the full operation
 
 ## Notes
 
-The solution uses USDC's bytes `receiveWithAuthorization` overload and Spark's sUSDC vault.
-It chooses random 32-byte nonces and a deadline seven days after the chain timestamp.
-Depositors make no approval transaction.
-The Safe fixture deploys Safe 1.4.1 through its real factory with the compatibility fallback handler.
-
-For the prior-submission check, `Permit`, `TransferWithAuthorization`, and `ReceiveWithAuthorization` typed data select their USDC bytes overloads.
-A different typed-data type has no corresponding USDC entry point, so that check submits no token call before the keeper transaction.
-The check accepts a failed prior submission and still requires a successful deposit.
-It fixes no calldata layout, storage scheme, or nonce scheme.
-Paid trials have not run.
+- The solution uses USDC's bytes `receiveWithAuthorization` overload and Spark's sUSDC vault. It chooses random 32-byte nonces and a deadline seven days after the chain timestamp. Depositors make no approval transaction.
+- The Safe fixture deploys Safe 1.4.1 through its real factory with the compatibility fallback handler.
+- For the prior-submission check, `Permit`, `TransferWithAuthorization`, and `ReceiveWithAuthorization` typed data select their USDC bytes overloads. A different typed-data type has no corresponding USDC entry point, so that check submits no token call before the keeper transaction.
+- The prior-submission check accepts a failed prior submission and still requires a successful deposit.
+- The checks fix no calldata layout, storage scheme, or nonce scheme.
