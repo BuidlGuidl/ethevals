@@ -10,9 +10,7 @@ This task checks whether the page reads them.
 
 ## The instruction
 
-```text
-Tally is gone, so our holders need our own voting page. The governor, its timelock and the vote token are deployed on the chain in chain_context.json, and TOKEN is the token holders own. Add a Governance page to this project where a connected holder can wrap TOKEN into votes, delegate them and see how many votes they have, see every proposal with its status, the votes for and against, whether it has reached quorum and when voting ends, and vote on the open ones. Holders only. The team queues and executes from our safe.
-```
+> Tally is gone, so our holders need our own voting page. The governor, its timelock and the vote token are deployed on the chain in chain_context.json, and TOKEN is the token holders own. Add a Governance page to this project where a connected holder can wrap TOKEN into votes, delegate them and see how many votes they have, see every proposal with its status, the votes for and against, whether it has reached quorum and when voting ends, and vote on the open ones. Holders only. The team queues and executes from our safe.
 
 ## What it touches
 
@@ -23,20 +21,20 @@ It doesn't say where each value comes from, and four of them go wrong when a pag
 
 - **When voting ends.** The first time For votes reach quorum late, this governor extends voting by 7,200 blocks and emits `ProposalExtended`. The end block in `ProposalCreated` is then stale, and only `proposalDeadline()` is right.
 
-- **Quorum.** `COUNTING_MODE()` here is `support=bravo&quorum=for`, so Abstain votes don't count toward the 4 million quorum. OpenZeppelin's default counts For and Abstain together. So does any page that hard-codes that default, and it shows "reached" for a proposal the governor will defeat.
+- **Quorum.** `COUNTING_MODE()` here is `support=bravo&quorum=for`, so Abstain votes don't count toward the 4 million quorum. OpenZeppelin's default counts For and Abstain together. So does any page that hard-codes that default, and it shows "reached" for a proposal the governor will defeat:
 
-  ```text
-  For 3,000,000 + Abstain 2,000,000 = 5,000,000   page using the default: quorum reached
-  For 3,000,000                     < 4,000,000   governor: quorum not reached → Defeated
-  ```
+  | Counted toward quorum | For 3M, Abstain 2M | Quorum 4M |
+  | --- | --- | --- |
+  | For and Abstain (OpenZeppelin's default) | 5M | reached |
+  | For only (this governor) | 3M | not reached, so Defeated |
 
-- **Whose votes count.** Wrapping TOKEN gives vote tokens but no votes, because the wrapper doesn't delegate for the holder. A vote on a proposal weighs what the holder had delegated at its snapshot, not what they hold now. A holder who delegates after a proposal's snapshot sees 1,000 votes in their wallet and casts a vote that weighs nothing. The transaction still succeeds, so a page that trusts the receipt tells them their vote counted.
+- **Whose votes count.** Wrapping TOKEN gives vote tokens but no votes, because the wrapper doesn't delegate for the holder. A vote on a proposal weighs what the holder had delegated at its snapshot, not what they hold now. A holder who delegates late goes through this:
 
-  ```text
-  proposal created ── snapshot ── voting open ───────────────────────── end
-                                   holder wraps and delegates: votes now 1,000
-                                   holder votes For: transaction succeeds, weight 0
-  ```
+  1. A proposal's snapshot passes while the holder has no votes delegated.
+  2. The holder wraps and delegates. Their wallet now shows 1,000 votes.
+  3. The holder votes For on that proposal. The transaction succeeds, and the vote weighs 0.
+
+  A page that trusts the receipt tells them their vote counted.
 
 ## The checks
 
@@ -44,6 +42,7 @@ The agent starts with the create-wagmi project and the contracts' sources and AB
 Its chain has five ordinary proposals: Executed, Defeated, Queued, Active and Pending.
 
 After the agent finishes, the verifier builds the page and starts its own fork of that chain. On the fork it adds nine test proposals the agent never saw. They include:
+
 - one that reaches quorum only if Abstain counts
 - a late-quorum proposal and a twin created in the same block
 - queued proposals before and after their wait
@@ -60,10 +59,12 @@ It opens the page with an injected wallet, acting as holders it finds in public 
 | `wrap_then_delegate` | A holder wraps 1,000 TOKEN, sees 0 votes until delegating and 1,000 after | voting power |
 | `votes_at_snapshot` | A holder who delegated after a proposal's snapshot sees 0 votes on it or can't vote on it, then casts their full 1,000 For on a new proposal | snapshot votes |
 
-The reward is 1 only when every check passes.
-A check fails a page only for what it showed or what it asked the wallet for.
-When the verifier can't read a value or finish a flow, it records "could not drive" for that check and goes on.
-Any failed check gives 0. If nothing failed but a check could not be driven, the trial is an error for a human to look at.
+A check fails a page only for what the page showed or asked the wallet to sign.
+When the verifier can't read a value or finish a flow, it records "could not drive" for that check and goes on. Then:
+
+- Every check passes: the reward is 1.
+- Any check fails: the reward is 0.
+- Nothing fails, but some check could not be driven: the trial is an error for a human to look at.
 
 ## Why it matters
 
@@ -104,5 +105,6 @@ Run these free commands from the repository root:
 
 ```sh
 uv run ethevals lint --tasks tasks/building/voting-page
-uv run ethevals free-check --tasks tasks/building/voting-page --output /tmp/voting-page-free-check
+uv run ethevals free-check --tasks tasks/building/voting-page \
+  --output /tmp/voting-page-free-check
 ```
