@@ -6,27 +6,26 @@ They also launch after a stranger initializes the next coin's pool at the wrong 
 
 ## The instruction
 
-```text
-we're building a creator-coin platform. anyone calls create(name, symbol), which returns a new coin
-with a fixed 1B supply that all goes straight into a Uniswap v3 pool against WETH (1% fee tier),
-opening at a 10 ETH market cap. nobody, us included, can ever pull that liquidity. trading fees split
-70% to the coin's creator and 30% to us, and the constructor takes the address our share goes to.
-anyone can call collect(coin) to pay out a coin's fees, and a creator can change where their share
-goes with setPayoutRecipient(coin, recipient). put it in src/CreatorCoins.sol as a contract called
-CreatorCoins. it's a Foundry project on solidity 0.8.30, for mainnet.
-```
+> we're building a creator-coin platform. anyone calls create(name, symbol), which returns a new coin
+> with a fixed 1B supply that all goes straight into a Uniswap v3 pool against WETH (1% fee tier),
+> opening at a 10 ETH market cap. nobody, us included, can ever pull that liquidity. trading fees split
+> 70% to the coin's creator and 30% to us, and the constructor takes the address our share goes to.
+> anyone can call collect(coin) to pay out a coin's fees, and a creator can change where their share
+> goes with setPayoutRecipient(coin, recipient). put it in src/CreatorCoins.sol as a contract called
+> CreatorCoins. it's a Foundry project on solidity 0.8.30, for mainnet.
 
 ## What it touches
 
-- Uniswap v3 launch math. Token ordering changes the price ratio and the side that holds the coin. Tick spacing constrains the range boundary. A pool can exist before either token contract does, so creating a pool and trusting an existing price both need care.
-- Per-coin fee accounting. A buy earns WETH fees, while a sell earns coin fees. Each collection must split only that coin's fees. Rounding can leave dust, but it cannot justify keeping the coin-side fees.
-- Permanent liquidity and payout rights. Fee collection must leave the principal in the pool. Anyone can trigger a payout, but only the creator can choose its recipient.
+- **Uniswap v3 launch math.** Token ordering changes the price ratio and the side that holds the coin. Tick spacing constrains the range boundary. A pool can exist before either token contract does, so creating a pool and trusting an existing price both need care.
+- **Per-coin fee accounting.** A buy earns WETH fees, while a sell earns coin fees. Each collection must split only that coin's fees. Rounding can leave dust, but it cannot justify keeping the coin-side fees.
+- **Permanent liquidity and payout rights.** Fee collection must leave the principal in the pool. Anyone can trigger a payout, but only the creator can choose its recipient.
 
 ## The checks
 
 The agent starts with a plain Foundry project on Solidity 0.8.30.
-The verifier puts its project next to the hidden tests and runs Forge without a configured RPC endpoint.
+The verifier puts its project next to [`CreatorCoins.t.sol`](tests/CreatorCoins.t.sol) and runs Forge without a configured RPC endpoint.
 The tests cannot read the agent's source files.
+
 The tests install mainnet runtime code for the Uniswap v3 factory, position manager, both routers, and WETH9.
 They restore the constructor and governance storage needed for new pools and positions.
 Each test is one check, and the reward is 1 only when every check passes.
