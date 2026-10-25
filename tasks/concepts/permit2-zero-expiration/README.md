@@ -5,9 +5,7 @@ The fixed answer is no, because zero sets the expiration to the approval block's
 
 ## The instruction
 
-```text
-A script calls Uniswap's Permit2 approve(token, spender, amount, 0) for a spender. In the next block, the spender calls Permit2's transferFrom to pull those tokens. Does the pull succeed? Answer yes or no first, then say why in one sentence.
-```
+> A script calls Uniswap's Permit2 approve(token, spender, amount, 0) for a spender. In the next block, the spender calls Permit2's transferFrom to pull those tokens. Does the pull succeed? Answer yes or no first, then say why in one sentence.
 
 ## What it touches
 
