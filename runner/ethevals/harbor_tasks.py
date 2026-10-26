@@ -80,8 +80,10 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         raise ValueError(f"{path / 'task.toml'}: verifier.env must declare only the required judge key when a judge exists")
     names = set()
     for file, judge in judges.items():
-        if judge.judge.atif_trajectory != "/logs/agent/trajectory.json":
-            raise ValueError(f"{file}: the judge must read the ATIF trajectory /logs/agent/trajectory.json")
+        reads_reply = judge.judge.atif_trajectory is None and judge.judge.files == ("/logs/verifier/final-reply.txt",)
+        if judge.judge.atif_trajectory != "/logs/agent/trajectory.json" and not reads_reply:
+            raise ValueError(f"{file}: the judge must read the ATIF trajectory /logs/agent/trajectory.json"
+                             " or only the final reply /logs/verifier/final-reply.txt")
         if judge.judge.guard not in {"flag", "penalize"}:
             raise ValueError(f"{file}: the judge guard must be flag or penalize")
         if judge.scoring.aggregation != "all-pass" or judge.judge.weight <= 0:
