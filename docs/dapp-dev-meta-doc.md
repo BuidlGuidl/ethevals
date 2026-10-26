@@ -26,14 +26,17 @@ The last one takes its name from the tech tree, because ethereum.org has no use 
 
 A task works in one or more parts of the app: the contracts, the scripts and the frontend.
 
-The map is for looking around. A task can touch several use cases and parts of the app, and many tasks can sit in the same one. What matters is overlap. Before you write checks, read the README of each task already in [`tasks/`](../tasks/), and make sure your checks are mostly new.
+The map is for looking around. A task can touch several use cases and parts of the app, and many tasks can sit in the same one. What matters is overlap. Before you write checks, read the README of each task already in [`tasks/`](../tasks/) and in the [open task pull requests](https://github.com/BuidlGuidl/ethevals/pulls?q=is%3Apr+is%3Aopen+label%3A%22type%3A+build%22%2C%22type%3A+script%22%2C%22type%3A+quiz%22). Its checks table says what each check proves. Make sure your checks are mostly new.
 
-### Two kinds of task
+### Three kinds of task
 
-Each builder story gives a few quizzes and a build.
+Tasks sit in three pillars: Concepts, Build and Act. Each builder story gives a few quizzes, and a Build or an Act task.
 
-- A quiz goes to a bare model and has a fixed answer. It tests a concept, and the answer stays the same whichever library you use.
-- A build gives an agent an environment and an instruction written as the builder's message. Hidden checks look at two things. Did the agent do the job, and did it do what a senior Ethereum app developer would do without being told?
+- **Concepts.** A quiz asks a question with a fixed answer. It tests a concept, and the answer stays the same whichever library you use. Agents with the web answer it too, but a quiz is also worth keeping when a bare model, with no web, gets it wrong.
+- **Build.** The agent gets an environment and an instruction written as the builder's message, and writes code: contracts, scripts or a page. The tests run what it wrote.
+- **Act.** The agent acts on a chain. It sends transactions, or writes a script that sends them, and the checks look at what changed on the chain.
+
+In a Build or Act task, hidden checks look at two things. Did the agent do the job, and did it do what a senior Ethereum app developer would do without being told?
 
 ## What a good task looks like
 
@@ -75,11 +78,11 @@ Judgment also sets how much you read. Read until you have a few ideas worth filt
    - Start with two or three apps live on Ethereum mainnet. That is where the most value sits and where the patterns are most tested. Read each app and its GitHub repo as a vertical slice: the contracts, and how the frontend and scripts use them. Take the patterns the best teams use and leave the code. Write each one down with the case where it looks satisfied and still breaks; that case is what a check sees. A judge reads what no test or chain state can show, and each of its questions names the sentence it rests on and the code it compares against.
    - Follow what the apps raise into the libraries' source and comments, which show what their authors worry about, and into audit checklists and recent incidents. Go to them with a question from the apps.
    - Newness is not a reason to pick a task. An agent with the web reads deployed code and docs in minutes. What changed after training helps a quiz, where a bare model answers from memory.
-3. Write a few builder stories, two lines each: the story, and what it never mentions that a senior developer would handle. Let taste drop most of them and judgment pick one.
-4. Write the quizzes and the build's instruction from that story.
-5. Show the person you're working with the story, the quizzes, the build's instruction and the decisions behind them, including the stories you dropped and why. Agree on them before any trial.
-6. Trial the build cheaply. Give the instruction to a strong agent and an open one in a plain project, two or three times each, and read what they built. Write the hidden checks around what they actually missed.
-7. Build the task folder. Read [CONTEXT.md](../CONTEXT.md) for the words and [Add a task](add-a-task.md) for the folder.
+3. Write a few builder stories, two lines each: the story, and what it never mentions that a senior developer would handle. Drop any whose checks an existing task already covers. Let taste drop most of the rest and judgment pick one.
+4. Write the quizzes, and the instruction for the Build or Act task, from that story.
+5. Show the person you're working with the story, the quizzes, the instruction and the decisions behind them, including the stories you dropped and why. Agree on them before any trial.
+6. Trial the instruction cheaply. Give it to a strong agent and an open one in a plain project, two or three times each, and read what they did. Write the hidden checks around what they actually missed.
+7. Make the task folder. Read [CONTEXT.md](../CONTEXT.md) for the words and [Add a task](add-a-task.md) for the folder.
 8. Calibrate it with the runner, using your own keys in a `.env` at the repo root, passed with `uv run --env-file .env`. Round 1 is one trial each of `claude-code-opus-5.5`, `codex-gpt-6.1-sol`, `opencode-glm-5.3` and `opencode-kimi-k3` in the internet mode, in one job. Before a failure counts, name its reason: the agent's install or its own limits, our verifier, or the work. Only the last is a miss. If both open models pass every check for the right reasons, the task is too easy. If the failures come from the task itself, such as a vague instruction, two clauses that pull against each other, or a check that accepts only one design, fix the task. Read the strong models' trajectories too. A pass with no reading, testing or fixing along the way means the task is too easy for them. Round 2 is a second trial for each agent whose single result decides the verdict. [Plan and run](../runner/README.md#plan-and-run) has the commands and budgets.
 
 ## Sources
