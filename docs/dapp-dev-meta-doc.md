@@ -48,7 +48,7 @@ The one finished example is [revenue payouts](../tasks/building/revenue-payouts/
 
 ### The instruction reads like a builder's message
 
-Write the instruction as the message that builder would send. A real builder says what they want and why, plus the few things they would mention anyway, such as where the code goes or who will call it. That is usually enough for the checks to reach the work. The rest is the agent's call, and that is where the unsaid things live. If every agent would build something different, the instruction is too loose. If it lists every function and edge case, it has become a spec, and a spec only tests whether the agent can follow it.
+Write the instruction as the message that builder would send, without a greeting. A real builder says what they want and why, plus the few things they would mention anyway, such as where the code goes or who will call it. That is usually enough for the checks to reach the work. The rest is the agent's call, and that is where the unsaid things live. If every agent would build something different, the instruction is too loose. If it lists every function and edge case, it has become a spec, and a spec only tests whether the agent can follow it.
 
 ### The bar is what an open model misses and a strong one works hard for
 
