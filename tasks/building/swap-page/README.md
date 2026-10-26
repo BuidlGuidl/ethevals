@@ -6,7 +6,7 @@ It compares the page's amounts and wallet requests with chain balances.
 
 ## The instruction
 
-> Hey! So our users hold ETH, USDC and USDT on Ethereum mainnet and keep leaving our app to trade. Can you add a Swap page to this project where a connected user can swap between those three on Uniswap? Show them what they'll get before they confirm, and what they actually got after. We take a 0.25% cut of each swap, paid to our treasury. Its address and the chain to use are in `chain_context.json`.
+> Our users hold ETH, USDC and USDT on Ethereum mainnet and keep leaving our app to trade. Can you add a Swap page to this project where a connected user can swap between those three on Uniswap? Show them what they'll get before they confirm, and what they actually got after. We take a 0.25% cut of each swap, paid to our treasury. Its address and the chain to use are in `chain_context.json`.
 
 ## What it touches
 
