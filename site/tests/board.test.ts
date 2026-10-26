@@ -99,20 +99,20 @@ test("mode, agent, model, and effort keep different agents apart", () => {
 });
 
 test("the knowledge table and its panel data include only declared vanilla tasks", () => {
-  const board = buildBoard([evaluation, { ...evaluation, id: "building/token", pillar: "building", modes: ["internet"] }],
+  const board = buildBoard([evaluation, { ...evaluation, id: "build/token", pillar: "build", modes: ["internet"] }],
     [row({ mode: "vanilla", agent: null })]);
   assert.deepEqual(board.tables.vanilla.pillars.concepts.evals.map((entry) => entry.id), ["concepts/units"]);
-  assert.deepEqual(board.tables.vanilla.pillars.building.cells['["model-a",null,"high"]'],
+  assert.deepEqual(board.tables.vanilla.pillars.build.cells['["model-a",null,"high"]'],
     { state: "empty", score: null, passed: 0, total: 0, errors: 0, scoredEvals: 0 });
-  assert.equal(board.tables.internet.pillars.building.evals[0].id, "building/token");
+  assert.equal(board.tables.internet.pillars.build.evals[0].id, "build/token");
 });
 
 test("a pillar with no declared tasks for a mode differs from an unsupported task", () => {
-  const board = buildBoard([evaluation, { ...evaluation, id: "building/check", pillar: "building", modes: ["vanilla"] }], [row()]);
+  const board = buildBoard([evaluation, { ...evaluation, id: "build/check", pillar: "build", modes: ["vanilla"] }], [row()]);
   assert.deepEqual(board.tables.internet.pillars.act.cells[agentKey(agent)],
     { state: "empty", score: null, passed: 0, total: 0, errors: 0, scoredEvals: 0 });
-  assert.equal(board.tables.internet.pillars.building.cells[agentKey(agent)].state, "empty");
-  assert.equal(board.tables.internet.pillars.building.evals[0].cells[agentKey(agent)].state, "na");
+  assert.equal(board.tables.internet.pillars.build.cells[agentKey(agent)].state, "empty");
+  assert.equal(board.tables.internet.pillars.build.evals[0].cells[agentKey(agent)].state, "na");
   assert.equal(board.tables.internet.pillars.concepts.cells[agentKey(agent)].score, 1);
 });
 
@@ -172,7 +172,7 @@ test("selection decoding accepts known ids and closes unknown or prototype-named
 });
 
 test("list rows have one task button and Overall groups them under pillar headings", () => {
-  const data = buildBoard([evaluation, { ...evaluation, id: "building/token", pillar: "building" }], [row()]);
+  const data = buildBoard([evaluation, { ...evaluation, id: "build/token", pillar: "build" }], [row()]);
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, onSelect: () => {} }));
   assert.equal((panel.match(/<button/g) ?? []).length, 2);
   assert.ok(panel.includes('<h3>Concepts</h3>') && panel.includes('<h3>Build</h3>'));

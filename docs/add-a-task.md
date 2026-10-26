@@ -12,7 +12,7 @@ You write the instruction, what the agent starts with, the checks, and a solutio
 Every task belongs to one of three pillars: Concepts, Build, and Act.
 
 - `concepts` holds quizzes.
-- `building` holds builds.
+- `build` holds builds.
 - `act` holds tasks where the agent acts on a chain.
 
 The pillar describes the work, not its tools. Start from the recipe with the same needs.
@@ -85,7 +85,7 @@ Use these sections, in this order:
 A unit test fails the pull request if a section is missing, if the quoted instruction differs from `instruction.md`, or if the table leaves out a check.
 Write the README before the tests.
 If you can't name a gotcha that the instruction leaves out, the task probably won't tell agents apart.
-The [revenue payouts README](../tasks/building/revenue-payouts/README.md) is a full example.
+The [revenue payouts README](../tasks/build/revenue-payouts/README.md) is a full example.
 
 ### `instruction.md`
 
@@ -1015,7 +1015,7 @@ The oracle run now fails `test_zero_pool_allowance`. Change it back.
 
 This recipe checks code the agent writes.
 Forge tests import the agent's contract and try it with awkward payees and tokens.
-It's [`tasks/building/revenue-payouts`](../tasks/building/revenue-payouts).
+It's [`tasks/build/revenue-payouts`](../tasks/build/revenue-payouts).
 
 ```text
 revenue-payouts/
@@ -1047,7 +1047,7 @@ authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "solidity", "payments"]
 
 [metadata]
-pillar = "building"
+pillar = "build"
 modes = ["internet", "skills"]
 
 [verifier]
@@ -1252,7 +1252,7 @@ contract RevenuePayoutsTest is Test {
 
 1. Any revert passes, so the agent can use its own errors.
 
-The other nine tests follow the same shape. [The full file](../tasks/building/revenue-payouts/tests/RevenuePayouts.t.sol) has them all.
+The other nine tests follow the same shape. [The full file](../tasks/build/revenue-payouts/tests/RevenuePayouts.t.sol) has them all.
 
 </details>
 
@@ -1260,7 +1260,7 @@ The other nine tests follow the same shape. [The full file](../tasks/building/re
 <summary><code>solution/solve.sh</code></summary>
 
 `solve.sh` writes a working `src/RevenuePayouts.sol` into `/workspace`, where the agent would put it.
-See [the file](../tasks/building/revenue-payouts/solution/solve.sh).
+See [the file](../tasks/build/revenue-payouts/solution/solve.sh).
 `tests/test.sh` and `tests/reward.toml` are the same as in [`tests/`](#tests).
 
 </details>

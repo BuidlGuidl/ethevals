@@ -46,7 +46,7 @@ def test_catalog_hashes_every_real_task_with_harbors_package_digest(tmp_path):
         "sha256:" + Packager.compute_content_hash(path)[0] for path in paths]
 
 
-@pytest.mark.parametrize("pillar", ["security", "transactions"])
+@pytest.mark.parametrize("pillar", ["security", "transactions", "building"])
 def test_catalog_refuses_removed_pillars(tmp_path, pillar):
     task = task_folder(tmp_path)
     settings = task / "task.toml"

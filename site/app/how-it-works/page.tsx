@@ -5,7 +5,7 @@ import { PipelineDiagram, RunDiagram } from "../../components/diagrams";
 export const metadata = { title: "How it works · ETH Evals" };
 const scope = {
   concepts: "Quizzes on Ethereum concepts. A bare model or an agent answers, and the verifier checks the reply.",
-  building: "The agent writes contracts, pages, or apps, and the tests run what it wrote.",
+  build: "The agent writes contracts, pages, or apps, and the tests run what it wrote.",
   act: "The agent acts on a chain. It sends transactions, or writes a script that sends them, and the tests check what changed.",
 };
 const evalFiles = [

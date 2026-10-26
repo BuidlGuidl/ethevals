@@ -6,8 +6,8 @@
       "modes": [
         "internet"
       ],
-      "id": "building/token-contract",
-      "pillar": "building",
+      "id": "build/token-contract",
+      "pillar": "build",
       "hash": "ada3ab97528490a5d92bb2dd243d62b0e3d046b4a2160ea905fb6563e04c69b6",
       "instruction": "Implement the token described in the environment. Run the tests and explain your changes."
     },

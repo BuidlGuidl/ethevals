@@ -1,6 +1,6 @@
 import type { Agent, Mode, Pillar } from "./board";
 
-export const names: Record<Pillar, string> = { concepts: "Concepts", building: "Build", act: "Act" };
+export const names: Record<Pillar, string> = { concepts: "Concepts", build: "Build", act: "Act" };
 export const modelOnlyNote = "Bare model, one API call, no tools or web.";
 export const modeNames: Record<Mode, string> = { internet: "Internet", skills: "Internet + Skills", vanilla: "Model only" };
 
