@@ -26,7 +26,7 @@ The last one takes its name from the tech tree, because ethereum.org has no use 
 
 A task works in one or more parts of the app: the contracts, the scripts and the frontend.
 
-The map is for looking around. A task can touch several use cases and parts of the app, and many tasks can sit in the same one. What matters is overlap. Before you write checks, read the README of each task already in [`tasks/`](../tasks/) and in the [open task pull requests](https://github.com/BuidlGuidl/ethevals/pulls?q=is%3Apr+is%3Aopen+label%3A%22type%3A+build%22%2C%22type%3A+script%22%2C%22type%3A+quiz%22). Its checks table says what each check proves. Make sure your checks are mostly new.
+The map is for looking around. A task can touch several use cases and parts of the app, and many tasks can sit in the same one. What matters is overlap. Before you write checks, read the README of each task already in [`tasks/`](../tasks/), and make sure your checks are mostly new. Do the same for the tasks in [open pull requests](https://github.com/BuidlGuidl/ethevals/pulls?q=is%3Apr+is%3Aopen+label%3A%22type%3A+build%22%2C%22type%3A+script%22%2C%22type%3A+quiz%22).
 
 ### Three kinds of task
 
