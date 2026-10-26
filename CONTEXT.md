@@ -95,6 +95,10 @@ _Avoid_: motivation, notes
 **Quiz**:
 A task that asks a question with a fixed answer and checks the reply against a target. The word describes a task. It is not a field.
 
+**Builder story**:
+The app a developer would ask an agent for, plus the mechanics that make it theirs. One story gives a few quizzes, and a Build or an Act task.
+_Avoid_: scenario, user story
+
 ## How tasks are run and checked
 
 **Trial**:
