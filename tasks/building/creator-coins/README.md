@@ -6,7 +6,7 @@ They also launch after a stranger initializes the next coin's pool at the wrong 
 
 ## The instruction
 
-> Hello! We're building a creator-coin platform. anyone calls create(name, symbol), which returns a
+> We're building a creator-coin platform. anyone calls create(name, symbol), which returns a
 > new coin with a fixed 1B supply that all goes straight into a Uniswap v3 pool against WETH (1% fee
 > tier), opening at a 10 ETH market cap. nobody, us included, can ever pull that liquidity. trading
 > fees split 70% to the coin's creator and 30% to us, and the constructor takes the address our share
