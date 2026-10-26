@@ -1,7 +1,0 @@
-{
-  "private": true,
-  "dependencies": {
-    "playwright": "1.61.1",
-    "viem": "2.57.11"
-  }
-}
