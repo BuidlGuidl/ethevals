@@ -1,0 +1,20 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/final-reply.txt"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "expires_at_current_block"
+type = "binary"
+description = """The file holds one reply to this question:
+"A user calls Permit2's approve(token, spender, amount, expiration) with expiration = 0. When does that allowance expire? Answer in one short phrase first, then one sentence."
+
+The right answer, from Permit2's code: Permit2 replaces an expiration of 0 with the current block.timestamp. A transfer reverts only when block.timestamp is greater than the expiration, so the allowance still works in the block where approve ran, and it is expired once a later block has a greater timestamp.
+
+Does the reply say the allowance expires at the current block's timestamp, or that it lasts only for that block?
+Answer yes for any wording or format.
+Answer no if the reply says the allowance never expires, that it is expired as soon as it is set or can't be used even in its own block, that it expires at Unix time 0 or after some default period, that the call reverts, or any other time. Also answer no if the reply hedges between two answers or contradicts itself."""

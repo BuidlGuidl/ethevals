@@ -1,0 +1,80 @@
+{
+  "note": "Replies the judge must mark correctly. 'want' is the correct mark: right passes the quiz, wrong fails it.",
+  "cases": [
+    {
+      "want": "right",
+      "label": "ready first",
+      "reply": "\"Ready\" means the wallet can upgrade the account to atomic execution once the user approves, while \"supported\" means it already executes batches atomically."
+    },
+    {
+      "want": "right",
+      "label": "echoes the question",
+      "reply": "The difference between \"supported\" and \"ready\" is that supported means the wallet executes the batch atomically now, while ready means it can upgrade the account to do so if the user approves."
+    },
+    {
+      "want": "right",
+      "label": "says no upgrade needed",
+      "reply": "\"supported\" means the wallet executes calls atomically with no upgrade needed, while \"ready\" means it can upgrade the account to atomic execution after the user approves."
+    },
+    {
+      "want": "right",
+      "label": "says not one by one",
+      "reply": "\"supported\" means the batch runs atomically, not one call at a time, while \"ready\" means the wallet can upgrade the account to that once the user approves."
+    },
+    {
+      "want": "right",
+      "label": "delegate, not upgrade",
+      "reply": "\"supported\" means the wallet executes the calls atomically today; \"ready\" means it can do so after the user approves an EIP-7702 delegation of the account."
+    },
+    {
+      "want": "right",
+      "label": "enable, not upgrade",
+      "reply": "\"supported\" means atomic execution works now, and \"ready\" means the wallet can enable it for this account once the user approves."
+    },
+    {
+      "want": "right",
+      "label": "plain right",
+      "reply": "\"supported\" means atomic batching works now; \"ready\" means the wallet can upgrade the account to support it, pending user approval."
+    },
+    {
+      "want": "wrong",
+      "label": "a real swapped reply",
+      "reply": "“supported” means the wallet can enable atomic execution but the account requires an upgrade or setup first, while “ready” means the account can already execute calls atomically."
+    },
+    {
+      "want": "wrong",
+      "label": "swapped, says unavailable",
+      "reply": "\"supported\" means atomic execution is unavailable for now, while \"ready\" means it works after the upgrade."
+    },
+    {
+      "want": "wrong",
+      "label": "swapped, says can't",
+      "reply": "\"supported\" means the wallet can't run the batch atomically until an upgrade, and \"ready\" means atomic now."
+    },
+    {
+      "want": "wrong",
+      "label": "hedged both ways",
+      "reply": "\"supported\" means the batch is atomic now or after an upgrade, and \"ready\" means the upgrade is ready."
+    },
+    {
+      "want": "right",
+      "label": "the oracle's reply",
+      "reply": "\"supported\" means atomic execution works now, while \"ready\" means the account can upgrade to it with user approval."
+    },
+    {
+      "want": "right",
+      "label": "already upgraded, in the right direction",
+      "reply": "\"supported\" means the account is already upgraded (for example an EIP-7702 delegation is in place), so the wallet runs the batch atomically; \"ready\" means it can make that upgrade once the user approves."
+    },
+    {
+      "want": "wrong",
+      "label": "both read as now, no upgrade",
+      "reply": "\"supported\" means the wallet supports atomic batching for that chain, and \"ready\" means it's ready to execute this batch atomically right now."
+    },
+    {
+      "want": "right",
+      "label": "can't yet, in the ready clause",
+      "reply": "\"ready\" means the wallet can't batch atomically yet but can after the user approves an account upgrade; \"supported\" means it can already."
+    }
+  ]
+}

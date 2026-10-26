@@ -14,6 +14,9 @@ modes = ["vanilla", "internet", "skills"]
 [verifier]
 environment_mode = "separate"
 
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
 [environment]
 cpus = 1
 memory_mb = 1024

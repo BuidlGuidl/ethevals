@@ -1,29 +1,16 @@
-import re
-import string
 import sys
+from pathlib import Path
 
 sys.path.insert(0, "/opt")
 import target_checks
 import rewardkit as rk
 
 
-def accepts(reply: str) -> bool:
-    reply = re.sub(r"(?m)^\s*```[^\n]*\n", "", reply)
-    text = re.sub(r"[*_#`]", "", reply).lower()
-    text = text.translate(str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"', "‑": "-", "–": "-"}))
-    text = text.strip(string.whitespace + string.punctuation.replace("-", "").replace("+", ""))
-    text = re.sub(r"^short\s+answer\s*:\s*", "", text)
-    first_sentence = re.split(r"[.!?](?:\s|$)", text, maxsplit=1)[0]
-    return bool(
-        re.search(
-            r"\bblock\.timestamp\b|\b(?:current|same|this|that|approval)\s+block\b|"
-            r"\bend of (?:the )?block\b", first_sentence
-        )
-        and not re.search(
-            r"\bunusable\b|\bnever works\b|\balready (?:expired|in the past)\b|"
-            r"\bdead on arrival\b|\bnever expires\b", text
-        )
-    )
+@rk.criterion(description="The final reply is not empty")
+def answered(workspace: Path) -> dict:
+    if target_checks.final_reply(Path("/logs/agent/trajectory.json")).strip():
+        return {"score": True, "reasoning": "There is a reply for the judge to grade."}
+    return {"score": False, "reasoning": "The answer is empty."}
 
 
-rk.final_answer(accepts, name="expires_at_current_block")
+rk.answered(name="answered")

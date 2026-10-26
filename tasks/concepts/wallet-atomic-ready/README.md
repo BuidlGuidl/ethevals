@@ -23,12 +23,13 @@ The common mistake swaps the first two, reading `ready` as "ready to batch now" 
 
 ## The checks
 
-The check reads what the reply says about each state.
-It needs atomic execution for `supported` and an upgrade for `ready`, and it refuses the swapped meanings.
+A judge reads the question, the right answer, and the final reply, and nothing else.
+It passes the reply when it gives atomic execution now for `supported` and an upgrade for `ready`, in any wording, and fails swapped or hedged meanings.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `supported_now_ready_upgrade` | Assigns atomic execution to supported and an account upgrade to ready | wallet capability |
+| `answered` | The final reply isn't empty | reply |
+| `supported_now_ready_upgrade` | The judge finds atomic execution now for supported, and an account upgrade for ready | wallet capability |
 
 The quiz runs in vanilla, internet, and skills modes.
 
@@ -44,6 +45,6 @@ An app that reads `supported` as "needs setup" sends separate transactions when 
 
 ## Notes
 
-The check accepts either state first, and it ignores Markdown or a leading "Short answer:".
-It refuses a `supported` clause that says "not" or "cannot", or that execution needs setup or an upgrade.
-It needs upgrade wording for `ready`, but not approval wording or a named upgrade mechanism.
+The judge counts an EIP-7702 delegation, enabling, or activating the account as the upgrade, and it doesn't need approval wording.
+It's the board's judge, Claude Opus 5.5 at high effort, and it never sees the model's reasoning ([ADR 0016](../../../docs/adr/0016-quizzes-with-explained-answers-use-a-judge.md)).
+`tests/hand-cases.json` holds right and wrong replies with their correct marks, and the judge must give each one its mark.

@@ -26,12 +26,13 @@ There are two wrong readings:
 
 ## The checks
 
-The check reads the first sentence of the reply.
-It needs the current block or its timestamp there, and it refuses a reply that says the allowance never expires or can't be used.
+A judge reads the question, the right answer, and the final reply, and nothing else.
+It passes the reply when it says the allowance expires at the current block's timestamp or lasts only for that block, in any wording, and fails a reply that hedges.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `expires_at_current_block` | Names the current block or its timestamp as the expiration in the first sentence | allowance lifetime |
+| `answered` | The final reply isn't empty | reply |
+| `expires_at_current_block` | The judge finds the current block's timestamp, or that block only, as the expiration | allowance lifetime |
 
 The quiz runs in vanilla, internet, and skills modes.
 
@@ -43,8 +44,8 @@ The approve transaction succeeds, and the user's swap in a later block reverts w
 
 ## Notes
 
-The check accepts `block.timestamp`, "current block", "same block", or "end of the block" anywhere in the first sentence.
-It refuses phrases such as "never expires", "already expired", or "unusable" anywhere in the reply, even in a denial.
-It does not run a transfer or check other allowance conditions.
+The judge fails a reply that says the allowance never expires, is unusable even in its own block, expires at Unix time 0 or after a default period, or that the call reverts.
+It's the board's judge, Claude Opus 5.5 at high effort, and it never sees the model's reasoning ([ADR 0016](../../../docs/adr/0016-quizzes-with-explained-answers-use-a-judge.md)).
+`tests/hand-cases.json` holds right and wrong replies with their correct marks, and the judge must give each one its mark.
 
 On a mainnet fork, `approve` with expiration 0 stored exactly that block's timestamp.

@@ -25,12 +25,13 @@ It is not a user rejection, which `wallet_sendCalls` reports as error 4001, and 
 
 ## The checks
 
-The check reads only the first sentence of the reply.
-It needs partial or mixed execution there, and it refuses a first sentence that also names another outcome.
+A judge reads the question, the right answer, and the final reply, and nothing else.
+It passes the reply when it says the batch reverted partially, in any wording, and fails a reply that gives another meaning or hedges.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `partial_onchain_revert` | Describes partial or mixed execution in the first sentence, without a conflicting batch status | wallet batch status |
+| `answered` | The final reply isn't empty | reply |
+| `partial_onchain_revert` | The judge finds a partial revert, with no other batch outcome given as the answer | wallet batch status |
 
 The quiz runs in vanilla, internet, and skills modes.
 
@@ -41,6 +42,6 @@ A dapp that treats 600 as a full rollback can resubmit calls that already ran, s
 
 ## Notes
 
-The check accepts "partial failure", "partially reverted", "mixed execution", or "some calls failed while others succeeded" in the first sentence.
-It refuses "rejected", "pending", "confirmed", "undefined", or a whole-batch failure there, even next to "partial".
-A right second sentence does not rescue a wrong first one.
+The judge fails a reply that gives a full revert, a rejection, pending, confirmed, an offchain failure, or an unknown status as its answer, even when it also mentions a partial revert.
+It's the board's judge, Claude Opus 5.5 at high effort, and it never sees the model's reasoning ([ADR 0016](../../../docs/adr/0016-quizzes-with-explained-answers-use-a-judge.md)).
+`tests/hand-cases.json` holds right and wrong replies with their correct marks, and the judge must give each one its mark.
