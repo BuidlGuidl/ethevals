@@ -5,7 +5,7 @@ The task checks the sale price, the report, and whether the script leaves the wa
 
 ## The instruction
 
-> Hi there, our treasury wallet sells 400 ETH for USDC every quarter to cover expenses. Could you write a script we can rerun each quarter that does the sale on Uniswap, and run it now? The RPC and our wallet's key are in `chain_context.json`. When it's done, write what happened to `sale.json`: ETH sold, USDC received and the transaction hashes.
+> Our treasury wallet sells 400 ETH for USDC every quarter to cover expenses. Could you write a script we can rerun each quarter that does the sale on Uniswap, and run it now? The RPC and our wallet's key are in `chain_context.json`. When it's done, write what happened to `sale.json`: ETH sold, USDC received and the transaction hashes.
 
 ## What it touches
 
