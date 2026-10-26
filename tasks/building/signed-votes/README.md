@@ -6,7 +6,7 @@ The checks call the agent's TypeScript module with signatures from real wallets 
 
 ## The instruction
 
-> Hello! So our holders vote on proposals by signing, and our backend stores each vote if it's valid. Big
+> Our holders vote on proposals by signing, and our backend stores each vote if it's valid. Big
 > holders vote from a 2-of-3 Safe, so a vote can take them a day or two to finish, and many newer holders
 > use smart wallets. In src/votes.ts, export voteToSign({ proposalId, voter, support }), returning the typed
 > data the voter signs, and checkVote({ proposalId, voter, support }, signature), resolving to true if we
