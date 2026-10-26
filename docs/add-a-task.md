@@ -9,14 +9,13 @@ You write the instruction, what the agent starts with, the checks, and a solutio
 
 ## The task folder
 
-Every task belongs to one of four pillars:
+Every task belongs to one of three pillars: Concepts, Build, and Act.
 
-- `concepts`
-- `transactions`
-- `building`
-- `security`
+- `concepts` holds quizzes.
+- `building` holds builds.
+- `act` holds tasks where the agent acts on a chain.
 
-The pillar describes the work, not its tools. You build a security task like any other, so start from the recipe with the same needs.
+The pillar describes the work, not its tools. Start from the recipe with the same needs.
 
 A task lives in `tasks/<pillar>/<task_name>/`:
 
@@ -469,7 +468,7 @@ The oracle run now fails, and its `reward-details.json` gives the reason `Answer
 
 This recipe checks what the agent did on a chain.
 Setup deploys a token with 6 decimals, the agent sends 12.5 of it, Forge tests read the balances, and a criterion asks whether the agent confirmed the transfer.
-It's [`tasks/transactions/send-six-decimal-token`](../tasks/transactions/send-six-decimal-token).
+It's [`tasks/act/send-six-decimal-token`](../tasks/act/send-six-decimal-token).
 
 ```text
 send-six-decimal-token/
@@ -507,7 +506,7 @@ authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "erc20", "transfers"]
 
 [metadata]
-pillar = "transactions"
+pillar = "act"
 modes = ["internet", "skills"]  # (1)
 
 [verifier]
@@ -844,7 +843,7 @@ The oracle run now fails, and its `reward-details.json` gives your assertion mes
 
 To check against a live protocol, the chain sidecar forks mainnet at a pinned block.
 This recipe has the agent supply 10,000 USDC to Aave. Setup moves USDC to the agent's wallet, and Forge tests read the wallet's balances and allowance.
-It's [`tasks/transactions/supply-usdc-to-aave`](../tasks/transactions/supply-usdc-to-aave).
+It's [`tasks/act/supply-usdc-to-aave`](../tasks/act/supply-usdc-to-aave).
 
 ```text
 supply-usdc-to-aave/
@@ -1275,7 +1274,7 @@ Install the runner as the [README](../README.md#quickstart) says, then start Doc
 
 ```sh
 unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
-task=tasks/transactions/send-six-decimal-token
+task=tasks/act/send-six-decimal-token
 uv run python scripts/ci.py images
 uv run ethevals lint --tasks "$task"
 uv run ethevals free-check --tasks "$task" --output results/author-task
@@ -1292,8 +1291,8 @@ Both runs must write the same check names.
 `free-check` skips criteria, because the judge needs a paid call. It ends with:
 
 ```text
-tasks/transactions/send-six-decimal-token: oracle reward 1; checks: results/author-task/oracle/send-six-decimal-token__KPN9wVQ/verifier/reward-details.json
-tasks/transactions/send-six-decimal-token: nop reward 0; checks: results/author-task/nop/send-six-decimal-token__zNK4ZTq/verifier/reward-details.json
+tasks/act/send-six-decimal-token: oracle reward 1; checks: results/author-task/oracle/send-six-decimal-token__KPN9wVQ/verifier/reward-details.json
+tasks/act/send-six-decimal-token: nop reward 0; checks: results/author-task/nop/send-six-decimal-token__zNK4ZTq/verifier/reward-details.json
 ```
 
 Each `reward-details.json` lists the trial's checks with their reasons.

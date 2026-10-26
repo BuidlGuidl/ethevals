@@ -7,6 +7,8 @@ The root `pyproject.toml` installs `ethevals` from this directory.
 ## Task folders
 
 Write tasks directly in Harbor's format under `tasks/PILLAR/NAME/`.
+Tasks belong to three pillars: Concepts, Build, and Act.
+Concepts holds quizzes, Build holds builds, and Act holds tasks where the agent acts on a chain.
 Each folder has `task.toml`, `instruction.md`, `environment/`, `tests/`, and `solution/`.
 Copy a task with similar needs, then run the [free check](../docs/harbor.md#free-checks).
 

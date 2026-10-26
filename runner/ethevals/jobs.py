@@ -27,7 +27,7 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
     task = Task(path)
     metadata = task.config.metadata
     pillar = metadata.get("pillar")
-    if pillar not in {"concepts", "transactions", "building", "security"}:
+    if pillar not in {"concepts", "act", "building"}:
         raise ValueError(f"{path}: metadata.pillar must name a board pillar")
     modes = metadata.get("modes")
     if not isinstance(modes, list) or not modes or any(not isinstance(mode, str) or mode not in {"vanilla", "internet", "skills"} for mode in modes):

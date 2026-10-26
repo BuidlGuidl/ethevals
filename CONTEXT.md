@@ -157,7 +157,7 @@ The oracle and nop runs for a fork task. A maintainer starts it by hand on a pul
 ## How tasks are grouped
 
 **Pillar**:
-The area of Ethereum a task covers: Concepts, Transactions, Building, or Security.
+The kind of work a task asks for: Concepts, Build, or Act. Concepts tasks are quizzes. Build tasks are builds, where the tests run what the agent wrote. In Act tasks the agent acts on a chain, by sending transactions or by writing a script that sends them, and the tests check what changed on the chain.
 _Avoid_: category, stage, track
 
 ## What the system publishes

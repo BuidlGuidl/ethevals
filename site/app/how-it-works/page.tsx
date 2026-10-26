@@ -4,10 +4,9 @@ import { PipelineDiagram, RunDiagram } from "../../components/diagrams";
 
 export const metadata = { title: "How it works · ETH Evals" };
 const scope = {
-  concepts: "How the protocol works: finality, gas and fees, L2s, ERCs and EIPs, wallets and keys.",
-  transactions: "Acting on chain: encoding calldata and signatures, reading live state, sending transfers and swaps.",
-  building: "Code that has to work: contracts from a spec, test suites, repairing a project, wallet flows in a frontend.",
-  security: "Vulnerabilities: spotting known bug patterns, triaging an audit, fixing a bug before it ships.",
+  concepts: "Quizzes on Ethereum concepts. A bare model or an agent answers, and the verifier checks the reply.",
+  building: "The agent writes contracts, pages, or apps, and the tests run what it wrote.",
+  act: "The agent acts on a chain. It sends transactions, or writes a script that sends them, and the tests check what changed.",
 };
 const evalFiles = [
   ["├──", "task.toml", "settings, description, and modes"],
@@ -28,8 +27,8 @@ export default function Page() {
       <p>A new model is one line of config, so it can be tested the day it launches. A new or changed task runs on every agent and model as soon as it merges.</p></div>
       <figure className="diagram-figure"><PipelineDiagram /></figure>
     </section>
-    <section id="hw-pillars" className="how-section"><div className="how-head"><p className="eyebrow">What we measure</p><h2>Four pillars</h2>
-      <p>Each task tests one of these four areas of Ethereum work.</p></div>
+    <section id="hw-pillars" className="how-section"><div className="how-head"><p className="eyebrow">What we measure</p><h2>Three pillars</h2>
+      <p>Each task belongs to one of three pillars: Concepts, Build, and Act.</p></div>
       <ol className="pillars-grid">{pillars.map((pillar) => <li key={pillar}><h3>{names[pillar]}</h3><p>{scope[pillar]}</p></li>)}</ol>
       <div className="how-modes"><h3>Three ways to run a task</h3>
         <div className="modes-grid"><article className="model-only"><p className="eyebrow">Model only</p><h3>What does the model know?</h3><p>The bare model answers in one API call, with no tools or web.</p></article>
@@ -52,7 +51,7 @@ export default function Page() {
       <p className="how-intro">Chain setup is a Forge script and the tests are Forge tests, so an Ethereum developer writes them the way they already work.</p>
     </section>
     <section id="hw-run" className="how-section"><div className="how-head"><p className="eyebrow">Inside one trial</p><h2>One task, start to finish</h2>
-      <p>Take one Transactions task: &quot;send tokens to the recipient.&quot; Here is what happens.</p></div>
+      <p>Take one Act task: &quot;send tokens to the recipient.&quot; Here is what happens.</p></div>
       <figure className="diagram-figure"><RunDiagram /></figure>
       <div className="rules"><h3>Rules every trial follows</h3><ul>
         <li><b>Tests arrive after the agent stops.</b> Harbor starts a separate verifier, or checks a live sidecar in the agent&apos;s container.</li>

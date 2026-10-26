@@ -108,11 +108,11 @@ test("the knowledge table and its panel data include only declared vanilla tasks
 });
 
 test("a pillar with no declared tasks for a mode differs from an unsupported task", () => {
-  const board = buildBoard([evaluation, { ...evaluation, id: "security/check", pillar: "security", modes: ["vanilla"] }], [row()]);
-  assert.deepEqual(board.tables.internet.pillars.transactions.cells[agentKey(agent)],
+  const board = buildBoard([evaluation, { ...evaluation, id: "building/check", pillar: "building", modes: ["vanilla"] }], [row()]);
+  assert.deepEqual(board.tables.internet.pillars.act.cells[agentKey(agent)],
     { state: "empty", score: null, passed: 0, total: 0, errors: 0, scoredEvals: 0 });
-  assert.equal(board.tables.internet.pillars.security.cells[agentKey(agent)].state, "empty");
-  assert.equal(board.tables.internet.pillars.security.evals[0].cells[agentKey(agent)].state, "na");
+  assert.equal(board.tables.internet.pillars.building.cells[agentKey(agent)].state, "empty");
+  assert.equal(board.tables.internet.pillars.building.evals[0].cells[agentKey(agent)].state, "na");
   assert.equal(board.tables.internet.pillars.concepts.cells[agentKey(agent)].score, 1);
 });
 
@@ -120,10 +120,10 @@ test("the table and panel both label an empty pillar as No tasks yet", () => {
   const data = buildBoard([evaluation], [row()]);
   const table = renderToStaticMarkup(createElement(Board, { data }));
   const panel = renderToStaticMarkup(createElement(Detail, {
-    data, selection: { pillar: "transactions", agent, mode: "internet" },
+    data, selection: { pillar: "act", agent, mode: "internet" },
     onSelect: () => {},
   }));
-  assert.ok(table.includes('aria-label="Transactions, agent-a / model-a. No tasks yet. Open details."'));
+  assert.ok(table.includes('aria-label="Act, agent-a / model-a. No tasks yet. Open details."'));
   assert.ok(panel.includes('<p class="muted">No tasks yet</p>'));
   assert.ok(panel.includes("No tasks yet for this mode."));
 });
@@ -175,7 +175,7 @@ test("list rows have one task button and Overall groups them under pillar headin
   const data = buildBoard([evaluation, { ...evaluation, id: "building/token", pillar: "building" }], [row()]);
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, onSelect: () => {} }));
   assert.equal((panel.match(/<button/g) ?? []).length, 2);
-  assert.ok(panel.includes('<h3>Concepts</h3>') && panel.includes('<h3>Building</h3>'));
+  assert.ok(panel.includes('<h3>Concepts</h3>') && panel.includes('<h3>Build</h3>'));
   assert.ok(panel.includes('class="run-dot passed"') && panel.includes('class="heat-chip"'));
   const board = renderToStaticMarkup(createElement(Board, { data }));
   assert.equal((board.match(/aria-label="Which results"/g) ?? []).length, 1);
@@ -283,10 +283,14 @@ test("details link directly to the trial trajectory and show its payment source"
 });
 
 test("configurations show one agent logo beside the name, or one provider logo for model-only rows", () => {
-  for (const [model, agent, provider, icon] of [
+  for (const [model, agent, provider, icon, label] of [
     ["anthropic/claude-opus-5-5", "claude-code", "claude", "claude-code"],
     ["openai/gpt-5.5", "codex", "openai", "codex"],
-    ["openrouter/moonshotai/kimi-k3", "opencode", "openrouter", "opencode"],
+    ["openrouter/moonshotai/kimi-k3", "opencode", "openrouter", "opencode", "Kimi K3"],
+    ["openrouter/z-ai/glm-5.3", "opencode", "openrouter", "opencode", "GLM 5.3"],
+    ["openrouter/deepseek/deepseek-v4.1-flash-1017", "opencode", "openrouter", "opencode", "DeepSeek V4.1 Flash"],
+    ["openrouter/x-ai/grok-4.7", "opencode", "openrouter", "opencode", "Grok 4.7"],
+    ["openrouter/google/gemini-4-argon", "opencode", "openrouter", "opencode", "Gemini 4 Argon"],
   ]) {
     const html = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent, effort: null } }));
     assert.ok(html.match(/<b>([\s\S]*?)<\/b>/)?.[1].includes(`src="/logos/${icon}.svg"`));
@@ -294,6 +298,10 @@ test("configurations show one agent logo beside the name, or one provider logo f
     const bare = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent: null, effort: null } }));
     assert.ok(bare.match(/<b>([\s\S]*?)<\/b>/)?.[1].includes(`src="/logos/${provider}.svg"`));
     assert.equal((bare.match(/<img /g) ?? []).length, 1);
+    if (label) {
+      assert.ok(html.includes(` ${label}</b>`));
+      assert.ok(bare.includes(label));
+    }
   }
 });
 

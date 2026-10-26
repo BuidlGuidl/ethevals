@@ -35,22 +35,12 @@
       "instruction": "How many wei equal one ether?"
     },
     {
-      "description": "Check whether a bare model understands token allowances.",
-      "modes": [
-        "vanilla"
-      ],
-      "id": "security/approval-scope",
-      "pillar": "security",
-      "hash": "6983b2e1430b3e7eb40ce2d0e4233c1121c4902631c8764b212c9b525dbd931c",
-      "instruction": "Does an ERC-20 approval give the spender permission to transfer native ether? Reply yes or no."
-    },
-    {
       "description": "Check whether an agent sends the requested value to the right recipient.",
       "modes": [
         "internet"
       ],
-      "id": "transactions/send-ether",
-      "pillar": "transactions",
+      "id": "act/send-ether",
+      "pillar": "act",
       "hash": "3be99d6fc5585c78ed82069ba881956f24d9000f1410ffaf832a864f8d2a2382",
       "instruction": "Send 0.01 ether to the recipient in the environment on the local chain. Record the transaction hash."
     }

@@ -162,7 +162,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
       <p className="hero-plate"><span><b>{data.counts.evals}</b> tasks</span><span><b>{data.counts.agents}</b> agents</span><span><b>{data.counts.runs.toLocaleString("en")}</b> trials</span></p></div>
       <p className="hero-tag">The Open Benchmark for AI on Ethereum</p>
       <p className="hero-desc">We test AI agents, and the models behind them, on real Ethereum work. Every task, trial and trajectory is public, allowing anyone to run the same tasks.</p>
-      <p className="hero-desc">We evaluate <Link href="/how-it-works/#hw-pillars">four pillars</Link>: <b>Concepts</b>, <b>Transactions</b>, <b>Building</b> and <b>Security</b>.</p>
+      <p className="hero-desc">We evaluate <Link href="/how-it-works/#hw-pillars">three pillars</Link>: <b>Concepts</b>, <b>Build</b>, and <b>Act</b>.</p>
     </header>
     <section id="leaderboard" className="results-section"><div className="section-head"><div><h2>Results</h2><p>The same work, with and without Ethereum skills.</p></div>
       <Link className="text-link" href={`/compare/?mode=${mode}`}>Compare configurations →</Link></div>
@@ -182,7 +182,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
                   onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} />}</td>)}
             </tr>)}</tbody></table></div>{mode === "skills" && <div className="table-note">+pp is the change over Internet.</div>}</div> :
         <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current tasks. Browse the task catalog below.</p></div>}
-      <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on the four pillars of Ethereum work. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them.</div>
+      <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on three pillars: Concepts, Build, and Act. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them.</div>
     </section>
     <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task · {modeNames[evalsMode]}</h2><p>A detailed view of the Leaderboard. See how many trials each agent passed on every task, grouped by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />

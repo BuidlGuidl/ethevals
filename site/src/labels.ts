@@ -1,6 +1,6 @@
 import type { Agent, Mode, Pillar } from "./board";
 
-export const names: Record<Pillar, string> = { concepts: "Concepts", transactions: "Transactions", building: "Building", security: "Security" };
+export const names: Record<Pillar, string> = { concepts: "Concepts", building: "Build", act: "Act" };
 export const modelOnlyNote = "Bare model, one API call, no tools or web.";
 export const modeNames: Record<Mode, string> = { internet: "Internet", skills: "Internet + Skills", vanilla: "Model only" };
 
@@ -14,6 +14,9 @@ const models = new Map([
   ["openai/gpt-6.1-sol", "GPT-6.1 Sol"],
   ["openrouter/moonshotai/kimi-k3", "Kimi K3"],
   ["openrouter/z-ai/glm-5.3", "GLM 5.3"],
+  ["openrouter/deepseek/deepseek-v4.1-flash-1017", "DeepSeek V4.1 Flash"],
+  ["openrouter/x-ai/grok-4.7", "Grok 4.7"],
+  ["openrouter/google/gemini-4-argon", "Gemini 4 Argon"],
 ]);
 const providers = new Map([
   ["anthropic", "claude"], ["openai", "openai"], ["openrouter", "openrouter"],

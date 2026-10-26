@@ -197,7 +197,7 @@
   .how-section { @apply grid gap-6; }
   .how-head { @apply grid gap-2; }
   .how-head > p:not(.eyebrow), .how-intro { @apply max-w-[850px] text-muted; }
-  .pillars-grid { @apply grid grid-cols-4 border border-border bg-sheet; }
+  .pillars-grid { @apply grid grid-cols-3 border border-border bg-sheet; }
   .pillars-grid li { @apply grid gap-3 border-r border-border p-5; grid-template-rows: auto 1fr; }
   .pillars-grid li:last-child { border-right: 0; }
   .pillars-grid p { @apply text-muted; }
@@ -271,7 +271,7 @@
 @keyframes cursor-blink { 50% { opacity: 0; } }
 @keyframes diagram-pulse { 0% { stroke-dashoffset: 100; opacity: 0; } 10%, 85% { opacity: 1; } 100% { stroke-dashoffset: 4; opacity: 0; } }
 @keyframes sheet-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
-@media (max-width: 1100px) { .navtag { display: none; } .pillars-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .pillars-grid li:nth-child(2) { border-right: 0; } .pillars-grid li:nth-child(n+3) { border-top: 1px solid var(--color-border); } }
+@media (max-width: 1100px) { .navtag { display: none; } }
 @media (max-width: 760px) {
   .sheet { padding-inline: 16px; }
   .runs-table { min-width: 0; }

@@ -1,6 +1,8 @@
 # ETH Evals board
 
 The site builds a static board from Harbor task declarations and results rows.
+It groups tasks into three pillars: Concepts, Build, and Act.
+Concepts holds quizzes, Build holds builds, and Act holds tasks where the agent acts on a chain.
 The browser receives public instructions and check records, without verifier files or targets.
 
 ## Build

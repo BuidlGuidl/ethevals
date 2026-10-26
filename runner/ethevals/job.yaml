@@ -25,6 +25,15 @@ models:
   glm-5.3:
     name: openrouter/z-ai/glm-5.3
     effort: high
+  deepseek-v4.1-flash-1017:
+    name: openrouter/deepseek/deepseek-v4.1-flash-1017
+    effort: high
+  grok-4.7:
+    name: openrouter/x-ai/grok-4.7
+    effort: high
+  gemini-4-argon:
+    name: openrouter/google/gemini-4-argon
+    effort: high
 agents:
   vanilla-opus-5.5:
     name: ethevals.vanilla:VanillaAgent
@@ -57,6 +66,33 @@ agents:
     name: ethevals.vanilla:VanillaAgent
     version: 0.1.0
     model: glm-5.3
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+  vanilla-deepseek-v4.1-flash-1017:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: deepseek-v4.1-flash-1017
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+  vanilla-grok-4.7:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: grok-4.7
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+  vanilla-gemini-4-argon:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: gemini-4-argon
     modes: [vanilla]
     paid_by: api_key
     cost_limit_usd: 20.0
@@ -104,6 +140,45 @@ agents:
     name: opencode
     version: 1.18.33
     model: glm-5.3
+    modes: [internet, skills]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+      EXA_API_KEY: '${EXA_API_KEY:-}'
+      # OpenCode 1.x caps each model call at 32k tokens (ADR 0015).
+      # Harbor 0.24.0 redacts TOKEN values; the plus sign keeps that off JSON numbers.
+      OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'
+  opencode-deepseek-v4.1-flash-1017:
+    name: opencode
+    version: 1.18.33
+    model: deepseek-v4.1-flash-1017
+    modes: [internet, skills]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+      EXA_API_KEY: '${EXA_API_KEY:-}'
+      # OpenCode 1.x caps each model call at 32k tokens (ADR 0015).
+      # Harbor 0.24.0 redacts TOKEN values; the plus sign keeps that off JSON numbers.
+      OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'
+  opencode-grok-4.7:
+    name: opencode
+    version: 1.18.33
+    model: grok-4.7
+    modes: [internet, skills]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+      EXA_API_KEY: '${EXA_API_KEY:-}'
+      # OpenCode 1.x caps each model call at 32k tokens (ADR 0015).
+      # Harbor 0.24.0 redacts TOKEN values; the plus sign keeps that off JSON numbers.
+      OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'
+  opencode-gemini-4-argon:
+    name: opencode
+    version: 1.18.33
+    model: gemini-4-argon
     modes: [internet, skills]
     paid_by: api_key
     cost_limit_usd: 20.0
