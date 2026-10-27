@@ -15,7 +15,7 @@ authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "eip3009", "erc4626", "signatures", "fork"]
 
 [metadata]
-pillar = "building"
+pillar = "build"
 modes = ["internet", "skills"]
 
 [verifier]

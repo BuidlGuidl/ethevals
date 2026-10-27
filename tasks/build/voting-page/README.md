@@ -132,7 +132,7 @@ A page that reads them shows holders what the governor will do. A page that gues
 Run these free commands from the repository root:
 
 ```sh
-uv run ethevals lint --tasks tasks/building/voting-page
-uv run ethevals free-check --tasks tasks/building/voting-page \
+uv run ethevals lint --tasks tasks/build/voting-page
+uv run ethevals free-check --tasks tasks/build/voting-page \
   --output /tmp/voting-page-free-check
 ```

@@ -134,8 +134,8 @@ Both layers matter when limiting future spending.
 Run the free check with `MAINNET_RPC_URL` set and all model key variables unset:
 
 ```sh
-uv run ethevals lint --tasks tasks/building/swap-page
-uv run ethevals free-check --tasks tasks/building/swap-page \
+uv run ethevals lint --tasks tasks/build/swap-page
+uv run ethevals free-check --tasks tasks/build/swap-page \
   --output /tmp/swap-page-free-check
 ```
 
@@ -143,8 +143,8 @@ Install `environment/verifier/package.json` into a private local directory for v
 
 ```sh
 VERIFIER_DEPS=/path/to/packages \
-  node --test tasks/building/swap-page/tests/*.test.mjs
-python3 tasks/building/swap-page/tests/test_source_snapshot.py
+  node --test tasks/build/swap-page/tests/*.test.mjs
+python3 tasks/build/swap-page/tests/test_source_snapshot.py
 ```
 
 Set `SWAP_FIXTURE_OUTPUT` to replay saved page evidence through the current check functions.

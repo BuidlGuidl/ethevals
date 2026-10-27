@@ -247,18 +247,18 @@ With `MAINNET_RPC_URL` set, run the free check from the repository root:
 
 ```sh
 uv run ethevals lint \
-  --tasks tasks/building/aave-savings-page
+  --tasks tasks/build/aave-savings-page
 uv run ethevals free-check \
-  --tasks tasks/building/aave-savings-page \
+  --tasks tasks/build/aave-savings-page \
   --output /tmp/aave-savings-free-check
 ```
 
 To run either free agent directly through Harbor:
 
 ```sh
-uv run harbor run -p tasks/building/aave-savings-page \
+uv run harbor run -p tasks/build/aave-savings-page \
   -a oracle -e docker --n-concurrent 1
-uv run harbor run -p tasks/building/aave-savings-page \
+uv run harbor run -p tasks/build/aave-savings-page \
   -a nop -e docker --n-concurrent 1
 ```
 
@@ -266,7 +266,7 @@ Verifier self-tests run outside scored trials.
 Install the pinned verifier packages in a directory you own, then run these commands from the repository root:
 
 ```sh
-T=tasks/building/aave-savings-page/tests
+T=tasks/build/aave-savings-page/tests
 VERIFIER_DEPS=/path/to/verifier-packages \
   node --test $T/*.test.mjs
 python3 $T/test_source_snapshot.py
