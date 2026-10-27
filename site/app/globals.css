@@ -74,7 +74,7 @@
   .mode-toggle > div { @apply min-w-0 max-w-full flex-wrap; }
   .mode-separator { @apply h-6 w-px bg-border-strong; }
   .mode-note { @apply border-l-2 border-accent bg-tint px-4 py-2 text-xs text-muted; }
-  .badge { @apply inline-block rounded-full border border-border-strong bg-tint px-2 py-0.5 text-[10px] text-muted; }
+  .badge { @apply inline-block border border-border-strong bg-tint px-2 py-0.5 text-[10px] text-muted; }
   .button { @apply inline-flex items-center justify-center gap-2 border border-border-strong px-3 py-2 text-xs text-ink; }
   .button:hover { @apply bg-accent text-sheet; text-decoration: none; }
   .text-link { @apply text-accent text-xs; }
