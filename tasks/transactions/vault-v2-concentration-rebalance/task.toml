@@ -1,0 +1,19 @@
+schema_version = "1.3"
+
+[task]
+name = "buidlguidl/vault-v2-concentration-rebalance"
+description = "Rebalance a Morpho V2 vault within a concentration limit while preserving ordinary withdrawals."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "morpho", "vault", "fork"]
+
+[metadata]
+pillar = "transactions"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 4096
