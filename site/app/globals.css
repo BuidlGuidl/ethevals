@@ -33,7 +33,7 @@
   h2 { @apply font-terminal text-[40px] leading-none; letter-spacing: .01em; }
   h2::before { content: "## "; color: var(--color-accent); }
   h3 { @apply font-semibold text-[15px] leading-snug; }
-  pre { @apply border border-border bg-[#07090e] p-4 text-[12px] text-[#cfd3e3]; white-space: pre-wrap; overflow-wrap: anywhere; }
+  pre { @apply border border-border-strong bg-tint px-6 py-5 text-[15px] leading-[1.7] text-ink; white-space: pre-wrap; overflow-wrap: anywhere; }
   code { @apply text-[12px]; overflow-wrap: anywhere; }
   section[id] { scroll-margin-top: 90px; }
 }
@@ -282,6 +282,7 @@
   .run-stats > div { padding-inline: 8px; }
   .run-stats dd { font-size: 14px; }
   .page { padding: 28px 18px; }
+  pre { padding: 16px; }
   .topnav { gap: 12px; padding-inline: 18px; }
   .brand { width: 88px; }
   .navlinks { gap: 15px; font-size: 11px; }
