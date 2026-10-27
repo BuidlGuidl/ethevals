@@ -148,6 +148,7 @@
   .pillar-act { --pillar: var(--color-act); }
   .task-totals button[class*="pillar-"]:not([aria-pressed="true"]) .eyebrow { color: var(--pillar); }
   .task-totals button[class*="pillar-"][aria-pressed="true"] { background: var(--pillar); border-color: var(--pillar); }
+  .task-areas.pillar-build button[aria-pressed="true"] { background: var(--pillar); border-color: var(--pillar); }
   .task-badges .badge[class*="pillar-"] { color: var(--pillar); border-color: color-mix(in srgb, var(--pillar) 45%, transparent); }
   .task-areas { @apply flex flex-wrap gap-2; }
   .task-areas button { @apply inline-flex min-h-9 items-center gap-2 text-xs transition-colors; }

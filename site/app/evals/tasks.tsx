@@ -33,7 +33,7 @@ export function TaskList({ tasks, query }: { tasks: Eval[]; query: URLSearchPara
           <span className="task-number">{inArea.filter((task) => task.pillar === value).length}</span>
         </button>)}
       </div>
-      {pillar === "build" && <div className="task-areas" role="group" aria-label="Filter Build tasks by layer">
+      {pillar === "build" && <div className="task-areas pillar-build" role="group" aria-label="Filter Build tasks by layer">
         {layers.map((value) => {
           const count = inArea.filter((task) => task.pillar === "build" && task.layer === value).length;
           return <button type="button" className="badge" key={value} aria-pressed={layer === value} disabled={count === 0}
