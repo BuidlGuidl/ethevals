@@ -7,7 +7,7 @@ The task checks pending deposits, signatures submitted before the keeper call, a
 
 > Our depositors hold USDC and haven't approved anything. Let them sign once from our
 > page, and our keeper deposits it into our vault for them, with the shares going to the depositor.
-> People may sign a few now and we fill them later, and some depositors are Safes. Put the contract in
+> People may sign a few now and we fill them later, and some depositors are Safes. Put the KeeperDeposits contract in
 > src/KeeperDeposits.sol; we'll deploy it with forge create, nothing to pass in, and it's for mainnet.
 > In script/deposits.ts, export prepareDeposit({ contract, depositor, amount }), returning the typed data
 > the depositor signs and a keeperTx(signature) that gives our keeper's { to, data }.
@@ -39,13 +39,15 @@ It runs each check on a private fork with fresh depositors and a separate funded
 | `two_pending` | Two deposits prepared and signed before either fill both land in signing order | "people may sign a few now and we fill them later" | nonces |
 | `safe_depositor` | Two owners of a real 2-of-3 Safe sign its SafeMessage digest and the keeper deposits the Safe's USDC | "some depositors are Safes" | signatures |
 | `no_replay` | Repeating a filled keeper transaction moves no USDC or shares | "let them sign once" | replay |
+| `forged_deposit` | Another account's signature for an amount the depositor never signed moves nothing | "let them sign once" | forgery |
 
 How the checks judge:
 
 - Every positive deposit checks the exact USDC debit, the depositor's shares, and zero USDC and shares left in the contract.
 - The keeper supplies no USDC and receives no shares.
-- A reverted keeper transaction fails a positive check and counts as no movement on the replay check.
-- The replay check counts only after `deposit_lands` passes.
+- A reverted keeper transaction fails a positive check and counts as no movement on the replay and forged-deposit checks.
+- The replay and forged-deposit checks count only after `deposit_lands` passes.
+- The forged-deposit check fills one deposit. Then another account signs the depositor's typed data for a different amount and sends that keeper transaction itself. A helper that refuses the signature passes.
 - The reward is 1 only when every check passes.
 
 ## Why it matters

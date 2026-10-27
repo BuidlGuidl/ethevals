@@ -1,6 +1,6 @@
 Our depositors hold USDC and haven't approved anything. Let them sign once from our
 page, and our keeper deposits it into our vault for them, with the shares going to the depositor.
-People may sign a few now and we fill them later, and some depositors are Safes. Put the contract in
+People may sign a few now and we fill them later, and some depositors are Safes. Put the KeeperDeposits contract in
 src/KeeperDeposits.sol; we'll deploy it with forge create, nothing to pass in, and it's for mainnet.
 In script/deposits.ts, export prepareDeposit({ contract, depositor, amount }), returning the typed data
 the depositor signs and a keeperTx(signature) that gives our keeper's { to, data }.

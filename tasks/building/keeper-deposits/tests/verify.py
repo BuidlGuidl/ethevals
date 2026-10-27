@@ -15,7 +15,7 @@ import urllib.request
 
 CHECKS = [check["name"] for check in (
     dict(name="compile"), dict(name="deposit_lands"), dict(name="signature_used_first"),
-    dict(name="two_pending"), dict(name="safe_depositor"), dict(name="no_replay"),
+    dict(name="two_pending"), dict(name="safe_depositor"), dict(name="no_replay"), dict(name="forged_deposit"),
 )]
 
 
@@ -50,7 +50,7 @@ def main():
             for key in ("optimizer", "optimizer_runs", "via_ir", "evm_version") if key in settings
         )
         (root / "foundry.toml").write_text(
-            '[profile.default]\nsrc = "workspace/src"\nlibs = []\n'
+            '[profile.default]\nsrc = "workspace/src"\nout = "workspace/out"\nlibs = []\n'
             'test = "absent-tests"\nscript = "absent-scripts"\n'
             'solc = "0.8.30"\nffi = false\nauto_detect_remappings = false\n'
             + "remappings = " + json.dumps(remappings) + "\n"
@@ -60,7 +60,7 @@ def main():
             ["forge", "build", "--root", str(root)], capture_output=True, text=True, timeout=180,
         )
         (args.output / "build.log").write_text(build.stdout + build.stderr)
-        artifact_path = root / "out/KeeperDeposits.sol/KeeperDeposits.json"
+        artifact_path = project / "out/KeeperDeposits.sol/KeeperDeposits.json"
         helper_path = project / "script/deposits.ts"
         if build.returncode or not artifact_path.exists() or not helper_path.exists():
             (args.output / "checks.json").write_text(json.dumps(records, indent=2) + "\n")
@@ -72,7 +72,8 @@ def main():
             port = probe.getsockname()[1]
         url = f"http://127.0.0.1:{port}"
         fork = subprocess.Popen(
-            ["anvil", "--fork-url", context["rpcUrl"], "--chain-id", "1", "--port", str(port), "--silent"],
+            ["anvil", "--fork-url", context["rpcUrl"], "--chain-id", "1", "--host", "127.0.0.1", "--port", str(port),
+             "--accounts", "0", "--silent"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         try:

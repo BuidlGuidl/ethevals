@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     user: agent
+    command: [sleep, infinity]
     environment:
       RPC_URL: http://chain:8545
     volumes:

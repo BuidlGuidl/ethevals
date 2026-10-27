@@ -46,14 +46,23 @@ const safeAbi = parseAbi([
 const factoryAbi = parseAbi([
   'function createProxyWithNonce(address singleton,bytes initializer,uint256 saltNonce) returns (address proxy)',
 ]);
-const names = ['compile', 'deposit_lands', 'signature_used_first', 'two_pending', 'safe_depositor', 'no_replay'];
+const names = ['compile', 'deposit_lands', 'signature_used_first', 'two_pending', 'safe_depositor', 'no_replay', 'forged_deposit'];
 const records = Object.fromEntries(names.map(name => [name, { passed: false, reason: 'The check has not completed.' }]));
 async function save() {
   await writeFile(path.join(output, 'checks.json'), JSON.stringify(records, null, 2) + '\n');
 }
+async function timed(operation) {
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Helper call exceeded 15 seconds')), 15_000); }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
 let prepareDeposit;
 try {
-  ({ prepareDeposit } = await import(pathToFileURL(path.join(workspace, 'script/deposits.ts')).href));
+  ({ prepareDeposit } = await timed(() => import(pathToFileURL(path.join(workspace, 'script/deposits.ts')).href)));
   assert.equal(typeof prepareDeposit, 'function', 'prepareDeposit must be a function');
 } catch (error) {
   for (const name of names) records[name] = { passed: false, reason: `Helper import failed: ${error.message}` };
@@ -150,11 +159,15 @@ async function fixture(useSafe = false) {
   }
   return { depositor, keeper, attacker, contract: deployment.contractAddress };
 }
-async function signed(f, amount) {
-  const prepared = await prepareDeposit({ contract: f.contract, depositor: f.depositor.address, amount });
+async function prepare(f, amount) {
+  const prepared = await timed(() => prepareDeposit({ contract: f.contract, depositor: f.depositor.address, amount }));
   assert.equal(typeof prepared?.keeperTx, 'function', 'prepareDeposit must return keeperTx');
+  return prepared;
+}
+async function signed(f, amount) {
+  const prepared = await prepare(f, amount);
   const signature = await f.depositor.signTypedData(prepared.typedData);
-  const tx = await prepared.keeperTx(signature);
+  const tx = await timed(() => prepared.keeperTx(signature));
   assert.equal(typeof tx?.to, 'string', 'keeperTx(signature) must give a to address');
   assert.match(tx?.data, /^0x[0-9a-fA-F]+$/);
   return { tx, signature, typedData: prepared.typedData };
@@ -263,6 +276,24 @@ const cases = {
     const before = await state(f);
     await trySend(f.keeper, tx);
     assert.deepEqual(await state(f), before, 'A replay must move no USDC or shares');
+  },
+  async forged_deposit() {
+    assert.equal(records.deposit_lands.passed, true, 'Rejecting a forged deposit counts only after deposit_lands passes');
+    const f = await fixture();
+    const amount = 1_501_000_000n;
+    await lands(f, amount, (await signed(f, amount)).tx);
+    // Another account signs the depositor's typed data for an amount the depositor never signed.
+    const prepared = await prepare(f, 5_002_000_000n);
+    const signature = await f.attacker.signTypedData(prepared.typedData);
+    const before = await state(f);
+    let tx;
+    try {
+      tx = await timed(() => prepared.keeperTx(signature));
+    } catch {
+      return 'The helper refused the forged signature.';
+    }
+    await trySend(f.attacker, tx);
+    assert.deepEqual(await state(f), before, 'A deposit the depositor never signed must move no USDC or shares');
   },
 };
 for (const [name, body] of Object.entries(cases)) {
