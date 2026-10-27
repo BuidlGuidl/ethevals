@@ -23,12 +23,13 @@ The second is the tempting wrong answer.
 
 ## The checks
 
-The check reads the duration at the start of the reply.
-It needs about a week, and a reply that opens with hours fails even if a later sentence corrects it.
+A judge reads the question, the right answer, and the final reply, and nothing else.
+It passes the reply when it gives about seven days, in any unit or wording, and fails a reply that gives another duration as its answer or hedges.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `l1_clock_seven_days` | Starts with about seven days or an equivalent duration | governance clock |
+| `answered` | The final reply isn't empty | reply |
+| `l1_clock_seven_days` | The judge finds about seven days, with no other duration given as the answer | governance clock |
 
 The quiz runs in vanilla, internet, and skills modes.
 
@@ -41,8 +42,9 @@ Arbitrum's docs on [block numbers and time](https://docs.arbitrum.io/build-decen
 
 ## Notes
 
-The check accepts seven days, one week, 168 hours, or 604,800 seconds at the start of the reply.
-It also accepts words such as "about" and the `~` or `≈` symbols.
-It refuses a right duration that comes after another answer, and it does not check the explanation.
+The judge passes a duration a little over seven days or a narrow range around it, and a reply may name 3.5 hours to set it apart.
+It fails a reply that gives 3.5 hours or another duration as the answer, even next to seven days.
+It's the board's judge, Claude Opus 5.5 at high effort, and it never sees the model's reasoning ([ADR 0016](../../../docs/adr/0016-quizzes-with-explained-answers-use-a-judge.md)).
+`tests/hand-cases.json` holds right and wrong replies with their correct marks, and the judge must give each one its mark.
 
 The L1 value is approximate and catches up with Ethereum every 13 to 15 seconds, so seven days is an estimate, not an exact closing time.

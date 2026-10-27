@@ -1,0 +1,100 @@
+{
+  "note": "Replies the judge must mark correctly. 'want' is the correct mark: right passes the quiz, wrong fails it.",
+  "cases": [
+    {
+      "want": "right",
+      "label": "the oracle's reply",
+      "reply": "About 7 days. Arbitrum One's block.number approximates Ethereum L1 blocks, about 12 seconds each."
+    },
+    {
+      "want": "right",
+      "label": "a week",
+      "reply": "Roughly a week, because block.number there is the Ethereum block number."
+    },
+    {
+      "want": "right",
+      "label": "in seconds",
+      "reply": "604,800 seconds. That's 50,400 blocks of 12 seconds, since a contract on Arbitrum sees L1 block numbers."
+    },
+    {
+      "want": "right",
+      "label": "in hours",
+      "reply": "168 hours. Arbitrum's block.number follows Ethereum's blocks, not its own."
+    },
+    {
+      "want": "right",
+      "label": "just over 7 days",
+      "reply": "Just over 7 days, since block.number follows L1 and some L1 slots are missed."
+    },
+    {
+      "want": "right",
+      "label": "a range",
+      "reply": "7-8 days. Arbitrum's block.number reports Ethereum's block number, about 12 s apart."
+    },
+    {
+      "want": "right",
+      "label": "opens with \"The\"",
+      "reply": "The vote stays open for about 7 days, because block.number on Arbitrum tracks L1 blocks."
+    },
+    {
+      "want": "right",
+      "label": "sets 3.5 hours apart",
+      "reply": "About 7 days, not the 3.5 hours you'd get from Arbitrum's quarter-second blocks, because block.number returns the L1 block number."
+    },
+    {
+      "want": "right",
+      "label": "names 3.5 hours in brackets",
+      "reply": "7 days (or about 3.5 hours if it counted L2 blocks)."
+    },
+    {
+      "want": "right",
+      "label": "a real reply (GPT)",
+      "reply": "**About 7 days.** On Arbitrum One, `block.number` tracks Ethereum L1 blocks rather than L2 blocks, so 50,400 × roughly 12 seconds is approximately one week."
+    },
+    {
+      "want": "right",
+      "label": "a real reply (Opus)",
+      "reply": "**About 7 days.** On Arbitrum One, `block.number` returns an approximation of the Ethereum L1 block number rather than the L2 block number, so 50,400 blocks × ~12 seconds per L1 block ≈ 604,800 seconds, or one week (the L2 block count would have given only a few hours)."
+    },
+    {
+      "want": "right",
+      "label": "a real reply (Kimi)",
+      "reply": "**About 7 days.** On Arbitrum One, `block.number` tracks the Ethereum L1 block number at roughly 12 seconds per block, so 50,400 blocks equals about 604,800 seconds."
+    },
+    {
+      "want": "wrong",
+      "label": "a real reply (3.5 hours)",
+      "reply": "About 3.5 hours. Arbitrum One’s `block.number` advances by roughly one L2 block every 0.25 seconds, so 50,400 blocks is about 12,600 seconds."
+    },
+    {
+      "want": "wrong",
+      "label": "3.5 hours",
+      "reply": "About 3.5 hours, since Arbitrum makes a block every 0.25 seconds."
+    },
+    {
+      "want": "wrong",
+      "label": "another duration",
+      "reply": "About 14 hours, at roughly one Arbitrum block per second."
+    },
+    {
+      "want": "wrong",
+      "label": "hedges",
+      "reply": "Either about 7 days or about 3.5 hours, depending on which block number the Governor reads."
+    },
+    {
+      "want": "wrong",
+      "label": "7 days on L1, 3.5 hours on Arbitrum",
+      "reply": "About 7 days on Ethereum mainnet, but on Arbitrum One it's about 3.5 hours."
+    },
+    {
+      "want": "wrong",
+      "label": "contradicts itself",
+      "reply": "About 7 days. Arbitrum blocks come every 0.25 seconds, so 50,400 of them last about 3.5 hours."
+    },
+    {
+      "want": "wrong",
+      "label": "no duration",
+      "reply": "It depends on network activity, so there's no fixed duration."
+    }
+  ]
+}
