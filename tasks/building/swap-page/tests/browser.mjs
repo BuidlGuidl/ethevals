@@ -7,6 +7,7 @@ import { createMarket } from './market.mjs';
 import { belief, confirmedBelief, gradeJourney, scoredJourneys } from './checks.mjs';
 import { walletIdle } from './rpc-policy.mjs';
 import { rpc } from './rpc.mjs';
+import { journeys, warmQuotes } from './warm.mjs';
 
 export const CHECKS = ['swaps_assets', 'cut_only_on_swap', 'honors_minimum', 'exact_approvals', 'finite_deadline', 'native_eth', 'routers_empty', 'shows_received'];
 const workspace = path.resolve(process.argv[2] || '/workspace');
@@ -30,7 +31,7 @@ try {
   const context = JSON.parse(await fs.readFile(sourceContext, 'utf8'));
   const treasury = context.treasury;
   if (!/^0x[0-9a-fA-F]{40}$/.test(treasury)) throw new Error('Trusted chain context has no treasury');
-  harness = await createHarness({ workspace, output, sourceContext, funding });
+  harness = await createHarness({ workspace, output, sourceContext, funding, warm: warmQuotes });
   if (await rpc(harness.mainRpc, 'eth_getCode', [treasury, 'latest']) !== '0x') throw new Error('Treasury fixture has code');
   const reader = chainReader(harness.mainRpc, harness.account.address, treasury);
   const market = createMarket({ url: harness.mainRpc, output });
@@ -151,17 +152,17 @@ try {
     console.log(stringify({ event: 'journey', name, success: result.success, flags: result.flags, error: result.error }));
     return { result, transactions };
   }
-  await runSwap({ name: 'usdc-eth', input: 'USDC', output: 'ETH', amount: '500' });
-  await runSwap({ name: 'eth-usdc', input: 'ETH', output: 'USDC', amount: '1' });
+  await runSwap(journeys.usdcEth);
+  await runSwap(journeys.ethUsdc);
   // Discover this page's actual spender, then replay from a clean snapshot with that one seeded allowance.
-  const probe = await runSwap({ name: 'usdt-usdc', input: 'USDT', output: 'USDC', amount: '1000' });
+  const probe = await runSwap(journeys.usdtUsdc);
   const approval = probe.transactions.find(tx => tx.tx.to?.toLowerCase() === TOKENS.USDT.toLowerCase() && tx.decoded.function === 'approve');
   const spender = approval?.decoded.spender || approval?.decoded.arg0;
-  if (spender) await runSwap({ name: 'usdt-seeded', input: 'USDT', output: 'USDC', amount: '1000', seed: spender });
-  await runSwap({ name: 'drift', input: 'USDC', output: 'ETH', amount: '500', mode: 'drift' });
-  await runSwap({ name: 'moved', input: 'USDC', output: 'ETH', amount: '2000', mode: 'moved' });
-  await runSwap({ name: 'rejected', input: 'USDC', output: 'ETH', amount: '500', mode: 'reject' });
-  await runSwap({ name: 'reverted', input: 'USDC', output: 'ETH', amount: '500', mode: 'race' });
+  if (spender) await runSwap({ ...journeys.usdtSeeded, seed: spender });
+  await runSwap(journeys.drift);
+  await runSwap(journeys.moved);
+  await runSwap(journeys.rejected);
+  await runSwap(journeys.reverted);
   const flag = { swaps_assets: null, cut_only_on_swap: 'fee', honors_minimum: 'minimum', exact_approvals: 'approvals', finite_deadline: 'deadline', native_eth: 'native', routers_empty: 'routers', shows_received: 'received' };
   for (const name of CHECKS) {
     const selected = scoredJourneys(outcomes, name);

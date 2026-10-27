@@ -29,12 +29,14 @@ The task copies the savings verifier's wallet, isolated fork, static server, and
 - The verifier stops agent processes before the build and before its fork starts.
 - Browser reads reach that fork through Playwright request routing. Other endpoints, WebSockets, and direct chain writes are blocked.
 - The wallet signs transactions outside the page and records requests before execution.
-- Fork startup, funding, and market fixture failures produce trial errors. Broken pages fail checks with evidence and a screenshot.
+- Fork startup, funding, pool warm-up, and market fixture failures produce trial errors. Broken pages fail checks with evidence and a screenshot.
+- Setup warms v3 fee tiers, listed v4 pools, and direct v2 pairs for the journey amounts before the first snapshot.
 
 The driver uses the page the way a user would:
 
 - It selects tokens through visible controls and checks the resulting pair.
 - It types an amount and saves the page text before every action press.
+- It waits up to 45 seconds for a quote or swap action.
 - It finds actions through general action words, button roles, and position near the swap form or inside a dialog.
 - It accepts Swap tokens, Get quote, Sign, Permit, Submit, Allow, Enable, Review, Confirm, Approve, Accept, Continue, Refresh, and network Switch controls. Each journey has a six-press limit. Refresh is a fallback. Direction controls and token pickers never count as swap actions.
 - If a stale-quote dialog blocks the form, the driver dismisses it before it opens a fresh review.
@@ -45,7 +47,7 @@ Every journey starts from the funded snapshot:
 - `usdc-eth`, `eth-usdc`, and `usdt-usdc` are the scored successful swaps, of 500 USDC, 1 ETH, and 1,000 USDT. The other three directions are not covered. The USDT journey starts without an allowance.
 - `usdt-seeded` replays the USDT swap with a nonzero allowance seeded to the spender the first USDT journey found. It scores the same checks as the successful swaps, including cleared allowances. This models approving 500 exactly, a reverted swap, and a retry with 1,000. On USDT, `approve(1000)` reverts unless the page resets the existing approval to 0 first.
 - `drift` swaps 500 USDC to ETH. The wallet hook moves the market about 0.3% just before sending the swap. Only `shows_received` scores this journey, so a receipt that echoes the quote can fail. If the page's slippage makes the swap revert, the journey adds no `shows_received` evidence.
-- `moved` swaps 2,000 USDC to ETH. It waits up to 20 seconds for an output amount or an enabled, named Review, Swap, or Confirm button, and opens Review when available. Then it moves the market and observes the page for a fixed minute, independent of any saved page's quote expiry. Of the programmatic checks, only `honors_minimum` scores it. A clean revert with zero user and treasury asset deltas after gas honours the minimum.
+- `moved` swaps 2,000 USDC to ETH. It waits up to 45 seconds for an output amount or an enabled, named Review, Swap, or Confirm button, and opens Review when available. Then it moves the market and observes the page for a fixed minute, independent of any saved page's quote expiry. Of the programmatic checks, only `honors_minimum` scores it. A clean revert with zero user and treasury asset deltas after gas honours the minimum.
 - `rejected` swaps 500 USDC to ETH, and the wallet returns error 4001 for the swap request only. Earlier approval or fee transactions go through, so a premature cut remains visible.
 - `reverted` swaps 500 USDC to ETH and moves the market inside the wallet hook just before the swap is sent. If the page uses an untouched pool and the swap succeeds, the usual successful fee check applies.
 

@@ -146,7 +146,7 @@ export async function prepareSwap(page, input, output, amount) {
   amountInput ||= inputs.length === 1 ? inputs[0] : null;
   if (!amountInput) throw new CouldNotDrive('input amount');
   await amountInput.fill(amount);
-  if (!await until(async () => Boolean(await nextAction(page)), 20_000)) throw new CouldNotDrive('swap quote or action');
+  if (!await until(async () => Boolean(await nextAction(page)), 45_000)) throw new CouldNotDrive('swap quote or action');
   return { page, input, output, amount, amountInput };
 }
 
@@ -186,7 +186,7 @@ export async function nextAction(page) {
   return null;
 }
 
-export async function waitForQuote(page, output, timeout = 20_000) {
+export async function waitForQuote(page, output, timeout = 45_000) {
   if (!await until(async () => {
     const display = belief(await page.locator('body').innerText(), output);
     if (display.expected?.value > 0n || display.minimum?.value > 0n) return true;
