@@ -27,12 +27,13 @@ The live v0.8 EntryPoint at `0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108` reports
 
 ## The checks
 
-The check reads the start of the reply.
-It needs EIP-712 or the domain-separated `0x1901` formula there, and the old formula alone fails.
+A judge reads the question, the right answer, and the final reply, and nothing else.
+It passes the reply when it says v0.8 computes an EIP-712 typed-data hash, or gives its `0x1901` formula, in any wording, and fails a reply that gives the old formula as the answer or hedges.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `userop_eip712_hash` | Starts with EIP-712 typed-data hashing or its domain-separated 0x1901 formula | account abstraction signatures |
+| `answered` | The final reply isn't empty | reply |
+| `userop_eip712_hash` | The judge finds an EIP-712 typed-data hash, with the old formula not given as the answer | account abstraction signatures |
 
 The quiz runs in vanilla, internet, and skills modes.
 
@@ -44,6 +45,7 @@ The typed-data format also lets a wallet show the user what they sign.
 
 ## Notes
 
-The check accepts an opening that names EIP-712 with hash or typed-data wording, after lead-ins such as "using" or "it is".
-It also accepts an opening `keccak256(0x1901 ...)` formula that names the domain separator.
-It refuses the old formula alone, and it does not check every domain field or the operation's encoding.
+The judge fails a reply that gives the v0.6 and v0.7 formula as v0.8's, even under the EIP-712 name, and a plain hash of the operation or an EIP-191 hash.
+It doesn't check every domain field or the operation's encoding.
+It's the board's judge, Claude Opus 5.5 at high effort, and it never sees the model's reasoning ([ADR 0016](../../../docs/adr/0016-quizzes-with-explained-answers-use-a-judge.md)).
+`tests/hand-cases.json` holds right and wrong replies with their correct marks, and the judge must give each one its mark.
