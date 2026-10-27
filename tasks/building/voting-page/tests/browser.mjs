@@ -2,15 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHarness } from './harness.mjs';
 import { CouldNotDrive } from './control-vocabulary.mjs';
-import { connect, proposal, proposalValues, currentVotes, votingScope, oldVoteView, castVote, wrap, delegate, dismiss,
-  listedDescriptions, governanceControls, settled, ambiguousWeight, emptyProposals } from './controls.mjs';
+import { connect, openProposal, castVote, wrap, delegate, dismiss, usableChoices,
+  listedDescriptions, governanceControls, emptyProposals } from './controls.mjs';
 import { UNIT, prepareFork, discoverAccounts, localAccounts, proposals, proposalState, governorAbi, votesAbi,
-  value, mineTo, voteEvents, voteRequests, executedCalls, createProposal } from './chain.mjs';
+  value, mineTo, voteEvents, voteRequests, castRequests, executedCalls, createProposal } from './chain.mjs';
 import { balance } from './rpc.mjs';
-import { journey, verdict, oldSnapshotVerdict, forVoteMatches, quorumMatches, endOrder, proposalListVerdict, statusAndTalliesMatch } from './checks.mjs';
+import { journey, forVoteMatches, proposalListVerdict } from './checks.mjs';
 
 export const CHECKS = ['lists_every_proposal', 'status_and_tallies_match', 'quorum_counts_for_only',
-  'end_moves_with_late_quorum', 'wrap_then_delegate', 'votes_at_snapshot'];
+  'end_moves_with_late_quorum', 'wrap_then_delegate', 'votes_at_snapshot', 'canceled_status', 'already_voted'];
 const workspace = path.resolve(process.argv[2] || '/workspace');
 const output = path.resolve(process.argv[3] || '/logs/verifier');
 const sourceContext = process.argv[4] || '/chain/chain_context.json';
@@ -19,14 +19,17 @@ const stringify = data => JSON.stringify(data, (_, v) => typeof v === 'bigint' ?
 const save = (name, data) => fs.writeFile(path.join(output, name), stringify(data));
 let checks = {};
 try { const previous = JSON.parse(await fs.readFile(path.join(output, 'checks.json'), 'utf8')); if (previous.compile) checks.compile = previous.compile; } catch {}
-const persist = () => save('checks.json', checks);
+const evidence = { units: 'Governor tallies, quorum and holderVotes use whole tokens. Event weights use raw units with 18 decimals. End and snapshot are block numbers. States use OpenZeppelin Governor numbering.',
+  texts: {}, checks: Object.fromEntries(CHECKS.slice(1, -1).map(name => [name, { captured: false, observations: [] }])) };
+const persist = async () => { await save('checks.json', checks); await save('page-evidence.txt', evidence); };
 const record = async (name, passed, reason) => { checks[name] = { passed: Boolean(passed), reason }; await persist(); };
 const check = async (name, run) => {
   await journey(checks, name, run, persist);
-  if (checks[name]?.couldNotDrive && harness?.active) {
-    await harness.capture(harness.active, name + '-could-not-drive').catch(() => {});
-    await save(name + '-page-errors.json', harness.active.errors);
-  }
+  if (checks[name]?.couldNotDrive) {
+    if (evidence.checks[name]) Object.assign(evidence.checks[name], { captured: false, reason: checks[name].reason });
+    if (harness?.active) await harness.capture(harness.active, name + '-could-not-drive').catch(() => {});
+  } else if (evidence.checks[name]) evidence.checks[name].captured = true;
+  await persist();
 };
 let harness, fixture;
 const started = Date.now();
@@ -47,148 +50,161 @@ try {
       s.governanceFound = await connect(s.page, wallet.address);
       return s;
     }
-    async function reload(s, wallet = account) {
+    async function reload(s) {
       await s.page.reload({ waitUntil: 'domcontentloaded' });
-      await connect(s.page, wallet.address);
+      await connect(s.page, account.address);
+      await s.page.waitForTimeout(1800);
     }
-    async function readCard(s, description) {
-      return proposalValues(await settled(await proposal(s.page, description, { descriptions: all.map(p => p.description) })));
+    async function capture(s, label) {
+      await s.page.waitForTimeout(1800);
+      await harness.capture(s, label);
+      const text = await s.page.locator('body').innerText();
+      let id = Object.keys(evidence.texts).find(key => evidence.texts[key] === text);
+      if (!id) { id = label; evidence.texts[id] = text; }
+      return id;
+    }
+    async function observe(name, s, label, p, facts = {}) {
+      const view = await capture(s, label);
+      const chain = p ? await proposalState(url, context, p) : undefined;
+      const truth = chain && { ...chain, for: String(chain.for / UNIT), against: String(chain.against / UNIT), quorum: String(chain.quorum / UNIT) };
+      evidence.checks[name].observations.push({ label, description: p?.description, view, chain: truth, ...facts });
+      await persist();
     }
     const selected = name => ({ ...fixture.proposals[name], id: BigInt(fixture.proposals[name].id) });
     const all = await proposals(url, context.governor);
-    let s;
-    const listed = [];
-    let absent = false;
-    let empty = false;
+    let s, absent = false, empty = false;
     await check('lists_every_proposal', async () => {
       s = await session();
-      listed.push(...await listedDescriptions(s.page, all.map(p => p.description)));
-      await harness.capture(s, 'initial');
+      const listed = await listedDescriptions(s.page, all.map(p => p.description), async () => { await capture(s, 'list-' + Object.keys(evidence.texts).length); });
+      await capture(s, 'initial');
       empty = !listed.length && await emptyProposals(s.page);
       const result = proposalListVerdict({ shown: listed.length, total: all.length,
         governance: s.governanceFound || await governanceControls(s.page).count() > 0, empty });
       if (result === 'could-not-drive') throw new CouldNotDrive('governance navigation showed no readable proposals');
       absent = !listed.length && !empty;
-      await record('lists_every_proposal', result === 'pass',
-        `The fork has ${all.length} proposals; the page lists ${listed.length}. See initial-page.txt.`);
+      await record('lists_every_proposal', result === 'pass', `The fork has ${all.length} proposals; the page lists ${listed.length}. See initial-page.txt.`);
     });
-    if (absent) {
-      for (const name of CHECKS.slice(1)) await record(name, false, 'The page has no governance control and shows no proposals.');
-    } else if (empty) {
-      for (const name of CHECKS.slice(1)) await check(name, async () => { throw new CouldNotDrive('the Governance page shows an empty proposal list'); });
+    if (absent || empty) {
+      for (const name of CHECKS.slice(1)) {
+        if (absent) await record(name, false, 'The page has no governance control and shows no proposals.');
+        else await check(name, async () => { throw new CouldNotDrive('the Governance page shows an empty proposal list'); });
+      }
     } else {
       await check('status_and_tallies_match', async () => {
         s = await session();
-        const rows = [];
         for (const stage of ['before-original-end', 'after-original-end']) {
-          for (const p of all) {
-            const shown = await readCard(s, p.description);
-            const chain = await proposalState(url, context, p);
-            const passed = statusAndTalliesMatch(shown, { status: chain.state, for: Number(chain.for / UNIT), against: Number(chain.against / UNIT) });
-            rows.push({ stage, description: p.description, shown, chain, passed });
-            await save('status-comparisons.json', rows);
-            if (!passed) await record('status_and_tallies_match', false, 'A visible status or tally differs from the chain. See status-comparisons.json.');
+          for (const [index, p] of all.entries()) {
+            await openProposal(s.page, p.description);
+            await observe('status_and_tallies_match', s, `status-${stage}-${index}`, p);
           }
           if (stage === 'before-original-end') { await mineTo(url, selected('twin').originalDeadline + 2); await reload(s); }
         }
-        await record('status_and_tallies_match', rows.every(row => row.passed), 'Compared status and For/Against tallies at both heights. See status-comparisons.json.');
+        await record('status_and_tallies_match', true, 'Captured status and tallies at both heights for the judge.');
       });
       await harness.reset();
       await check('quorum_counts_for_only', async () => {
         s = await session();
-        const rows = [];
         for (const name of ['for_abstain', 'succeeded', 'extended']) {
-          const p = selected(name), shown = await readCard(s, p.description), chain = await proposalState(url, context, p);
-          const passed = quorumMatches(shown, { for: Number(chain.for / UNIT), quorum: Number(chain.quorum / UNIT) });
-          rows.push({ name, shown, chain, passed });
-          await save('quorum-comparisons.json', rows);
-          if (!passed) await record('quorum_counts_for_only', false, 'A visible quorum value differs from For-only quorum.');
+          const p = selected(name); await openProposal(s.page, p.description);
+          await observe('quorum_counts_for_only', s, 'quorum-' + name, p);
         }
-        await record('quorum_counts_for_only', rows.every(row => row.passed), 'Compared visible quorum with For-only quorum. See quorum-comparisons.json.');
+        await record('quorum_counts_for_only', true, 'Captured For-only quorum for the judge.');
       });
       await harness.reset();
       await check('end_moves_with_late_quorum', async () => {
         s = await session();
-        const extended = selected('extended'), twin = selected('twin');
-        const extendedBefore = await readCard(s, extended.description), twinBefore = await readCard(s, twin.description);
-        const order = endOrder(extendedBefore, twinBefore);
-        if (!order) await record('end_moves_with_late_quorum', false, 'The extended end does not follow its twin.');
-        await mineTo(url, twin.originalDeadline + 2);
-        await reload(s);
-        const extendedAfter = await readCard(s, extended.description), twinAfter = await readCard(s, twin.description);
-        if (extendedAfter.status === null || twinAfter.status === null) throw new CouldNotDrive('twins status after original end');
-        const states = [2, 3, 4, 5, 6, 7].includes(twinAfter.status) && extendedAfter.status === 1;
-        if (!states) await record('end_moves_with_late_quorum', false, 'The twins do not show closed and active states after the original end.');
+        for (const name of ['extended', 'twin']) {
+          const p = selected(name); await openProposal(s.page, p.description);
+          await observe('end_moves_with_late_quorum', s, 'end-before-' + name, p);
+        }
+        await mineTo(url, selected('twin').originalDeadline + 2); await reload(s);
+        for (const name of ['extended', 'twin']) {
+          const p = selected(name); await openProposal(s.page, p.description);
+          await observe('end_moves_with_late_quorum', s, 'end-after-' + name, p);
+        }
         s = await session(localAccounts[1]);
-        const scope = await votingScope(s.page, extended.description, { descriptions: all.map(p => p.description) });
-        await settled(scope);
+        const p = selected('extended'), scope = await openProposal(s.page, p.description);
         await castVote(s, scope);
-        const events = voteEvents(s.wallet, context.governor, localAccounts[1].address, extended.id);
-        const requests = voteRequests(s.wallet, context.governor, extended.id);
-        await save('extension.json', { extendedBefore, twinBefore, extendedAfter, twinAfter, events, requests });
-        await record('end_moves_with_late_quorum', order && states && forVoteMatches(requests, events), 'Compared end order, states, For request and VoteCast. See extension.json.');
+        await observe('end_moves_with_late_quorum', s, 'extended-voted', p);
+        const events = voteEvents(s.wallet, context.governor, localAccounts[1].address, p.id), requests = voteRequests(s.wallet, context.governor, p.id);
+        await save('extension.json', { events, requests });
+        await record('end_moves_with_late_quorum', requests.length === castRequests(s.wallet).length && forVoteMatches(requests, events), 'Compared For request and VoteCast; the judge checks the ends and states.');
       });
       await harness.reset();
       let wrappedReady = false;
       await check('wrap_then_delegate', async () => {
-        s = await session();
-        await wrap(s);
+        s = await session(); await wrap(s);
         const deposits = executedCalls(s.wallet, context.voteToken, votesAbi, 'depositFor');
         const combined = executedCalls(s.wallet, context.voteToken, votesAbi, 'delegate').some(call => call.args[0].toLowerCase() === account.address.toLowerCase());
         await dismiss(s.page); await reload(s);
-        const afterWrap = await currentVotes(s.page), wrapped = await balance(url, context.voteToken, account.address);
-        const intermediate = combined || afterWrap === null || afterWrap === 0;
-        if (!intermediate) await record('wrap_then_delegate', false, 'The page shows nonzero votes after wrapping without delegation.');
-        await harness.capture(s, 'wrapped-undelegated');
+        const wrapped = await balance(url, context.voteToken, account.address), afterWrap = await value(url, context.voteToken, votesAbi, 'getVotes', [account.address]);
+        await observe('wrap_then_delegate', s, 'wrapped-undelegated', null, { combined, holderVotes: String(afterWrap / UNIT) });
         if (!combined) await delegate(s, account.address);
         await dismiss(s.page); await reload(s);
-        const afterDelegate = await currentVotes(s.page);
         const chainVotes = await value(url, context.voteToken, votesAbi, 'getVotes', [account.address]);
+        await observe('wrap_then_delegate', s, 'delegated', null, { holderVotes: String(chainVotes / UNIT) });
         wrappedReady = chainVotes === 1000n * UNIT;
-        await save('wrap-delegate.json', { afterWrap, afterDelegate, wrapped, chainVotes, deposits, combined });
-        if (afterDelegate === null) throw new CouldNotDrive('holder votes after delegation');
-        await record('wrap_then_delegate', wrapped === 1000n * UNIT && deposits.length > 0 && intermediate
-          && afterDelegate === 1000 && wrappedReady, 'Compared deposits, balance and displayed votes before and after delegation. See wrap-delegate.json.');
+        await save('wrap-delegate.json', { wrapped, chainVotes, deposits, combined });
+        await record('wrap_then_delegate', wrapped === 1000n * UNIT && deposits.some(call => call.args[0].toLowerCase() === account.address.toLowerCase() && call.args[1] === 1000n * UNIT)
+          && executedCalls(s.wallet, context.voteToken, votesAbi, 'delegate').some(call => call.args[0].toLowerCase() === account.address.toLowerCase()) && wrappedReady,
+        'Compared depositFor, delegation, balance and getVotes; the judge checks shown votes.');
       });
       await check('votes_at_snapshot', async () => {
         if (!wrappedReady) { await harness.reset(); s = await session(); await wrap(s); await delegate(s, account.address); await dismiss(s.page); await reload(s); }
-        const old = selected('for_abstain');
-        const oldScope = await votingScope(s.page, old.description, { descriptions: all.map(p => p.description) });
-        const { text: oldText, shown: oldShown, choices } = await oldVoteView(oldScope);
-        const ambiguous = ambiguousWeight(oldText, oldShown);
-        const current = await currentVotes(s.page);
+        const old = selected('for_abstain'), scope = await openProposal(s.page, old.description);
         const oldChain = await value(url, context.governor, governorAbi, 'getVotes', [account.address, BigInt(old.snapshot)]);
+        const current = await value(url, context.voteToken, votesAbi, 'getVotes', [account.address]);
         if (oldChain !== 0n) throw new Error('Old fixture weight is not zero');
-        let oldDriveError;
-        if (choices.length && oldShown !== 0) {
-          try { await castVote(s, oldScope, choices[0]); } catch (error) { if (!(error instanceof CouldNotDrive)) throw error; oldDriveError = error; }
+        await observe('votes_at_snapshot', s, 'snapshot-old-before', old, { holderVotes: String(oldChain / UNIT), currentVotes: String(current / UNIT) });
+        const choices = await usableChoices(scope);
+        if (choices.length) {
+          try { await castVote(s, scope, choices[0]); }
+          catch (error) { if (!(error instanceof CouldNotDrive)) throw error; }
         }
-        const asked = voteRequests(s.wallet, context.governor, old.id).length > 0;
-        const oldResult = oldSnapshotVerdict({ shown: oldShown, current, usable: choices.length > 0, asked, ambiguous });
-        await save('snapshot-old.json', { shown: oldShown, currentShown: current, ambiguous, chain: oldChain, choices, asked, result: oldResult,
-          events: voteEvents(s.wallet, context.governor, account.address, old.id) });
-        if (oldResult === 'fail') await record('votes_at_snapshot', false, 'The old proposal shows nonzero or only current votes and asks for a vote despite zero snapshot weight.');
+        const requests = castRequests(s.wallet), events = voteEvents(s.wallet, context.governor, account.address, old.id);
+        const oldPass = requests.length === voteRequests(s.wallet, context.governor, old.id).length
+          && requests.every(call => call.args[0] === old.id && Number(call.args[1]) === ({ For: 1, Against: 0, Abstain: 2 }[choices[0]]))
+          && events.every(event => event.weight === oldChain);
+        if (!oldPass) await record('votes_at_snapshot', false, 'An old-proposal request or recorded weight differs from the chosen proposal and snapshot.');
+        await observe('votes_at_snapshot', s, 'snapshot-old-after', old, { holderVotes: String(oldChain / UNIT), currentVotes: String(current / UNIT), voteRequestSent: requests.length > 0, events });
+        await save('snapshot-old.json', { chain: oldChain, choices, requests, events });
         await dismiss(s.page);
-        const fresh = await createProposal(url, context, fixture);
-        await reload(s);
-        const newScope = await votingScope(s.page, fresh.description, { descriptions: all.map(p => p.description) });
-        const newShown = proposalValues(await settled(newScope)).snapshot;
-        if (newShown === null) throw new CouldNotDrive('holder weight on the new proposal');
+        const fresh = await createProposal(url, context, fixture); await reload(s);
+        const newScope = await openProposal(s.page, fresh.description), newWeight = await value(url, context.governor, governorAbi, 'getVotes', [account.address, fresh.voteStart]);
+        await observe('votes_at_snapshot', s, 'snapshot-new-before', fresh, { holderVotes: String(newWeight / UNIT) });
         await castVote(s, newScope);
-        const events = voteEvents(s.wallet, context.governor, account.address, fresh.id), requests = voteRequests(s.wallet, context.governor, fresh.id);
-        await save('snapshot-new.json', { proposal: fresh, shown: newShown, events, requests });
-        const freshPass = newShown === 1000 && forVoteMatches(requests, events, 1000n * UNIT);
-        if (!freshPass || oldResult === 'fail') await record('votes_at_snapshot', false, 'Snapshot weight, For request or VoteCast differs from the chain. See snapshot-old.json and snapshot-new.json.');
-        else if (oldResult === 'could-not-drive') throw oldDriveError || new CouldNotDrive('ambiguous old-proposal weight');
-        else await record('votes_at_snapshot', true, 'Old proposal has zero weight or no usable choice; new proposal casts its full weight For.');
+        const newEvents = voteEvents(s.wallet, context.governor, account.address, fresh.id), newRequests = voteRequests(s.wallet, context.governor, fresh.id);
+        await observe('votes_at_snapshot', s, 'snapshot-new-after', fresh, { holderVotes: String(newWeight / UNIT), voteRequestSent: newRequests.length > 0, events: newEvents });
+        await save('snapshot-new.json', { proposal: fresh, events: newEvents, requests: newRequests });
+        const noOtherVotes = castRequests(s.wallet).length === requests.length + newRequests.length;
+        await record('votes_at_snapshot', oldPass && noOtherVotes && newWeight === 1000n * UNIT && forVoteMatches(newRequests, newEvents, 1000n * UNIT), 'Compared proposal, support and snapshot weights; the judge checks shown weights.');
       });
+      await harness.reset();
+      for (const [name, p, wallet] of [['canceled_status', selected('canceled'), localAccounts[1]], ['already_voted', selected('for_abstain'), localAccounts[1]]]) {
+        await check(name, async () => {
+          s = await session(wallet);
+          const hasVoted = await value(url, context.governor, governorAbi, 'hasVoted', [p.id, wallet.address]);
+          if (name === 'already_voted' && !hasVoted) throw new Error('Already-voted fixture has no prior vote');
+          const scope = await openProposal(s.page, p.description);
+          if (name === 'canceled_status') await observe(name, s, name + '-before', p);
+          else await capture(s, name + '-before');
+          const choices = await usableChoices(scope);
+          if (choices.length) {
+            try { await castVote(s, scope, choices[0]); }
+            catch (error) { if (!(error instanceof CouldNotDrive)) throw error; }
+          }
+          await capture(s, name + '-after');
+          const requests = castRequests(s.wallet);
+          await save(name + '.json', { proposal: p, hasVoted, choices, requests });
+          await record(name, requests.length === 0, `The attempted vote sent ${requests.length} castVote requests. See ${name}.json.`);
+        });
+        await harness.reset();
+      }
     }
   }
-  if (verdict(checks) === 'trial-error') await save('trial-error.json', { reason: 'No check failed, but some checks could not be driven.' });
 } catch (error) {
   await save('browser-error.json', { kind: 'trial-error', error: error.stack });
-  console.error(error);
-  process.exitCode = 1;
+  console.error(error); process.exitCode = 1;
 } finally {
   if (harness) await harness.close();
   await persist();

@@ -3,69 +3,6 @@ import { until } from './harness.mjs';
 import { walletIdle } from './rpc-policy.mjs';
 import { requestedCalls, governorAbi, votesAbi } from './chain.mjs';
 
-const quantity = '(\\d[\\d,]*(?:\\.\\d+)?\\s*[KMB]?)';
-const holderWeightLabel = '(?:(?:your|my) (?:votes?|voting power|(?:vote )?weight)|voting power|eligible votes|votes you will cast)';
-export function number(text) {
-  const match = text.trim().match(/^(\d[\d,]*(?:\.\d+)?)\s*([KMB])?$/i);
-  if (!match) return null;
-  return Number(match[1].replaceAll(',', '')) * ({ k: 1e3, m: 1e6, b: 1e9 }[match[2]?.toLowerCase()] || 1);
-}
-export function labelled(text, label) {
-  const match = text.match(new RegExp(`(?:^|\\n|[·|])\\s*(?:${label})\\s*[:\\t\\n]?\\s*(?:\\d[\\d,.]*\\s*%\\s*[·|:]*\\s*)?${quantity}(?![\\d.,]|\\s*%)`, 'i'));
-  return match ? number(match[1]) : null;
-}
-const statuses = [ /^(?:pending|upcoming)$/i, /^(?:active|open|open for voting)$/i,
-  /^cancel(?:l)?ed$/i, /^(?:defeated|failed|rejected)$/i, /^(?:succeeded|passed)$/i,
-  /^queued(?:\s.*)?$/i, /^expired$/i, /^executed$/i ];
-export function proposalValues(text) {
-  const lines = text.split('\n').map(line => line.trim());
-  const statusLine = lines.find(line => /^status\s*:/i.test(line));
-  const statusValues = (statusLine ? [statusLine.replace(/^status\s*:\s*/i, '')] : lines.filter(line => !/^(?:queued|executed|cancel(?:l)?ed)\s+(?:at|on)\b/i.test(line)))
-    .map(line => statuses.findIndex(expression => expression.test(line))).filter(value => value >= 0);
-  const status = new Set(statusValues).size === 1 ? statusValues[0] : null;
-  const quorumLine = text.match(/^[^\n]*\bquorum\b[^\n]*(?:\n(?![^\n]*\b(?:left|remaining)\b)[^\n]+){0,2}/im)?.[0] || '';
-  const progress = quorumLine.match(new RegExp(`${quantity}\\s*(?:of|/)\\s*${quantity}`, 'i'));
-  const reached = /\bnot\s+(?:yet\s+)?(?:reached|met)\b|\bunmet\b|\bbelow\b/i.test(quorumLine) ? false
-    : /(?:reached|met)\b/i.test(quorumLine) ? true
-    : progress ? number(progress[1]) >= number(progress[2])
-    : /quorum\s*(\d+(?:\.\d+)?)\s*%/i.test(quorumLine)
-      ? Number(quorumLine.match(/quorum\s*(\d+(?:\.\d+)?)\s*%/i)[1]) >= 100
-      : null;
-  const quorumMatch = quorumLine.match(new RegExp(`(?:of|/)\\s*${quantity}`, 'i'))
-    || quorumLine.match(new RegExp(`${quantity}\\s*required`, 'i'))
-    || quorumLine.match(new RegExp(`quorum\\s*:?\\s*${quantity}(?![\\d.,]|\\s*%|\\s*(?:days?|hours?|minutes?|seconds?|[dhms])\\b)`, 'i'));
-  const endLine = text.match(/^[^\n]*(?:\bends?\b|\bended\b|\bdeadline\b|\bcloses\b)[^\n]*(?:\n[^\n]+){0,1}/im)?.[0]
-    || text.match(/^[^\n]*\b(?:left|remaining)\b[^\n]*$/im)?.[0] || '';
-  const endMatch = endLine.match(/\bblock\s*([\d,]+)/i);
-  const duration = [...endLine.matchAll(/(\d+)\s*(days?|hours?|minutes?|seconds?|[dhms])\b/gi)];
-  const dateText = endLine.replace(/^.*?(?:ends?|ended|deadline|closes)\s*(?:at|on|in|:)?\s*/i, '').split('\n')[0];
-  const date = /[a-z]|\d{4}-\d{2}-\d{2}/i.test(dateText) ? Date.parse(dateText) : NaN;
-  const end = endMatch ? Number(endMatch[1].replaceAll(',', '')) : duration.length
-    ? duration.reduce((sum, match) => sum + Number(match[1]) * ({ d: 86400, h: 3600, m: 60, s: 1 }[match[2][0].toLowerCase()]), 0)
-    : Number.isFinite(date) ? date : null;
-  const snapshot = labelled(text, '(?:(?:(?:your|my) )?snapshot (?:votes|voting power|weight)|(?:(?:your|my) )?(?:votes|voting power|weight) (?:at|for) (?:the )?(?:snapshot|this proposal)|(?:your|my) votes (?:on|for) this proposal|at (?:the )?snapshot)')
-    ?? (text.match(new RegExp(`you have\\s*${quantity}\\s*votes? (?:on|for) this proposal`, 'i'))?.[1]
-      ? number(text.match(new RegExp(`you have\\s*${quantity}\\s*votes? (?:on|for) this proposal`, 'i'))[1]) : null)
-    ?? (text.match(new RegExp(`you had\\s*${quantity}\\s*votes?[^\\n]*snapshot`, 'i'))?.[1]
-      ? number(text.match(new RegExp(`you had\\s*${quantity}\\s*votes?[^\\n]*snapshot`, 'i'))[1]) : null)
-    ?? (text.match(new RegExp(`${quantity}\\s+snapshot votes\\b`, 'i'))?.[1]
-      ? number(text.match(new RegExp(`${quantity}\\s+snapshot votes\\b`, 'i'))[1]) : null);
-  const noVotes = /\bno (?:votes?|voting power)\b[^\n]*(?:snapshot|at block|(?:on|for) this proposal)|(?:snapshot|this proposal)[^\n]*\bno (?:votes?|voting power)\b/i.test(text);
-  const weightMatch = text.match(new RegExp(`\\b${holderWeightLabel}\\s*:?\\s*${quantity}`, 'i'))
-    || text.match(new RegExp(`\\byou can (?:vote with|cast)\\s*${quantity}\\s*votes?\\b`, 'i'));
-  const shownWeight = snapshot ?? (noVotes ? 0 : null) ?? (weightMatch ? number(weightMatch[1]) : null);
-  return { status, for: labelled(text, '(?:votes? )?for'),
-    against: labelled(text, '(?:votes? )?against'), reached,
-    quorum: quorumMatch ? number(quorumMatch[1]) : null,
-    quorumProgress: progress ? number(progress[1]) : null,
-    end, endUnit: end === null ? null : endMatch ? 'block' : duration.length ? 'seconds' : 'date',
-    snapshot: shownWeight };
-}
-
-export function ambiguousWeight(text, shown) {
-  return shown === null && new RegExp(`\\b${holderWeightLabel}\\b|\\b(?:ineligible|eligible)\\b|\\b(?:you|your|my)\\b[^\\n]*\\b(?:votes?|voting power|weight)\\b|\\b(?:votes|voting power|weight) (?:at|for) (?:the )?(?:snapshot|this proposal)\\b|\\bat (?:the )?snapshot\\b`, 'i').test(text);
-}
-
 export async function connect(page, address) {
   await page.waitForFunction(() => document.body.innerText.trim().length > 0, undefined, { timeout: 20000 });
   for (let step = 0; step < 30; step++) {
@@ -100,38 +37,24 @@ export async function settled(scope, { timeout = 8000, quiet = 800 } = {}) {
   return text;
 }
 
-export async function proposal(page, description, { required = true, descriptions = [] } = {}) {
-  await findDescription(page, description);
-  const candidate = page.locator('article,section,li,tr').filter({ hasText: description }).first();
-  const text = await candidate.count() ? await candidate.innerText() : '';
-  if (!/\bfor\b/i.test(text) || !/\bagainst\b/i.test(text)) {
-    const detail = await firstVisible(page.getByRole('link').filter({ hasText: description }));
-    const href = detail && await detail.getAttribute('href');
-    if (href && new URL(href, page.url()).origin === new URL(page.url()).origin) await detail.click();
-    else if (await candidate.count()) {
-      const open = await firstVisible(candidate.getByRole('button', { name: /^(?:view|details|vote on)\b/i }));
-      if (open) await open.click();
-    }
+export async function openProposal(page, description) {
+  await dismiss(page);
+  if (!await until(() => findDescription(page, description), 15000)) throw new CouldNotDrive(`proposal title ${description} was not found`);
+  const title = await firstVisible(page.getByText(description, { exact: false }));
+  // Locate a control container only for driving. Evidence always captures the whole visible page.
+  const container = title.locator('xpath=ancestor-or-self::*[self::article or self::section or self::li or self::tr or self::button or self::a or @role="button"][1]');
+  const card = await container.count() ? container : title.locator('..');
+  const link = await firstVisible(card.getByRole('link').filter({ hasText: description }))
+    || (await title.evaluate(el => el.matches('a[href]')) ? title : null);
+  if (link) {
+    const href = await link.getAttribute('href');
+    if (href && new URL(href, page.url()).origin === new URL(page.url()).origin) await link.click();
+  } else {
+    const open = await firstVisible(card.getByRole('button', { name: /^(?:view|details|vote on)\b/i }));
+    if (open) await open.click();
+    else if (await card.evaluate(el => el.matches('button,[role="button"]'))) await card.click();
   }
-  const found = await until(() => page.evaluate(({ description, descriptions }) => {
-    document.querySelectorAll('[data-voting-proposal]').forEach(el => el.removeAttribute('data-voting-proposal'));
-    const candidates = [...document.querySelectorAll('body *')].filter(el =>
-      el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden' && typeof el.innerText === 'string'
-      && el.innerText.includes(description)
-      && /\bfor\b/i.test(el.innerText) && /\bagainst\b/i.test(el.innerText));
-    candidates.sort((a, b) => a.innerText.length - b.innerText.length
-      || Number(b.matches('button,a[href],[role="button"]')) - Number(a.matches('button,a[href],[role="button"]')));
-    if (!candidates.length) return false;
-    if (descriptions.some(other => other !== description && candidates[0].innerText.includes(other))) return 'ambiguous';
-    candidates[0].setAttribute('data-voting-proposal', '');
-    return true;
-  }, { description, descriptions }), 8000);
-  if (found === 'ambiguous') throw new CouldNotDrive(`proposal card for ${description} contains another proposal`);
-  if (!found) {
-    if (required) throw new CouldNotDrive(`proposal card for ${description} was not found`);
-    return null;
-  }
-  return page.locator('[data-voting-proposal]');
+  return await firstVisible(page.getByRole('dialog')) || card;
 }
 
 export async function findDescription(page, description) {
@@ -161,11 +84,11 @@ export async function findDescription(page, description) {
   }
   return false;
 }
-export async function listedDescriptions(page, descriptions) {
+export async function listedDescriptions(page, descriptions, capture = async () => {}) {
   await until(async () => await page.evaluate(descriptions => descriptions.some(description => document.body.innerText.includes(description)), descriptions)
     || await emptyProposals(page), 15000);
   const listed = [];
-  for (const description of descriptions) if (await findDescription(page, description)) listed.push(description);
+  for (const description of descriptions) if (await findDescription(page, description)) { listed.push(description); await capture(); }
   return listed;
 }
 
@@ -184,22 +107,13 @@ export async function dismiss(page) {
   else await page.keyboard.press('Escape');
 }
 
-export async function votingScope(page, description, options) {
-  const card = await proposal(page, description, options);
-  const dialog = await firstVisible(page.getByRole('dialog'));
-  if (dialog) return dialog;
-  const open = await firstVisible(card.getByRole('button', { name: /^(?:vote on|view)\b/i }));
-  if (open) await open.click();
-  else if (!(await voteControl(card, 'For') || await voteControl(card, 'Against') || await voteControl(card, 'Abstain'))
-    && await card.evaluate(el => el.matches('button,a[href],[role="button"]'))) await card.click();
-  return await firstVisible(page.getByRole('dialog')) || card;
-}
-
 export async function voteControl(scope, choice = 'For') {
   return await firstVisible(scope.getByRole('button', { name: new RegExp(`^(?:vote )?${choice}(?:\\s+.*)?$`, 'i') }))
     || firstVisible(scope.getByRole('radio', { name: new RegExp(`^${choice}\\b`, 'i') }));
 }
 export async function usableChoices(scope) {
+  const page = scope.page?.() || scope;
+  scope = await firstVisible(page.getByRole('dialog')) || scope;
   const choices = [];
   for (const name of ['For', 'Against', 'Abstain']) {
     const control = await voteControl(scope, name);
@@ -207,27 +121,10 @@ export async function usableChoices(scope) {
   }
   return choices;
 }
-export async function oldVoteView(scope) {
-  let text = await settled(scope, { quiet: 1500 });
-  let shown = proposalValues(text).snapshot;
-  let choices = await usableChoices(scope);
-  if (shown !== 0 && !choices.length) {
-    await until(async () => {
-      text = await scope.innerText();
-      shown = proposalValues(text).snapshot;
-      choices = await usableChoices(scope);
-      return shown === 0 || choices.length > 0;
-    }, 8000);
-    text = await settled(scope);
-    shown = proposalValues(text).snapshot;
-    choices = await usableChoices(scope);
-  }
-  return { text, shown, choices };
-}
 export async function castVote(session, scope, name = 'For') {
-  const choice = await voteControl(scope, name);
+  const choice = await until(async () => voteControl(await firstVisible(session.page.getByRole('dialog')) || scope, name), 8000);
   if (!choice) throw new CouldNotDrive('Vote For control was not found');
-  if (!await choice.isEnabled()) return false;
+  if (!await until(() => choice.isEnabled(), 8000)) return false;
   const count = () => requestedCalls(session.wallet, session.governor, governorAbi).filter(call => /^castVote/.test(call.functionName)).length;
   const before = count();
   await choice.click();
@@ -245,31 +142,6 @@ export async function castVote(session, scope, name = 'For') {
   if (!done) throw new CouldNotDrive('vote flow did not ask the wallet for castVote');
   await walletIdle(session.wallet);
   return true;
-}
-
-export async function currentVotes(page) {
-  const read = text => {
-    const direct = labelled(text, '(?:your )?current votes|your votes|votes|voting weight|voting power');
-    const before = text.match(new RegExp(`(?:your voting power)\\s*${quantity}\\s*votes`, 'i'));
-    return direct ?? (before ? number(before[1]) : null);
-  };
-  let scope;
-  await until(async () => {
-    const texts = await page.evaluate(() => {
-      const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
-      const candidates = [...document.querySelectorAll('section,article,div,table')].filter(el => visible(el)
-        && /current votes|voting power|voting weight|your votes/i.test(el.innerText) && /wrapped|vtoken/i.test(el.innerText));
-      candidates.sort((a,b) => a.innerText.length - b.innerText.length);
-      document.querySelectorAll('[data-voting-power]').forEach(el => el.removeAttribute('data-voting-power'));
-      candidates.forEach((el, index) => el.setAttribute('data-voting-power', String(index)));
-      return candidates.map(el => el.innerText);
-    });
-    const index = texts.findIndex(text => read(text) !== null);
-    if (index < 0) return false;
-    scope = page.locator(`[data-voting-power="${index}"]`);
-    return true;
-  }, 8000);
-  return scope ? read(await settled(scope, { quiet: 1500 })) : null;
 }
 
 export async function wrap(session) {

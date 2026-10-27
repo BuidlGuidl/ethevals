@@ -32,9 +32,10 @@ Path("/logs/verifier/checks.json").write_text(
 PY
 export PLAYWRIGHT_BROWSERS_PATH=/root/voting-browsers
 browser_status=0
-node /tests/browser.mjs /workspace /logs/verifier > /logs/verifier/browser.log 2>&1 || browser_status=$?
-rewardkit /tests
-if [ "$browser_status" -ne 0 ] || [ -f /logs/verifier/trial-error.json ]; then
+env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u OPENROUTER_API_KEY -u ANTHROPIC_AUTH_TOKEN -u EXA_API_KEY \
+  node /tests/browser.mjs /workspace /logs/verifier > /logs/verifier/browser.log 2>&1 || browser_status=$?
+python3 /tests/run_reward.py
+if [ "$browser_status" -ne 0 ]; then
   exit 1
 fi
 STARTED_AT="$started_at" python3 - <<'PY'

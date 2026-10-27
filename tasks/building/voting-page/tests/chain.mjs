@@ -13,6 +13,7 @@ export const governorAbi = parseAbi([
   'function proposalDeadline(uint256) view returns (uint256)',
   'function quorum(uint256) view returns (uint256)',
   'function getVotes(address,uint256) view returns (uint256)',
+  'function hasVoted(uint256,address) view returns (bool)',
   'function castVote(uint256,uint8) returns (uint256)',
   'function castVoteWithReason(uint256,uint8,string) returns (uint256)',
   'function castVoteWithReasonAndParams(uint256,uint8,string,bytes) returns (uint256)',
@@ -76,13 +77,14 @@ export function requestedCalls(wallet, address, abi) {
     const calls = request.method === 'wallet_sendCalls' ? request.params[0].calls
       : /^(?:eth|wallet)_sendTransaction$/.test(request.method) ? [request.params[0]] : [];
     return calls.flatMap(call => {
-      if (call.to?.toLowerCase() !== address.toLowerCase()) return [];
+      if (address && call.to?.toLowerCase() !== address.toLowerCase()) return [];
       try { return [decodeFunctionData({ abi, data: call.data || call.input })]; } catch { return []; }
     });
   });
 }
-export const voteRequests = (wallet, governor, id) => requestedCalls(wallet, governor, governorAbi)
-  .filter(call => /^castVote/.test(call.functionName) && call.args[0] === id);
+export const castRequests = (wallet, governor = null) => requestedCalls(wallet, governor, governorAbi)
+  .filter(call => /^castVote/.test(call.functionName));
+export const voteRequests = (wallet, governor, id) => castRequests(wallet, governor).filter(call => call.args[0] === id);
 export function executedCalls(wallet, address, abi, name) {
   return wallet.transactions.flatMap(tx => {
     if (tx.call?.to?.toLowerCase() !== address.toLowerCase() || tx.receipt.status !== '0x1') return [];

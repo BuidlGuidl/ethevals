@@ -60,6 +60,21 @@ def test_lint_requires_all_pass_across_judges_and_tests(tmp_path):
         lint_task(task)
 
 
+def test_lint_accepts_verifier_files_without_a_trajectory(tmp_path):
+    task = task_folder(tmp_path)
+    add_judge(task)
+    judge = task / "tests/judge.toml"
+    original = judge.read_text()
+    for files in ['["/logs/verifier/page.txt"]', '["/logs/verifier/final-reply.txt"]']:
+        judge.write_text(original.replace('atif-trajectory = "/logs/agent/trajectory.json"', f'files = {files}'))
+        lint_task(task)
+    for files in ['[]', '["/app/page.txt"]', '["/logs/verifier/../agent/trajectory.json"]',
+                  '["/logs/verifier/page.txt", "/app/source.tsx"]', '["/logs/verifier/*.txt"]']:
+        judge.write_text(original.replace('atif-trajectory = "/logs/agent/trajectory.json"', f'files = {files}'))
+        with pytest.raises(ValueError, match="trajectory or only files"):
+            lint_task(task)
+
+
 @pytest.mark.parametrize("variable", ["CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CUSTOM_SECRET"])
 def test_only_the_judge_key_can_enter_verifier_env(tmp_path, variable):
     task = task_folder(tmp_path)

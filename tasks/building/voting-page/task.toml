@@ -16,6 +16,9 @@ environment_mode = "shared"
 user = "root"
 timeout_sec = 1800
 
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
 [environment]
 cpus = 1
 memory_mb = 4096

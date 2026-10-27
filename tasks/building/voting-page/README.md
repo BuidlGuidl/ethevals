@@ -8,7 +8,8 @@ Three of the governor's rules differ from what most pages assume:
 - A late quorum moves the end of voting.
 - Votes count at each proposal's snapshot.
 
-The checks drive the built page in a browser. They compare what it shows, and what it asks the wallet to sign, with the governor.
+Code drives the built page and checks wallet requests and chain results.
+A RewardKit judge compares captured page text with the governor's values.
 
 Every number on a voting page has a source on chain, and a page can guess each one from events and defaults instead.
 Live pages make those guesses today.
@@ -23,7 +24,7 @@ This task checks whether the page reads them.
 The request names what holders must see.
 It doesn't say where each value comes from, and four of them go wrong when a page computes them itself.
 
-- **Status.** Pending, Active, Defeated, Succeeded, Queued and Executed come from the governor's `state()`. A page that works status out from the creation event and the tallies is wrong at the deadline, on a tie, and whenever the end moves.
+- **Status.** Pending, Active, Canceled, Defeated, Succeeded, Queued and Executed come from the governor's `state()`. A page that works status out from the creation event and the tallies is wrong at the deadline, on a tie, and whenever the end moves.
 
 - **When voting ends.** The first time For votes reach quorum late, this governor extends voting by 7,200 blocks and emits `ProposalExtended`. The end block in `ProposalCreated` is then stale, and only `proposalDeadline()` is right.
 
@@ -47,26 +48,41 @@ It doesn't say where each value comes from, and four of them go wrong when a pag
 The agent starts with the create-wagmi project and the contracts' sources and ABIs under `/workspace/contracts/`. It also gets `chain_context.json`, which names TOKEN, the vote token, the governor and the timelock.
 Its chain has five ordinary proposals: Executed, Defeated, Queued, Active and Pending.
 
-After the agent finishes, the verifier builds the page and starts its own fork of that chain. On the fork it adds nine test proposals the agent never saw. They include:
+After the agent finishes, the verifier builds the page and starts its own fork of that chain. On the fork it adds ten test proposals the agent never saw. They include:
 
 - one that reaches quorum only if Abstain counts
 - a late-quorum proposal and a twin created in the same block
 - queued proposals before and after their wait
 
-It opens the page with an injected wallet, acting as holders it finds in public `DelegateChanged` logs. It follows the page's own tabs, links and vote dialogs, and compares what it reads with the governor.
+One test proposal gets canceled while Pending.
+The snapshot journey later creates a fresh proposal after the holder delegates.
+
+It opens the page with an injected wallet, acting as holders it finds in public `DelegateChanged` logs. It follows the page's own tabs, links and vote dialogs, and captures plain text for the judge alongside the governor's values.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `compile` | `pnpm build` and `pnpm exec tsc --noEmit` both pass | frontend compilation |
-| `lists_every_proposal` | The page lists all five ordinary and nine test proposals | proposal discovery |
-| `status_and_tallies_match` | Every status and For/Against tally matches the governor, before and after the twins' original end | governor reads |
-| `quorum_counts_for_only` | For plus Abstain over 4 million doesn't show quorum reached; passed and extended proposals do | counting rules |
-| `end_moves_with_late_quorum` | The extended proposal shows a later end than its twin, stays open after the twin closes, and takes a vote with weight | voting end |
-| `wrap_then_delegate` | A holder wraps 1,000 TOKEN, sees 0 votes until delegating and 1,000 after | voting power |
-| `votes_at_snapshot` | A holder who delegated after a proposal's snapshot sees 0 votes on it or can't vote on it, then casts their full 1,000 For on a new proposal | snapshot votes |
+| `lists_every_proposal` | The page lists all five ordinary and ten test proposals | proposal discovery |
+| `status_and_tallies_match` | Captures proposal views before and after the twins' original end | governor reads |
+| `quorum_counts_for_only` | Captures the For-only quorum cases for the judge | counting rules |
+| `end_moves_with_late_quorum` | The extended proposal accepts a For vote with weight after its twin closes | voting end |
+| `wrap_then_delegate` | Deposit and delegation calls give the holder 1,000 wrapped tokens and votes | voting power |
+| `votes_at_snapshot` | Captures old and new weights; the new proposal records 1,000 For | snapshot votes |
+| `canceled_status` | Trying to vote on a canceled proposal sends no vote request | closed proposals |
+| `already_voted` | A holder who already voted sends no second vote request | duplicate votes |
+| `shown_status_and_tallies` | Captured statuses and tallies match the governor | judge |
+| `shown_for_only_quorum` | Captured quorum uses For votes only | judge |
+| `shown_extended_end` | Captures show the later end and the twins' states | judge |
+| `shown_holder_votes` | Captures show current votes before and after delegation | judge |
+| `shown_snapshot_votes` | Captures show each proposal's snapshot weight | judge |
+| `shown_canceled_status` | Captures show the canceled proposal's status | judge |
+
+Code checks and binary judge criteria combine under RewardKit's `all-pass` reward.
+The judge reads only `/logs/verifier/page-evidence.txt`, never source or the trajectory.
 
 A check fails a page only for what the page showed or asked the wallet to sign.
-When the verifier can't read a value or finish a flow, it records "could not drive" for that check and goes on. Then:
+A requested value missing from every captured view fails the judge criterion.
+When code cannot finish a flow, it records "could not drive" and the judge passes that uncaptured criterion. Then:
 
 - Every check passes: the reward is 1.
 - Any check fails: the reward is 0.
@@ -94,15 +110,20 @@ A page that reads them shows holders what the governor will do. A page that gues
 - No check scores approval amounts, Abstain display, network switching, or the team's queue and execute controls. The team acts from its safe.
 - The checks accept these variations:
   - wrapping and delegating in one action
-  - an end shown as a block, a date or a countdown, compared by order when both ends use the same unit
-  - for a holder with no votes at the snapshot, either a 0 shown or no usable vote control
+  - any wording or number format for the requested values
+  - an end shown as a block, a date or a countdown that establishes the later end
+  - for a holder with no votes at the snapshot, either a 0 shown or no vote request
 
   A For vote must send support 1, and the governor must record it For with the holder's full weight.
 - **The chain.**
   - Setup deploys the `token-governor` task's contracts unchanged, with OpenZeppelin 5.7.0. The timelock owns Protocol and holds 10 ETH.
   - Four holders wrap and delegate 12 million of the 100 million TOKEN. The deployer keeps the rest unwrapped. Anvil's default accounts hold nothing.
   - Voting runs in blocks and the timelock in seconds. No check depends on wall time.
-- Setup makes its keys at random inside the chain container. The agent can't read them or the setup files, and the verifier needs no keys.
+- Setup makes its keys at random inside the chain container. The agent cannot read them or the setup files.
+- The judge needs `ANTHROPIC_API_KEY` through `[verifier.env]`. It uses Opus 5.5 at high effort with `guard = "flag"`.
+  Saved-page judge runs cost $0.021 to $0.524 per trial, from usage in `reward-details.json`.
+  The largest capture exceeds the aim of less than $0.50 per trial.
+  Builds and the browser receive no model keys. The free check skips the judge.
 - The test proposals exist only on the verifier's fork, so the agent's chain never shows the cases the checks use.
 - Pages here make many RPC reads per block, which a public RPC would throttle. No check covers that load.
 - The verifier's browser and its libraries are root-only, so the agent can't use or change them. With internet access, an agent can still download a browser and the system libraries it needs, and test its own page.

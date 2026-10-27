@@ -20,6 +20,7 @@ DESCRIPTIONS = {
     "twin": "Set the protocol fee to 17 basis points",
     "for_abstain": "Set the protocol fee to 18 basis points",
     "pending": "Set the protocol fee to 19 basis points",
+    "canceled": "Set the protocol fee to 20 basis points",
 }
 HISTORY = {
     "history_executed": "Set the protocol fee to 6 basis points",
@@ -247,7 +248,8 @@ def seed_proposals(url, context, private, *, checks):
     vote("for_abstain", holders[1], 2)
     mine_to(url, original_end - 55)
     action("queued_waiting", "queue")
-    batch(["pending"])
+    batch(["pending", "canceled"])
+    action("canceled", "cancel")
 
 
 def checks(url, public, private):
