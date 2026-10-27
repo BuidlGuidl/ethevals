@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/signatures-permit2-witness-string"
+description = "Check whether a model can construct the exact Permit2 witness type string with both referenced types in order."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "permit2", "eip-712"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024
