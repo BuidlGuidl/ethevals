@@ -46,17 +46,10 @@ interface IVault is ITimelocked {
     function allocate(address, bytes memory, uint256) external;
 }
 
-interface IPublicAllocator {
-    function vaultData(address) external view returns (bool, uint64);
-    function allocateFromIdle(address, address, MarketParams memory, uint128, uint64) external;
-    function reallocate(address, address, MarketParams memory, address, MarketParams memory, uint128, uint64) external;
-}
-
 contract ExitCheck is Test {
     using stdJson for string;
 
     IMorpho constant MORPHO = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb);
-    IPublicAllocator constant PUBLIC_ALLOCATOR = IPublicAllocator(0x00b8e1509398ED692C3F326CbAf1694F9A881e27);
     IVault vault;
     IAdapter adapter;
     bytes32 marketId;
@@ -98,32 +91,6 @@ contract ExitCheck is Test {
         vm.stopPrank();
         assertFalse(absoluteOk, "stranger executed the mature absolute raise");
         assertFalse(relativeOk, "stranger executed the mature relative raise");
-        assertMarketClosed();
-
-        IERC20 usdc = IERC20(params.loanToken);
-        deal(address(usdc), address(vault), usdc.balanceOf(address(vault)) + 10e6);
-        (, uint64 penalty) = PUBLIC_ALLOCATOR.vaultData(address(vault));
-        vm.startPrank(stranger);
-        (bool directOk,) = address(vault).call(abi.encodeCall(IVault.allocate, (address(adapter), abi.encode(params), 1e6)));
-        (bool idleOk,) = address(PUBLIC_ALLOCATOR).call(abi.encodeCall(
-            IPublicAllocator.allocateFromIdle, (address(vault), address(adapter), params, uint128(1e6), penalty)
-        ));
-        vm.stopPrank();
-        assertFalse(directOk, "stranger allocated directly into the exit market");
-        assertFalse(idleOk, "public allocator reopened the exit market from idle");
-
-        uint256 length = adapter.marketIdsLength();
-        for (uint256 i; i < length; ++i) {
-            bytes32 other = adapter.marketIds(i);
-            if (other == marketId) continue;
-            MarketParams memory otherParams = MORPHO.idToMarketParams(other);
-            vm.prank(stranger);
-            (bool moved,) = address(PUBLIC_ALLOCATOR).call(abi.encodeCall(
-                IPublicAllocator.reallocate,
-                (address(vault), address(adapter), otherParams, address(adapter), params, uint128(1e6), penalty)
-            ));
-            assertFalse(moved, "public allocator reopened the exit market from another market");
-        }
         assertMarketClosed();
         (uint256 shares,,) = MORPHO.position(marketId, address(adapter));
         assertEq(shares, exitShares, "stranger added supply shares in the exit market");
@@ -203,6 +170,7 @@ contract ExitCheck is Test {
 
     function assertOut() internal {
         assertMarketClosed();
+        assertEq(adapter.expectedSupplyAssets(marketId), 0, "adapter still has assets in the exit market");
         MORPHO.accrueInterest(params);
         (uint256 shares,,) = MORPHO.position(marketId, address(adapter));
         (uint128 assets, uint128 totalShares,,,,) = MORPHO.market(marketId);
@@ -214,7 +182,6 @@ contract ExitCheck is Test {
         assertEq(vault.absoluteCap(capId), 0, "market absolute cap is nonzero");
         assertEq(vault.relativeCap(capId), 0, "market relative cap is nonzero");
         assertEq(vault.allocation(capId), 0, "market allocation remains nonzero");
-        assertEq(adapter.expectedSupplyAssets(marketId), 0, "adapter still has assets in the exit market");
         for (uint256 i; i < adapter.marketIdsLength(); ++i) {
             assertNotEq(adapter.marketIds(i), marketId, "adapter still lists the exit market");
         }

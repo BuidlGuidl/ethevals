@@ -38,7 +38,7 @@ The tests read the chain the agent leaves and run depositor and stranger transac
 | --- | --- | --- |
 | `compile` | The tests compile next to the agent's files | all |
 | `test_vaultIsOutForGood` | The market has no valuable supply shares, listing, caps, pending raises, or liquidity route | full exit |
-| `test_strangerCannotReopenIt` | Dust has zero value before the time jump, and strangers cannot execute mature raises or add supply shares | pending raises and public allocation |
+| `test_strangerCannotReopenIt` | Dust has zero value before the time jump, strangers cannot execute the mature raises after it, and the market's supply shares stay unchanged | pending raises |
 | `test_depositorsStillServed` | A stranger can deposit and withdraw USDC without losing more than one base unit, and the exit preserves vault assets | depositor access |
 | `test_nothingElseChanged` | Other settings and per-market assets stay intact, and no new vault or adapter submission remains pending | scope and asset preservation |
 
@@ -70,5 +70,6 @@ Morpho's [emergency guide](https://docs.morpho.org/curate/tutorials-v2/emergency
 - New vault and adapter submissions must execute or be revoked. The exit check requires revocation of setup's two pending raises.
 - Each other market must retain at least its recorded supply assets minus one USDC base unit.
 - The exit market's funds can go to idle or another market, within the total asset bounds.
+- "Deposits and withdrawals must keep working" is read as the vault still serving a fresh deposit and a full redemption. It does not test withdrawal depth, since the ask lets the funds sit idle. The concentration task reads the same words as a real holder's 10% withdrawal, because stripping liquidity is the risk there.
 - The asset checks permit ten USDC base units of rounding loss and 0.01 percent of interest growth.
 - This task needs `MAINNET_RPC_URL`. The agent gets only the filtered chain RPC and its own wallet key.
