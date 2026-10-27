@@ -132,7 +132,7 @@
   .caution { @apply text-amber; }
   .lift { @apply text-accent; }
   .eyebrow { @apply text-[10px] uppercase tracking-[.08em] text-dim; }
-  .tasks-page { @apply grid gap-8; }
+  .tasks-page { @apply grid max-w-[880px] gap-8; }
   .task-counts { @apply grid gap-6; }
   .task-totals { @apply grid grid-cols-4 gap-3; }
   .task-totals button { @apply border border-border-strong p-4 text-left transition-colors; }
