@@ -1,0 +1,20 @@
+schema_version = "1.3"
+artifacts = ["/workspace/src", "/workspace/test"]
+
+[task]
+name = "buidlguidl/signed-votes"
+description = "Check signed holder votes from EOAs, a threshold Safe, and deployed or undeployed smart wallets."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "signatures", "safe", "smart-wallets", "typescript"]
+
+[metadata]
+pillar = "building"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 4096
