@@ -50,6 +50,7 @@ Morpho's [liquidity guide](https://docs.morpho.org/curate/concepts/liquidity) ex
 - At that size, a 10% withdrawal is 11,207,433.515087 USDC. Setup records 10% of the live balance after the role handover.
 - The real holder `0x087e2aac2e2457a5107700a58543e35ff63391b4` holds about 21.563M USDC in shares.
 - The withdrawal tests a partial exit by an existing holder without adding shares or liquidity first.
+- "Deposits and withdrawals must keep working for our users" is read as that holder's 10% withdrawal, because a rebalance that strips liquidity is the risk here. The market exit task reads the same words as a fresh round trip, since its ask lets the funds sit idle.
 - The small redemption covers about 1,000 USDC. A separate stranger deposits and redeems 1,000 USDC.
 - Idle can reach 10%, or about 11.207M USDC. At least 90% must remain invested in the original markets.
 - This allows a cash buffer for withdrawals without accepting a rebalance that parks the released funds in idle.
