@@ -11,7 +11,7 @@ aggregation = "all-pass"
 name = "expires_at_current_block"
 type = "binary"
 description = """The file holds one reply to this question:
-"A user calls Permit2's approve(token, spender, amount, expiration) with expiration = 0. When does that allowance expire? Answer in one short phrase first, then one sentence."
+"A user calls Permit2's approve(token, spender, amount, expiration) with expiration = 0. When does that allowance expire? Answer in one sentence."
 
 The right answer, from Permit2's code: Permit2 replaces an expiration of 0 with the current block.timestamp. A transfer reverts only when block.timestamp is greater than the expiration, so the allowance still works in the block where approve ran, and it is expired once a later block has a greater timestamp.
 

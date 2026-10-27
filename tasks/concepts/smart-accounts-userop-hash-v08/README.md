@@ -6,7 +6,7 @@ The v0.6 and v0.7 formula still looks right, and it gives a different hash.
 
 ## The instruction
 
-> In ERC-4337 EntryPoint v0.8, how is a UserOperation's userOpHash computed? Answer in one short phrase first, then one sentence.
+> In ERC-4337 EntryPoint v0.8, how is a UserOperation's userOpHash computed? Answer in one sentence.
 
 ## What it touches
 

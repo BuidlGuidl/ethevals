@@ -11,7 +11,7 @@ aggregation = "all-pass"
 name = "partial_onchain_revert"
 type = "binary"
 description = """The file holds one reply to this question:
-"Under EIP-5792, wallet_getCallsStatus returns status 600 for a batch of calls. What does that mean? Answer in one short phrase first, then one sentence."
+"Under EIP-5792, wallet_getCallsStatus returns status 600 for a batch of calls. What does that mean? Answer in one sentence."
 
 The right answer, from EIP-5792: the batch reverted partially. It reached the chain, some calls reverted, and changes from other calls may be onchain.
 
