@@ -15,8 +15,17 @@ SELF = "0x0000000000000000000000000000000000000002"
 TOTAL = 400 * 10**18
 
 
+class RpcError(RuntimeError):
+    def __init__(self, method, error):
+        super().__init__(f"{method}: {error}")
+        self.error = error
+
+
 def cast(*args):
-    return subprocess.check_output(["cast", *map(str, args)], text=True).strip()
+    try:
+        return subprocess.check_output(["cast", *map(str, args)], text=True).strip()
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f"cast {args[0]} failed with exit code {error.returncode}.") from None
 
 
 def encode(types, *values):
@@ -30,7 +39,7 @@ def rpc(url, method, params):
     with urllib.request.urlopen(request, timeout=120) as response:
         result = json.load(response)
     if "error" in result:
-        raise RuntimeError(f"{method}: {result['error']}")
+        raise RpcError(method, result["error"])
     return result["result"]
 
 
@@ -114,7 +123,10 @@ def main():
     transaction = {"from": owner, "to": ROUTER, "value": hex(TOTAL), "data": data}
     try:
         rpc(url, "eth_call", [transaction, "latest"])
-    except RuntimeError:
+    except RpcError as error:
+        # BALANCE_CHECK_ERC20 is the last command; only its error proves a price refusal.
+        if error.error.get("data") != cast("sig", "BalanceTooLow()"):
+            raise
         write_sale({"status": "refused", "quarter": quarter, "ethSold": "0", "usdcReceived": "0",
                     "transactionHashes": [], "reason": "The atomic route cannot meet the 98.5% Chainlink floor."})
         return

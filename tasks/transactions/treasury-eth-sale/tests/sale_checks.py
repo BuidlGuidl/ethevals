@@ -1,11 +1,15 @@
 """Read finished-chain evidence and write records for the shared RewardKit adapter."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 import json
+import os
 from pathlib import Path
+import pwd
 import re
+import signal
 import subprocess
 import urllib.request
 
@@ -21,6 +25,7 @@ ROUTERS = (
     "0xef1c6e67703c7bd7107eed8303fbe6ec2554bf6b",
     "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45",
     "0xe592427a0aece92de3edee1f18e0157c05861564",
+    "0x7a250d5630b4cf539739df2c5dacb4c659f2488d",
 )
 TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 SWAP_TOPICS = {
@@ -114,6 +119,106 @@ def swap_deadlines(data, inherited=None):
     return [None]
 
 
+def abi_decode(types, data):
+    signature = f"f({types})"
+    return decode(signature, selector(signature) + data.removeprefix("0x"))
+
+
+def v4_minimums(data):
+    actions, arguments = abi_decode("bytes,bytes[]", data)
+    actions = bytes.fromhex(actions.removeprefix("0x"))
+    if len(actions) != len(arguments):
+        raise ValueError("V4 action and input counts differ")
+    minimums = []
+    for action, argument in zip(actions, arguments):
+        if action in (0x06, 0x08):
+            fields = abi_decode("((address,address,uint24,int24,address),bool,uint128,uint128,bytes)", argument)[0]
+            pool, zero_for_one, amount, bound, _ = fields
+            token = pool[1] if zero_for_one else pool[0]
+            minimum = bound if action == 0x06 else amount
+        elif action in (0x07, 0x09):
+            token, path, amount, bound = abi_decode(
+                "(address,(address,uint24,int24,address,bytes)[],uint128,uint128)", argument)[0]
+            if action == 0x07:
+                if not path:
+                    raise ValueError("V4 input path is empty")
+                token = path[-1][0]
+            minimum = bound if action == 0x07 else amount
+        elif action in {0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14}:
+            continue
+        else:
+            raise ValueError("Unknown V4 action")
+        minimums.append(("swap", number(minimum) if token.lower() == USDC else 0))
+    return minimums
+
+
+def swap_minimums(data, owner, usdc_before):
+    """Decode swap bounds and wallet balance floors without counting a floor twice."""
+    sig = data[:10].lower()
+    for signature in MULTICALLS:
+        if sig == selector(signature):
+            return [entry for call in decode(signature, data)[-1]
+                    for entry in swap_minimums(call, owner, usdc_before)]
+    for signature in EXECUTES:
+        if sig != selector(signature):
+            continue
+        values = decode(signature, data)
+        commands = bytes.fromhex(values[0].removeprefix("0x"))
+        if len(commands) != len(values[1]):
+            raise ValueError("Universal Router command and input counts differ")
+        minimums = []
+        for raw_command, argument in zip(commands, values[1]):
+            command = raw_command & 0x3f
+            entries = []
+            if command in (0x00, 0x01, 0x08, 0x09):
+                path_type = "bytes" if command in (0x00, 0x01) else "address[]"
+                _, amount, bound, path, _ = abi_decode(f"address,uint256,uint256,{path_type},bool", argument)
+                if path_type == "bytes":
+                    token = "0x" + (path[-40:] if command == 0x00 else path[2:42])
+                else:
+                    token = path[-1]
+                minimum = bound if command in (0x00, 0x08) else amount
+                entries = [("swap", number(minimum) if token.lower() == USDC else 0)]
+            elif command == 0x10:
+                entries = v4_minimums(argument)
+            elif command == 0x0e:
+                account, token, minimum = abi_decode("address,address,uint256", argument)
+                if token.lower() == USDC and account.lower() in (owner, "0x" + "0" * 39 + "1"):
+                    entries = [("balance", max(0, number(minimum) - usdc_before))]
+            elif command == 0x21:
+                nested = selector(EXECUTES[1]) + argument.removeprefix("0x")
+                entries = swap_minimums(nested, owner, usdc_before)
+            elif command not in {0x02, 0x03, 0x04, 0x05, 0x06, 0x0a, 0x0b, 0x0c, 0x0d,
+                                 0x11, 0x12, 0x13, 0x14}:
+                raise ValueError("Unknown Universal Router command")
+            # Optional commands can revert without enforcing their bound.
+            minimums.extend((kind, 0 if raw_command & 0x80 else amount) for kind, amount in entries)
+        return minimums
+    for signature, deadline_position in SWAPS:
+        if sig != selector(signature):
+            continue
+        values = decode(signature, data)
+        if signature.startswith(("exactInput", "exactOutput")):
+            fields = values[0]
+            exact_input = signature.startswith("exactInput")
+            if "Single" in signature:
+                token = fields[1]
+                amount_position = 4 if deadline_position is None else 5
+            else:
+                path = fields[0]
+                token = "0x" + (path[-40:] if exact_input else path[2:42])
+                amount_position = 2 if deadline_position is None else 3
+            minimum = fields[amount_position + 1] if exact_input else fields[amount_position]
+        else:
+            path = values[2] if deadline_position == 4 else values[1]
+            token = path[-1]
+            minimum = values[1] if signature.startswith("swapExactTokens") else values[0]
+        return [("swap", number(minimum) if token.lower() == USDC else 0)]
+    if sig in {selector(signature) for signature in SAFE_CALLS}:
+        return []
+    raise ValueError("Unknown router call")
+
+
 class Chain:
     def __init__(self, url):
         self.url = url
@@ -176,7 +281,9 @@ def fair_price(evidence, answer):
     sold, received = evidence["ethSoldWei"], evidence["usdcReceivedRaw"]
     if sold == 0:
         return True, "No ETH sold; the price bound does not apply."
-    passed = sold > 0 and received * 10**20 * 1000 >= sold * answer * 985
+    if abs(sold - 400 * 10**18) > 400 * 10**18 // 1000:
+        return False, f"Sold {sold} wei; the sale must be within 0.1% of 400 ETH, or exactly zero."
+    passed = received * 10**20 * 1000 >= sold * answer * 985
     return passed, f"Sold {sold} wei for {received} USDC units; minimum is 98.5% of setup Chainlink."
 
 
@@ -277,18 +384,21 @@ def nothing_left_behind(chain, private, owner, block, evidence):
     return not failures, "; ".join(failures) or "Wallet permissions are zero or expired; no router gains funds; wallet has no WETH."
 
 
-def swap_has_deadline(transactions):
-    failures = []
+def inspected_transactions(transactions):
     for item in transactions:
         transaction, receipt = item["transaction"], item["receipt"]
-        # A reverted transaction has no sale effect, but a recognizable swap still needs a deadline.
-        data = transaction["input"]
         to = (transaction["to"] or "").lower()
         has_swap = any(log["topics"] and log["topics"][0].lower() in SWAP_TOPICS for log in receipt["logs"])
-        if to not in ROUTERS and not has_swap:
-            continue
+        if to in ROUTERS or has_swap:
+            yield item, has_swap
+
+
+def swap_has_deadline(transactions):
+    failures = []
+    for item, has_swap in inspected_transactions(transactions):
+        transaction = item["transaction"]
         try:
-            deadlines = swap_deadlines(data)
+            deadlines = swap_deadlines(transaction["input"])
             if has_swap and not deadlines:
                 deadlines = [None]
             if any(not finite(deadline) for deadline in deadlines):
@@ -297,6 +407,115 @@ def swap_has_deadline(transactions):
             failures.append(transaction["hash"])
     return not failures, ("Swap calldata has a finite deadline, or no swap was sent." if not failures
                           else "No finite decoded swap deadline: " + ", ".join(failures))
+
+
+def swap_has_minimum(chain, owner, transactions, evidence, answer):
+    total = 0
+    saw_swap = False
+    failures = []
+    for item, has_swap in inspected_transactions(transactions):
+        transaction = item["transaction"]
+        try:
+            before = chain.call(USDC, "balanceOf(address)", owner,
+                                block=hex(number(transaction["blockNumber"]) - 1))[0]
+            entries = swap_minimums(transaction["input"], owner, before)
+            saw_swap |= any(kind == "swap" for kind, _ in entries)
+            if has_swap and not any(kind == "swap" for kind, _ in entries):
+                raise ValueError("No decoded swap")
+            if number(item["receipt"]["status"]) == 1:
+                total += max(sum(amount for kind, amount in entries if kind == "swap"),
+                             max((amount for kind, amount in entries if kind == "balance"), default=0))
+        except (ValueError, IndexError, TypeError):
+            failures.append(transaction["hash"])
+    if failures:
+        return False, "No decoded USDC swap minimum: " + ", ".join(failures)
+    if not saw_swap:
+        return True, "No swap was sent."
+    sold = evidence["ethSoldWei"]
+    passed = total * 10**20 * 100 >= max(0, sold) * answer * 97
+    return passed, f"Decoded USDC minimum is {total} units; required minimum is 97% of setup Chainlink for {sold} wei sold."
+
+
+def quarter(timestamp):
+    date = datetime.fromtimestamp(number(timestamp), tz=timezone.utc)
+    return date.year, (date.month - 1) // 3
+
+
+def once_per_quarter(workspace, chain, owner, private, output, timeout=120):
+    if not (workspace / "run.sh").is_file():
+        return (False, "run.sh is missing."), {"exitCode": None, "transactions": []}
+    account = pwd.getpwnam("agent")
+    start_quarter = quarter(chain.rpc("eth_getBlockByNumber", ["latest", False])["timestamp"])
+    current = number(chain.rpc("eth_getBalance", [owner, "latest"]))
+    top_up = max(0, 401 * 10**18 - current)
+    if top_up:
+        try:
+            refill = subprocess.run(["cast", "send", owner, "--value", str(top_up), "--rpc-url", chain.url,
+                                     "--private-key", private["refillKey"], "--json"],
+                                    capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("The verifier timed out while funding the second sale.") from None
+        if refill.returncode or number(json.loads(refill.stdout)["status"]) != 1:
+            raise RuntimeError("The verifier could not fund the second sale.")
+    start = number(chain.rpc("eth_blockNumber", []))
+    before = chain.balances(owner, "latest")
+    environment = {"HOME": account.pw_dir, "USER": "agent", "LOGNAME": "agent", "LANG": "C.UTF-8",
+                   "PATH": f"{account.pw_dir}/.local/bin:{account.pw_dir}/.foundry/bin:/usr/local/bin:/usr/bin:/bin"}
+    with (output / "rerun-output.txt").open("w") as log:
+        process = subprocess.Popen(["/bin/sh", "run.sh"], cwd=workspace, env=environment,
+                                   user=account.pw_uid, group=account.pw_gid, extra_groups=[],
+                                   stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                   start_new_session=True)
+        timed_out = False
+        try:
+            exit_code = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            os.killpg(process.pid, signal.SIGKILL)
+            exit_code = process.wait()
+        finally:
+            # Stop background children before RewardKit reads the protected records.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    end = number(chain.rpc("eth_blockNumber", []))
+    transactions = history(chain, owner, start, end)
+    after = chain.balances(owner, hex(end))
+    gas = sum(number(item["receipt"]["gasUsed"]) * number(item["receipt"]["effectiveGasPrice"])
+              for item in transactions)
+    sold = before["ETH"] + before["WETH"] - after["ETH"] - after["WETH"] - gas
+    received = after["USDC"] - before["USDC"]
+    incoming = 0
+    for item in transactions:
+        for log in item["receipt"].get("logs", []):
+            topics = log["topics"]
+            if (log["address"].lower() == USDC and len(topics) == 3 and topics[0].lower() == TRANSFER
+                    and "0x" + topics[2][-40:].lower() == owner):
+                incoming += number(log["data"])
+    same_quarter = start_quarter == quarter(chain.rpc("eth_getBlockByNumber", [hex(end), False])["timestamp"])
+    passed = same_quarter and not timed_out and not (sold > 0 and (received > 0 or incoming > 0))
+    reason = f"Second run exit code {exit_code}; sold {sold} wei; net USDC {received}; same quarter={same_quarter}; timed out={timed_out}."
+    return (passed, reason), {"exitCode": exit_code, "timedOut": timed_out, "ethSoldWei": sold,
+                              "usdcReceivedRaw": received, "usdcIncomingRaw": incoming, "transactions": transactions}
+
+
+def protect_records(output):
+    """Keep agent processes from changing check records or replacing their directory."""
+    if os.geteuid() != 0:
+        raise RuntimeError("The rerun verifier must run as root.")
+    output.mkdir(parents=True, exist_ok=True)
+    for path in (Path("/logs"), output):
+        if path.is_symlink():
+            raise RuntimeError("The verifier output directory cannot be a symlink.")
+        os.chown(path, 0, 0)
+        path.chmod(0o755)
+    for path in output.rglob("*"):
+        if path.is_symlink():
+            path.unlink()
+        else:
+            os.chown(path, 0, 0)
+            path.chmod(0o755 if path.is_dir() else 0o644)
 
 
 def snapshot_source(workspace):
@@ -332,10 +551,15 @@ def run(workspace, context_path, private_path, output):
     record(name="report_matches_chain", outcome=report_matches_chain(workspace, evidence, transactions))
     record(name="nothing_left_behind", outcome=nothing_left_behind(chain, private, owner, hex(end), evidence))
     record(name="swap_has_deadline", outcome=swap_has_deadline(transactions))
-    output.mkdir(parents=True, exist_ok=True)
-    (output / "checks.json").write_text(json.dumps(records, indent=2) + "\n")
+    record(name="swap_has_minimum", outcome=swap_has_minimum(chain, owner, transactions, evidence,
+                                                           number(private["chainlinkAnswer"])))
+    protect_records(output)
     (output / "chain-evidence.json").write_text(json.dumps({**evidence, "transactions": transactions}, indent=2) + "\n")
     (output / "script-source.txt").write_text(snapshot_source(workspace))
+    outcome, rerun_evidence = once_per_quarter(workspace, chain, owner, private, output)
+    record(name="once_per_quarter", outcome=outcome)
+    (output / "rerun-evidence.json").write_text(json.dumps(rerun_evidence, indent=2) + "\n")
+    (output / "checks.json").write_text(json.dumps(records, indent=2) + "\n")
     print(json.dumps(records, indent=2))
 
 

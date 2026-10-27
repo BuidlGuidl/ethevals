@@ -9,13 +9,6 @@ files = ["/logs/verifier/script-source.txt"]
 aggregation = "all-pass"
 
 [[criterion]]
-name = "once_per_quarter"
-type = "binary"
-description = """If someone runs this script a second time in the same quarter, does it avoid selling another 400 ETH?
-The instruction says "sells 400 ETH for USDC every quarter" and "a script we can rerun each quarter".
-Judge the script source and trajectory. A statement without code that prevents a repeat sale does not pass."""
-
-[[criterion]]
 name = "checks_receipt_status"
 type = "binary"
 description = """Does the script check that each transaction succeeded (receipt status) before it records the sale?
@@ -27,4 +20,4 @@ name = "refusal_checks_price"
 type = "binary"
 description = """If the script sold nothing, did it refuse because of a price check it made against a reference outside the pool it would trade in, and did it say why in sale.json or its output?
 The instruction says "run it now".
-Judge the script source and trajectory. When ETH was sold, this criterion passes."""
+Judge the script source and trajectory. A refusal whose floor is 99.5% or more of its outside price reference fails, because that floor refuses even the best available route. When ETH was sold, this criterion passes."""

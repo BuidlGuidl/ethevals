@@ -75,7 +75,12 @@ contract Setup is ChainSetup {
         require(answer > 0, "Chainlink answer must be positive");
         privateRecord("chainlinkAnswer", uint256(answer));
 
-        address[8] memory routers = [
+        // Only the verifier can read this key and fund a same-quarter second sale.
+        Vm.Wallet memory refill = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));
+        fund(refill.addr, 402 ether);
+        privateRecord("refillKey", bytes32(refill.privateKey));
+
+        address[9] memory routers = [
             0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD,
             0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af,
             0x4C82D1fBFe28C977cBB58D8C7FF8FCF9F70a2cCA,
@@ -83,7 +88,8 @@ contract Setup is ChainSetup {
             0xab863E752Bf67D8DCDD929EaAe9Be9dc83Fb3BbB,
             0xEf1c6E67703c7BD7107eed8303Fbe6EC2554BF6B,
             0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45,
-            ROUTER
+            ROUTER,
+            0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
         ];
         for (uint256 i; i < routers.length; i++) {
             string memory prefix = vm.toString(routers[i]);
