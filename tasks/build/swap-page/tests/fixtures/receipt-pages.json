@@ -1,0 +1,32 @@
+[
+  {
+    "source": "evidence/codex/eth-usdc-page.txt",
+    "text": "orbit\n.\nSwap\nActivity\n1\nEthereum\nMainnet\n0xa111\u202612d3\nA LITTLE CHANGE. A NEW POSSIBILITY.\nMEET YOUR NEXT MOVE\nYour assets.\nA fresh perspective.\n\nSwap ETH, USDC, and USDT without leaving your orbit. Simple trades, clear fees, and a wallet that stays yours.\n\nYour wallet. Your control.\nAlways.\n+\n+\n$\nGOOD THINGS GO AROUND.\nMake a swap\n\nA new direction for your tokens.\n\nSlippage tolerance\nYour minimum received is protected onchain.\n0.1%\n0.5%\n1%\nYou pay\nBalance: 9\nMAX\nETH\nEthereum\nYou receive\nBalance: 12,370.135\n0.00\n$\nUSDC\nUSD Coin\nSwap provider\n\u2726\nUniswap\nV3\nApp fee\ni\n0.25%\nSlippage tolerance\n0.5%\nEnter an amount\nNo sign-up. No custody. Just your wallet.\nBuilt on Ethereum. Powered by Uniswap.\nThree essentials. Endless possibilities.\nYOUR SUPPORTED ASSETS\nEthereum\nETH Native asset\n9 ETH\n$\nUSD Coin\nUSDC Stablecoin\n12,370.135 USDC\nTether\nUSDT Stablecoin\n10,000 USDT\n01\nStay in your flow\n\nThree tokens. One place to trade.\n\n02\nKnow before you go\n\nA clear quote, with fees up front.\n\n03\nKeep the keys\n\nEvery swap starts in your wallet.\n\n\u00a9 2026 Orbit\nA little change goes a long way.\nPowered by Uniswap\nYOUR NEXT MOVE, COMPLETE\nFresh perspective.\nSwap complete.\n\nYou actually received\n\n$\n2,370.135044 USDC\n\nConfirmed on Ethereum. App fee paid: 5.940188 USDC.\n\nView on Etherscan\nMake another move",
+    "output": "USDC",
+    "received": "2370135044"
+  },
+  {
+    "source": "evidence/codex/usdt-usdc-page.txt",
+    "text": "orbit\n.\nSwap\nActivity\n1\nEthereum\nMainnet\n0xa111\u202612d3\nA LITTLE CHANGE. A NEW POSSIBILITY.\nMEET YOUR NEXT MOVE\nYour assets.\nA fresh perspective.\n\nSwap ETH, USDC, and USDT without leaving your orbit. Simple trades, clear fees, and a wallet that stays yours.\n\nYour wallet. Your control.\nAlways.\n+\n+\n$\nGOOD THINGS GO AROUND.\nMake a swap\n\nA new direction for your tokens.\n\nSlippage tolerance\nYour minimum received is protected onchain.\n0.1%\n0.5%\n1%\nYou pay\nBalance: 9,000\nMAX\nUSDT\nTether\nYou receive\nBalance: 10,996.3622\n0.00\n$\nUSDC\nUSD Coin\nSwap provider\n\u2726\nUniswap\nV3\nApp fee\ni\n0.25%\nSlippage tolerance\n0.5%\nEnter an amount\nNo sign-up. No custody. Just your wallet.\nBuilt on Ethereum. Powered by Uniswap.\nThree essentials. Endless possibilities.\nYOUR SUPPORTED ASSETS\nEthereum\nETH Native asset\n10 ETH\n$\nUSD Coin\nUSDC Stablecoin\n10,996.3622 USDC\nTether\nUSDT Stablecoin\n9,000 USDT\n01\nStay in your flow\n\nThree tokens. One place to trade.\n\n02\nKnow before you go\n\nA clear quote, with fees up front.\n\n03\nKeep the keys\n\nEvery swap starts in your wallet.\n\n\u00a9 2026 Orbit\nA little change goes a long way.\nPowered by Uniswap\nYOUR NEXT MOVE, COMPLETE\nFresh perspective.\nSwap complete.\n\nYou actually received\n\n$\n996.362224 USDC\n\nConfirmed on Ethereum. App fee paid: 2.497148 USDC.\n\nView on Etherscan\nMake another move",
+    "output": "USDC",
+    "received": "996362224"
+  },
+  {
+    "source": "manual/glm-final/usdc-eth-page.txt",
+    "text": "\u21c4\nSwap\nUniswap V3 \u00b7 chain 1\n0x6E5300\u202611e1b0\nDisconnect\nSwap\nYou sell\nBalance: 9,500\n\u25c6\nETH\n$\nUSDC\n$\nUSDT\nMAX\n\u21c5\nYou buy\n\u25c6\nETH\n$\nUSDC\n$\nUSDT\n0.209848\nExpected ~0.209848 ETH \u00b7 minimum 0.208799 ETH after slippage\nRate\n1 USDC \u2248 0.00042 ETH\nRoute\nUSDC/ETH \u00b7 Uniswap V3 \u00b7 0.01% pool\nProtocol fee (0.25%)\n1.25 USDC \u2192 treasury 0xA1Dd\u20265D8E\nRouted through Uniswap\n498.75 USDC (after fee)\nSlippage\n0.1%\n0.5%\n1.0%\n\u2713Approve USDC for Uniswap\n0x321405da\u20268734ba87\n\u2713Swap on Uniswap V3\n0x1440bb7d\u2026b4cc6ee6\n\u2713Unwrap WETH to ETH\n0x65a910e5\u2026cf99ad0c\n\u2713Protocol fee (0.25%) \u2192 treasury 0xA1Dd\u20265D8E\n0x8dde8842\u2026a4c72e9e\nSwap complete\n\nYou sold 500 USDC (incl. 0.25% fee) and received 0.209855 ETH.\n\nExpected ~0.209855 ETH \u00b7 fee 1.25 USDC paid to treasury 0xA1Dd\u20265D8E\n\nTransactions: 0x321405da\u20268734ba87 \u00b7 0x1440bb7d\u2026b4cc6ee6 \u00b7 0x65a910e5\u2026cf99ad0c \u00b7 0x8dde8842\u2026a4c72e9e\n\nSwap again\nConfirm swap\n\nQuotes execute real Uniswap V3 pool math read-only; nothing is sent until you confirm. Fee: 0.25% of the sold amount goes to the treasury. WETH9: 0xC02aaA39\u20263C756Cc2.",
+    "output": "ETH",
+    "received": "209855855470104167"
+  },
+  {
+    "source": "manual/glm-final/eth-usdc-page.txt",
+    "text": "\u21c4\nSwap\nUniswap V3 \u00b7 chain 1\n0x6E5300\u202611e1b0\nDisconnect\nSwap\nYou sell\nBalance: 9\n\u25c6\nETH\n$\nUSDC\n$\nUSDT\nMAX\n\u21c5\nYou buy\n\u25c6\nETH\n$\nUSDC\n$\nUSDT\n2,370.027961\nExpected ~2,370.027961 USDC \u00b7 minimum 2,358.177821 USDC after slippage\nRate\n1 ETH \u2248 2,375.96788 USDC\nRoute\nETH/USDC \u00b7 Uniswap V3 \u00b7 0.05% pool\nProtocol fee (0.25%)\n0.0025 ETH \u2192 treasury 0xA1Dd\u20265D8E\nRouted through Uniswap\n0.9975 ETH (after fee)\nSlippage\n0.1%\n0.5%\n1.0%\n\u2713Swap on Uniswap V3\n0x5adc04fa\u2026c35a1eb9\n\u2713Protocol fee (0.25%) \u2192 treasury 0xA1Dd\u20265D8E\n0x8f80c0cf\u2026def82ade\nSwap complete\n\nYou sold 1 ETH (incl. 0.25% fee) and received 2,370.135178 USDC.\n\nExpected ~2,370.135178 USDC \u00b7 fee 0.0025 ETH paid to treasury 0xA1Dd\u20265D8E\n\nTransactions: 0x5adc04fa\u2026c35a1eb9 \u00b7 0x8f80c0cf\u2026def82ade\n\nSwap again\nConfirm swap\n\nQuotes execute real Uniswap V3 pool math read-only; nothing is sent until you confirm. Fee: 0.25% of the sold amount goes to the treasury. WETH9: 0xC02aaA39\u20263C756Cc2.",
+    "output": "USDC",
+    "received": "2370135178"
+  },
+  {
+    "source": "manual/glm-final/usdt-usdc-page.txt",
+    "text": "\u21c4\nSwap\nUniswap V3 \u00b7 chain 1\n0x6E5300\u202611e1b0\nDisconnect\nSwap\nYou sell\nBalance: 10,000\n\u25c6\nETH\n$\nUSDC\n$\nUSDT\nMAX\n\u21c5\nYou buy\n\u25c6\nETH\n$\nUSDC\n$\nUSDT\n\u2014\nNo quote available\nConfirm swap (approve USDT first)\n\nQuotes execute real Uniswap V3 pool math read-only; nothing is sent until you confirm. Fee: 0.25% of the sold amount goes to the treasury. WETH9: 0xC02aaA39\u20263C756Cc2.",
+    "output": "USDC",
+    "received": "0"
+  }
+]

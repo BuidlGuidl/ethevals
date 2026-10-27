@@ -1,0 +1,25 @@
+<!-- DOM fixture from GLM src/components/TokenRow.tsx. -->
+<main>
+  <div id="rows"></div>
+  <button title="Switch direction" aria-label="Switch direction" onclick="selected.reverse();render()">⇅</button>
+  <button>Confirm swap</button>
+</main>
+<script>
+  const tokens = [['ETH', 'Ether'], ['USDC', 'USD Coin'], ['USDT', 'Tether USD']];
+  const selected = ['ETH', 'USDC'];
+  function render() {
+    document.getElementById('rows').innerHTML = selected.map((symbol, row) => `
+      <div class="token-row">
+        <div class="token-row-top"><span>${row ? 'You buy' : 'You sell'}</span></div>
+        <div class="token-row-main">
+          <div class="token-select" role="radiogroup" aria-label="${row ? 'You buy' : 'You sell'} token">
+            ${tokens.map(([id, name]) => `<button type="button" role="radio" aria-checked="${id === symbol}"
+              aria-label="${name}" data-symbol="${id}" ${id === selected[1 - row] ? 'disabled' : ''}
+              onclick="selected[${row}]='${id}';render()"><span>${id === 'ETH' ? '◆' : '$'}</span>${id}</button>`).join('')}
+          </div>
+          ${row ? '<div class="token-output">0.21</div>' : '<div class="token-input-wrap"><input type="text" inputmode="decimal"></div>'}
+        </div>
+      </div>`).join('');
+  }
+  render();
+</script>

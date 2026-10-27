@@ -1,0 +1,20 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/governance-arbitrum-block-clock"
+description = "Check the duration of a block-number voting period on Arbitrum One."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["governance","arbitrum","clock"]
+
+[metadata]
+area = "Governance"
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

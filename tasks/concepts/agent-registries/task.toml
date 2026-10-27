@@ -8,6 +8,7 @@ authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "erc", "agent-discovery"]
 
 [metadata]
+area = "Agents"
 pillar = "concepts"
 modes = ["vanilla", "internet", "skills"]
 

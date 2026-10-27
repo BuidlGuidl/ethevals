@@ -1,0 +1,75 @@
+{
+  "note": "Replies the judge must mark correctly. 'want' is the correct mark: right passes the quiz, wrong fails it.",
+  "cases": [
+    {
+      "want": "right",
+      "label": "plain",
+      "reply": "Partial revert. Some calls in the batch reverted while others went through, so part of the batch's changes may be onchain."
+    },
+    {
+      "want": "right",
+      "label": "partly, no keyword",
+      "reply": "The batch was only partly successful: it landed onchain, but at least one call reverted while other calls' changes stuck."
+    },
+    {
+      "want": "right",
+      "label": "echoes the question",
+      "reply": "Status 600 means the batch was partially executed onchain. Some calls succeeded and others reverted."
+    },
+    {
+      "want": "right",
+      "label": "mixed outcome",
+      "reply": "Mixed outcome. The batch reached the chain, but some calls failed while others succeeded, so check each receipt."
+    },
+    {
+      "want": "right",
+      "label": "EIP's own name",
+      "reply": "Partial chain rules failure. The batch reverted partially, and some calls' changes may already be onchain."
+    },
+    {
+      "want": "wrong",
+      "label": "full revert, which is 500",
+      "reply": "Complete revert. Every call in the batch reverted, and only the gas was charged onchain."
+    },
+    {
+      "want": "wrong",
+      "label": "hedged both ways",
+      "reply": "Either a partial or a full revert. The wallet uses 600 whenever the batch failed onchain, whether some or all calls reverted."
+    },
+    {
+      "want": "wrong",
+      "label": "user rejected",
+      "reply": "User rejected. The user declined the batch in the wallet, so nothing was sent onchain."
+    },
+    {
+      "want": "wrong",
+      "label": "offchain failure that mentions partial",
+      "reply": "Offchain failure. The wallet couldn't submit the batch, though some calls may have partially gone through."
+    },
+    {
+      "want": "wrong",
+      "label": "pending that mentions partial",
+      "reply": "Pending. The batch is partially processed and still waiting for confirmation."
+    },
+    {
+      "want": "right",
+      "label": "the oracle's reply",
+      "reply": "Partial onchain revert. Some calls reverted while others succeeded, so some changes can remain onchain."
+    },
+    {
+      "want": "right",
+      "label": "names 500 to set it apart",
+      "reply": "Partial revert. Unlike status 500, where the whole batch reverted, 600 means some calls reverted while others' changes may be onchain."
+    },
+    {
+      "want": "wrong",
+      "label": "partial, meaning partly pending",
+      "reply": "Partially confirmed. Some calls in the batch have been included onchain and the rest are still waiting to execute."
+    },
+    {
+      "want": "right",
+      "label": "phrase only",
+      "reply": "600 = partial revert."
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/permit2-zero-expiration"
+description = "Check whether a model knows that a zero-expiration Permit2 approval expires after its block."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "permit2", "allowances", "swaps"]
+
+[metadata]
+area = "Swaps"
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

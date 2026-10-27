@@ -1,0 +1,20 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/permit2-7702-signature"
+description = "Check whether a model knows that Permit2 uses ERC-1271 for an EOA with EIP-7702 delegation."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "permit2", "eip-7702", "erc-1271", "swaps"]
+
+[metadata]
+area = "Swaps"
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

@@ -1,0 +1,7 @@
+{
+  "name": "holder-votes",
+  "private": true,
+  "type": "module",
+  "dependencies": { "viem": "2.57.11" },
+  "devDependencies": { "@types/node": "22.15.30", "tsx": "4.20.3", "typescript": "5.8.3" }
+}
