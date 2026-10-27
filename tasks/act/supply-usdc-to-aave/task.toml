@@ -8,6 +8,7 @@ keywords = ["ethereum", "defi", "fork"]
 
 [metadata]
 pillar = "act"
+area = "Lending"
 modes = ["internet", "skills"]
 
 [verifier]

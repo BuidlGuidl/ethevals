@@ -70,6 +70,13 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         raise ValueError(f"{path / 'task.toml'}: [task].description must be a nonempty line")
     if task.config.metadata.get("pillar") != path.parent.name:
         raise ValueError(f"{path / 'task.toml'}: metadata.pillar must match the parent folder {path.parent.name!r}")
+    if "area" in task.config.metadata:
+        area = task.config.metadata["area"]
+        if not isinstance(area, str) or not area.strip():
+            raise ValueError(f"{path / 'task.toml'}: metadata.area must be a nonempty string")
+    if "layer" in task.config.metadata and (
+            path.parent.name != "build" or task.config.metadata["layer"] not in ("contracts", "frontend", "backend")):
+        raise ValueError(f"{path / 'task.toml'}: metadata.layer must be contracts, frontend, or backend, on a build task")
     config = config or load_job()
     credentials = config.credential_names()
     for name in task_host_variables(path):

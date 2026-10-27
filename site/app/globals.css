@@ -13,6 +13,9 @@
   --color-green: #5ee69a;
   --color-amber: #f2bf4f;
   --color-red: #ff7b7b;
+  --color-concepts: #8fa0ff;
+  --color-build: #67c8f0;
+  --color-act: #f09ad0;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
   --font-terminal: var(--font-vt323), monospace;
   --font-diagram: var(--font-archivo), sans-serif;
@@ -132,6 +135,39 @@
   .caution { @apply text-amber; }
   .lift { @apply text-accent; }
   .eyebrow { @apply text-[10px] uppercase tracking-[.08em] text-dim; }
+  .tasks-page { @apply grid max-w-[880px] gap-8; }
+  .task-counts { @apply grid gap-6; }
+  .task-totals { @apply grid grid-cols-4 gap-3; }
+  .task-totals button { @apply border border-border-strong p-4 text-left transition-colors; }
+  .task-totals button:hover { @apply bg-tint; }
+  .task-totals .task-number { @apply mt-2 block text-[64px] leading-none tracking-tight; }
+  .task-totals button[aria-pressed="true"] { @apply border-accent bg-accent text-sheet; }
+  .task-totals button[aria-pressed="true"] .eyebrow { @apply text-sheet; }
+  .pillar-concepts { --pillar: var(--color-concepts); }
+  .pillar-build { --pillar: var(--color-build); }
+  .pillar-act { --pillar: var(--color-act); }
+  .task-totals button[class*="pillar-"]:not([aria-pressed="true"]) .eyebrow { color: var(--pillar); }
+  .task-totals button[class*="pillar-"][aria-pressed="true"] { background: var(--pillar); border-color: var(--pillar); }
+  .task-areas.pillar-build button[aria-pressed="true"] { background: var(--pillar); border-color: var(--pillar); }
+  .task-badges .badge[class*="pillar-"] { color: var(--pillar); border-color: color-mix(in srgb, var(--pillar) 45%, transparent); }
+  .task-areas { @apply flex flex-wrap gap-2; }
+  .task-areas button { @apply inline-flex min-h-9 items-center gap-2 text-xs transition-colors; }
+  .task-areas button span { @apply font-semibold; }
+  .task-areas button:hover:not(:disabled):not([aria-pressed="true"]) { @apply border-accent text-accent; }
+  .task-areas button[aria-pressed="true"] { @apply border-accent bg-accent text-sheet; }
+  .task-areas button:disabled { @apply opacity-40; }
+  .task-filter-status { @apply flex min-h-9 items-center justify-between gap-4 text-xs text-muted; }
+  .task-catalog { @apply border-t border-border-strong; }
+  .task-row { @apply border-b border-border; }
+  .task-row summary { @apply flex cursor-pointer items-center gap-4 py-5; list-style: none; }
+  .task-row summary::-webkit-details-marker { display: none; }
+  .task-row summary::before { content: "+"; @apply text-accent; }
+  .task-row[open] summary::before { content: "−"; }
+  .task-row summary:hover { @apply bg-tint; }
+  .task-title { @apply min-w-0 flex-1 font-semibold; }
+  .task-badges { @apply flex flex-wrap justify-end gap-2; }
+  .task-instruction { @apply grid gap-3 pb-6; }
+  .task-instruction > a { @apply w-fit text-xs; }
   .sheet-close { @apply absolute right-5 top-5 flex h-9 w-9 items-center justify-center border border-border-strong; }
   .sheet-close:hover { @apply bg-accent text-sheet; }
   .sheet { animation: sheet-in .2s ease-out; }
@@ -273,6 +309,11 @@
 @keyframes sheet-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
 @media (max-width: 1100px) { .navtag { display: none; } }
 @media (max-width: 760px) {
+  .task-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .task-totals .task-number { font-size: 48px; }
+  .task-row summary { flex-wrap: wrap; gap: 10px; }
+  .task-title { flex-basis: calc(100% - 24px); }
+  .task-badges { padding-left: 18px; justify-content: flex-start; }
   .sheet { padding-inline: 16px; }
   .runs-table { min-width: 0; }
   .runs-table th, .runs-table td { padding-inline: 8px; white-space: nowrap; }
@@ -285,7 +326,7 @@
   pre { padding: 16px; }
   .topnav { gap: 12px; padding-inline: 18px; }
   .brand { width: 88px; }
-  .navlinks { gap: 15px; font-size: 11px; }
+  .navlinks { gap: 12px; font-size: 11px; }
   .hero { gap: 12px; margin-bottom: 42px; }
   .hero-brand { margin-bottom: 12px; }
   .hero-desc { font-size: 13px; }
