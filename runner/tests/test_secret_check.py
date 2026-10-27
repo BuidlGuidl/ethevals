@@ -39,6 +39,7 @@ def test_local_run_withholds_secret_files_and_keeps_a_safe_error_row(tmp_path, m
     assert (row["status"], row["error_kind"], row["trajectory_file"], row["verifier_files"]) == (
         "error", "secret", None, None)
     assert "NEW_AGENT_CREDENTIAL" in row["error_reason"]
+    assert f"trial/{location}" in row["error_reason"]
     assert "offline-new-agent-credential" not in json.dumps(row)
     assert "offline-new-agent-credential" not in capsys.readouterr().err
     release = publish_logs(output / "release", "owner/repo", "22", "a" * 40, rows=[row])
@@ -295,9 +296,12 @@ def test_check_reads_binary_chunk_boundaries_and_names_without_following_links(t
     (folder / "output.bin").write_bytes(b"\x00" * (1024 * 1024 - 3) + value + b"\xff")
     (folder / "offline-filename-token").write_text("clean")
     (folder / "publication-check.json").write_text("offline-receipt-token")
+    files = set()
     names, digest = check_folder(folder, {"BINARY_TOKEN": {value}, "NAME_TOKEN": {b"offline-filename-token"},
-                                        "RECEIPT_TOKEN": {b"offline-receipt-token"}})
+                                        "RECEIPT_TOKEN": {b"offline-receipt-token"}}, files)
     assert names == ["BINARY_TOKEN", "NAME_TOKEN", "RECEIPT_TOKEN"]
+    # A name that holds a secret never appears in the reason.
+    assert files == {"output.bin", "a file name", "publication-check.json"}
     assert len(digest) == 64
     (folder / "link").symlink_to(tmp_path / "private")
     with pytest.raises(ValueError, match="symlinks"):

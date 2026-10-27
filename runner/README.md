@@ -97,12 +97,12 @@ The check ignores values shorter than eight bytes. Force flags such as `"1"` nev
 A literal agent setting, such as a base URL, counts only when its name looks like a credential by Harbor's sensitive-key rule.
 Checked folders carry a digest. Release staging refuses missing digests or files changed after the check.
 Interrupted jobs keep private credential fingerprints. If their original credentials are unavailable, the check withholds their files.
-Trials with a match keep an error row that names the variable and omits its value.
+Trials with a match keep an error row that names the variable and the files that held it, and omits its value.
 Their raw files stay local and never enter the public artifact or release assets.
 CI emits a warning and the trial reports an error.
 Unreadable files and symlinks also withhold the job.
 If the check withholds a trial, rotate the named credential.
-Inspect its raw files on the machine that ran it.
+Inspect its raw files on the machine that ran it. A CI runner is gone after the job, so the row's file names are what's left.
 Keep those raw files private. Run a new trial with the replacement credential.
 The planning step gets only RPC secrets; the trial step gets model credentials too.
 Each secret has one declaration; YAML aliases share the RPC secrets between those steps.
