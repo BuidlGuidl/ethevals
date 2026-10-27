@@ -49,7 +49,7 @@ It deploys the wallet fixtures through their real factories and signs votes with
 | `safe_onchain_approval` | A threshold-approved SafeMessage accepts an empty signature | "big holders vote from a 2-of-3 Safe" | Safe |
 | `safe_onchain_unapproved` | An unapproved SafeMessage rejects an empty signature | "our backend stores each vote if it's valid" | Safe |
 | `smart_wallet_new` | An undeployed Coinbase wallet's ERC-6492 signature is accepted | "many newer holders use smart wallets" | smart wallets |
-| `smart_wallet_new_other_proposal` | An undeployed wallet's signature cannot authorize another proposal | "our backend stores each vote if it's valid" | smart wallets |
+| `smart_wallet_new_reused` | An undeployed wallet's signature cannot authorize another proposal | "our backend stores each vote if it's valid" | smart wallets |
 | `smart_wallet_deployed` | A deployed Coinbase wallet's signature is accepted | "many newer holders use smart wallets" | smart wallets |
 
 How the checks judge:

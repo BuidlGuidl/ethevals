@@ -7,7 +7,7 @@ import { wallets } from './wallets.mjs';
 const [submission, output] = process.argv.slice(2);
 const names = [
   'eoa_vote', 'tampered_vote', 'wrong_signer', 'other_proposal', 'safe_vote', 'safe_one_owner',
-  'safe_late_vote', 'safe_onchain_approval', 'safe_onchain_unapproved', 'smart_wallet_new', 'smart_wallet_new_other_proposal',
+  'safe_late_vote', 'safe_onchain_approval', 'safe_onchain_unapproved', 'smart_wallet_new', 'smart_wallet_new_reused',
   'smart_wallet_deployed',
 ];
 const records = {};
@@ -137,7 +137,7 @@ await check('smart_wallet_new', async () => {
   await accepts(data, signature, true);
   assert.equal(await fixture.client.getCode({ address: account.address }), undefined);
 });
-await check('smart_wallet_new_other_proposal', async () => {
+await check('smart_wallet_new_reused', async () => {
   const account = await fixture.smartWallet(false);
   const original = await vote(account.address);
   const changed = await vote(account.address);
