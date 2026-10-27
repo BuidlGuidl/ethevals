@@ -16,6 +16,7 @@ keywords = ["ethereum", "eip3009", "erc4626", "signatures", "fork"]
 
 [metadata]
 area = "Signatures"
+layer = "contracts"
 pillar = "build"
 modes = ["internet", "skills"]
 

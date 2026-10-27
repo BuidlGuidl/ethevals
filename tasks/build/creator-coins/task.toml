@@ -9,6 +9,7 @@ keywords = ["ethereum", "solidity", "uniswap-v3", "creator-coins", "liquidity", 
 
 [metadata]
 area = "Tokens"
+layer = "contracts"
 pillar = "build"
 modes = ["internet", "skills"]
 

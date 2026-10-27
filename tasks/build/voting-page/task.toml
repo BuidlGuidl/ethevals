@@ -9,6 +9,7 @@ keywords = ["ethereum", "governance", "react", "wagmi", "anvil"]
 
 [metadata]
 area = "Governance"
+layer = "frontend"
 pillar = "build"
 modes = ["internet", "skills"]
 
