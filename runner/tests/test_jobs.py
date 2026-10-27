@@ -416,7 +416,7 @@ def test_catalog_contains_only_public_task_fields(tmp_path):
     catalog = json.loads((output / "catalog.json").read_text())
     entry = catalog["tasks"][0]
     assert {key: value for key, value in entry.items() if key != "hash"} == {
-        "id": "concepts/question", "pillar": "concepts", "area": None,
+        "id": "concepts/question", "pillar": "concepts", "area": None, "layer": None,
         "name": "buidlguidl/question", "description": "Check a reply.",
         "instruction": "Name a unit.\n", "modes": ["internet"]}
     assert entry["hash"] == "sha256:" + Packager.compute_content_hash(task)[0]
@@ -431,6 +431,41 @@ def test_catalog_carries_the_task_area(tmp_path):
     assert result.returncode == 0, result.stderr
     entry = json.loads((output / "catalog.json").read_text())["tasks"][0]
     assert (entry["id"], entry["area"]) == ("concepts/question", "Tokens")
+
+
+def build_task_folder(tmp_path, layer):
+    task = task_folder(tmp_path)
+    build = task.parent.parent / "build/question"
+    build.parent.mkdir()
+    task.rename(build)
+    settings = build / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', f'pillar = "build"\nlayer = {layer}'))
+    return build
+
+
+def test_catalog_carries_a_build_tasks_layer(tmp_path):
+    task = build_task_folder(tmp_path, '"frontend"')
+    output = tmp_path / "catalog"
+    result = cli("-m", "ethevals.cli", "catalog", "--tasks", task, "--output", output)
+    assert result.returncode == 0, result.stderr
+    entry = json.loads((output / "catalog.json").read_text())["tasks"][0]
+    assert (entry["id"], entry["layer"]) == ("build/question", "frontend")
+
+
+@pytest.mark.parametrize("layer", ['"pages"', '""', '["contracts"]'])
+def test_task_lint_refuses_an_unknown_layer(tmp_path, layer):
+    result = cli("-m", "ethevals.cli", "lint", "--tasks", build_task_folder(tmp_path, layer))
+    assert result.returncode == 2
+    assert "metadata.layer must be contracts, frontend, or backend, on a build task" in result.stderr
+
+
+def test_task_lint_refuses_a_layer_outside_build(tmp_path):
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "concepts"\nlayer = "contracts"'))
+    result = cli("-m", "ethevals.cli", "lint", "--tasks", task)
+    assert result.returncode == 2
+    assert "metadata.layer must be contracts, frontend, or backend, on a build task" in result.stderr
 
 
 @pytest.mark.parametrize("area", ['""', '"   "', "42", "true", '[]'])

@@ -4,6 +4,8 @@ export type { Row } from "./rows";
 export const pillars = ["concepts", "build", "act"] as const;
 export type Pillar = (typeof pillars)[number];
 export type Mode = "vanilla" | "internet" | "skills";
+export const layers = ["contracts", "frontend", "backend"] as const;
+export type Layer = (typeof layers)[number];
 
 export interface Eval {
   id: string;
@@ -11,6 +13,7 @@ export interface Eval {
   title: string;
   pillar: Pillar;
   area?: string | null;
+  layer?: Layer | null;
   description: string;
   instruction: string;
   modes: Mode[];

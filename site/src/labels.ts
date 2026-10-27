@@ -1,6 +1,7 @@
-import type { Agent, Mode, Pillar } from "./board";
+import type { Agent, Layer, Mode, Pillar } from "./board";
 
 export const names: Record<Pillar, string> = { concepts: "Concepts", build: "Build", act: "Act" };
+export const layerNames: Record<Layer, string> = { contracts: "Contracts", frontend: "Frontend", backend: "Backend" };
 export const modeHints: Record<Mode, string> = {
   internet: "Measures how agents do Ethereum work with web access, the way developers use them",
   skills: "Measures whether giving agents skills makes them better at Ethereum work",

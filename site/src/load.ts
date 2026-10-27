@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { buildBoard, pillars, agentKey, type BoardData, type Eval } from "./board";
+import { buildBoard, layers, pillars, agentKey, type BoardData, type Eval } from "./board";
 import { rowSchema, type Row } from "./rows";
 import { siteRoot } from "./paths";
 
@@ -11,7 +11,7 @@ const catalogSchema = z.object({
   models: z.array(z.string().min(1)),
   tasks: z.array(z.object({
     id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
-    area: z.string().trim().min(1).nullish(),
+    area: z.string().trim().min(1).nullish(), layer: z.enum(layers).nullish(),
     description: z.string().min(1), instruction: z.string().min(1),
     modes: z.array(z.enum(["vanilla", "internet", "skills"])).min(1),
   })),

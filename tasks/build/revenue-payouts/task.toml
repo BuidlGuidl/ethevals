@@ -10,6 +10,7 @@ keywords = ["ethereum", "solidity", "payments"]
 [metadata]
 pillar = "build"
 area = "Payments"
+layer = "contracts"
 modes = ["internet", "skills"]
 
 [verifier]
