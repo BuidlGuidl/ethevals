@@ -139,15 +139,17 @@ contract CreatorCoinsTest is MainnetSetup {
 
     function test_strangerCreatedPoolFirst() public {
         for (uint256 i; i < 2; ++i) {
+            // Each round launches its own coin, so a design may derive addresses from the name.
+            string memory name = string.concat("same block launch ", vm.toString(i));
             uint256 snapshot = vm.snapshotState();
-            address predicted = launch(creator, "same block launch");
+            address predicted = launch(creator, name);
             assertTrue(vm.revertToState(snapshot), "restore address prediction");
             vm.startPrank(stranger);
             TestPool pool = TestPool(TestFactory(FACTORY).createPool(predicted, WETH, 10000));
             uint160 open = predicted < WETH ? uint160(uint256(2 ** 96) / 10000) : uint160(2 ** 96 * 10000);
             pool.initialize(i == 0 ? open * 10 : open / 10);
             vm.stopPrank();
-            address coin = launch(creator, "same block launch");
+            address coin = launch(creator, name);
             // A design can choose a different address after discovering an occupied pool.
             assertOpening(coin);
         }

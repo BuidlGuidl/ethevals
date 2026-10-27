@@ -58,5 +58,5 @@ Uniswap liquidity-launcher's [OpenZeppelin v3 audit](https://github.com/Uniswap/
 - The opening-price band allows one 200-tick spacing in either direction from the expected price, including the 1% trading fee.
 - The liquidity control runs the same swaps without collections or recipient changes. The test trades back to each control price after the required calls, so fee conversion and range crossings remain valid. It covers the required calls only, so it cannot prove an agent added no other withdrawal function.
 - The stranger check keeps the pool empty and stays in the same block, including its randomness. It makes no claim about recovery through liquidity an attacker has already deposited.
-- A launch that refuses to proceed after a stranger creates the coin's pool fails `test_strangerCreatedPoolFirst`, because the coin's predictable address lets a stranger block every attempt.
+- An empty pool's price can be moved at no cost. So a launch that refuses to proceed after a stranger creates the coin's pool fails `test_strangerCreatedPoolFirst`, because the coin's predictable address lets a stranger block every attempt.
 - The verifier needs no RPC, so a contract that hardcodes a wrong mainnet address, such as WETH's, fails.
