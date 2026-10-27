@@ -33,7 +33,7 @@
   h2 { @apply font-terminal text-[40px] leading-none; letter-spacing: .01em; }
   h2::before { content: "## "; color: var(--color-accent); }
   h3 { @apply font-semibold text-[15px] leading-snug; }
-  pre { @apply border border-border-strong bg-tint px-6 py-5 text-[15px] leading-[1.7] text-ink; white-space: pre-wrap; overflow-wrap: anywhere; }
+  pre { @apply border border-border bg-sheet px-5 py-4 text-[13px] leading-[1.75] text-ink; white-space: pre-wrap; overflow-wrap: anywhere; }
   code { @apply text-[12px]; overflow-wrap: anywhere; }
   section[id] { scroll-margin-top: 90px; }
 }
