@@ -4,7 +4,7 @@ import { createHarness, until } from './harness.mjs';
 import { connect, prepareSwap, pressThrough, nextAction, waitForQuote, openDetails } from './controls.mjs';
 import { chainReader, funding, classify, classifyRequest, observedSpenders, TOKENS } from './chain.mjs';
 import { createMarket } from './market.mjs';
-import { belief, confirmedBelief, gradeJourney } from './checks.mjs';
+import { belief, confirmedBelief, gradeJourney, scoredJourneys } from './checks.mjs';
 import { walletIdle } from './rpc-policy.mjs';
 import { rpc } from './rpc.mjs';
 
@@ -49,7 +49,7 @@ try {
     const pressRecords = [];
     let moveStarted;
     let moveEnded;
-    const result = { name, input, output: tokenOut, amount, mode, evidenceOnly: Boolean(seed), completed: false, success: false, flags: {} };
+    const result = { name, input, output: tokenOut, amount, mode, completed: false, success: false, flags: {} };
     const isSwapRequest = request => {
       const classification = classifyRequest(request, treasury);
       return classification.kind === 'swap' || classification.calls?.some(call => call.kind === 'swap');
@@ -70,8 +70,8 @@ try {
         const text = await session.page.locator('body').innerText();
         await snapshot({ time: Date.now(), label: 'wallet swap request', text, belief: belief(text, tokenOut) });
         if (mode === 'reject') throw Object.assign(new Error('User rejected the swap request'), { code: 4001 });
-        if (mode === 'race' && !marketResult) {
-          try { marketResult = await market.moveMarket(2, 'eth-buyers'); }
+        if (['race', 'drift'].includes(mode) && !marketResult) {
+          try { marketResult = await market.moveMarket(mode === 'drift' ? 0.3 : 2, 'eth-buyers'); }
           catch (error) { hookError = error; throw error; }
           await save(`${name}-market.json`, marketResult);
         }
@@ -158,15 +158,13 @@ try {
   const approval = probe.transactions.find(tx => tx.tx.to?.toLowerCase() === TOKENS.USDT.toLowerCase() && tx.decoded.function === 'approve');
   const spender = approval?.decoded.spender || approval?.decoded.arg0;
   if (spender) await runSwap({ name: 'usdt-seeded', input: 'USDT', output: 'USDC', amount: '1000', seed: spender });
+  await runSwap({ name: 'drift', input: 'USDC', output: 'ETH', amount: '500', mode: 'drift' });
   await runSwap({ name: 'moved', input: 'USDC', output: 'ETH', amount: '2000', mode: 'moved' });
   await runSwap({ name: 'rejected', input: 'USDC', output: 'ETH', amount: '500', mode: 'reject' });
   await runSwap({ name: 'reverted', input: 'USDC', output: 'ETH', amount: '500', mode: 'race' });
-  const normal = outcomes.filter(result => ['usdc-eth', 'eth-usdc', 'usdt-usdc'].includes(result.name));
   const flag = { swaps_assets: null, cut_only_on_swap: 'fee', honors_minimum: 'minimum', exact_approvals: 'approvals', finite_deadline: 'deadline', native_eth: 'native', routers_empty: 'routers', shows_received: 'received' };
   for (const name of CHECKS) {
-    const selected = name === 'cut_only_on_swap' ? outcomes.filter(result => !result.evidenceOnly && result.mode !== 'moved')
-      : name === 'finite_deadline' ? outcomes.filter(result => !result.evidenceOnly && !['reject', 'moved'].includes(result.mode))
-      : name === 'honors_minimum' ? [...normal, ...outcomes.filter(result => result.mode === 'moved')] : normal;
+    const selected = scoredJourneys(outcomes, name);
     const passed = selected.every(result => name === 'swaps_assets' ? result.success && result.entered : result.flags[flag[name]]);
     const reasons = selected.map(result => {
       const status = result.error || (name === 'swaps_assets' ? result.success : result.flags[flag[name]]);

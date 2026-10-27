@@ -1,10 +1,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import { belief, labelledAmount, feeCheck, deltas, finiteDeadline, sentMinimum, minimumCheck, allowancesEmpty, receivedCheck, routersEmpty, enteredAmountCheck, gradeJourney } from './checks.mjs';
+import { belief, labelledAmount, feeCheck, deltas, finiteDeadline, sentMinimum, minimumCheck, allowancesEmpty, receivedCheck, routersEmpty, enteredAmountCheck, gradeJourney, scoredJourneys } from './checks.mjs';
 import { classify, classifyRequest, routerTransaction, hasSwapLog, swapTopics } from './chain.mjs';
 import { TOKENS, ROUTERS, PERMIT2, ERC20 } from './lib.mjs';
 import { encodeFunctionData } from './deps.mjs';
+
+test('reads abbreviated received and output minimum labels', () => {
+  for (const text of ['Min. received 0.2 ETH', 'Minimum received 0.2 ETH', 'Minimum output 0.2 ETH']) {
+    assert.equal(belief(text, 'ETH').minimum.value, 200000000000000000n, text);
+  }
+});
+
+test('caps coarse receipt tolerance and rejects a precise echoed quote after drift', () => {
+  assert.equal(receivedCheck('You received 0 ETH', 'ETH', 200000000000000000n).passed, false);
+  assert.equal(receivedCheck('You received 0.2 ETH', 'ETH', 250000000000000000n).passed, false);
+  assert.equal(receivedCheck('You received 0.2 ETH', 'ETH', 201000000000000000n).passed, true);
+  assert.equal(receivedCheck('You received 0.200000 ETH', 'ETH', 199400000000000000n).passed, false);
+  assert.equal(receivedCheck('You received 0.199400 ETH', 'ETH', 199400000000000000n).passed, true);
+});
+
+test('scores seeded swaps everywhere and drift receipts unless the swap reverts', () => {
+  const outcomes = [
+    { name: 'usdc-eth', mode: 'normal' }, { name: 'usdt-seeded', mode: 'normal' },
+    { name: 'drift', mode: 'drift', receivedSkipped: false }, { name: 'moved', mode: 'moved' },
+    { name: 'rejected', mode: 'reject' }, { name: 'reverted', mode: 'race' },
+  ];
+  const names = check => scoredJourneys(outcomes, check).map(result => result.name);
+  assert.deepEqual(names('shows_received'), ['usdc-eth', 'usdt-seeded', 'drift']);
+  assert.deepEqual(names('exact_approvals'), ['usdc-eth', 'usdt-seeded']);
+  assert.deepEqual(names('swaps_assets'), ['usdc-eth', 'usdt-seeded']);
+  assert.deepEqual(names('honors_minimum'), ['usdc-eth', 'usdt-seeded', 'moved']);
+  assert.deepEqual(names('finite_deadline'), ['usdc-eth', 'usdt-seeded', 'reverted']);
+  assert.deepEqual(names('cut_only_on_swap'), ['usdc-eth', 'usdt-seeded', 'rejected', 'reverted']);
+  outcomes[2].receivedSkipped = true;
+  assert.deepEqual(names('shows_received'), ['usdc-eth', 'usdt-seeded']);
+});
 
 test('reads saved receipts across decorative icons and sold-and-received summaries', async () => {
   const pages = JSON.parse(await fs.readFile(new URL('./fixtures/receipt-pages.json', import.meta.url), 'utf8'));
@@ -125,4 +156,7 @@ test('a moved-market revert honours the minimum when both parties lose only gas'
   assert.equal(gradeJourney(evidence).success, false);
   assert.equal(gradeJourney({ ...evidence, after: { ...after, treasuryBalances: { ...zero, USDC: 1n } } }).flags.minimum, false);
   assert.equal(gradeJourney({ ...evidence, display: belief('Minimum 0.3 ETH', 'ETH') }).flags.minimum, false);
+  assert.equal(gradeJourney({ ...evidence, mode: 'drift' }).receivedSkipped, true);
+  assert.equal(gradeJourney({ ...evidence, mode: 'drift', completed: false }).receivedSkipped, false);
+  assert.equal(gradeJourney({ ...evidence, mode: 'drift', after: { ...after, treasuryBalances: { ...zero, USDC: 1n } } }).receivedSkipped, true);
 });

@@ -6,13 +6,13 @@ It compares the page's amounts and wallet requests with chain balances.
 
 ## The instruction
 
-> Our users hold ETH, USDC and USDT on Ethereum mainnet and keep leaving our app to trade. Can you add a Swap page to this project where a connected user can swap between those three on Uniswap? Show them what they'll get before they confirm, and what they actually got after. We take a 0.25% cut of each swap, paid to our treasury. Its address and the chain to use are in `chain_context.json`.
+> Our users hold ETH, USDC and USDT on Ethereum mainnet and keep leaving our app to trade. Can you add a Swap page to this project where a connected user can swap between those three on Uniswap? Show them what they'll get before they confirm, and what they actually got after. Don't leave open-ended token approvals behind. We take a 0.25% cut of each swap, paid to our treasury. Its address and the chain to use are in `chain_context.json`.
 
 ## What it touches
 
 - **When the cut is paid.** The 0.25% cut has to travel inside the swap transaction. A cut sent before the swap leaves the user poorer when they cancel or the swap reverts.
 - **The amount the user confirmed.** The swap must enforce the minimum the page showed at confirmation. If the price moves while the user reviews the quote, the page has to say so before the wallet request.
-- **Token permissions.** After a swap, no standing permission remains at the ERC-20 or the Permit2 layer. This is a maintainer requirement, explained at the end of the checks.
+- **Token permissions.** After a swap, no standing permission remains at the ERC-20 or the Permit2 layer. An exact Permit2 permit alone does not clear the underlying token approval.
 - **Settlement.** Each swap carries a deadline, ETH arrives as ETH rather than WETH, and the routers keep nothing.
 - **What the user got.** The page shows the amount the chain delivered.
 
@@ -35,20 +35,23 @@ The driver uses the page the way a user would:
 
 - It selects tokens through visible controls and checks the resulting pair.
 - It types an amount and saves the page text before every action press.
-- It presses through Swap, Review, Confirm, Approve, Accept, Continue, Refresh, and network Switch controls, with a six-press limit. Refresh is a fallback when no swap or confirmation action is enabled. Direction controls never count as swap actions.
-- If an expired review says to close it to refresh, the driver follows that instruction before it opens a fresh review.
+- It finds actions through general action words, button roles, and position near the swap form or inside a dialog.
+- It accepts Swap tokens, Get quote, Sign, Permit, Submit, Allow, Enable, Review, Confirm, Approve, Accept, Continue, Refresh, and network Switch controls. Each journey has a six-press limit. Refresh is a fallback. Direction controls and token pickers never count as swap actions.
+- If a stale-quote dialog blocks the form, the driver dismisses it before it opens a fresh review.
 - It classifies wallet requests by decoded calldata rather than request order.
 
 Every journey starts from the funded snapshot:
 
 - `usdc-eth`, `eth-usdc`, and `usdt-usdc` are the scored successful swaps, of 500 USDC, 1 ETH, and 1,000 USDT. The other three directions are not covered. The USDT journey starts without an allowance.
-- `usdt-seeded` replays the USDT swap with a nonzero allowance seeded to the spender the first USDT journey found. It supplies evidence only, so failing to reset a USDT approval does not affect the reward.
+- `usdt-seeded` replays the USDT swap with a nonzero allowance seeded to the spender the first USDT journey found. It scores the same checks as the successful swaps, including cleared allowances. This models approving 500 exactly, a reverted swap, and a retry with 1,000. On USDT, `approve(1000)` reverts unless the page resets the existing approval to 0 first.
+- `drift` swaps 500 USDC to ETH. The wallet hook moves the market about 0.3% just before sending the swap. Only `shows_received` scores this journey, so a receipt that echoes the quote can fail. If the page's slippage makes the swap revert, the journey adds no `shows_received` evidence.
 - `moved` swaps 2,000 USDC to ETH. It waits up to 20 seconds for an output amount or an enabled, named Review, Swap, or Confirm button, and opens Review when available. Then it moves the market and observes the page for a fixed minute, independent of any saved page's quote expiry. Of the programmatic checks, only `honors_minimum` scores it. A clean revert with zero user and treasury asset deltas after gas honours the minimum.
 - `rejected` swaps 500 USDC to ETH, and the wallet returns error 4001 for the swap request only. Earlier approval or fee transactions go through, so a premature cut remains visible.
 - `reverted` swaps 500 USDC to ETH and moves the market inside the wallet hook just before the swap is sent. If the page uses an untouched pool and the swap succeeds, the usual successful fee check applies.
 
 The market moves buy ETH through eight active v3 ETH/stablecoin pools and three main hooked v4 pools.
-Each pool's USD-per-ETH price rises about 2% through actual swaps, from a pool inventory measured at the pinned block.
+Each pool's USD-per-ETH price rises about 2%, or 0.3% for `drift`, through actual swaps at the pinned block.
+V2 pools stay unmoved, so a page that routes through V2 isn't tested by `drift`, `moved` or `reverted`.
 The mover never edits price storage, liquidity, code, or permissions.
 For Angstrom pools, it mines an authorized node's empty unlock and the market trade in one block.
 
@@ -58,11 +61,11 @@ For Angstrom pools, it mines an authorized node's empty unlock and the market tr
 | `swaps_assets` | "Swap between those three ... on Uniswap": each scored direction spends the entered amount and receives its output through Uniswap | trading | [browser.mjs](tests/browser.mjs) |
 | `cut_only_on_swap` | "A 0.25% cut of each swap": the swap transaction pays 0.25% of input or gross output within 1%; rejected and reverted swaps lose only gas | fee handling | [checks.mjs](tests/checks.mjs) |
 | `honors_minimum` | "What they'll get before they confirm": the submitted minimum is at least 99% of the last confirmed minimum, and successful output reaches that display | slippage | [checks.mjs](tests/checks.mjs) |
-| `exact_approvals` | Maintainer requirement: no token allowance remains to Permit2, listed routers, or observed spenders, and no unexpired Permit2 amount remains | token permissions | [chain.mjs](tests/chain.mjs) |
+| `exact_approvals` | "Don't leave open-ended token approvals behind": no token allowance remains to Permit2, listed routers, or observed spenders, and no unexpired Permit2 amount remains | token permissions | [chain.mjs](tests/chain.mjs) |
 | `finite_deadline` | "Swap ... on Uniswap": each scored router or Swap-log transaction has a deadline no later than one year after the fork timestamp | transaction lifetime | [decode.mjs](tests/decode.mjs) |
 | `native_eth` | "Hold ETH": ETH output arrives as ETH without a WETH balance increase | native currency | [checks.mjs](tests/checks.mjs) |
 | `routers_empty` | "Swap between those three": router ETH, WETH, USDC, and USDT balances return to their pinned baseline | settlement | [chain.mjs](tests/chain.mjs) |
-| `shows_received` | "What they actually got after": the received amount matches the chain delta within its displayed precision | receipt display | [checks.mjs](tests/checks.mjs) |
+| `shows_received` | "What they actually got after": the received amount matches the chain delta within its displayed precision, capped at 1% of the chain amount | receipt display | [checks.mjs](tests/checks.mjs) |
 | `explains_price_change` | "What they'll get before they confirm": a notice or refresh step tells the user the quote changed before the wallet request | user feedback, judge | [price-change.toml](tests/price-change.toml) |
 
 The reward is 1 only when every check passes.
@@ -75,13 +78,13 @@ The judge reads the page before the move, every later press, and the wallet requ
 The runner requires the trajectory input, but the criterion judges page behaviour from the saved timeline and wallet requests.
 
 - It accepts a stale-quote notice with a forced refresh or a new confirmation.
-- It judges changes after the user reaches the review or confirmation view. Without a review step, it judges the view with the Swap button.
+- It judges changes after the user reaches the review or confirmation view. Without a review step, it fails only if the number at press time differs from the request or was stale.
 - A live form quote can refresh before review without a notice. Once the user reaches the confirming view, silent replacement of the amounts they must confirm fails.
 - An unchanged quote on an untouched route passes without a price-change notice.
 
 The checks read the confirmed minimum this way:
 
-- The parser accepts minimum, min, at least, or worst-case labels beside the output token. The token can appear before or after the number, including across lines.
+- The parser accepts Minimum received, Min. received, Minimum output, min, at least, or worst-case labels beside the output token. The token can appear before or after the number, including across lines.
 - The driver can open one Details, More, or Show disclosure before it reads the minimum.
 - Without a minimum, it uses expected output minus stated slippage, with 1% tolerance for both submitted and received amounts. Without both, it records "could not read a minimum".
 - The last readable minimum before a user action supplies the confirmed amount. Wallet-pending text cannot erase it or lower it after confirmation.
@@ -97,7 +100,7 @@ The fee, input, and deadline checks work this way:
 - The deadline check rejects bounds more than one year after the fork block's timestamp. It does not require a deadline to follow the current wall clock. Transfers, approvals, and WETH wrapping alone do not trigger it.
 - V2 Router02 and SwapRouter02's v2 functions use the same minimum and deadline checks as the other routers.
 
-Exact approval is the maintainers' choice and goes beyond the instruction's explicit words.
+The instruction asks the page not to leave open-ended token approvals behind.
 Uniswap's own app fails this row when it grants a maximum token approval or a reusable maximum Permit2 amount.
 A router bug or a phishing signature can spend the remaining wallet balance under those approvals.
 An exact one-shot Permit2 signature still fails if the underlying ERC-20 approval to Permit2 remains unlimited.
@@ -124,6 +127,7 @@ Both layers matter when limiting future spending.
 - The solution is a reference page with an explicit fresh-price review. Its token picker uses buttons and a dialog to exercise a different control shape. It uses exact approvals and takes the fee from output inside the router transaction.
 - The task-local wallet adds transaction classification arguments to its `beforeSend` callback. The task-local RPC helper uses 120-second request and receipt timeouts for fork reads and market transactions. The savings copies do not include these swap-specific changes.
 - ETH settlement, empty routers, and receipt amounts partly repeat checks in other page tasks.
+- Slippage of 2% or more can let `moved` and `reverted` succeed without testing a stale-price revert.
 
 Run the free check with `MAINNET_RPC_URL` set and all model key variables unset:
 

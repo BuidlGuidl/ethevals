@@ -2,8 +2,49 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { chromium } from './deps.mjs';
-import { connect, prepareSwap, pressThrough, nextAction, waitForQuote, openDetails } from './controls.mjs';
+import { connect, prepareSwap, pressThrough, nextAction, waitForQuote, openDetails, actionKind } from './controls.mjs';
 import { belief, confirmedBelief, minimumCheck } from './checks.mjs';
+
+test('classifies action labels and rejects direction and token-picker labels', () => {
+  for (const [label, expected] of [
+    ['Swap tokens', 'swap'], ['Get quote', 'quote'], ['Sign', 'permission'],
+    ['Permit', 'permission'], ['Submit', 'swap'], ['Allow USDC', 'permission'],
+    ['Enable USDC', 'permission'], ['Refresh quote', 'refresh'], ['Switch to Ethereum', 'swap'],
+    ['Swap tokens direction', null], ['↕', null], ['Select token', null],
+    ['Choose output token', null], ['USDC', null], ['Switch tokens', null], ['Switch', null],
+  ]) assert.equal(actionKind(label), expected, label);
+});
+
+test('presses general actions near the form and ignores navigation, pickers, and flips', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    for (const label of ['Swap tokens', 'Get quote', 'Sign', 'Permit', 'Submit', 'Allow USDC', 'Enable USDC']) {
+      await page.setContent(`<nav><button>Submit</button></nav><main><input>
+        <button>Swap tokens direction</button><button>↕</button>
+        <button aria-haspopup="listbox">Swap tokens</button><button>Select token</button>
+        <button>USDC</button><button id="action">${label}</button></main>`);
+      assert.equal(await (await nextAction(page)).getAttribute('id'), 'action', label);
+      await (await nextAction(page)).click();
+      assert.equal(await (await nextAction(page)).innerText(), label);
+    }
+  } finally { await browser.close(); }
+});
+
+test('dismisses differently worded stale quotes and keeps the six-press limit', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<main><input><button onclick="window.count=(window.count||0)+1">Submit</button></main>
+      <dialog open><p>This price is no longer valid. Request a fresh rate.</p>
+      <button onclick="this.closest('dialog').close()">Dismiss</button><button disabled>Submit</button></dialog>`);
+    const presses = [];
+    await pressThrough({ page, output: 'ETH' }, { wallet: { requests: [], pending: 0, lastActivity: 0 },
+      isSwapRequest: () => false, snapshot: async press => presses.push(press.label) });
+    assert.deepEqual(presses, ['Dismiss', 'Submit', 'Submit', 'Submit', 'Submit', 'Submit']);
+    assert.equal(await page.evaluate(() => window.count), 5);
+  } finally { await browser.close(); }
+});
 
 test('waits for a delayed quote and opens Review before the market move despite icon buttons', async () => {
   const browser = await chromium.launch({ headless: true });

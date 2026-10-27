@@ -63,7 +63,7 @@ export function labelledAmount(text, label, symbol) {
 export function belief(text, output) {
   // Remove parenthesized percentage qualifiers before reading labelled amounts.
   const clean = text.replace(/\((?![^)]*\b(?:ETH|USDC|USDT)\b)[^)]*\)/g, '');
-  let minimum = labelledAmount(clean, '\\bmin(?:imum)?(?: received)?|at least|worst[ -]case', output);
+  let minimum = labelledAmount(clean, '\\bmin(?:imum)?\\.?(?: received| output)?|at least|worst[ -]case', output);
   const expected = labelledAmount(clean, '(?:you )?(?:receive(?!d)|get)(?: estimated)?|quote(?:d)?|expected(?: output)?', output);
   const slippage = /(?:slippage[^\d\n]*([0-9.]+)\s*%|([0-9.]+)\s*%\s*slippage)/i.exec(text);
   if (!minimum && expected && slippage) {
@@ -122,8 +122,18 @@ export function minimumCheck(display, decoded, output, received, reverted = fals
 export function receivedCheck(text, output, received) {
   const amountFirst = text.replace(new RegExp(`(${numberPattern}\\s*${output}|${output}\\s*${numberPattern})\\s+received\\b`, 'ig'), 'You received $1');
   const display = labelledAmount(amountFirst, 'you\\s+(?:received|got)|\\band\\s+received|(?:^|\\n)\\s*received|actual(?:ly)?(?: received| output)?|swapped[^\\n]*?\\bfor', output);
-  return { passed: Boolean(display && received > 0n && abs(display.value - received) <= display.tolerance),
+  const tolerance = display && (display.tolerance < received / 100n ? display.tolerance : received / 100n);
+  return { passed: Boolean(display && received > 0n && abs(display.value - received) <= tolerance),
     reason: `Received ${received} base units of ${output}; page amount ${display?.raw ?? 'could not read received amount'}.` };
+}
+
+export function scoredJourneys(outcomes, check) {
+  const normal = outcomes.filter(result => result.mode === 'normal');
+  if (check === 'cut_only_on_swap') return outcomes.filter(result => ['normal', 'reject', 'race'].includes(result.mode));
+  if (check === 'finite_deadline') return outcomes.filter(result => ['normal', 'race'].includes(result.mode));
+  if (check === 'honors_minimum') return [...normal, ...outcomes.filter(result => result.mode === 'moved')];
+  if (check === 'shows_received') return [...normal, ...outcomes.filter(result => result.mode === 'drift' && !result.receivedSkipped)];
+  return normal;
 }
 
 export function gradeJourney({ input, output, amount, mode, completed, before, after, baseline, transactions, display, pageText, marketResult, rejected }) {
@@ -135,10 +145,11 @@ export function gradeJourney({ input, output, amount, mode, completed, before, a
     successful.reduce((sum, tx) => sum + (tx.treasuryDelta?.[symbol] ?? 0n), 0n)]));
   const cleanRevert = mode === 'moved' && swaps.length > 0 && swaps.every(tx => tx.receipt.status === '0x0')
     && feeCheck(delta, input, output, false);
+  const receivedSkipped = mode === 'drift' && completed && swaps.length > 0 && swaps.every(tx => tx.receipt.status === '0x0');
   const minimum = (cleanRevert ? swaps : successful).map(tx => minimumCheck(display || {}, tx.decoded, output, delta.user[output], cleanRevert));
   const received = receivedCheck(pageText, output, delta.user[output]);
   const entered = enteredAmountCheck(amount, input, delta);
-  return { success, delta, swapTreasury, entered, minimum, received,
+  return { success, receivedSkipped, delta, swapTreasury, entered, minimum, received,
     leftoverAllowances: {
       erc20: after.erc20Allowances.filter(item => item.amount !== 0n),
       permit2: after.permit2Allowances.filter(item => item.amount !== 0n && BigInt(item.expiration) > after.timestamp),

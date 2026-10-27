@@ -5,7 +5,16 @@ import { walletIdle } from './rpc-policy.mjs';
 const tokenAliases = { ETH: 'ETH|Ether', USDC: 'USDC|USD Coin', USDT: 'USDT|Tether USD|Tether' };
 const tokenPattern = Object.values(tokenAliases).join('|');
 const tokenSymbol = text => Object.keys(tokenAliases).find(symbol => new RegExp(`\\b(?:${tokenAliases[symbol]})\\b`, 'i').test(text || ''));
-const actionName = /^(?:(?:swap|review|confirm|approve|accept|continue|refresh|switch)\b)/i;
+const actionName = /^(?:(?:swap|review|confirm|approve|allow|enable|sign|permit|submit|accept|continue|refresh|switch)\b|(?:get|request|fetch)\s+(?:a\s+)?quote\b)/i;
+
+export function actionKind(name) {
+  const label = name.trim();
+  if (!actionName.test(label) || /\bdirection\b|\b(?:new|another) swap\b|^switch(?: tokens)?$|[↓↑⇅↕]/i.test(label)) return null;
+  if (/^refresh\b/i.test(label)) return 'refresh';
+  if (/^(?:get|request|fetch)\b/i.test(label)) return 'quote';
+  if (/^(?:approve|allow|enable|sign|permit)\b/i.test(label)) return 'permission';
+  return 'swap';
+}
 
 export class CouldNotDrive extends Error {
   constructor(message) { super(`could not drive: ${message}`); }
@@ -47,12 +56,12 @@ async function slots(page) {
   const result = [];
   for (const item of await candidates.all()) {
     if (!await item.isVisible()) continue;
-    const rank = await item.evaluate((el, pattern) => {
+    const rank = await item.evaluate((el, { pattern, actionPattern }) => {
       const text = `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${[...el.querySelectorAll('img[alt]')].map(image => image.alt).join(' ')}`;
       const names = new RegExp(`\\b(?:${pattern})\\b`, 'i');
       const token = el.tagName === 'SELECT' ? [...el.options].some(option => names.test(option.textContent))
         : names.test(text) || /(?:select|choose).*(?:token|input|output)/i.test(text);
-      if (!token || /^(?:swap|approve|review|confirm|switch|refresh)\b/i.test(text.trim())) return null;
+      if (!token || new RegExp(actionPattern, 'i').test(text.trim()) || /direction|[↓↑⇅↕]/i.test(text)) return null;
       let distance = 100;
       for (let parent = el.parentElement, depth = 0; parent && parent.tagName !== 'BODY'; parent = parent.parentElement, depth++) {
         if (parent.querySelector('input:not([type="hidden"]),output')) { distance = depth; break; }
@@ -60,7 +69,7 @@ async function slots(page) {
       if (distance === 100) return null;
       const label = /\b(input|from|sell)\b/i.test(text) ? 0 : /\b(output|to|buy)\b/i.test(text) ? 1 : null;
       return { label, distance };
-    }, tokenPattern);
+    }, { pattern: tokenPattern, actionPattern: actionName.source });
     if (rank) result.push({ item, order: result.length, ...rank });
   }
   const nearest = result.sort((a, b) => a.distance - b.distance).slice(0, 2).sort((a, b) => a.order - b.order);
@@ -158,17 +167,20 @@ export async function nextAction(page) {
     if (!await button.isVisible() || !await button.isEnabled()) continue;
     const label = await button.innerText();
     const accessible = await button.getAttribute('aria-label') || label;
-    if ((!label.trim() && !/^refresh\b/i.test(accessible.trim())) || !actionName.test(accessible.trim())) continue;
-    if (/direction|new swap|another swap|tokens|[↓↑⇅↕]/i.test(`${label} ${accessible}`) || /^switch$/i.test(accessible.trim())) continue;
+    const kind = actionKind(accessible);
+    if (!kind || (!label.trim() && kind !== 'refresh') || /direction|[↓↑⇅↕]/i.test(label)) continue;
+    if (await button.getAttribute('aria-haspopup') === 'listbox'
+      || await button.getAttribute('role') === 'combobox') continue;
     const depth = await actionDepth(button);
     if (!Number.isFinite(depth)) continue;
-    const priority = /^refresh\b/i.test(accessible) ? 2 : /^(?:confirm|accept|continue|approve|review)\b/i.test(accessible) ? 0 : 1;
+    const priority = kind === 'refresh' ? 2 : kind === 'permission' || /^(?:confirm|accept|continue|review)\b/i.test(accessible) ? 0 : 1;
     candidates.push({ button, depth, priority });
   }
   candidates.sort((a, b) => a.priority - b.priority || a.depth - b.depth);
   if (candidates.length) return candidates[0].button;
-  if (dialog && /quote[^\n]*expired[^\n]*close[^\n]*refresh/i.test(await dialog.innerText())) {
-    const close = await firstVisible(dialog.getByRole('button', { name: /^close\b/i }));
+  if (dialog && /\b(?:quote|price|rate)\b/i.test(await dialog.innerText())
+    && /\b(?:stale|expired|out of date|no longer valid|changed)\b/i.test(await dialog.innerText())) {
+    const close = await firstVisible(dialog.getByRole('button', { name: /^(?:close|dismiss|back|cancel|ok|got it)\b/i }));
     if (close && await close.isEnabled()) return close;
   }
   return null;
