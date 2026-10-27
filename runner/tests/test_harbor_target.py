@@ -32,3 +32,50 @@ def test_shared_target_verifier_reads_the_final_reply(tmp_path, message, tool_ca
         env={**os.environ, "PYTHONPATH": str(HELPER.parent)}, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert read_reward(output) == ({"reward": float(expected)}, {"unit": {"passed": expected, "reason": reason}})
+
+
+@pytest.mark.parametrize("task_name,check,message,expected", [
+    ("permit2-zero-expiration", "zero_expiration", message, expected)
+    for message, expected in [
+        ("**No.** In Permit2, an expiration of 0 is stored as the current `block.timestamp`, ...", True),
+        ("No. Permit2 converts expiration `0` to the approval block's timestamp, ...", True),
+        ("No — Permit2's `transferFrom` reverts `AllowanceExpired` unless ...", True),
+        ("Yes. In Permit2, `expiration == 0` is treated as non-expiring, ...", False),
+        ('Yes — Permit2 treats an `expiration` of `0` in `approve` as "no expiration" ...', False),
+        ("Not sure; it depends.", False),
+        ("Nothing expires.", False),
+        (" \n***nO!*** The approval expired.", True),
+        ("", False),
+    ]
+] + [
+    ("permit2-7702-signature", "signature_check", message, expected)
+    for message, expected in [
+        ("**ERC-1271**  Permit2's `SignatureVerification` uses ecrecover only when ...", True),
+        ("ERC-1271 — Permit2 checks `owner.code.length`, ...", True),
+        ("**ERC-1271.**  Because after EIP-7702 delegation ...", True),
+        ("**ecrecover**  Permit2's SignatureVerification library validates all signatures via ECDSA recovery ...", False),
+        ("ecrecover — the EOA's key signed it.", False),
+        (" \n***erc1271.*** The account has code.", True),
+        ("(eip-1271). The account has code.", True),
+        ("ERC-12710", False),
+        ("", False),
+    ]
+])
+def test_permit2_targets_grade_final_replies(tmp_path, task_name, check, message, expected):
+    import shutil
+
+    task = Path(__file__).resolve().parents[2] / "tasks/concepts" / task_name
+    tests, output = tmp_path / "tests", tmp_path / "verifier"
+    trajectory = tmp_path / "trajectory.json"
+    tests.mkdir()
+    trajectory.write_text(json.dumps({"steps": [{"source": "agent", "message": message}]}))
+    (tests / "answer.py").write_text((task / "tests/answer.py").read_text().replace(
+        "    name=", f"    trajectory={str(trajectory)!r},\n    name="))
+    shutil.copyfile(task / "tests/reward.toml", tests / "reward.toml")
+    result = subprocess.run(["rewardkit", str(tests), "--output", str(output / "reward.json")],
+        env={**os.environ, "PYTHONPATH": str(HELPER.parent)}, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    reason = "Answer matches the target." if expected else "Answer does not match the target."
+    if not message.strip():
+        reason = "The answer is empty."
+    assert read_reward(output) == ({"reward": float(expected)}, {check: {"passed": expected, "reason": reason}})

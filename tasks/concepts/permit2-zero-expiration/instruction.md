@@ -1,0 +1,1 @@
+A script calls Uniswap's Permit2 approve(token, spender, amount, 0) for a spender. In the next block, the spender calls Permit2's transferFrom to pull those tokens. Does the pull succeed? Answer yes or no, then explain in one sentence.
