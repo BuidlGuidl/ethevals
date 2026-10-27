@@ -13,6 +13,9 @@ The build writes `out/` for a static file host.
 It refreshes `.catalog/catalog.json` through `ethevals catalog`.
 The catalog lists tasks and the current skills hash.
 
+The Tasks page at `/evals/` shows catalog counts by pillar and area without results data.
+Expand a task to read its instruction and open its README on GitHub.
+
 Run `ETHEVALS_DEMO=1 pnpm build` for an invented board.
 The banner labels its results, and its trajectory links are examples.
 Demo mode and an explicit rows path cannot be combined.

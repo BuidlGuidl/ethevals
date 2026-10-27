@@ -34,6 +34,7 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
         raise ValueError(f"{path}: metadata.modes must list supported modes")
     digest, _ = Packager.compute_content_hash(path)
     return {"id": f"{pillar}/{path.name}", "hash": "sha256:" + digest, "pillar": pillar,
+            "area": metadata.get("area"),
             "name": task.name, "description": task.config.task.description,
             "instruction": (path / "instruction.md").read_text(), "modes": modes}
 

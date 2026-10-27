@@ -10,6 +10,7 @@ export interface Eval {
   hash: string;
   title: string;
   pillar: Pillar;
+  area?: string | null;
   description: string;
   instruction: string;
   modes: Mode[];

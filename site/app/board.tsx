@@ -13,7 +13,7 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components
 import { TooltipProvider } from "../components/ui/tooltip";
 import { Score, Hint, formulas, heat, percent, money } from "../components/scores";
 import { updateQuery, useQuery } from "../components/url-state";
-import { repo } from "../components/shell";
+import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
 
 type Sort = "overall" | Pillar | "costPerPass";

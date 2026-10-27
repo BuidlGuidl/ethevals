@@ -416,9 +416,31 @@ def test_catalog_contains_only_public_task_fields(tmp_path):
     catalog = json.loads((output / "catalog.json").read_text())
     entry = catalog["tasks"][0]
     assert {key: value for key, value in entry.items() if key != "hash"} == {
-        "id": "concepts/question", "pillar": "concepts", "name": "buidlguidl/question", "description": "Check a reply.",
+        "id": "concepts/question", "pillar": "concepts", "area": None,
+        "name": "buidlguidl/question", "description": "Check a reply.",
         "instruction": "Name a unit.\n", "modes": ["internet"]}
     assert entry["hash"] == "sha256:" + Packager.compute_content_hash(task)[0]
+
+
+def test_catalog_carries_the_task_area(tmp_path):
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "concepts"\narea = "Tokens"'))
+    output = tmp_path / "catalog"
+    result = cli("-m", "ethevals.cli", "catalog", "--tasks", task, "--output", output)
+    assert result.returncode == 0, result.stderr
+    entry = json.loads((output / "catalog.json").read_text())["tasks"][0]
+    assert (entry["id"], entry["area"]) == ("concepts/question", "Tokens")
+
+
+@pytest.mark.parametrize("area", ['""', '"   "', "42", "true", '[]'])
+def test_task_lint_refuses_an_empty_or_non_string_area(tmp_path, area):
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', f'pillar = "concepts"\narea = {area}'))
+    result = cli("-m", "ethevals.cli", "lint", "--tasks", task)
+    assert result.returncode == 2
+    assert "metadata.area must be a nonempty string" in result.stderr
 
 
 @pytest.mark.parametrize("command", ["lint", "catalog", "plan", "export-hf"])

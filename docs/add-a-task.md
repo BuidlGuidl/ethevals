@@ -49,6 +49,7 @@ Let's look at each piece:
 | `[task].authors`              | no                | who wrote it, like `[{ name = "BuidlGuidl" }]`                            |
 | `[task].keywords`             | no                | a few words to find it by                                                 |
 | `[metadata].pillar`           | yes               | the pillar, which must match the parent folder                            |
+| `[metadata].area`             | no                | a non-empty string naming the part of dapp development, such as Lending or Swaps |
 | `[metadata].modes`            | yes               | any of `vanilla`, `internet`, and `skills`                                |
 | `[verifier].environment_mode` | no                | `shared` for a task with a chain, `separate` for one without              |
 | `[verifier].user`             | no                | `root` for Forge tests                                                    |
