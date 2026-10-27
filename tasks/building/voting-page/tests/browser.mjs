@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHarness } from './harness.mjs';
+import { warmGovernance } from './warm.mjs';
 import { CouldNotDrive } from './control-vocabulary.mjs';
 import { connect, openProposal, castVote, wrap, delegate, dismiss, usableChoices,
   listedDescriptions, governanceControls, emptyProposals } from './controls.mjs';
@@ -41,7 +42,8 @@ try {
     await discoverAccounts(context.rpcUrl, context);
     harness = await createHarness({ workspace, output, sourceContext,
       funding: { nativeBalance: 10n * UNIT, transfers: [{ token: context.token, holder: localAccounts[0].address, amount: 1000n * UNIT }] },
-      prepare: async url => { fixture = await prepareFork(url, context, output); } });
+      prepare: async url => { fixture = await prepareFork(url, context, output); },
+      warm: (url, wallet) => warmGovernance(url, context, wallet.address) });
     const { mainRpc: url, account } = harness;
     await save('fixture.json', { sourceBlock: harness.sourceBlock, wallet: account.address, proposals: fixture.proposals, checksBlock: fixture.checksBlock });
     async function session(wallet = account) {

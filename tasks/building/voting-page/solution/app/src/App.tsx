@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPublicClient, http, parseAbi, parseUnits, formatUnits } from 'viem'
 import type { Address, Hash, WalletClient } from 'viem'
 import { useConnect, useConnection, useConnectors, useDisconnect, useWalletClient } from 'wagmi'
@@ -46,7 +46,10 @@ export default function App() {
   const [amount, setAmount] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const latest = useRef(0)
   async function refresh(holder = account) {
+    // Only the newest refresh may set state, so a slower earlier one can't overwrite it.
+    const run = ++latest.current
     const logs = await client.getLogs({ address: governor, event: abi[7], fromBlock: 0n, toBlock: 'latest', strict: true })
     const block = await client.getBlockNumber({ cacheTime: 0 })
     const proposals = await Promise.all(logs.map(async log => {
@@ -62,6 +65,7 @@ export default function App() {
       return { id: event.proposalId, description: event.description, state, for: tallies[1], against: tallies[0],
         end, quorum, weight, voted, snapshot: event.voteStart }
     }))
+    if (run !== latest.current) return
     setRows(proposals.reverse())
     if (holder) {
       const [balance, wrapped, votes] = await Promise.all([
@@ -69,7 +73,7 @@ export default function App() {
         client.readContract({ address: voteToken, abi: tokenAbi, functionName: 'balanceOf', args: [holder] }),
         client.readContract({ address: voteToken, abi: tokenAbi, functionName: 'getVotes', args: [holder] }),
       ])
-      setPower({ token: balance, wrapped, votes })
+      if (run === latest.current) setPower({ token: balance, wrapped, votes })
     }
   }
   useEffect(() => { void refresh().catch(error => setMessage(String(error))) }, [account])

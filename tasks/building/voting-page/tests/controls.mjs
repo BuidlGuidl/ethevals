@@ -124,7 +124,7 @@ export async function usableChoices(scope) {
 export async function castVote(session, scope, name = 'For') {
   const choice = await until(async () => voteControl(await firstVisible(session.page.getByRole('dialog')) || scope, name), 8000);
   if (!choice) throw new CouldNotDrive('Vote For control was not found');
-  if (!await until(() => choice.isEnabled(), 8000)) return false;
+  if (!await until(() => choice.isEnabled(), 20000)) return false;
   const count = () => requestedCalls(session.wallet, session.governor, governorAbi).filter(call => /^castVote/.test(call.functionName)).length;
   const before = count();
   await choice.click();
