@@ -58,7 +58,7 @@ def test_lint_accepts_a_quiz_judge_that_reads_only_the_final_reply(tmp_path):
         'atif-trajectory = "/logs/agent/trajectory.json"', 'files = ["/logs/verifier/final-reply.txt"]'))
     lint_task(task)
     judge.write_text(judge.read_text().replace("/logs/verifier/final-reply.txt", "/app/reply.txt"))
-    with pytest.raises(ValueError, match="only the final reply"):
+    with pytest.raises(ValueError, match="only files under /logs/verifier/"):
         lint_task(task)
 
 
