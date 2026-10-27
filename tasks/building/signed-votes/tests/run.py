@@ -17,6 +17,7 @@ CHECKS = [check["name"] for check in (
     dict(name="tampered_vote"),
     dict(name="wrong_signer"),
     dict(name="other_proposal"),
+    dict(name="other_chain"),
     dict(name="safe_vote"),
     dict(name="safe_one_owner"),
     dict(name="safe_late_vote"),

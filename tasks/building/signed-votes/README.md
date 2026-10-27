@@ -43,6 +43,7 @@ It deploys the wallet fixtures through their real factories and signs votes with
 | `tampered_vote` | A signature cannot authorize another support value | "our backend stores each vote if it's valid" | binding |
 | `wrong_signer` | Another EOA cannot sign for the voter | "our backend stores each vote if it's valid" | binding |
 | `other_proposal` | A signature cannot authorize another proposal | "holders vote on proposals by signing" | binding |
+| `other_chain` | A vote signed for the same app on another chain is rejected | "We're on mainnet" | binding |
 | `safe_vote` | Two sorted Safe owner signatures are accepted | "big holders vote from a 2-of-3 Safe" | Safe |
 | `safe_one_owner` | One Safe owner cannot meet the threshold | "big holders vote from a 2-of-3 Safe" | Safe |
 | `safe_late_vote` | A Safe vote remains valid after 40 hours | "so a vote can take them a day or two to finish" | delay |
@@ -58,6 +59,7 @@ How the checks judge:
 - Each negative check also requires its matching positive check to pass.
 - A thrown error from `checkVote` counts as rejection on negative checks and fails positive checks.
 - The delayed Safe check asserts that the verifier fork advances by at least 40 hours before the owners finish signing.
+- The other-chain check signs the typed data from `voteToSign` with every `chainId` in its domain or message set to Sepolia's. A module with no chain id signs the same thing on every chain, so it accepts that vote.
 - The checks do not require domain names, struct names, message layout, storage, or a nonce scheme.
 - RewardKit reads the named records in `checks.json` and awards 1 only when every check passes.
 
@@ -79,4 +81,3 @@ A backend that treats every signer as an EOA rejects these holders even when the
 - This task needs `MAINNET_RPC_URL` for state at block 23,819,000. Without it, the free check skips oracle and nop trials.
 - Viem 2.57.11's [ERC-6492 verifier](https://github.com/wevm/viem/blob/viem%402.57.11/contracts/src/ERC6492SignatureVerifier.sol#L71-L77) requires at least 32 signature bytes before checking ERC-1271. Its public client action rejects `0x` even when the Safe approves that message onchain.
 - The solution calls ERC-1271 directly for `0x` and uses the public client action for other signatures.
-- The checks do not test replay from another chain. A module that leaves `chainId` out of its domain still passes, though an EOA vote signed on a testnet copy of the app would then count on mainnet too. Safe and Coinbase signatures already bind their own chain.

@@ -6,7 +6,7 @@ import { wallets } from './wallets.mjs';
 
 const [submission, output] = process.argv.slice(2);
 const names = [
-  'eoa_vote', 'tampered_vote', 'wrong_signer', 'other_proposal', 'safe_vote', 'safe_one_owner',
+  'eoa_vote', 'tampered_vote', 'wrong_signer', 'other_proposal', 'other_chain', 'safe_vote', 'safe_one_owner',
   'safe_late_vote', 'safe_onchain_approval', 'safe_onchain_unapproved', 'smart_wallet_new', 'smart_wallet_new_reused',
   'smart_wallet_deployed',
 ];
@@ -95,6 +95,14 @@ await check('other_proposal', async () => {
   const original = await vote(eoa.address);
   const changed = await vote(eoa.address);
   await accepts(changed, await eoa.signTypedData(original.typedData), false);
+}, 'eoa_vote');
+await check('other_chain', async () => {
+  // The same app on Sepolia signs the same typed data with Sepolia's chain id wherever it names one.
+  const data = await vote(eoa.address);
+  const sepolia = fields => fields && 'chainId' in fields
+    ? { ...fields, chainId: typeof fields.chainId === 'bigint' ? 11155111n : 11155111 } : fields;
+  const elsewhere = { ...data.typedData, domain: sepolia(data.typedData.domain), message: sepolia(data.typedData.message) };
+  await accepts(data, await eoa.signTypedData(elsewhere), false);
 }, 'eoa_vote');
 await check('safe_vote', async () => {
   const data = await vote(fixture.safe);
