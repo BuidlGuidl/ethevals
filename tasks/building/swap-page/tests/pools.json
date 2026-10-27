@@ -1,0 +1,170 @@
+{
+  "block": "26260992",
+  "pools": [
+    {
+      "version": 3,
+      "stable": "USDC",
+      "address": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
+      "key": {
+        "currency0": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "currency1": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "fee": 500,
+        "tickSpacing": 0,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "liquidity": "2149103141226647366",
+      "pinnedSqrtPriceX96": "1624927165188810456441984470232319",
+      "pinnedEthPrice": 2377.3403911859173
+    },
+    {
+      "version": 3,
+      "stable": "USDC",
+      "address": "0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8",
+      "key": {
+        "currency0": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "currency1": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "fee": 3000,
+        "tickSpacing": 0,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "liquidity": "2903198296451260826",
+      "pinnedSqrtPriceX96": "1624355426455778170953143889762767",
+      "pinnedEthPrice": 2379.0142327220897
+    },
+    {
+      "version": 3,
+      "stable": "USDC",
+      "address": "0x7BeA39867e4169DBe237d55C8242a8f2fcDcc387",
+      "key": {
+        "currency0": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "currency1": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "fee": 10000,
+        "tickSpacing": 0,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "liquidity": "14560094941628620",
+      "pinnedSqrtPriceX96": "1625349427814997227747012297356078",
+      "pinnedEthPrice": 2376.105294807199
+    },
+    {
+      "version": 3,
+      "stable": "USDC",
+      "address": "0xE0554a476A092703abdB3Ef35c80e0D76d32939F",
+      "key": {
+        "currency0": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "currency1": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "fee": 100,
+        "tickSpacing": 0,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "liquidity": "618010759676616804",
+      "pinnedSqrtPriceX96": "1625264261013300421497159114792759",
+      "pinnedEthPrice": 2376.354325805373
+    },
+    {
+      "version": 4,
+      "stable": "USDC",
+      "id": "0x98316e8405502774a5d0a0761276b5d26505a8195c1905169864008d5e7a3eea",
+      "key": {
+        "currency0": "0x0000000000000000000000000000000000000000",
+        "currency1": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "fee": 8388608,
+        "tickSpacing": 4,
+        "hooks": "0x000022Ec4eBD6b12294396E852E4C3876b253Cc0"
+      },
+      "liquidity": "890876286678390024",
+      "pinnedSqrtPriceX96": "3862939316823228225582194",
+      "pinnedEthPrice": 2377.2595689082723
+    },
+    {
+      "version": 4,
+      "stable": "USDC",
+      "id": "0xe500210c7ea6bfd9f69dce044b09ef384ec2b34832f132baec3b418208e3a657",
+      "key": {
+        "currency0": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "currency1": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "fee": 8388608,
+        "tickSpacing": 10,
+        "hooks": "0x0000000aa232009084Bd71A5797d089AA4Edfad4"
+      },
+      "liquidity": "32232973383041682",
+      "pinnedSqrtPriceX96": "1625198568835247345889638892574972",
+      "pinnedEthPrice": 2376.5464390024936
+    },
+    {
+      "version": 3,
+      "stable": "USDT",
+      "address": "0x11b815efB8f581194ae79006d24E0d814B7697F6",
+      "key": {
+        "currency0": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "currency1": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "fee": 500,
+        "tickSpacing": 0,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "liquidity": "679556107548259484",
+      "pinnedSqrtPriceX96": "3864750911615395682773580",
+      "pinnedEthPrice": 2379.489808908112
+    },
+    {
+      "version": 3,
+      "stable": "USDT",
+      "address": "0x4e68Ccd3E89f51C3074ca5072bbAC773960dFa36",
+      "key": {
+        "currency0": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "currency1": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "fee": 3000,
+        "tickSpacing": 0,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "liquidity": "10124300578616847148",
+      "pinnedSqrtPriceX96": "3866589921257951779226281",
+      "pinnedEthPrice": 2381.7548686348628
+    },
+    {
+      "version": 3,
+      "stable": "USDT",
+      "address": "0xC5aF84701f98Fa483eCe78aF83F11b6C38ACA71D",
+      "key": {
+        "currency0": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "currency1": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "fee": 10000,
+        "tickSpacing": 0,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "liquidity": "2192971060794694",
+      "pinnedSqrtPriceX96": "3862595180051260333363946",
+      "pinnedEthPrice": 2376.836023040202
+    },
+    {
+      "version": 3,
+      "stable": "USDT",
+      "address": "0xc7bBeC68d12a0d1830360F8Ec58fA599bA1b0e9b",
+      "key": {
+        "currency0": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "currency1": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "fee": 100,
+        "tickSpacing": 0,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "liquidity": "114792629526338803",
+      "pinnedSqrtPriceX96": "3864023440281598967573299",
+      "pinnedEthPrice": 2378.5940990688573
+    },
+    {
+      "version": 4,
+      "stable": "USDT",
+      "id": "0x90078845bceb849b171873cfbc92db8540e9c803ff57d9d21b1215ec158e79b3",
+      "key": {
+        "currency0": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "currency1": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "fee": 8388608,
+        "tickSpacing": 10,
+        "hooks": "0x0000000aa232009084Bd71A5797d089AA4Edfad4"
+      },
+      "liquidity": "28760482763935699",
+      "pinnedSqrtPriceX96": "3864476478281529188721475",
+      "pinnedEthPrice": 2379.151889000129
+    }
+  ]
+}
