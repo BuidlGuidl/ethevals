@@ -7,7 +7,8 @@ import { wallets } from './wallets.mjs';
 const [submission, output] = process.argv.slice(2);
 const names = [
   'eoa_vote', 'tampered_vote', 'wrong_signer', 'other_proposal', 'safe_vote', 'safe_one_owner',
-  'safe_late_vote', 'safe_onchain_approval', 'safe_onchain_unapproved', 'smart_wallet_new', 'smart_wallet_deployed',
+  'safe_late_vote', 'safe_onchain_approval', 'safe_onchain_unapproved', 'smart_wallet_new', 'smart_wallet_new_other_proposal',
+  'smart_wallet_deployed',
 ];
 const records = {};
 await mkdir(output, { recursive: true });
@@ -136,6 +137,14 @@ await check('smart_wallet_new', async () => {
   await accepts(data, signature, true);
   assert.equal(await fixture.client.getCode({ address: account.address }), undefined);
 });
+await check('smart_wallet_new_other_proposal', async () => {
+  const account = await fixture.smartWallet(false);
+  const original = await vote(account.address);
+  const changed = await vote(account.address);
+  const signature = await account.signTypedData(original.typedData);
+  assert.ok(signature.endsWith('6492649264926492649264926492649264926492649264926492649264926492'));
+  await accepts(changed, signature, false);
+}, 'smart_wallet_new');
 await check('smart_wallet_deployed', async () => {
   const account = await fixture.smartWallet(true);
   const data = await vote(account.address);

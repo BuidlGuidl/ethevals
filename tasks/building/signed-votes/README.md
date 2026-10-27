@@ -49,6 +49,7 @@ It deploys the wallet fixtures through their real factories and signs votes with
 | `safe_onchain_approval` | A threshold-approved SafeMessage accepts an empty signature | "big holders vote from a 2-of-3 Safe" | Safe |
 | `safe_onchain_unapproved` | An unapproved SafeMessage rejects an empty signature | "our backend stores each vote if it's valid" | Safe |
 | `smart_wallet_new` | An undeployed Coinbase wallet's ERC-6492 signature is accepted | "many newer holders use smart wallets" | smart wallets |
+| `smart_wallet_new_other_proposal` | An undeployed wallet's signature cannot authorize another proposal | "our backend stores each vote if it's valid" | smart wallets |
 | `smart_wallet_deployed` | A deployed Coinbase wallet's signature is accepted | "many newer holders use smart wallets" | smart wallets |
 
 How the checks judge:
@@ -78,3 +79,4 @@ A backend that treats every signer as an EOA rejects these holders even when the
 - This task needs `MAINNET_RPC_URL` for state at block 23,819,000. Without it, the free check skips oracle and nop trials.
 - Viem 2.57.11's [ERC-6492 verifier](https://github.com/wevm/viem/blob/viem%402.57.11/contracts/src/ERC6492SignatureVerifier.sol#L71-L77) requires at least 32 signature bytes before checking ERC-1271. Its public client action rejects `0x` even when the Safe approves that message onchain.
 - The solution calls ERC-1271 directly for `0x` and uses the public client action for other signatures.
+- The checks do not test replay from another chain. A module that leaves `chainId` out of its domain still passes, though an EOA vote signed on a testnet copy of the app would then count on mainnet too. Safe and Coinbase signatures already bind their own chain.
