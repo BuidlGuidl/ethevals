@@ -224,6 +224,8 @@ The page and the wallet:
 Time, snapshots, and the cap:
 
 - The fork's block interval is zero, and the verifier moves time only where a journey needs it.
+- Before the first snapshot, `warm.mjs` reads the reserve and token state the pages read. It also simulates each journey's deposits and withdrawals with `eth_simulateV1`, which changes nothing.
+- The snapshot keeps what the warm-up fetched, so a slow upstream RPC costs setup time instead of a page's wait. Each new page session waits up to 30 seconds for the USDC APY to appear.
 - Snapshots isolate the USDT and cap journeys. Each withdrawal journey gets a funded position if the one before it failed.
 - For the cap journey alone, the verifier impersonates the provider's ACL admin, after checking its pool admin role, and lowers USDC's cap through the pool configurator.
 - The new cap is the aUSDC total supply rounded up to whole USDC, plus 5,000 USDC. Accrued treasury tokens leave less than that as room.
@@ -235,7 +237,7 @@ Outputs:
 - Each journey saves page text, a screenshot, and the wallet requests with their receipts.
 - The verifier writes `build.log`, `typecheck.log`, and `checks.json` under `/logs/verifier/`.
 - It copies `/opt/check_records.py` into `/tests/check_records.py`, and RewardKit uses that shared adapter to turn `checks.json` into named checks and the reward.
-- Fork startup, funding, and fixture failures are trial errors. Broken pages and builds fail their checks.
+- Fork startup, funding, warm-up, and fixture failures are trial errors. Broken pages and builds fail their checks.
 - Harbor saves `/workspace` as an artifact, without `node_modules`, `dist`, `.git`, and `chain_context.json`. Leaving out the chain context symlink lets the publication secret check scan the saved project, since it rejects symlinks.
 
 The wallet also supports atomic bundles and ERC-1271 signatures through an EIP-7702 account, for later page tasks.
@@ -291,7 +293,8 @@ Copy these into the new task's `tests/`:
 
 What the copied files give you:
 
-- `createHarness({workspace, output, sourceContext, funding})` creates the fork, funded account, browser, and static server.
+- `createHarness({workspace, output, sourceContext, funding, warm})` creates the fork, funded account, browser, and static server.
+- `warm(mainRpc)` is optional. It runs after funding and before the first snapshot, so the snapshot keeps the state it reads.
 - `funding` supplies `nativeBalance` and token transfers, each with `token`, `holder`, and `amount`.
 - The returned object exposes `mainRpc`, `account`, `sourceBlock`, `session`, `reset`, `capture`, and `close`.
 - `session({atomic, beforeSend})` opens the built page and returns `page`, `context`, `wallet`, and `errors`.
@@ -303,6 +306,7 @@ What the copied files give you:
 What the new task supplies:
 
 - Its journeys, chain setup, funding addresses, expected values, and page-specific control scopes. For Savings, those live in `browser.mjs`, `chain.mjs`, and `controls.mjs`.
+- A warm-up that reads the state its journeys touch, like Savings' `warm.mjs`. Without one, the first journey to touch new state pays for every upstream read inside its page waits.
 - Its own check names, and which failures are trial errors.
 - The check-record and RewardKit wiring, adapted from `test.sh`.
 
