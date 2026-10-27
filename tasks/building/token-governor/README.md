@@ -34,7 +34,7 @@ The instruction leaves out four things. Each has a real incident or an adopted f
 
   One holder voting 1,000,000 for passes against the wrapped supply and fails against TOKEN.
 
-- **Who holds the keys.** The contract that enforces the two-day wait has to own the protocol and hold the treasury. Make the governor itself the owner and a passed proposal can change fees or move funds with no wait at all. The wait also has to be fixed when a proposal is queued, or one vote can shorten every wait behind it. Term's first transaction set its delay to zero, and Moonwell's attacker in March 2026 went straight for the admin rights.
+- **Who holds the keys.** The contract that enforces the two-day wait has to own the protocol and hold the treasury. Make the governor itself the owner and a passed proposal can change fees or move funds with no wait at all. Term's first transaction set its delay to zero, and Moonwell's attacker in March 2026 went straight for the admin rights. A wait that is read at execution instead of fixed when the proposal is queued lets one vote shorten every wait behind it; the check does not test that, and OpenZeppelin's timelock fixes the wait at queue time.
 
 - **Time to answer a late vote.** A proposal can sit at zero votes all week, look dead, and reach quorum in its last hour. If the deadline does not move, the other 96% of holders never get a turn, and the two-day wait does not help because stopping a passed proposal needs another vote. Compound's proposal 289 passed after 18 wallets cast 536,376 COMP in a 23-minute burst at the end of the vote.
   - Without the extension, votes sit at zero for seven days, 4M for arrive in the last hour, and the vote closes. 4% spoke. 96% never got a turn.
@@ -82,9 +82,11 @@ The [ENS discussion of Tally's shutdown](https://discuss.ens.domains/t/tally-is-
 
 - Every agent can fail this task and the task still earns its place. The bar is what a strong agent misses when nobody names the thing. The day an agent protects the vote without being asked, this task is the one that shows it.
 - Each check has a design behind it that an agent produced in a trial, so a 0 is a finding, not noise. Strong agents have passed the quorum, control and Snapshot checks and left the vote open to a last-hour swing, while listing OpenZeppelin's extension for it. An open model has measured quorum against the wrapped supply, the design Term shipped.
+- A 0 on the late-vote check means the governor took no extra care, not that it has a bug. Uniswap's and ENS's governors lack the extension too; Compound's and Arbitrum's have it.
 - A variant of the message that named the fear of late votes got the extension from every agent. The miss is about what nobody said, not what nobody knows, so the shipped message stays unprompted.
 - A developer who leaves the extension out and writes down why would also fail the late-vote check, since the check only reads code. That is the one unfairness we know of, and nobody has flagged it yet.
 - The checks accept any design that follows the standard. They read the clock mode and voting settings from the governor, accept block numbers or timestamps, any extension length, and any revert reason. They never name a constructor or a library.
+- The quorum check accepts OpenZeppelin's default counting, where abstain votes count toward quorum. The ask says "votes for it", and no check separates the two, so a governor that counts only for-votes passes as well.
 - OpenZeppelin Contracts 5.7.0 is in `lib/` when the agent starts, so nothing needs installing.
 - There is no chain sidecar or RPC dependency. Forge advances the governor's chosen clock and uses seconds for the execution wait.
 - The checks run the deploy script the way `forge script` does and set `PRIVATE_KEY` and `DEPLOYER_PRIVATE_KEY`, so an ordinary script works unchanged.
