@@ -148,6 +148,7 @@ test("the mode switch disables upcoming modes and retains skills details", () =>
   const html = renderToStaticMarkup(createElement(Board, { data }));
   assert.ok(html.includes('aria-label="Which results"'));
   assert.match(html, /aria-checked="true"[^>]*>Internet<\/button>/);
+  assert.ok(html.includes(">Measures how agents do Ethereum work with web access, the way developers use them</p>"));
   for (const label of ["Internet + Skills", "Model only"]) {
     assert.match(html, new RegExp(`<button[^>]*disabled=""[^>]*>${label.replace("+", "\\+")}</button>`));
   }

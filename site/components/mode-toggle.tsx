@@ -2,19 +2,15 @@
 
 import { useState } from "react";
 import type { Mode } from "../src/board";
-import { modelOnlyNote, modeNames } from "../src/labels";
+import { modeHints, modeNames } from "../src/labels";
 import { isLiveMode } from "../src/modes";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
-const descriptions = {
-  vanilla: modelOnlyNote,
-  skills: "Measures whether giving agents skills makes them better at Ethereum work.",
-};
 // Each tab draws its own border: solid when live, dashed when coming soon.
 const edge = "border border-border-strong";
 
-function UpcomingMode({ value }: { value: keyof typeof descriptions }) {
+function UpcomingMode({ value }: { value: "skills" | "vanilla" }) {
   const [open, setOpen] = useState(false);
   const disabled = !isLiveMode(value);
   const button = <ToggleGroupItem value={value} disabled={disabled} className={disabled ? "disabled:pointer-events-none" : edge}>{modeNames[value]}</ToggleGroupItem>;
@@ -22,7 +18,7 @@ function UpcomingMode({ value }: { value: keyof typeof descriptions }) {
   // Touch screens have no hover, so a tap opens the tooltip too. preventDefault skips Radix's close on click.
   return <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent><TooltipTrigger asChild>
     <span className={`inline-flex border-dashed ${edge}`} tabIndex={0} onClick={(event) => { event.preventDefault(); setOpen(true); }}>{button}</span></TooltipTrigger>
-    <TooltipContent className="max-w-80"><span className="badge">Coming soon</span><p className="mt-2">{descriptions[value]}</p></TooltipContent>
+    <TooltipContent className="max-w-80"><span className="badge">Coming soon</span><p className="mt-2">{modeHints[value]}</p></TooltipContent>
   </Tooltip>;
 }
 

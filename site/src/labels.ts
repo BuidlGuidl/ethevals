@@ -1,7 +1,11 @@
 import type { Agent, Mode, Pillar } from "./board";
 
 export const names: Record<Pillar, string> = { concepts: "Concepts", build: "Build", act: "Act" };
-export const modelOnlyNote = "Measures what the model knows from pre-training, with a plain call to the provider.";
+export const modeHints: Record<Mode, string> = {
+  internet: "Measures how agents do Ethereum work with web access, the way developers use them",
+  skills: "Measures whether giving agents skills makes them better at Ethereum work",
+  vanilla: "Measures what the model learned in training, with no web or tools",
+};
 export const modeNames: Record<Mode, string> = { internet: "Internet", skills: "Internet + Skills", vanilla: "Model only" };
 
 const programs = new Map([
