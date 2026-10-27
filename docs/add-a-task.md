@@ -84,6 +84,7 @@ Use these sections, in this order:
 | `## Why it matters`   | where the same gotchas hurt real projects, with links                         |
 | `## Notes`            | optional caveats, such as a known contract that passes every check            |
 
+In the blockquote, start every line with `> ` and put a lone `>` line between paragraphs.
 A unit test fails the pull request if a section is missing, if the quoted instruction differs from `instruction.md`, or if the table leaves out a check.
 Write the README before the tests.
 If you can't name a gotcha that the instruction leaves out, the task probably won't tell agents apart.
