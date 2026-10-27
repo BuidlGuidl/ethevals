@@ -54,5 +54,4 @@ It refuses a dollar amount alone and does not check the explanation after the pe
 The $2,000 test uses the user's balance in each reserve in the call, not their position totals.
 The constant's NatSpec says "position", but the code and the release notes say reserve.
 
-With WETH's real liquidation threshold, these amounts give a health factor near 0.89, which would allow 100% on its own.
-The question states 0.98, so the answer rests on the size rule.
+WETH's liquidation threshold on Aave v3 is 83%, so these amounts give the question's health factor of 0.98.
