@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Keep state snapshots in memory and start this task's clock in the past."""
+import os
+import sys
+import time
+
+binary = "/usr/local/bin/anvil"
+os.execv(binary, [binary, "--prune-history", "128", "--timestamp", str(int(time.time()) - 79_239 * 12), *sys.argv[1:]])

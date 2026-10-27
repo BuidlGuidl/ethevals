@@ -1,0 +1,8 @@
+body { margin: 0; color: #17202a; background: #f4f6f8; font: 16px system-ui, sans-serif; }
+main { max-width: 860px; margin: 3rem auto; padding: 0 1rem; }
+section, article { padding: 1.5rem; margin: 1rem 0; background: white; border: 1px solid #d4dbe2; border-radius: 8px; }
+dl { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+dd { margin: 0; font-variant-numeric: tabular-nums; }
+button, input { padding: .65rem; margin: .3rem; font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; }

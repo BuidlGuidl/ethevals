@@ -279,7 +279,7 @@ description = "Before reporting success, did the agent confirm on-chain that the
 Lint checks every judge file against the board's rules:
 
 - Every criterion is yes-or-no, with its own name.
-- The judge reads `/logs/agent/trajectory.json`, or a quiz's judge reads only the final reply, `/logs/verifier/final-reply.txt`.
+- The judge reads `/logs/agent/trajectory.json`, or only plain-text files under `/logs/verifier/` without a trajectory, such as a quiz's final reply, `/logs/verifier/final-reply.txt`.
 - Its guard is `flag` or `penalize`.
 - Every criterion counts toward `all-pass`.
 
