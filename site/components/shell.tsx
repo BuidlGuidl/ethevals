@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Logo } from "./logo";
+import { repo } from "../src/repo";
 
-export const repo = "https://github.com/BuidlGuidl/ethevals";
 type Flight = { x: number; y: number; width: number; height: number; dx: number; dy: number; scale: number };
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -40,6 +40,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <Link ref={brand} className={`brand ${hideBrand || flight ? "brand-hidden" : ""}`} href="/" aria-label="ETH Evals"><Logo id="nav-logo" /></Link>
       <span className={`navtag ${hideBrand ? "brand-hidden" : ""}`}>The open benchmark for AI on Ethereum</span>
       <div className="navlinks"><Link href="/" aria-current={pathname === "/" ? "page" : undefined}>Results</Link>
+        <Link href="/evals/" aria-current={pathname === "/evals/" ? "page" : undefined}>Tasks</Link>
         <Link href="/how-it-works/" aria-current={pathname === "/how-it-works/" ? "page" : undefined}>How it works</Link>
         <a href={repo} target="_blank" rel="noreferrer">GitHub ↗</a></div>
     </nav>

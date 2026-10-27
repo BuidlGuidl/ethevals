@@ -207,8 +207,15 @@ def test_every_real_task_readme_quotes_its_instruction_and_names_every_check():
         assert readme.startswith("# "), task
         assert sections in (["The instruction", "What it touches", "The checks", "Why it matters"],
                             ["The instruction", "What it touches", "The checks", "Why it matters", "Notes"]), task
-        quoted = re.search(r"^## The instruction\n\n```text\n(.*?)```$", readme, re.MULTILINE | re.DOTALL)
-        assert quoted and quoted[1] == (task / "instruction.md").read_text(), task
+        section = readme.split("## The instruction\n\n", 1)[1].split("\n## ", 1)[0].rstrip("\n") + "\n"
+        fenced = re.fullmatch(r"```text\n(.*?)```\n", section, re.DOTALL)
+        if fenced:
+            quoted = fenced[1]
+        else:
+            lines = section.splitlines()
+            assert lines and all(line.startswith(">") for line in lines), f"{task}/README.md: the instruction is neither a blockquote nor a text block"
+            quoted = "".join(line.removeprefix(">").removeprefix(" ") + "\n" for line in lines)
+        assert quoted == (task / "instruction.md").read_text(), f"{task}/README.md: the quoted instruction differs from instruction.md"
         tests = task / "tests"
         names = set(re.findall(r"\bfunction (test\w*)\(", "".join(file.read_text() for file in tests.glob("*.t.sol"))))
         names |= {"compile"} if names else set()
@@ -259,11 +266,11 @@ def test_task_lint_requires_the_declared_pillar_to_match_the_folder(tmp_path):
 
     task = task_folder(tmp_path)
     settings = task / "task.toml"
-    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "building"'))
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "build"'))
     with pytest.raises(SystemExit) as error:
         main(["lint", "--tasks", str(task)])
     assert error.value.code == 2
-    settings.write_text(settings.read_text().replace('pillar = "building"', 'pillar = "concepts"'))
+    settings.write_text(settings.read_text().replace('pillar = "build"', 'pillar = "concepts"'))
     assert main(["lint", "--tasks", str(task)]) == 0
 
 

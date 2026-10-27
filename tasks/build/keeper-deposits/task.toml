@@ -1,0 +1,27 @@
+schema_version = "1.3"
+artifacts = [
+    "/workspace/src",
+    "/workspace/script",
+    "/workspace/test",
+    "/workspace/foundry.toml",
+    "/workspace/package.json",
+    "/workspace/package-lock.json",
+]
+
+[task]
+name = "buidlguidl/keeper-deposits"
+description = "Build keeper-filled USDC deposits with one signature, pending deposits, and Safe support on mainnet."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "eip3009", "erc4626", "signatures", "fork"]
+
+[metadata]
+pillar = "build"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 4096

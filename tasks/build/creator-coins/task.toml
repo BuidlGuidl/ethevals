@@ -1,0 +1,20 @@
+schema_version = "1.3"
+artifacts = ["/workspace"]
+
+[task]
+name = "buidlguidl/creator-coins"
+description = "Check creator-coin launch prices, permanent Uniswap v3 liquidity, per-coin fees, and launches into pools initialized by strangers."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "solidity", "uniswap-v3", "creator-coins", "liquidity", "fees"]
+
+[metadata]
+pillar = "build"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 2048

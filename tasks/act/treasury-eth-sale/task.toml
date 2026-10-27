@@ -1,0 +1,22 @@
+schema_version = "1.3"
+
+[task]
+name = "buidlguidl/treasury-eth-sale"
+description = "Check whether a quarterly ETH sale protects the treasury price, reports chain results, and leaves no permissions or funds behind."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "uniswap", "treasury", "fork", "scripts"]
+
+[metadata]
+pillar = "act"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[environment]
+cpus = 1
+memory_mb = 4096

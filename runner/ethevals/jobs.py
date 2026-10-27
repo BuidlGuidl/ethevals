@@ -15,7 +15,7 @@ from harbor.publisher.packager import Packager
 from pydantic import ValidationError
 
 from .files import write_whole
-from .job_config import JobSettings, check_credentials, check_judge_key
+from .job_config import JobSettings, check_credentials, check_judge_key, load_job
 from .harbor_tasks import lint_task, task_host_variables, task_judges
 from .skills import SkillsPack, pack_skills
 from .secret_check import check_output, remember_secrets, secret_values
@@ -27,13 +27,14 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
     task = Task(path)
     metadata = task.config.metadata
     pillar = metadata.get("pillar")
-    if pillar not in {"concepts", "transactions", "building", "security"}:
+    if pillar not in {"concepts", "build", "act"}:
         raise ValueError(f"{path}: metadata.pillar must name a board pillar")
     modes = metadata.get("modes")
     if not isinstance(modes, list) or not modes or any(not isinstance(mode, str) or mode not in {"vanilla", "internet", "skills"} for mode in modes):
         raise ValueError(f"{path}: metadata.modes must list supported modes")
     digest, _ = Packager.compute_content_hash(path)
     return {"id": f"{pillar}/{path.name}", "hash": "sha256:" + digest, "pillar": pillar,
+            "area": metadata.get("area"), "layer": metadata.get("layer"),
             "name": task.name, "description": task.config.task.description,
             "instruction": (path / "instruction.md").read_text(), "modes": modes}
 
@@ -48,7 +49,8 @@ def write_catalog(paths: list[Path], output: Path) -> None:
             raise ValueError(f"Duplicate task name: {entry['name']}")
         names.add(entry["name"])
     output.mkdir(parents=True, exist_ok=True)
-    (output / "catalog.json").write_text(json.dumps({"tasks": entries, "skills_hash": pack_skills().hash}, indent=2) + "\n")
+    models = [model.name for model in load_job().models.values()]
+    (output / "catalog.json").write_text(json.dumps({"tasks": entries, "skills_hash": pack_skills().hash, "models": models}, indent=2) + "\n")
 
 
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,

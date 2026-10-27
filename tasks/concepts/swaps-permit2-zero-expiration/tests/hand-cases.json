@@ -1,0 +1,80 @@
+{
+  "note": "Replies the judge must mark correctly. 'want' is the correct mark: right passes the quiz, wrong fails it.",
+  "cases": [
+    {
+      "want": "right",
+      "label": "plain",
+      "reply": "At the current block's timestamp. Permit2 stores block.timestamp when expiration is 0, so the spender can use it only in that block."
+    },
+    {
+      "want": "right",
+      "label": "own block only",
+      "reply": "It lasts for the approval's own block only. A transferFrom in the same block works, and from the next block on it's expired."
+    },
+    {
+      "want": "right",
+      "label": "immediately after the block",
+      "reply": "Immediately after the current block. Zero is swapped for block.timestamp, so only a same-block transfer can use it."
+    },
+    {
+      "want": "right",
+      "label": "when the block ends",
+      "reply": "When the block ends. Permit2 treats 0 as now, so the allowance is good for the transaction's block and nothing later."
+    },
+    {
+      "want": "right",
+      "label": "at once, explained right",
+      "reply": "Effectively at once: the expiration becomes block.timestamp, so it works only in the same block, for example in a multicall that approves and transfers."
+    },
+    {
+      "want": "wrong",
+      "label": "never expires",
+      "reply": "Never. An expiration of 0 means the allowance has no expiry."
+    },
+    {
+      "want": "wrong",
+      "label": "already expired",
+      "reply": "Immediately. A timestamp of 0 is in the past, so the allowance can't be used at all."
+    },
+    {
+      "want": "wrong",
+      "label": "hedged both ways",
+      "reply": "Either never or at the current block, depending on the Permit2 version, since 0 is often a sentinel for no expiry."
+    },
+    {
+      "want": "wrong",
+      "label": "default period",
+      "reply": "After 30 days. Permit2 applies a default expiration when 0 is passed."
+    },
+    {
+      "want": "wrong",
+      "label": "call reverts",
+      "reply": "It doesn't: the approve call reverts, because Permit2 rejects an expiration of 0 as invalid."
+    },
+    {
+      "want": "right",
+      "label": "the oracle's reply",
+      "reply": "At the current block's timestamp. Permit2 stores block.timestamp for zero, so the allowance is usable only in that block."
+    },
+    {
+      "want": "wrong",
+      "label": "immediately, naming block.timestamp but not same-block use",
+      "reply": "Immediately. Permit2 stores block.timestamp as the expiration when 0 is passed."
+    },
+    {
+      "want": "wrong",
+      "label": "expired as soon as it is set",
+      "reply": "Immediately. Permit2 stores block.timestamp as the expiration when 0 is passed, so the allowance is expired as soon as it is set."
+    },
+    {
+      "want": "right",
+      "label": "more precise than the target",
+      "reply": "At the approval's block.timestamp. transferFrom reverts once block.timestamp is greater than that, so on a chain where consecutive blocks share a timestamp it can outlive the block; on mainnet it is same-block only."
+    },
+    {
+      "want": "wrong",
+      "label": "hedge as a version caveat",
+      "reply": "At the end of the current block, or never if the deployment uses the older Permit2 that treats 0 as no expiry."
+    }
+  ]
+}

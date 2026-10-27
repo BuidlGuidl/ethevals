@@ -1,6 +1,8 @@
 # ETH Evals board
 
 The site builds a static board from Harbor task declarations and results rows.
+It groups tasks into three pillars: Concepts, Build, and Act.
+Concepts holds quizzes, Build holds builds, and Act holds tasks where the agent acts on a chain.
 The browser receives public instructions and check records, without verifier files or targets.
 
 ## Build
@@ -10,6 +12,10 @@ From `site/`, run `pnpm install --frozen-lockfile`, then `pnpm build`.
 The build writes `out/` for a static file host.
 It refreshes `.catalog/catalog.json` through `ethevals catalog`.
 The catalog lists tasks and the current skills hash.
+
+The Tasks page at `/evals/` shows catalog counts by pillar and area without results data.
+Select a pillar and an area to filter tasks. With Build selected, a layer filter appears too. Share the URL to keep those filters.
+Expand a task to read its instruction and open its README on GitHub.
 
 Run `ETHEVALS_DEMO=1 pnpm build` for an invented board.
 The banner labels its results, and its trajectory links are examples.
@@ -22,6 +28,7 @@ A missing explicit file fails the build.
 Malformed rows and duplicate trials fail with their file and line.
 The loader accepts schema version 8 and skips older rows.
 It shows only current task hashes and, for skills-mode rows, the current skills hash.
+It shows only models listed in the job settings.
 The 160 Inspect rows have been removed.
 
 ## Scores and trajectories

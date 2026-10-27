@@ -1,0 +1,19 @@
+schema_version = "1.3"
+
+[task]
+name = "buidlguidl/vault-v2-market-exit"
+description = "Check whether an agent exits a Morpho V2 market, cancels pending cap raises, and preserves deposits and withdrawals."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "morpho", "vault", "fork"]
+
+[metadata]
+pillar = "act"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 4096

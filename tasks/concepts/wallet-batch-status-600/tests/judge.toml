@@ -1,0 +1,22 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/final-reply.txt"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "partial_onchain_revert"
+type = "binary"
+description = """The file holds one reply to this question:
+"Under EIP-5792, wallet_getCallsStatus returns status 600 for a batch of calls. What does that mean? Answer in one sentence."
+
+The right answer, from EIP-5792: the batch reverted partially. It reached the chain, some calls reverted, and changes from other calls may be onchain.
+
+The other EIP-5792 statuses mean something else: 100 pending, 200 confirmed with no reverts, 400 offchain failure that the wallet won't retry, and 500 reverted completely, with only gas charges onchain. A user rejection is error 4001, not a status.
+
+Does the reply say status 600 means a partial revert, where some calls reverted and changes from others may be onchain?
+Answer yes for any wording or format. A reply may name another status to set it apart.
+Answer no if the reply offers another meaning as its answer, even next to a partial revert: the whole batch reverting, the user or wallet rejecting the calls, a batch that is still pending or partly pending, confirmed, an offchain failure, an undefined or unknown status, or any other meaning. Also answer no if the reply hedges between two meanings."""

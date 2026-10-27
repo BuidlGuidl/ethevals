@@ -1,25 +1,28 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { buildBoard, pillars, agentKey, type BoardData, type Eval } from "./board";
+import { buildBoard, layers, pillars, agentKey, type BoardData, type Eval } from "./board";
 import { rowSchema, type Row } from "./rows";
 import { siteRoot } from "./paths";
 
 // This checks the JSON transport. The runner owns task declarations and hashes.
 const catalogSchema = z.object({
   skills_hash: z.string().min(1),
+  models: z.array(z.string().min(1)),
   tasks: z.array(z.object({
     id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
+    area: z.string().trim().min(1).nullish(), layer: z.enum(layers).nullish(),
     description: z.string().min(1), instruction: z.string().min(1),
     modes: z.array(z.enum(["vanilla", "internet", "skills"])).min(1),
   })),
 });
 
-export function loadCatalog(filename: string): { evals: Eval[]; skills_hash: string } {
+export function loadCatalog(filename: string): { evals: Eval[]; skills_hash: string; models: string[] } {
   try {
     const catalog = catalogSchema.parse(JSON.parse(readFileSync(filename, "utf8")));
     return {
       skills_hash: catalog.skills_hash,
+      models: catalog.models,
       evals: catalog.tasks.map((entry) => {
         const name = entry.id.split("/").at(-1)!.replace(/[-_]/g, " ");
         return { ...entry, title: name.charAt(0).toUpperCase() + name.slice(1) };
@@ -28,6 +31,13 @@ export function loadCatalog(filename: string): { evals: Eval[]; skills_hash: str
   } catch (error) {
     throw new Error(`${filename}: cannot load task catalog: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+export function loadTaskCatalog(env: Record<string, string | undefined> = process.env, root = siteRoot) {
+  if (env.ETHEVALS_DEMO && !["0", "1"].includes(env.ETHEVALS_DEMO)) {
+    throw new Error("ETHEVALS_DEMO must be 0 or 1.");
+  }
+  return loadCatalog(path.resolve(root, env.ETHEVALS_DEMO === "1" ? "demo/catalog.json" : ".catalog/catalog.json"));
 }
 
 export function parseRows(contents: string, filename: string, evaluations: Eval[]): Row[] {
@@ -57,17 +67,16 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
 
 export function currentRows(rows: Row[], catalog: ReturnType<typeof loadCatalog>): Row[] {
   const current = new Map(catalog.evals.map((task) => [task.id, task.hash]));
+  const models = new Set(catalog.models);
   return rows.filter((row) => current.get(row.task_id) === row.task_hash
+    && models.has(row.model)
     && (row.mode !== "skills" || row.skills_hash === catalog.skills_hash));
 }
 
 export function loadBoard(env: Record<string, string | undefined> = process.env, root = siteRoot): BoardData {
-  if (env.ETHEVALS_DEMO && !["0", "1"].includes(env.ETHEVALS_DEMO)) {
-    throw new Error("ETHEVALS_DEMO must be 0 or 1.");
-  }
+  const catalog = loadTaskCatalog(env, root);
   const demo = env.ETHEVALS_DEMO === "1";
   if (demo && env.ETHEVALS_ROWS) throw new Error("Choose ETHEVALS_DEMO or ETHEVALS_ROWS, not both.");
-  const catalog = loadCatalog(path.resolve(root, demo ? "demo/catalog.json" : ".catalog/catalog.json"));
   if (!demo && catalog.evals.length) {
     const tasksRoot = path.resolve(root, "../tasks");
     if (!existsSync(tasksRoot) || !statSync(tasksRoot).isDirectory()) throw new Error(`${tasksRoot}: tasks root does not exist.`);

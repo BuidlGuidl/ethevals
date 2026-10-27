@@ -28,7 +28,7 @@ function fixture(t: TestContext) {
   mkdirSync(path.join(site, ".catalog"), { recursive: true });
   mkdirSync(path.join(root, "tasks"));
   mkdirSync(path.join(root, "results"));
-  writeFileSync(path.join(site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", tasks: [evaluation] }));
+  writeFileSync(path.join(site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", models: ["model-a"], tasks: [evaluation] }));
   const rows = path.join(root, "results/rows.jsonl");
   return { root, site, rows, write: (values: Partial<Row>[]) => {
     writeFileSync(rows, "\n" + values.map((value) => JSON.stringify({ ...paid,
@@ -46,6 +46,7 @@ for (const [name, change, message] of [
   test(`loader rejects ${name} with the file and physical line`, (t) => {
     const f = fixture(t);
     writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack",
+      models: ["model-a"],
       tasks: [{ ...evaluation, modes: ["internet"] }] }));
     f.write([change]);
     assert.throws(() => loadBoard({}, f.site), (error: Error) =>
@@ -125,8 +126,10 @@ test("missing task roots and missing or malformed catalogs fail loudly", (t) => 
 
 test("an empty catalog needs no legacy task root and excludes old rows", (t) => {
   const f = fixture(t);
+  f.write([{}]);
+  assert.equal(loadBoard({}, f.site).tables.internet.agents[0].model, "model-a");
   rmSync(path.join(f.root, "tasks"), { recursive: true });
-  writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", tasks: [] }));
+  writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", models: ["model-a"], tasks: [] }));
   f.write([{}]);
   const board = loadBoard({}, f.site);
   assert.deepEqual(board.evaluations, {});

@@ -1,15 +1,19 @@
 import type { Row } from "./rows";
 export type { Row } from "./rows";
 
-export const pillars = ["concepts", "transactions", "building", "security"] as const;
+export const pillars = ["concepts", "build", "act"] as const;
 export type Pillar = (typeof pillars)[number];
 export type Mode = "vanilla" | "internet" | "skills";
+export const layers = ["contracts", "frontend", "backend"] as const;
+export type Layer = (typeof layers)[number];
 
 export interface Eval {
   id: string;
   hash: string;
   title: string;
   pillar: Pillar;
+  area?: string | null;
+  layer?: Layer | null;
   description: string;
   instruction: string;
   modes: Mode[];
@@ -170,7 +174,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
       const cells = pillars.map((pillar) => table.pillars[pillar].cells[key]);
       const trials = pillars.flatMap((pillar) => table.pillars[pillar].evals.flatMap((entry) => entry.cells[key].trials));
       const scored = trials.filter((trial) => trial.status !== "error");
-      const scores: ConfigurationSummary["scores"] = { overall: null, concepts: null, transactions: null, building: null, security: null };
+      const scores: ConfigurationSummary["scores"] = { overall: null, concepts: null, build: null, act: null };
       for (const pillar of pillars) scores[pillar] = table.pillars[pillar].cells[key].score;
       scores.overall = overallScore(pillars.map((pillar) => scores[pillar]));
       table.summaries[key] = {
@@ -185,7 +189,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
   }
   const lifts: BoardData["lifts"] = {};
   for (const key of configurations.keys()) {
-    const lift: ConfigurationSummary["scores"] = { overall: null, concepts: null, transactions: null, building: null, security: null };
+    const lift: ConfigurationSummary["scores"] = { overall: null, concepts: null, build: null, act: null };
     for (const pillar of pillars) {
       const internet = tables.internet.pillars[pillar].evals;
       const skills = tables.skills.pillars[pillar].evals;

@@ -1,0 +1,1 @@
+An EOA has delegated its code with EIP-7702 to a smart account contract. Its owner signs a Permit2 PermitSingle message with the EOA's private key, and a router submits it to Permit2. Which check does Permit2 use to verify this signature: ecrecover against the EOA's address, or ERC-1271 isValidSignature on the account? Answer ecrecover or ERC-1271, then explain in one sentence.

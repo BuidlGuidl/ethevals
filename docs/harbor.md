@@ -175,6 +175,7 @@ The helper keeps Forge stdout and stderr beside `checks.json`.
 
 Criteria live in RewardKit judge TOML files under `tests/` and run through `test.sh`.
 Lint requires named binary criteria, `atif-trajectory = "/logs/agent/trajectory.json"`, and `guard = "flag"` or `"penalize"`.
+A quiz's judge may instead read only `files = ["/logs/verifier/final-reply.txt"]`, which its `test.sh` writes from the trajectory, so the judge never sees the model's reasoning.
 Each judge and its enclosing rewards use `all-pass`, so every test and criterion counts toward the same reward.
 The task's judge model and effort provide the defaults for plain Harbor runs.
 The board overrides them through `REWARDKIT_JUDGE` and `REWARDKIT_REASONING_EFFORT` from the job config.

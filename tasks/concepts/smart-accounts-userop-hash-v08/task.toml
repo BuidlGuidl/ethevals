@@ -1,0 +1,22 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/smart-accounts-userop-hash-v08"
+description = "Check the EIP-712 UserOperation hash scheme used by EntryPoint v0.8."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["erc-4337","entrypoint","eip-712"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[environment]
+cpus = 1
+memory_mb = 1024

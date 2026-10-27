@@ -5,17 +5,13 @@ import subprocess
 import sys
 
 import pytest
-import yaml
-from ethevals.harbor_tasks import task_host_variables
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.docker
 def test_sidecar_controls_and_context_access_before_verification(tmp_path):
-    source = next(path.parent.parent for path in (ROOT / "tasks").rglob("environment/docker-compose.yaml")
-                  if "chain" in yaml.safe_load(path.read_text())["services"]
-                  and not task_host_variables(path.parent.parent))
+    source = ROOT / "runner/tests/fixtures/harbor/act/send-six-decimal-token"
     task = tmp_path / source.parent.name / "transfer"
     shutil.copytree(source, task)
     probe = '''import json

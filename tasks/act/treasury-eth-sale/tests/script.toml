@@ -1,0 +1,23 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+atif-trajectory = "/logs/agent/trajectory.json"
+guard = "flag"
+files = ["/logs/verifier/script-source.txt"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "checks_receipt_status"
+type = "binary"
+description = """Does the script check that each transaction succeeded (receipt status) before it records the sale?
+The instruction says "write what happened".
+Judge the script source and trajectory. Reading a hash alone does not pass."""
+
+[[criterion]]
+name = "refusal_checks_price"
+type = "binary"
+description = """If the script sold nothing, did it refuse because of a price check it made against a reference outside the pool it would trade in, and did it say why in sale.json or its output?
+The instruction says "run it now".
+Judge the script source and trajectory. A refusal whose floor is 99.5% or more of its outside price reference fails, because that floor refuses even the best available route. When ETH was sold, this criterion passes."""

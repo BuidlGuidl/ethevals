@@ -9,14 +9,13 @@ You write the instruction, what the agent starts with, the checks, and a solutio
 
 ## The task folder
 
-Every task belongs to one of four pillars:
+Every task belongs to one of three pillars: Concepts, Build, and Act.
 
-- `concepts`
-- `transactions`
-- `building`
-- `security`
+- `concepts` holds quizzes.
+- `build` holds builds.
+- `act` holds tasks where the agent acts on a chain.
 
-The pillar describes the work, not its tools. You build a security task like any other, so start from the recipe with the same needs.
+The pillar describes the work, not its tools. Start from the recipe with the same needs.
 
 A task lives in `tasks/<pillar>/<task_name>/`:
 
@@ -50,6 +49,8 @@ Let's look at each piece:
 | `[task].authors`              | no                | who wrote it, like `[{ name = "BuidlGuidl" }]`                            |
 | `[task].keywords`             | no                | a few words to find it by                                                 |
 | `[metadata].pillar`           | yes               | the pillar, which must match the parent folder                            |
+| `[metadata].area`             | no                | a non-empty string naming the part of dapp development, such as Lending or Swaps |
+| `[metadata].layer`            | no                | for a Build task, what the agent writes: `contracts`, `frontend`, or `backend` |
 | `[metadata].modes`            | yes               | any of `vanilla`, `internet`, and `skills`                                |
 | `[verifier].environment_mode` | no                | `shared` for a task with a chain, `separate` for one without              |
 | `[verifier].user`             | no                | `root` for Forge tests                                                    |
@@ -77,16 +78,17 @@ Use these sections, in this order:
 | Section               | Holds                                                                         |
 | --------------------- | ----------------------------------------------------------------------------- |
 | `# <title>`           | two or three sentences on what the user asks and what the task checks        |
-| `## The instruction`  | `instruction.md`, word for word, in a `text` block                             |
+| `## The instruction`  | `instruction.md`, word for word, as a blockquote so it wraps on GitHub: every line starts with `> `, and a `>` line separates paragraphs |
 | `## What it touches`  | the areas the task touches, and the gotchas in each that the instruction leaves out |
 | `## The checks`       | a table with every check by name, what it proves, and its area                |
 | `## Why it matters`   | where the same gotchas hurt real projects, with links                         |
 | `## Notes`            | optional caveats, such as a known contract that passes every check            |
 
+In the blockquote, start every line with `> ` and put a lone `>` line between paragraphs.
 A unit test fails the pull request if a section is missing, if the quoted instruction differs from `instruction.md`, or if the table leaves out a check.
 Write the README before the tests.
 If you can't name a gotcha that the instruction leaves out, the task probably won't tell agents apart.
-The [revenue payouts README](../tasks/building/revenue-payouts/README.md) is a full example.
+The [token governor README](../tasks/build/token-governor/README.md) is a full example.
 
 ### `instruction.md`
 
@@ -124,7 +126,7 @@ Declare only the ones the task needs.
 Compose names the agent's container `main`.
 Lint allows a short list of compose options: no host mounts, no host network, no privileged containers, and every build stays inside the task folder.
 
-For a chain, copy `Chain.Dockerfile` and `docker-compose.yaml` from the [fresh chain recipe](#task-with-a-fresh-chain).
+For a chain, copy `Chain.Dockerfile` and `docker-compose.yaml` from the [mainnet fork recipe](#task-on-a-mainnet-fork), and leave out the chain's `environment:` block for a fresh chain.
 The chain sidecar starts anvil, runs your setup, and only then lets the agent start.
 The agent reaches it at `http://chain:8545`, through a filter that refuses anvil's cheat methods, like `anvil_setBalance`, and methods that ask the chain to sign, like `eth_sendTransaction`.
 So the agent signs its own transactions, as it would on a real network.
@@ -174,9 +176,11 @@ You pick the checks that fit your task, and you can use more than one kind:
 | --------------------------------------------------- | ------------------------------------------------ |
 | a Python file that calls `rk.final_answer`          | the final reply, against a target                |
 | `tests/*.t.sol`                                     | the chain, the agent's code, or both, with Forge |
-| a RewardKit judge file, like `tests/transfer.toml`  | the trajectory, with criteria a judge answers    |
+| a RewardKit judge file, like `tests/judge.toml`     | the trajectory, with criteria a judge answers    |
 
 **Target.** For a quiz, you write a rule that accepts the right reply, and the check runs it on the agent's final reply.
+A rule fits a fixed-form answer: yes or no, a number, an address, an exact string, or a name.
+When the model explains the answer in its own words, a rule fails right replies, so a judge grades the final reply instead ([ADR 0016](adr/0016-quizzes-with-explained-answers-use-a-judge.md)). [`wallet-atomic-ready`](../tasks/concepts/wallet-atomic-ready) is the example, with its hand cases in `tests/hand-cases.json`.
 
 <details>
 <summary>Example target</summary>
@@ -275,7 +279,7 @@ description = "Before reporting success, did the agent confirm on-chain that the
 Lint checks every judge file against the board's rules:
 
 - Every criterion is yes-or-no, with its own name.
-- The judge reads `/logs/agent/trajectory.json`.
+- The judge reads `/logs/agent/trajectory.json`, or only plain-text files under `/logs/verifier/` without a trajectory, such as a quiz's final reply, `/logs/verifier/final-reply.txt`.
 - Its guard is `flag` or `penalize`.
 - Every criterion counts toward `all-pass`.
 
@@ -377,7 +381,7 @@ artifacts = ["/logs/agent/trajectory.json"]  # (1)
 
 [task]
 name = "buidlguidl/agent-registries"
-description = "Check whether a model knows the ERC for agent discovery and trust."  # (2)
+description = "Check whether a model knows the ERC that gives AI agents onchain identity, reputation, and validation registries."  # (2)
 authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "erc", "agent-discovery"]
 
@@ -401,7 +405,7 @@ memory_mb = 1024
 `instruction.md` asks the way a person would:
 
 ```text
-which ERC defines onchain identity, reputation and validation registries for AI agents? just the number please
+Which ERC defines onchain identity, reputation and validation registries for AI agents? Answer with the ERC number only.
 ```
 
 <details>
@@ -467,12 +471,302 @@ The oracle run now fails, and its `reward-details.json` gives the reason `Answer
 
 ### Task with a fresh chain
 
-This recipe checks what the agent did on a chain.
-Setup deploys a token with 6 decimals, the agent sends 12.5 of it, Forge tests read the balances, and a criterion asks whether the agent confirmed the transfer.
-It's [`tasks/transactions/send-six-decimal-token`](../tasks/transactions/send-six-decimal-token).
+This recipe checks a page the agent builds against a chain that starts empty.
+Setup deploys a governor and seeds its proposals, the agent adds a voting page, a browser drives the page with a wallet, and criteria ask whether the page showed what the governor says.
+It's [`tasks/build/voting-page`](../tasks/build/voting-page).
 
 ```text
-send-six-decimal-token/
+voting-page/
+├── task.toml
+├── README.md
+├── instruction.md
+├── environment/
+│   ├── Dockerfile
+│   ├── Chain.Dockerfile
+│   ├── docker-compose.yaml
+│   ├── contracts/          the contracts setup deploys
+│   ├── starter/            the create-wagmi project the agent starts with
+│   ├── verifier/           the browser's packages, for the tests
+│   └── setup/
+│       ├── setup.s.sol
+│       ├── start.py
+│       ├── seed.py
+│       └── bin/
+│           └── anvil
+├── tests/
+│   ├── test.sh
+│   ├── reward.toml
+│   ├── judge.toml
+│   ├── check_records.py
+│   ├── run_reward.py
+│   ├── browser.mjs         drives the page, with help from the other .mjs files
+│   └── ...
+└── solution/
+    ├── solve.sh
+    └── app/
+```
+
+<details>
+<summary><code>task.toml</code></summary>
+
+```toml
+schema_version = "1.3"
+artifacts = [{ source = "/workspace", exclude = ["node_modules", "dist", ".git", "chain_context.json"] }]  # (1)
+
+[task]
+name = "buidlguidl/voting-page"
+description = "Build a holder voting page that follows proposal state, quorum, deadlines, and snapshot voting power."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "governance", "react", "wagmi", "anvil"]
+
+[metadata]
+pillar = "build"
+modes = ["internet", "skills"]  # (2)
+
+[verifier]
+environment_mode = "shared"  # (3)
+user = "root"  # (4)
+timeout_sec = 1800  # (5)
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"  # (6)
+
+[environment]
+cpus = 1
+memory_mb = 4096
+```
+
+1. Saves the agent's project with the trial, without its packages and build output.
+2. A bare model can't build a page, so no `vanilla`.
+3. The tests run in the agent's container, while the chain is still up.
+4. The tests stop the agent's processes and build the page as `agent`, which takes root.
+5. Building the page and driving it takes longer than the verifier's 10-minute default.
+6. The judge's key, for the criteria.
+
+</details>
+
+`instruction.md` is one line:
+
+> Tally is gone, and our holders need our own voting page. The governor, its timelock and the vote token are already deployed (the addresses are in chain_context.json), and TOKEN is the token holders own. Could you add a Governance page to this project where a connected holder can wrap TOKEN into votes, delegate them and see how many votes they have, see every proposal with its status, the votes for and against, whether it has reached quorum and when voting ends, and vote on the open ones? It's just for holders; the team queues and executes from our safe.
+
+<details>
+<summary><code>environment/Dockerfile</code> and <code>environment/Chain.Dockerfile</code></summary>
+
+The chain sidecar:
+
+```dockerfile
+FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678 AS contracts
+USER root
+WORKDIR /opt/governance
+COPY contracts/ ./
+RUN git clone --depth 1 --branch v5.7.0 https://github.com/OpenZeppelin/openzeppelin-contracts.git lib/openzeppelin-contracts && \
+    test "$(git -C lib/openzeppelin-contracts rev-parse HEAD)" = cab19933c33c2ad1d4c7a84864a3601dddfd16f3 && \
+    ln -s /opt/solidity/lib/forge-std lib/forge-std && \
+    forge build && python3 export.py
+COPY setup/ /setup/
+RUN chmod +x /setup/bin/anvil
+WORKDIR /tmp
+ENTRYPOINT ["python3", "/setup/start.py"]
+```
+
+The first stage builds the contracts in `contracts/` with OpenZeppelin 5.7.0, pinned to one commit, so setup can deploy them.
+Only the sidecar gets `setup/`.
+It starts this task's `start.py` in place of the shared starter, `start_chain.py`.
+
+The agent's container starts with the same contracts stage, then adds Node.js, pnpm, and a browser that only root can use, for the tests. It ends like this:
+
+```dockerfile
+USER agent
+COPY --chown=agent:agent starter/package.json starter/pnpm-lock.yaml starter/.npmrc ./
+RUN pnpm install --frozen-lockfile && rm -rf /home/agent/.local/share/pnpm/store
+COPY --chown=agent:agent starter/ ./
+COPY --from=contracts --chown=agent:agent /opt/governance/frontend/ /workspace/contracts/
+RUN ln -s /chain/chain_context.json /workspace/chain_context.json
+ENTRYPOINT []
+CMD ["sleep", "infinity"]
+```
+
+The agent starts with the starter project, its packages installed, and the contracts' sources and ABIs in `contracts/`.
+The link puts `chain_context.json` in the agent's folder. The image makes the link, so the task folder has no symlink.
+[The full file](../tasks/build/voting-page/environment/Dockerfile) has the rest.
+
+</details>
+
+<details>
+<summary><code>environment/docker-compose.yaml</code></summary>
+
+```yaml
+services:
+  main:  # (1)
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: agent  # (2)
+    volumes:
+      - public-context:/chain:ro  # (3)
+    depends_on:
+      chain:
+        condition: service_healthy  # (4)
+  chain:  # (5)
+    build:
+      context: .
+      dockerfile: Chain.Dockerfile
+    mem_limit: 3g
+    volumes:
+      - public-context:/chain
+      - private-context:/private
+    healthcheck:
+      test: [CMD-SHELL, "test -f /tmp/voting-ready && cast chain-id --rpc-url http://127.0.0.1:8545"]  # (6)
+      interval: 1s
+      timeout: 3s
+      retries: 600
+volumes:
+  public-context: {}
+  private-context: {}
+```
+
+1. The agent's container.
+2. The agent runs as `agent`.
+3. Setup's public file arrives read-only. The tests read nothing private, so `main` doesn't mount `/private`.
+4. The agent starts only after setup is done.
+5. The chain sidecar. The agent reaches it at `http://chain:8545`.
+6. Passes once `start.py` has seeded the chain. A chain set up only by `setup.s.sol` waits for `/tmp/chain-ready`, which the shared starter writes.
+
+</details>
+
+<details>
+<summary><code>environment/setup/</code></summary>
+
+`setup.s.sol` runs first, as in any chain task:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
+
+import {ChainSetup} from "ethevals/ChainSetup.sol";  // (1)
+
+contract Setup is ChainSetup {
+    function run() external {
+        vm.rpc("anvil_setBlockTimestampInterval", "[12]");  // (2)
+    }
+}
+```
+
+1. Gives you `fund`, `chainRecord`, and `privateRecord`. This task uses none of them.
+2. Setup can call anvil methods through `vm.rpc`, and the agent can't, because the filter refuses them. This one puts 12 seconds between blocks.
+
+`start.py` runs the shared starter, then seeds the chain before the healthcheck passes:
+
+```python
+def main():
+    environment = dict(os.environ, PATH="/setup/bin:" + os.environ["PATH"])  # (1)
+    process = subprocess.Popen([sys.executable, "/opt/start_chain.py"], env=environment)  # (2)
+    try:
+        deadline = time.monotonic() + 600
+        while not Path("/tmp/chain-ready").exists():  # (3)
+            if process.poll() is not None:
+                raise RuntimeError("The shared chain starter exited.")
+            if time.monotonic() >= deadline:
+                raise TimeoutError("The shared chain starter exceeded ten minutes.")
+            time.sleep(0.1)
+        subprocess.run([sys.executable, "/setup/seed.py", "seed", "--rpc-url", "http://127.0.0.1:8546",
+                        "--contracts", "/opt/governance"], check=True, timeout=max(1, deadline - time.monotonic()))  # (4)
+        states("http://127.0.0.1:8546", Path("/private/private_chain_context.json"))
+        Path("/tmp/voting-ready").touch()  # (5)
+        process.wait()
+        raise RuntimeError("The shared chain starter exited.")
+    finally:
+        process.terminate()
+```
+
+1. Puts this task's `bin/anvil` first on the path. It starts anvil with its clock in the past.
+2. The shared starter starts anvil behind the RPC filter and runs `setup.s.sol`.
+3. The shared starter writes `/tmp/chain-ready` once setup is done.
+4. Seeds the chain on port 8546, where anvil listens inside the sidecar. The agent reaches only the filter, on 8545.
+5. Releases the healthcheck.
+
+[`seed.py`](../tasks/build/voting-page/environment/setup/seed.py) makes five random wallets, deploys the contracts, has four holders wrap and delegate TOKEN, and seeds five proposals in different states.
+Then it writes both context files itself:
+
+```python
+    context = dict(rpcUrl="http://chain:8545", chainId=31337, token=token, voteToken=votes, governor=governor, timelock=timelock)  # (1)
+    private_context = dict(deployer=deployer, holders=holders, protocol=protocol, proposals={})  # (2)
+    seed_proposals(url, context, private_context, checks=False)
+    private_context["setupBlock"] = int(rpc(url, "eth_blockNumber"), 16)
+    write_json(public / "chain_context.json", context, 0o444)
+    write_json(private / "private_chain_context.json", private_context, 0o400)
+```
+
+1. What the agent gets: the RPC URL, the chain ID, and the contracts' addresses.
+2. The wallets' keys go only to the private chain context.
+
+</details>
+
+<details>
+<summary><code>tests/test.sh</code> and <code>tests/judge.toml</code></summary>
+
+`test.sh` stops the agent's processes and builds the page as `agent`, with no model keys.
+It writes the `compile` check to `/logs/verifier/checks.json`, the file any [other test tool](#tests) writes. Then it drives the page:
+
+```sh
+export PLAYWRIGHT_BROWSERS_PATH=/root/voting-browsers
+browser_status=0
+env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u OPENROUTER_API_KEY -u ANTHROPIC_AUTH_TOKEN -u EXA_API_KEY \
+  node /tests/browser.mjs /workspace /logs/verifier > /logs/verifier/browser.log 2>&1 || browser_status=$?  # (1)
+python3 /tests/run_reward.py  # (2)
+```
+
+1. `browser.mjs` forks the chain, adds ten test proposals the agent never saw, and opens the page with an injected wallet. It adds a record to `checks.json` for each check, and saves the page's text to `page-evidence.txt` for the judge.
+2. Runs RewardKit. `check_records.py` turns each record into a check, and the judge answers the criteria. If the browser couldn't finish a flow and no check failed, the trial is an error for a person to look at.
+
+`judge.toml` starts like this:
+
+```toml
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/page-evidence.txt"]  # (1)
+
+[scoring]
+aggregation = "all-pass"
+```
+
+1. The judge reads only the page text the tests saved, not the agent's code or trajectory.
+
+Six criteria follow, one for each code check that captures the page. For example, `shown_for_only_quorum` asks whether each proposal shows quorum as reached only when its For votes reach it.
+[The full file](../tasks/build/voting-page/tests/judge.toml) has them all.
+`tests/reward.toml` is the same as in [`tests/`](#tests).
+
+</details>
+
+<details>
+<summary><code>solution/solve.sh</code></summary>
+
+```sh
+#!/bin/sh
+set -eu
+cp -R /solution/app/. /workspace/
+```
+
+`solve.sh` copies a working page over the starter, where the agent would build it.
+See [the page](../tasks/build/voting-page/solution/app/src/App.tsx).
+
+</details>
+
+The free check skips the criteria, so it runs only the code checks.
+To prove they catch a wrong page, change `setRows(proposals.reverse())` to `setRows(proposals.reverse().slice(0, 10))` in `solution/app/src/App.tsx` and run the [free check](#check-your-task).
+The oracle run now fails `lists_every_proposal` and `status_and_tallies_match`, because the page shows only the newest ten proposals.
+The first gives the reason `The fork has 15 proposals; the page lists 10. See initial-page.txt.` Change it back.
+
+### Task on a mainnet fork
+
+To check against a live protocol, the chain sidecar forks mainnet at a pinned block.
+This recipe has the agent take a Morpho Vaults V2 vault out of one market for good. Setup makes the agent's wallet the vault's curator and an allocator, and leaves two cap raises pending. Forge tests read the vault and try it as a stranger and as a depositor.
+It's [`tasks/act/vault-v2-market-exit`](../tasks/act/vault-v2-market-exit).
+
+```text
+vault-v2-market-exit/
 ├── task.toml
 ├── README.md
 ├── instruction.md
@@ -481,18 +775,29 @@ send-six-decimal-token/
 │   ├── Chain.Dockerfile
 │   ├── docker-compose.yaml
 │   └── setup/
-│       ├── setup.s.sol
-│       └── Token.sol
+│       └── setup.s.sol
 ├── tests/
 │   ├── test.sh
 │   ├── reward.toml
-│   ├── Transfer.t.sol
-│   └── transfer.toml
+│   └── Exit.t.sol
 └── solution/
-    ├── solve.sh
-    ├── solution.s.sol
-    └── confirm.py
+    └── solve.sh
 ```
+
+It has no criteria and no seeding script. The fork lives in the chain sidecar's part of `docker-compose.yaml`:
+
+```yaml
+    environment:
+      FORK_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required}  # (1)
+      FORK_BLOCK_NUMBER: "26256000"  # (2)
+```
+
+1. The RPC URL comes from the host and reaches only the chain sidecar. Compose stops with this message if it's missing.
+2. Pins the block, so every trial starts from the same state.
+
+`instruction.md` is one line:
+
+> we curate a morpho vaults v2 vault, and one of its markets has an oracle we no longer trust after yesterday's incident. get our depositors fully out of that market, for good: nobody should be able to put the vault back in. move the funds to the other markets or leave them idle, your call. deposits and withdrawals must keep working, and nothing else about the vault changes. the vault, the market id and our wallet are in chain_context.json; the wallet holds the curator and allocator roles. do it on that chain and tell us what you did.
 
 <details>
 <summary><code>task.toml</code></summary>
@@ -501,21 +806,18 @@ send-six-decimal-token/
 schema_version = "1.3"
 
 [task]
-name = "buidlguidl/send-six-decimal-token"
-description = "Check whether an agent reads token decimals before signing an exact transfer."
+name = "buidlguidl/vault-v2-market-exit"
+description = "Check whether an agent exits a Morpho V2 market, cancels pending cap raises, and preserves deposits and withdrawals."
 authors = [{ name = "BuidlGuidl" }]
-keywords = ["ethereum", "erc20", "transfers"]
+keywords = ["ethereum", "morpho", "vault", "fork"]
 
 [metadata]
-pillar = "transactions"
+pillar = "act"
 modes = ["internet", "skills"]  # (1)
 
 [verifier]
 environment_mode = "shared"  # (2)
 user = "root"  # (3)
-
-[verifier.env]
-ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"  # (4)
 
 [environment]
 cpus = 1
@@ -525,16 +827,8 @@ memory_mb = 4096
 1. A bare model can't send a transaction, so no `vanilla`.
 2. The tests run in the agent's container, while the chain is still up.
 3. Only root can read `private_chain_context.json`.
-4. The judge's key, for the criterion.
 
 </details>
-
-`instruction.md`:
-
-```text
-can you send 12.5 tokens to the recipient in chain_context.json? the file has the rpc url,
-the token address, the recipient and the private key of my funded account.
-```
 
 <details>
 <summary><code>environment/Dockerfile</code> and <code>environment/Chain.Dockerfile</code></summary>
@@ -557,10 +851,13 @@ The chain sidecar:
 FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678
 USER root
 COPY setup/ /setup/
+RUN mkdir -p setup && cp /setup/*.sol setup/ && \
+    cp /opt/setup-foundry.toml foundry.toml && \
+    forge build && rm -rf setup
 ENTRYPOINT ["python3", "/opt/start_chain.py"]
 ```
 
-Only the sidecar gets `setup/`. `start_chain.py` starts anvil behind the RPC filter, runs setup, and writes both context files.
+Only the sidecar gets `setup/`. The `RUN` line compiles setup while the image builds. `start_chain.py` starts anvil behind the RPC filter, runs setup, and writes both context files.
 
 </details>
 
@@ -584,6 +881,9 @@ services:
     build:
       context: .
       dockerfile: Chain.Dockerfile
+    environment:
+      FORK_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required}
+      FORK_BLOCK_NUMBER: "26256000"
     mem_limit: 3g
     volumes:
       - public-context:/chain
@@ -610,141 +910,166 @@ volumes:
 <details>
 <summary><code>environment/setup/setup.s.sol</code></summary>
 
+`run()` makes the agent's wallet and hands it the vault:
+
 ```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+        Vm.Wallet memory wallet = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));  // (1)
+        fund(wallet.addr, 10 ether);
+        address owner = VAULT.owner();  // (2)
+        address curator = VAULT.curator();
+        MarketParams memory params = MORPHO.idToMarketParams(MARKET);
+        bytes memory idData = abi.encode("this/marketParams", address(ADAPTER), params);
+        bytes32 id = keccak256(idData);
+        bytes memory absoluteRaise = abi.encodeCall(IVaultSetup.increaseAbsoluteCap, (idData, VAULT.absoluteCap(id) * 2));
+        bytes memory relativeRaise = abi.encodeCall(IVaultSetup.increaseRelativeCap, (idData, uint256(1e18)));
+        require(VAULT.timelock(IVaultSetup.setIsAllocator.selector) == 0, "allocator appointment has a delay");
 
-import {ChainSetup} from "ethevals/ChainSetup.sol";  // (1)
-import {Vm} from "forge-std/Vm.sol";
-import {Token} from "./Token.sol";  // (2)
-
-contract Setup is ChainSetup {
-    function run() external {
-        Vm.Wallet memory me = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));  // (3)
-        Vm.Wallet memory deployer = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));
-        address recipient = vm.randomAddress();
-        fund(me.addr, 10 ether);  // (4)
-        fund(deployer.addr, 1 ether);
-
-        vm.startBroadcast(deployer.privateKey);
-        Token token = new Token(me.addr);
-        vm.stopBroadcast();
-
-        chainRecord("privateKey", bytes32(me.privateKey));  // (5)
-        chainRecord("recipient", recipient);
-        chainRecord("token", address(token));
-        privateRecord("sender", me.addr);  // (6)
-    }
-}
+        makeLiquid(params);
+        start(curator);  // (3)
+        send(curator, address(VAULT), abi.encodeCall(IVaultSetup.submit, (absoluteRaise)));  // (4)
+        send(curator, address(VAULT), abi.encodeCall(IVaultSetup.submit, (relativeRaise)));
+        stop(curator);
+        start(owner);
+        send(owner, address(VAULT), abi.encodeCall(IVaultSetup.setCurator, (wallet.addr)));  // (5)
+        stop(owner);
+        start(wallet.addr);
+        bytes memory allocator = abi.encodeCall(IVaultSetup.setIsAllocator, (wallet.addr, true));
+        send(wallet.addr, address(VAULT), abi.encodeCall(IVaultSetup.submit, (allocator)));
+        send(wallet.addr, address(VAULT), allocator);  // (6)
+        stop(wallet.addr);
 ```
 
-1. Gives you `fund`, `chainRecord`, and `privateRecord`.
-2. Setup can deploy its own contracts.
-3. Makes a new random wallet for each trial.
-4. Sets the wallet's ETH balance.
-5. Adds a field to `chain_context.json`.
-6. Adds a field to `private_chain_context.json`, for the tests.
+1. Makes a new random wallet for each trial, with ETH for gas.
+2. Setup reads the live vault at the pinned block.
+3. Acts as the vault's real curator. `start` and `stop` are below.
+4. The curator submits two cap raises for the market. They wait out the vault's timelock, so they're still pending when the agent starts.
+5. The owner makes the agent's wallet the curator.
+6. The wallet makes itself an allocator, which has no timelock on this vault.
+
+Then it records what the tests and the agent need:
+
+```solidity
+        privateRecord("absoluteRaise", vm.toString(absoluteRaise));  // (1)
+        privateRecord("relativeRaise", vm.toString(relativeRaise));
+        privateRecord("absoluteMaturity", VAULT.executableAt(absoluteRaise));
+        privateRecord("relativeMaturity", VAULT.executableAt(relativeRaise));
+        privateRecord("adapter", address(ADAPTER));
+        privateRecord("totalAssets", VAULT.totalAssets());
+        privateRecord("totalSupply", VAULT.totalSupply());
+        privateRecord("liquidityAdapter", VAULT.liquidityAdapter());
+        privateRecord("liquidityData", vm.toString(VAULT.liquidityData()));
+        privateRecord("sender", wallet.addr);
+        privateRecord("setupBlock", block.number);
+        recordMarkets();
+        recordSettings(owner, curator, wallet.addr);  // (2)
+        chainRecord("vault", address(VAULT));  // (3)
+        chainRecord("marketId", MARKET);
+        chainRecord("wallet", wallet.addr);
+        chainRecord("privateKey", bytes32(wallet.privateKey));
+```
+
+1. Adds fields to `private_chain_context.json`, for the tests: the pending raises and the vault before the agent starts.
+2. Records every other setting, so the tests can check that nothing else changed.
+3. Adds fields to `chain_context.json`: the vault, the market, and the wallet's key.
+
+The helpers send transactions as any account:
+
+```solidity
+    function start(address account) internal {
+        fund(account, 10 ether);
+        vm.rpc("anvil_impersonateAccount", string.concat('["', vm.toString(account), '"]'));  // (1)
+    }
+
+    function stop(address account) internal {
+        vm.rpc("anvil_stopImpersonatingAccount", string.concat('["', vm.toString(account), '"]'));
+    }
+
+    function send(address sender, address target, bytes memory data) internal {
+        vm.rpc("eth_sendTransaction", string.concat(  // (2)
+            '[{"from":"', vm.toString(sender), '","to":"', vm.toString(target),
+            '","gas":"0x200000","data":"', vm.toString(data), '"}]'
+        ));
+        // The later fork must see this transaction in a mined block.
+        vm.rpc("evm_mine", "[]");
+    }
+```
+
+1. Setup can call anvil methods through `vm.rpc`. The agent can't, because the filter refuses them.
+2. Sends a transaction from the account setup is acting as.
+
+Setup also tops up the market so the vault can leave it, and records each market's assets and caps. [The full file](../tasks/act/vault-v2-market-exit/environment/setup/setup.s.sol) has them.
 
 </details>
 
 <details>
-<summary><code>environment/setup/Token.sol</code></summary>
+<summary><code>tests/Exit.t.sol</code></summary>
+
+The file declares the interfaces it calls, then the checks:
 
 ```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity =0.8.30;
-
-contract Token {
-    string public constant name = "Six Decimal Token";
-    string public constant symbol = "SIX";
-    uint8 public constant decimals = 6;  // (1)
-    uint256 public constant totalSupply = 1000 * 10 ** 6;
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-
-    constructor(address owner) {
-        balanceOf[owner] = totalSupply;
-        emit Transfer(address(0), owner, totalSupply);
-    }
-
-    function transfer(address to, uint256 amount) external returns (bool) {
-        _transfer(msg.sender, to, amount);
-        return true;
-    }
-
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
-        emit Approval(msg.sender, spender, amount);
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        allowance[from][msg.sender] -= amount;
-        _transfer(from, to, amount);
-        return true;
-    }
-
-    function _transfer(address from, address to, uint256 amount) private {
-        require(to != address(0));
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
-        emit Transfer(from, to, amount);
-    }
-}
-```
-
-1. An agent that assumes 18 decimals sends the wrong amount. 12.5 tokens are 12,500,000 base units.
-
-</details>
-
-<details>
-<summary><code>tests/Transfer.t.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
-
-import {Test} from "forge-std/Test.sol";
-import {stdJson} from "forge-std/StdJson.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-
-contract TransferCheck is Test {
+contract ExitCheck is Test {
     using stdJson for string;
 
-    address recipient;
-    IERC20 token;
-    address sender;
+    IMorpho constant MORPHO = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb);  // (1)
+    IVault vault;
+    IAdapter adapter;
+    bytes32 marketId;
+    bytes32 capId;
+    MarketParams params;
+    string beforeState;
 
     function setUp() public {
-        string memory chain = vm.readFile("chain_context.json");  // (1)
-        recipient = chain.readAddress(".recipient");
-        token = IERC20(chain.readAddress(".token"));
-        sender = vm.readFile("private_chain_context.json").readAddress(".sender");  // (2)
-        vm.createSelectFork("chain");  // (3)
+        string memory chain = vm.readFile("chain_context.json");  // (2)
+        beforeState = vm.readFile("private_chain_context.json");  // (3)
+        vm.createSelectFork("chain");  // (4)
+        vault = IVault(chain.readAddress(".vault"));
+        adapter = IAdapter(beforeState.readAddress(".adapter"));
+        marketId = chain.readBytes32(".marketId");
+        params = MORPHO.idToMarketParams(marketId);
+        capId = keccak256(abi.encode("this/marketParams", address(adapter), params));
     }
 
-    function test_recipient_balance() public view {  // (4)
-        assertEq(token.balanceOf(recipient), 12_500_000, "recipient holds 12.5 tokens in base units");  // (5)
+    function test_vaultIsOutForGood() public {  // (5)
+        assertOut();
+        assertEq(vault.executableAt(beforeState.readBytes(".absoluteRaise")), 0, "absolute raise remains pending");  // (6)
+        assertEq(vault.executableAt(beforeState.readBytes(".relativeRaise")), 0, "relative raise remains pending");
+        if (vault.liquidityAdapter() == address(adapter)) {
+            assertNotEq(keccak256(vault.liquidityData()), marketId, "liquidity route still uses the exit market");
+        }
     }
 
-    function test_sender_balance() public view {  // (6)
-        assertEq(token.balanceOf(sender), 987_500_000, "sender spent exactly 12.5 tokens");
+    function test_strangerCannotReopenIt() public {
+        assertOut();
+        (uint256 exitShares,,) = MORPHO.position(marketId, address(adapter));
+        uint256 absoluteMaturity = beforeState.readUint(".absoluteMaturity");
+        uint256 relativeMaturity = beforeState.readUint(".relativeMaturity");
+        uint256 maturity = absoluteMaturity > relativeMaturity ? absoluteMaturity : relativeMaturity;
+        vm.warp((block.timestamp > maturity ? block.timestamp : maturity) + 1);  // (7)
+        address stranger = makeAddr("stranger");
+        vm.startPrank(stranger);
+        (bool absoluteOk,) = address(vault).call(beforeState.readBytes(".absoluteRaise"));
+        (bool relativeOk,) = address(vault).call(beforeState.readBytes(".relativeRaise"));
+        vm.stopPrank();
+        assertFalse(absoluteOk, "stranger executed the mature absolute raise");
+        assertFalse(relativeOk, "stranger executed the mature relative raise");
+        assertMarketClosed();
+        (uint256 shares,,) = MORPHO.position(marketId, address(adapter));
+        assertEq(shares, exitShares, "stranger added supply shares in the exit market");
     }
-}
 ```
 
-1. Tests read `chain_context.json`.
-2. And `private_chain_context.json`, which the agent never sees.
-3. Forks the chain as the agent left it.
-4. Each `test` function is one check.
-5. The message is the reason when the check fails.
-6. A second requirement gets its own check, so a failure says which one broke.
+1. The tests can name live protocol contracts, because the chain is a fork.
+2. Tests read `chain_context.json`.
+3. And `private_chain_context.json`, which the agent never sees.
+4. Forks the chain as the agent left it.
+5. Each `test` function is one check.
+6. The message is the reason when the check fails.
+7. Moves past the raises' timelock on the test's own fork, then tries them as a stranger.
+
+`test_depositorsStillServed` and `test_nothingElseChanged` follow, with the helpers they share. [The full file](../tasks/act/vault-v2-market-exit/tests/Exit.t.sol) has them all.
+`tests/test.sh` and `tests/reward.toml` are the same as in [`tests/`](#tests).
 
 </details>
-
-`tests/transfer.toml` is the [criteria example](#tests) above, and `tests/test.sh` and `tests/reward.toml` are the same as there.
 
 <details>
 <summary><code>solution/solve.sh</code></summary>
@@ -755,252 +1080,64 @@ set -eu
 cd /workspace  # (1)
 test -r chain_context.json  # (2)
 test ! -r /private/private_chain_context.json  # (3)
-cat > /workspace/foundry.toml <<'EOF'
-[profile.default]
-src = "/solution"
-remappings = ["forge-std/=/opt/solidity/lib/forge-std/src/"]
-ffi = false
-fs_permissions = [{access = "read", path = "/workspace/chain_context.json"}]
-EOF
-forge script /solution/solution.s.sol --root /workspace --broadcast --rpc-url http://chain:8545  # (4)
-python3 /solution/confirm.py  # (5)
+context() {
+    python3 -c 'import json, sys; print(json.load(open("chain_context.json"))[sys.argv[1]])' "$1"
+}
+rpc=$(context rpcUrl)
+key=$(context privateKey)
+vault=$(context vault)
+market=$(context marketId)
+morpho=0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb
+adapter=$(cast call "$vault" 'liquidityAdapter()(address)' --rpc-url "$rpc")
+params=$(cast call "$morpho" 'idToMarketParams(bytes32)(address,address,address,address,uint256)' "$market" --rpc-url "$rpc" --json |
+    python3 -c 'import json, sys; print("(" + ",".join(map(str, json.load(sys.stdin))) + ")")')
+data=$(cast abi-encode 'f((address,address,address,address,uint256))' "$params")
+id_data=$(cast abi-encode 'f(string,address,(address,address,address,address,uint256))' this/marketParams "$adapter" "$params")
+send() {
+    cast send "$vault" "$@" --private-key "$key" --rpc-url "$rpc" --json > /dev/null
+}
+
+# Submit events identify the exact calldata, including raises with different amounts.
+topic=$(cast keccak 'Submit(bytes4,bytes,uint256)')
+cast logs --address "$vault" --from-block 26256001 --to-block latest "$topic" --rpc-url "$rpc" --json |
+    python3 -c 'import json, sys; [print(log["data"]) for log in json.load(sys.stdin)]' > /tmp/vault-submit-events
+while IFS= read -r event_data; do
+    pending=$(cast abi-decode 'f()(bytes,uint256)' "$event_data" --json |
+        python3 -c 'import json, sys; print(json.load(sys.stdin)[0])')
+    decoded=$(cast calldata-decode 'increaseAbsoluteCap(bytes,uint256)' "$pending" --json 2>/dev/null || true)
+    if [ -z "$decoded" ]; then
+        decoded=$(cast calldata-decode 'increaseRelativeCap(bytes,uint256)' "$pending" --json 2>/dev/null || true)
+    fi
+    if [ -z "$decoded" ]; then continue; fi
+    pending_id=$(printf '%s' "$decoded" | python3 -c 'import json, sys; print(json.load(sys.stdin)[0])')
+    if [ "$pending_id" != "$id_data" ]; then continue; fi
+    executable=$(cast call "$vault" 'executableAt(bytes)(uint256)' "$pending" --rpc-url "$rpc" | awk '{print $1}')
+    if [ "$executable" != 0 ]; then send 'revoke(bytes)' "$pending"; fi  # (4)
+done < /tmp/vault-submit-events
+
+send 'decreaseAbsoluteCap(bytes,uint256)' "$id_data" 0  # (5)
+send 'decreaseRelativeCap(bytes,uint256)' "$id_data" 0
+
+# An unset route serves deposits and withdrawals from idle assets.
+send 'setLiquidityAdapterAndData(address,bytes)' 0x0000000000000000000000000000000000000000 0x  # (6)
+pass=0
+while [ "$pass" -lt 5 ]; do
+    assets=$(cast call "$adapter" 'expectedSupplyAssets(bytes32)(uint256)' "$market" --rpc-url "$rpc" | awk '{print $1}')
+    if [ "$assets" = 0 ]; then break; fi
+    send 'deallocate(address,bytes,uint256)' "$adapter" "$data" "$assets"  # (7)
+    pass=$((pass + 1))
+done
+test "$(cast call "$adapter" 'expectedSupplyAssets(bytes32)(uint256)' "$market" --rpc-url "$rpc" | awk '{print $1}')" = 0
+echo 'Revoked pending raises, zeroed both market caps, removed the liquidity route, and moved the market assets to idle.'
 ```
 
 1. Starts where the agent does.
 2. Checks that it can read the chain context, like the agent.
 3. Proves the agent can't read the private chain context.
-4. Sends the tokens.
-5. Confirms the transfer, the way the criterion asks.
-
-</details>
-
-<details>
-<summary><code>solution/solution.s.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
-
-import {Script} from "forge-std/Script.sol";
-import {stdJson} from "forge-std/StdJson.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-
-contract Solution is Script {
-    using stdJson for string;
-
-    function run() external {
-        string memory chain = vm.readFile("chain_context.json");  // (1)
-        IERC20 token = IERC20(chain.readAddress(".token"));
-        uint256 amount = 125 * 10 ** token.decimals() / 10;  // (2)
-        vm.startBroadcast(uint256(chain.readBytes32(".privateKey")));
-        token.transfer(chain.readAddress(".recipient"), amount);
-        vm.stopBroadcast();
-    }
-}
-```
-
-1. Uses only what the agent gets.
-2. Reads the decimals from the chain.
-
-</details>
-
-<details>
-<summary><code>solution/confirm.py</code></summary>
-
-```python
-import json
-from pathlib import Path
-import subprocess
-
-chain = json.loads(Path("/workspace/chain_context.json").read_text())
-command = ["cast", "call", chain["token"], "balanceOf(address)(uint256)", chain["recipient"],
-           "--rpc-url", chain["rpcUrl"]]
-balance = subprocess.check_output(command, text=True).strip()  # (1)
-assert int(balance.split()[0]) == 12_500_000, balance
-trajectory = {  # (2)
-    "schema_version": "ATIF-v1.7", "session_id": "solution",
-    "agent": {"name": "oracle", "version": "1.0.0"},
-    "steps": [
-        {"step_id": 1, "source": "agent", "message": "Read the recipient's token balance after the transfer.",
-         "tool_calls": [{"tool_call_id": "balance", "function_name": "shell",
-                         "arguments": {"command": " ".join(command)}}],
-         "observation": {"results": [{"source_call_id": "balance", "content": balance}]}},
-        {"step_id": 2, "source": "agent", "message": "The recipient holds 12.5 tokens. The transfer succeeded."},
-    ],
-}
-Path("/logs/agent").mkdir(parents=True, exist_ok=True)
-Path("/logs/agent/trajectory.json").write_text(json.dumps(trajectory))
-```
-
-1. Reads the recipient's balance from the chain.
-2. Writes a stand-in trajectory that shows the check, so the criterion can pass on the solution.
-
-</details>
-
-To prove the tests catch a wrong answer, change `amount` in `solution.s.sol` to `125 * 10 ** 4` and run the [free check](#check-your-task).
-The oracle run now fails, and its `reward-details.json` gives your assertion message as the reason: `recipient holds 12.5 tokens in base units: 1250000 != 12500000`. Change it back.
-
-### Task on a mainnet fork
-
-To check against a live protocol, the chain sidecar forks mainnet at a pinned block.
-This recipe has the agent supply 10,000 USDC to Aave. Setup moves USDC to the agent's wallet, and Forge tests read the wallet's balances and allowance.
-It's [`tasks/transactions/supply-usdc-to-aave`](../tasks/transactions/supply-usdc-to-aave).
-
-```text
-supply-usdc-to-aave/
-├── task.toml
-├── README.md
-├── instruction.md
-├── environment/
-│   ├── Dockerfile
-│   ├── Chain.Dockerfile
-│   ├── docker-compose.yaml
-│   └── setup/
-│       └── setup.s.sol
-├── tests/
-│   ├── test.sh
-│   ├── reward.toml
-│   └── Supplied.t.sol
-└── solution/
-    ├── solve.sh
-    └── solution.s.sol
-```
-
-It's built like the fresh chain recipe, with no criteria. The fork lives in the chain sidecar's part of `docker-compose.yaml`:
-
-```yaml
-    environment:
-      FORK_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required}  # (1)
-      FORK_BLOCK_NUMBER: "23819000"  # (2)
-```
-
-1. The RPC URL comes from the host and reaches only the chain sidecar. Compose stops with this message if it's missing.
-2. Pins the block, so every trial starts from the same state.
-
-`instruction.md`:
-
-```text
-i have 25,000 USDC in my account. can you please supply 10k of it to main aave v3 market? so it
-earns interest and leave rest in my wallet? chain_context.json has rpc url and private key to my account.
-```
-
-<details>
-<summary><code>environment/setup/setup.s.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
-
-import {ChainSetup} from "ethevals/ChainSetup.sol";
-import {Vm} from "forge-std/Vm.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-
-contract Setup is ChainSetup {
-    address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address constant HOLDER = 0x55FE002aefF02F77364de339a1292923A15844B8;  // (1)
-
-    function run() external {
-        Vm.Wallet memory me = vm.createWallet(vm.randomUint(1, SECP256K1_ORDER - 1));
-        fund(me.addr, 10 ether);
-
-        vm.rpc("anvil_impersonateAccount", string.concat('["', vm.toString(HOLDER), '"]'));  // (2)
-        vm.rpc("eth_sendTransaction", string.concat('[{"from":"', vm.toString(HOLDER), '","to":"', vm.toString(USDC),
-            '","data":"', vm.toString(abi.encodeCall(IERC20.transfer, (me.addr, 25_000e6))), '"}]'));  // (3)
-        vm.rpc("anvil_stopImpersonatingAccount", string.concat('["', vm.toString(HOLDER), '"]'));
-
-        chainRecord("privateKey", bytes32(me.privateKey));
-        privateRecord("sender", me.addr);
-    }
-}
-```
-
-1. An account that holds USDC at the pinned block.
-2. Setup can call anvil methods through `vm.rpc`. The agent can't, because the filter refuses them.
-3. Moves 25,000 USDC from the holder to the agent's wallet.
-
-</details>
-
-<details>
-<summary><code>tests/Supplied.t.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
-
-import {Test} from "forge-std/Test.sol";
-import {stdJson} from "forge-std/StdJson.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-
-contract SuppliedCheck is Test {
-    using stdJson for string;
-
-    IERC20 constant USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
-    IERC20 constant AUSDC = IERC20(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c);
-    address constant POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
-    address me;
-
-    function setUp() public {
-        me = vm.readFile("private_chain_context.json").readAddress(".sender");  // (1)
-        vm.createSelectFork("chain");
-    }
-
-    function test_supplied_10000_usdc() public view {
-        // Scaling the aToken balance can round down by one USDC base unit.
-        assertGe(AUSDC.balanceOf(me), 10_000e6 - 1, "wallet supplied at least 10,000 USDC minus rounding");  // (2)
-    }
-
-    function test_kept_15000_usdc() public view {
-        assertEq(USDC.balanceOf(me), 15_000e6, "wallet keeps exactly 15,000 USDC");
-    }
-
-    function test_zero_pool_allowance() public view {
-        assertEq(USDC.allowance(me, POOL), 0, "wallet leaves zero allowance for the pool");  // (3)
-    }
-}
-```
-
-1. The tests find the wallet in the private chain context.
-2. Aave's balance can round down by one base unit, so this check allows it.
-3. A careful agent doesn't leave the pool able to spend more of the wallet's USDC.
-
-</details>
-
-<details>
-<summary><code>solution/solution.s.sol</code></summary>
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
-
-import {Script} from "forge-std/Script.sol";
-import {stdJson} from "forge-std/StdJson.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-
-interface IPool {
-    function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
-}
-
-contract Solution is Script {
-    using stdJson for string;
-
-    address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address constant POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
-
-    function run() external {
-        string memory chain = vm.readFile("chain_context.json");
-        uint256 privateKey = uint256(chain.readBytes32(".privateKey"));
-        address me = vm.addr(privateKey);
-        vm.startBroadcast(privateKey);
-        IERC20(USDC).approve(POOL, 10_000e6);  // (1)
-        IPool(POOL).supply(USDC, 10_000e6, me, 0);
-        vm.stopBroadcast();
-    }
-}
-```
-
-1. Approves exactly what it supplies, so the allowance ends at zero.
-
-`solution/solve.sh` runs it like the fresh chain recipe's does, without the confirm step, and adds `--no-storage-caching` so Forge doesn't cache the fork's storage.
+4. Revokes each pending raise for the market, found from the vault's `Submit` events.
+5. Sets both of the market's caps to zero.
+6. Takes the market off the route that deposits and withdrawals use.
+7. Moves the market's assets back to the vault as idle funds.
 
 </details>
 
@@ -1009,27 +1146,32 @@ Pull request CI has no secrets, so it skips them too.
 Instead, a maintainer runs the fork check by hand once they've reviewed your code, and it must pass before merge.
 That keeps the RPC secret away from code nobody has reviewed.
 
-To prove the tests catch a wrong answer, change the approval in `solution.s.sol` to `type(uint256).max` and run the free check.
-The oracle run now fails `test_zero_pool_allowance`. Change it back.
+To prove the tests catch a wrong answer, delete the line that sends `revoke(bytes)` from `solve.sh` and run the free check.
+The oracle run now fails `test_vaultIsOutForGood` and `test_strangerCannotReopenIt`, because the raises stay pending. Change it back.
 
 ### Task that tests the agent's code
 
 This recipe checks code the agent writes.
-Forge tests import the agent's contract and try it with awkward payees and tokens.
-It's [`tasks/building/revenue-payouts`](../tasks/building/revenue-payouts).
+Forge tests run the agent's deploy script, then propose, vote, and execute through its governor.
+It's [`tasks/build/token-governor`](../tasks/build/token-governor).
 
 ```text
-revenue-payouts/
+token-governor/
 ├── task.toml
 ├── README.md
 ├── instruction.md
 ├── environment/
 │   ├── Dockerfile
-│   └── foundry.toml
+│   ├── foundry.toml
+│   └── src/
+│       ├── Protocol.sol
+│       ├── Token.sol
+│       └── interfaces/
+│           └── IVoteToken.sol
 ├── tests/
 │   ├── test.sh
 │   ├── reward.toml
-│   └── RevenuePayouts.t.sol
+│   └── TokenGovernor.t.sol
 └── solution/
     └── solve.sh
 ```
@@ -1042,13 +1184,13 @@ schema_version = "1.3"
 artifacts = ["/workspace"]  # (1)
 
 [task]
-name = "buidlguidl/revenue-payouts"
-description = "Check whether an agent can split incoming payments while handling token behavior and payee callbacks."
+name = "buidlguidl/token-governor"
+description = "Check whether an agent puts a live token's treasury and protocol owner role under holder votes with the right quorum and execution wait."
 authors = [{ name = "BuidlGuidl" }]
-keywords = ["ethereum", "solidity", "payments"]
+keywords = ["ethereum", "solidity", "governance"]
 
 [metadata]
-pillar = "building"
+pillar = "build"
 modes = ["internet", "skills"]
 
 [verifier]
@@ -1065,15 +1207,17 @@ memory_mb = 2048
 
 </details>
 
-`instruction.md` names the file, the contract, and the constructor, because the tests import and deploy them:
+`instruction.md` names the files, the contract, and the deploy script's `run(token)`, because the tests import and run them:
 
 ```text
-we're launching an NFT collection with a few collaborators and want the money split between us by
-share. mint money comes in as ETH, and some partners pay us in stablecoins like USDC and USDT.
-can you write a contract we can use as the payout address? put it in src/RevenuePayouts.sol as a
-contract called RevenuePayouts. the constructor takes (address[] payees, uint256[] shares). anyone can
-call release(payeeAddress) to send a payee the ETH they're owed so far, and
-release(tokenAddress, payeeAddress) for tokens. it's a Foundry project on solidity 0.8.30.
+Our token TOKEN is live, a plain ERC-20 with a fixed 100M supply, and we can't change it.
+we want our treasury and the owner role on our protocol contract under token holder control. a
+proposal passes when at least 4% of the supply votes for it, with more for than against, then waits
+two days before anyone can execute it. our delegates vote through snapshot, so it has to be a
+standard governor, and our frontend's wrap flow talks to the vote token through
+src/interfaces/IVoteToken.sol. put the governor in src/TokenGovernor.sol as TokenGovernor, and a
+deploy script in script/Deploy.s.sol whose run(token) returns the governor address and the address
+we should move the protocol's ownership and the treasury to. we're on foundry with solidity 0.8.30.
 ```
 
 <details>
@@ -1083,11 +1227,15 @@ release(tokenAddress, payeeAddress) for tokens. it's a Foundry project on solidi
 FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678
 WORKDIR /workspace
 COPY --chown=agent:agent foundry.toml /workspace/foundry.toml
+COPY --chown=agent:agent src /workspace/src
+RUN git clone --depth 1 --branch v5.7.0 https://github.com/OpenZeppelin/openzeppelin-contracts.git /workspace/lib/openzeppelin-contracts \
+    && chown -R agent:agent /workspace/lib
 ENTRYPOINT []
 CMD ["sleep", "infinity"]
 ```
 
 The chain image has Foundry. The task uses it with no chain sidecar.
+The agent starts with TOKEN, Protocol, and the `IVoteToken` interface in `src/`, and OpenZeppelin 5.7.0 in `lib/`.
 
 ```toml
 [profile.default]
@@ -1095,179 +1243,173 @@ src = "src"  # (1)
 test = "test"
 libs = ["lib"]
 solc = "0.8.30"
-remappings = ["forge-std/=/opt/solidity/lib/forge-std/src/"]  # (2)
+remappings = ["forge-std/=/opt/solidity/lib/forge-std/src/", "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]  # (2)
 ffi = false
 ```
 
-1. The agent's contract goes in `src/`.
-2. forge-std comes with the image, so the agent can write its own tests.
+1. The agent's contracts go in `src/`.
+2. forge-std comes with the image, so the agent can write its own tests. OpenZeppelin comes from `lib/`.
 
 </details>
 
 <details>
-<summary><code>tests/RevenuePayouts.t.sol</code></summary>
+<summary><code>tests/TokenGovernor.t.sol</code></summary>
 
-The file starts with the payees:
+The file starts with the imports:
 
 ```solidity
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
-import {RevenuePayouts} from "../workspace/src/RevenuePayouts.sol";  // (1)
-
-interface IRevenuePayoutsRelease {
-    function release(address payee) external;
-}
-
-interface IRevenuePayouts is IRevenuePayoutsRelease {
-    function release(address token, address payee) external;
-}
-
-// A payee that refuses plain ETH, like a contract with no receive function.
-contract RejectingPayee {  // (2)
-    receive() external payable {
-        revert("no ETH");
-    }
-}
-
-// A payee whose receive costs more than 2,300 gas, like a smart wallet that records deposits.
-contract GasHungryPayee {
-    uint256 public received;
-    receive() external payable {
-        received += msg.value;
-    }
-}
-
-// A payee that asks to be paid again from inside the payment.
-contract ReentrantPayee {
-    IRevenuePayoutsRelease public payouts;
-    uint256 public calls;
-    function setRevenuePayouts(IRevenuePayoutsRelease s) external {
-        payouts = s;
-    }
-    receive() external payable {
-        if (gasleft() > 2300 && calls++ == 0) {
-            try payouts.release(address(this)) {} catch {}
-        }
-    }
-}
+import {Token} from "../workspace/src/Token.sol";  // (1)
+import {Protocol} from "../workspace/src/Protocol.sol";
+import {IVoteToken} from "../workspace/src/interfaces/IVoteToken.sol";
+import {Deploy} from "../workspace/script/Deploy.s.sol";  // (2)
 ```
 
 1. Tests import the agent's code from `workspace/`.
-2. Payees that act like real contracts: one refuses ETH, one needs more gas, and one tries to get paid twice.
+2. And its deploy script, which the tests run.
 
-Mock USDC and USDT come next. Like real USDT, the mock's `transfer` returns nothing.
-Then the tests:
+Next come a governor interface and a small `Forwarder` contract. Each test calls `deploy()` first:
 
 ```solidity
-contract RevenuePayoutsTest is Test {
-    address constant A = address(0xA11CE);
-    address constant B = address(0xB0B);
-    address constant C = address(0xCA11);
-    address constant STRANGER = address(0xD00D);
-    MockUSDC constant USDC = MockUSDC(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
-    MockUSDT constant USDT = MockUSDT(0xdAC17F958D2ee523a2206206994597C13D831ec7);
-
-    function setUp() public {
-        vm.deal(address(this), 10 ether);
-        vm.etch(address(USDC), address(new MockUSDC()).code);  // (1)
-        vm.etch(address(USDT), address(new MockUSDT()).code);
-        USDC.mint(address(this), 2_000_000);
-        USDT.mint(address(this), 2_000_000);
-    }
-
-    function lists(address first) internal pure returns (address[] memory payees, uint256[] memory shares) {
-        payees = new address[](3);
-        payees[0] = first;
-        payees[1] = B;
-        payees[2] = C;
-        shares = new uint256[](3);
-        shares[0] = 50;
-        shares[1] = 30;
-        shares[2] = 20;
-    }
-
-    function create(address first) internal returns (IRevenuePayouts) {
-        (address[] memory payees, uint256[] memory shares) = lists(first);
-        return IRevenuePayouts(address(new RevenuePayouts(payees, shares)));  // (2)
-    }
-
-    function sendETH(IRevenuePayouts payouts, uint256 amount) internal {
-        (bool ok,) = address(payouts).call{value: amount}("");
-        assertTrue(ok, "plain ETH transfer failed");
-    }
-
-    function test_laterETH() public {  // (3)
-        IRevenuePayouts payouts = create(A);
-        sendETH(payouts, 1 ether);
-        vm.prank(A);
-        payouts.release(A);
-        assertEq(A.balance, 0.5 ether);
-        sendETH(payouts, 1 ether);
-        vm.prank(A);
-        payouts.release(A);
-        vm.prank(B);
-        try payouts.release(B) {} catch {}
-        vm.prank(C);
-        try payouts.release(C) {} catch {}
-        assertEq(A.balance, 1 ether);
-        assertEq(B.balance, 0.6 ether);
-        assertEq(C.balance, 0.4 ether);
-        assertEq(address(payouts).balance, 0);
-    }
-
-    function test_noDoublePayment() public {
-        IRevenuePayouts payouts = create(A);
-        sendETH(payouts, 1 ether);
-        vm.prank(A);
-        payouts.release(A);
-        assertEq(A.balance, 0.5 ether);
-        vm.prank(A);
-        try payouts.release(A) {} catch {}  // (4)
-        assertEq(A.balance, 0.5 ether);
+    function deploy() internal {
+        deployer = new Deploy();
+        vm.startBroadcast();
+        (, address sender,) = vm.readCallers();
+        vm.stopBroadcast();
+        vm.etch(sender, type(Forwarder).runtimeCode);
+        bytes memory result = Forwarder(sender).forward(address(deployer), abi.encodeCall(deployer.run, (address(token))));  // (1)
+        vm.etch(sender, "");
+        (address governorAddress, address holder) = abi.decode(result, (address, address));
+        governor = ITokenGovernor(governorAddress);
+        protocol.transferOwnership(holder);  // (2)
+        vm.deal(holder, 3 ether);
+        votes = IVoteToken(governor.token());
+        string memory mode = governor.CLOCK_MODE();  // (3)
+        timestampClock = startsWith(mode, "mode=timestamp");
+        assertTrue(timestampClock || startsWith(mode, "mode=blocknumber"), "unsupported governor clock");
+        assertEq(votes.CLOCK_MODE(), mode, "vote token and governor clocks differ");
+        assertEq(uint256(governor.clock()), timestampClock ? block.timestamp : block.number, "clock reports wrong time");
     }
 ```
 
-1. Puts the mock tokens at the real USDC and USDT addresses.
-2. The test contract deploys the agent's contract with three payees.
-3. Each `test` function is one check.
-4. A payee with nothing due may revert or get nothing, so the test accepts either.
+1. Runs the agent's script as the account `forge script` would broadcast from.
+2. Hands the protocol's ownership, and 3 ETH of treasury, to the address the script returned.
+3. Reads the governor's clock mode instead of dictating it, so blocks and timestamps both pass.
+
+Helpers for wrapping TOKEN, proposing, voting, and moving the clock come next. Then the tests:
 
 ```solidity
-    function test_constructorValidation() public {
-        (address[] memory payees, uint256[] memory shares) = lists(A);
-        uint256[] memory shortShares = new uint256[](1);
-        shortShares[0] = 1;
-        vm.expectRevert();  // (1)
-        new RevenuePayouts(payees, shortShares);
-        shares[1] = 0;
-        vm.expectRevert();
-        new RevenuePayouts(payees, shares);
-        shares[1] = 30;
-        payees[1] = address(0);
-        vm.expectRevert();
-        new RevenuePayouts(payees, shares);
+    function test_quorumCountsTheWholeSupply() public {  // (1)
+        deploy();
+        wrap(A, 1_000_000 ether);
+        Proposal memory small = feeProposal(1, "one percent");
+        vote(small, A, 1, 1_000_000 ether);  // (2)
+        finish(small, DEFEATED);
+        assertEq(protocol.fee(), 0, "defeated proposal changed the fee");
+        assertEq(governor.quorum(governor.proposalSnapshot(small.id)), 4_000_000 ether, "quorum does not use TOKEN supply");  // (3)
+
+        wrap(B, 4_000_000 ether);
+        Proposal memory enough = feeProposal(7, "five percent");
+        vote(enough, A, 1, 1_000_000 ether);
+        vote(enough, B, 1, 4_000_000 ether);
+        finish(enough, SUCCEEDED);
+        queue(enough);
+        waitSeconds(2 days);  // (4)
+        execute(enough);
+        assertEq(protocol.fee(), 7, "passed proposal did not control Protocol");
+
+        wrap(STRANGER, 5_000_000 ether);
+        Proposal memory opposed = feeProposal(8, "equal for and against");
+        vote(opposed, A, 1, 1_000_000 ether);
+        vote(opposed, B, 1, 4_000_000 ether);
+        vote(opposed, STRANGER, 0, 5_000_000 ether);
+        finish(opposed, DEFEATED);
+
+        Proposal memory boundary = feeProposal(9, "exactly four percent");
+        vote(boundary, A, 0, 1_000_000 ether);
+        vote(boundary, B, 1, 4_000_000 ether);
+        finish(boundary, SUCCEEDED);
+        queue(boundary);
+        waitSeconds(2 days);
+        execute(boundary);
+        assertEq(protocol.fee(), 9, "four percent for must suffice");
     }
 ```
 
-1. Any revert passes, so the agent can use its own errors.
+1. Each `test` function is one check.
+2. Only 1 million TOKEN is wrapped, so 1 million for-votes clear 4% of the wrapped supply but not 4% of TOKEN's 100 million.
+3. The message is the reason when the check fails.
+4. A passed proposal waits two days before anyone can execute it.
 
-The other nine tests follow the same shape. [The full file](../tasks/building/revenue-payouts/tests/RevenuePayouts.t.sol) has them all.
+`test_theDelayGuardsTheMoney` comes next. Then the late-vote test:
+
+```solidity
+    function test_lateVotesExtendTheVote() public {
+        deploy();
+        wrap(A, 1_000_000 ether);
+        wrap(B, 4_000_000 ether);
+        // Establish that ordinary votes can pass before trying the late vote.
+        Proposal memory ordinary = feeProposal(1, "ordinary vote");
+        vote(ordinary, A, 1, 1_000_000 ether);
+        vote(ordinary, B, 1, 4_000_000 ether);
+        finish(ordinary, SUCCEEDED);
+
+        Proposal memory late = feeProposal(2, "late quorum");
+        vote(late, A, 0, 1_000_000 ether);
+        uint256 oldDeadline = governor.proposalDeadline(late.id);
+        uint256 hour = timestampClock ? 1 hours : 1 hours / 12;
+        uint256 activeAt = governor.clock();
+        // Short voting periods still get a vote just before their deadline.
+        uint256 remaining = oldDeadline - activeAt;
+        advanceTo(remaining > hour ? oldDeadline - hour : activeAt);
+        vote(late, B, 1, 4_000_000 ether);  // (1)
+        uint256 extended = governor.proposalDeadline(late.id);
+        assertGt(extended, oldDeadline, "late quorum did not extend the deadline");  // (2)
+        advanceTo(oldDeadline);
+        assertEq(governor.state(late.id), ACTIVE, "vote closed at its former deadline");
+        finish(late, SUCCEEDED);
+    }
+```
+
+1. Four million for-votes reach quorum in the vote's last hour.
+2. The deadline must move, so the other holders get time to answer.
+
+`test_snapshotCanRunIt` ends the file. [The full file](../tasks/build/token-governor/tests/TokenGovernor.t.sol) has them all.
+
+</details>
+
+<details>
+<summary><code>tests/test.sh</code></summary>
+
+```sh
+#!/bin/sh
+set -eu
+export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80  # (1)
+export DEPLOYER_PRIVATE_KEY="$PRIVATE_KEY"
+# The account behind PRIVATE_KEY is also the sender, so msg.sender and the broadcaster agree.
+export FOUNDRY_SENDER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+python3 /opt/forge_checks.py
+cp /opt/check_records.py /tests/check_records.py
+rewardkit /tests
+```
+
+1. Sets the keys an ordinary deploy script reads, so it runs unchanged. The rest is the same as in [`tests/`](#tests), and so is `tests/reward.toml`.
 
 </details>
 
 <details>
 <summary><code>solution/solve.sh</code></summary>
 
-`solve.sh` writes a working `src/RevenuePayouts.sol` into `/workspace`, where the agent would put it.
-See [the file](../tasks/building/revenue-payouts/solution/solve.sh).
-`tests/test.sh` and `tests/reward.toml` are the same as in [`tests/`](#tests).
+`solve.sh` writes a working vote token, governor, and deploy script into `/workspace`, where the agent would put them.
+See [the file](../tasks/build/token-governor/solution/solve.sh).
 
 </details>
 
-To prove the tests catch a wrong answer, delete the line `released[payee] += payment;` from `solve.sh` and run the [free check](#check-your-task).
-The oracle run now fails `test_noDoublePayment`, `test_laterETH`, and `test_reentrantPayee`, because a payee can be paid twice. Change it back.
+To prove the tests catch a wrong answer, change `GovernorPreventLateQuorum(7200)` to `GovernorPreventLateQuorum(0)` in `solve.sh` and run the [free check](#check-your-task).
+The oracle run now fails `test_lateVotesExtendTheVote` with the reason `late quorum did not extend the deadline: 1115203 <= 1115203`, because a late vote no longer moves the deadline. Change it back.
 
 ## Check your task
 
@@ -1275,7 +1417,7 @@ Install the runner as the [README](../README.md#quickstart) says, then start Doc
 
 ```sh
 unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
-task=tasks/transactions/send-six-decimal-token
+task=tasks/build/token-governor
 uv run python scripts/ci.py images
 uv run ethevals lint --tasks "$task"
 uv run ethevals free-check --tasks "$task" --output results/author-task
@@ -1292,8 +1434,8 @@ Both runs must write the same check names.
 `free-check` skips criteria, because the judge needs a paid call. It ends with:
 
 ```text
-tasks/transactions/send-six-decimal-token: oracle reward 1; checks: results/author-task/oracle/send-six-decimal-token__KPN9wVQ/verifier/reward-details.json
-tasks/transactions/send-six-decimal-token: nop reward 0; checks: results/author-task/nop/send-six-decimal-token__zNK4ZTq/verifier/reward-details.json
+tasks/build/token-governor: oracle reward 1; checks: results/author-task/oracle/token-governor__8VgPSko/verifier/reward-details.json
+tasks/build/token-governor: nop reward 0; checks: results/author-task/nop/token-governor__sqDFToD/verifier/reward-details.json
 ```
 
 Each `reward-details.json` lists the trial's checks with their reasons.

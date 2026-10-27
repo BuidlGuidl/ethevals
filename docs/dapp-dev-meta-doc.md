@@ -44,7 +44,7 @@ In a Build or Act task, hidden checks look at two things. Did the agent do the j
 
 A builder story is the app a developer would ask for, plus the mechanics that make it theirs. "A lending market" names a use case. The story adds what this team's market does differently.
 
-The one finished example is [revenue payouts](../tasks/building/revenue-payouts/). Its story is an NFT team that splits its income by share, where the income arrives as ETH from the mint and as stablecoins from partners. Its README shows the instruction, what the instruction leaves out, and the checks.
+The one finished example is [token governor](../tasks/build/token-governor/). Its story is a team with a live token they can't change, who want holders to control the treasury and protocol through a governor their Snapshot delegates and wrap flow can use. Its README shows the instruction, what the instruction leaves out, and the checks.
 
 ### The instruction reads like a builder's message
 

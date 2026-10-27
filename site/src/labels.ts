@@ -1,7 +1,12 @@
-import type { Agent, Mode, Pillar } from "./board";
+import type { Agent, Layer, Mode, Pillar } from "./board";
 
-export const names: Record<Pillar, string> = { concepts: "Concepts", transactions: "Transactions", building: "Building", security: "Security" };
-export const modelOnlyNote = "Bare model, one API call, no tools or web.";
+export const names: Record<Pillar, string> = { concepts: "Concepts", build: "Build", act: "Act" };
+export const layerNames: Record<Layer, string> = { contracts: "Contracts", frontend: "Frontend", backend: "Backend" };
+export const modeHints: Record<Mode, string> = {
+  internet: "Measures how agents do Ethereum work with web access, the way developers use them",
+  skills: "Measures whether giving agents skills makes them better at Ethereum work",
+  vanilla: "Measures what the model learned in training, with no web or tools",
+};
 export const modeNames: Record<Mode, string> = { internet: "Internet", skills: "Internet + Skills", vanilla: "Model only" };
 
 const programs = new Map([
@@ -11,9 +16,14 @@ const programs = new Map([
 ]);
 const models = new Map([
   ["anthropic/claude-opus-5-5", "Opus 5.5"],
+  ["anthropic/claude-fable-5-1", "Fable 5.1"],
   ["openai/gpt-6.1-sol", "GPT-6.1 Sol"],
-  ["openrouter/moonshotai/kimi-k3", "Kimi K3"],
+  ["openai/gpt-6-astra", "GPT-6 Astra"],
+  ["openrouter/moonshotai/kimi-k3.1-pro", "Kimi K3.1 Pro"],
   ["openrouter/z-ai/glm-5.3", "GLM 5.3"],
+  ["openrouter/deepseek/deepseek-v4.1-flash-1017", "DeepSeek V4.1 Flash"],
+  ["openrouter/x-ai/grok-4.7", "Grok 4.7"],
+  ["openrouter/google/gemini-4-argon", "Gemini 4 Argon"],
 ]);
 const providers = new Map([
   ["anthropic", "claude"], ["openai", "openai"], ["openrouter", "openrouter"],

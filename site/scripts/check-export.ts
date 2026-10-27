@@ -9,7 +9,15 @@ assert.ok(html.includes('id="leaderboard"') && html.includes('id="evals"'), "The
 assert.ok(html.includes("Internet + Skills") && html.includes("Model only"));
 assert.equal((html.match(/aria-label="Which results"/g) ?? []).length, 1, "The leaderboard must have a mode toggle.");
 assert.equal((html.match(/aria-label="Which task results"/g) ?? []).length, 1, "The matrix must have its own mode toggle.");
+for (const label of ["Internet + Skills", "Model only"]) {
+  assert.equal((html.match(new RegExp(`<button[^>]*disabled=""[^>]*>${label.replace("+", "\\+")}</button>`, "g")) ?? []).length, 2);
+}
+assert.equal((html.match(/aria-checked="true"[^>]*>Internet<\/button>/g) ?? []).length, 2);
 assert.ok(existsSync("out/compare/index.html"));
+const tasks = readFileSync("out/evals/index.html", "utf8");
+assert.ok(tasks.includes("<h1>Tasks</h1>") && tasks.includes('aria-label="Task counts"'));
+const tasksLink = tasks.match(/<a\b[^>]*href="\/evals\/"[^>]*>Tasks<\/a>/)?.[0];
+assert.ok(tasksLink?.includes('aria-current="page"'));
 const how = readFileSync("out/how-it-works/index.html", "utf8");
 assert.ok(how.includes("<h1>Automated, open tasks for AI on Ethereum</h1>"));
 const sections = [...how.matchAll(/<section id="(hw-[^"]+)"/g)].map((match) => match[1]);
@@ -37,6 +45,8 @@ for (const svg of runDiagrams) {
 }
 assert.ok(!/no route|Grader model|Result row|filtered RPC|grader/i.test(how));
 if (expected === "demo") {
+  assert.ok(tasks.includes('href="https://github.com/BuidlGuidl/ethevals/blob/main/tasks/build/token-contract/README.md"'));
+  assert.ok(tasks.includes("Implement the token described in the environment."));
   assert.ok(html.includes("<strong>Demo data</strong>"), "The demo banner must be visible.");
   assert.ok(html.includes("Demo model A"));
   assert.ok(html.includes("2 of 3 trials passed"));

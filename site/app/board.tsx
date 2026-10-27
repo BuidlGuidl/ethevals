@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle } from "lucide-react";
-import { agentLabel, modelLabel, modelOnlyNote, names, modeNames, unwrapPrompt } from "../src/labels";
+import { agentLabel, modelLabel, modeHints, names, modeNames, unwrapPrompt } from "../src/labels";
 import { pillars, agentKey, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Trial, type Agent } from "../src/board";
 import { decodeSelection, encodeSelection, type Selection } from "../src/selection";
 import { Configuration } from "../components/configuration";
@@ -13,7 +13,8 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components
 import { TooltipProvider } from "../components/ui/tooltip";
 import { Score, Hint, formulas, heat, percent, money } from "../components/scores";
 import { updateQuery, useQuery } from "../components/url-state";
-import { repo } from "../components/shell";
+import { repo } from "../src/repo";
+import { readMode } from "../src/modes";
 
 type Sort = "overall" | Pillar | "costPerPass";
 const verdictLabels = { passed: "PASS", failed: "FAIL", error: "ERROR" };
@@ -49,7 +50,7 @@ function EvalList({ table, evaluations, agent, pillar, onEval }: {
 
 function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Trial[]; onRun: (run: number) => void }) {
   return <>
-    <p className="why">{evaluation.description}</p>
+    <p>{evaluation.description}</p>
     <details className="prompt-disclosure" open><summary>Instruction</summary><pre>{unwrapPrompt(evaluation.instruction)}</pre>
     </details>
     <section className="detail-section"><h3>Trials</h3>{trials.length ?
@@ -128,8 +129,8 @@ export default function Board({ data }: { data: BoardData }) {
 }
 
 export function Results({ data, query }: { data: BoardData; query: URLSearchParams }) {
-  const mode: Mode = query.get("mode") === "skills" ? "skills" : query.get("mode") === "vanilla" ? "vanilla" : "internet";
-  const evalsMode: Mode = query.get("evals") === "skills" ? "skills" : query.get("evals") === "vanilla" ? "vanilla" : "internet";
+  const mode = readMode(query.get("mode"));
+  const evalsMode = readMode(query.get("evals"));
   const [sort, setSort] = useState<{ key: Sort; ascending: boolean }>({ key: "overall", ascending: false });
   const pushed = useRef(false);
   const opener = useRef<HTMLElement | null>(null);
@@ -162,11 +163,11 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
       <p className="hero-plate"><span><b>{data.counts.evals}</b> tasks</span><span><b>{data.counts.agents}</b> agents</span><span><b>{data.counts.runs.toLocaleString("en")}</b> trials</span></p></div>
       <p className="hero-tag">The Open Benchmark for AI on Ethereum</p>
       <p className="hero-desc">We test AI agents, and the models behind them, on real Ethereum work. Every task, trial and trajectory is public, allowing anyone to run the same tasks.</p>
-      <p className="hero-desc">We evaluate <Link href="/how-it-works/#hw-pillars">four pillars</Link>: <b>Concepts</b>, <b>Transactions</b>, <b>Building</b> and <b>Security</b>.</p>
+      <p className="hero-desc">We evaluate <Link href="/how-it-works/#hw-pillars">three pillars</Link>: <b>Concepts</b>, <b>Build</b>, and <b>Act</b>.</p>
     </header>
     <section id="leaderboard" className="results-section"><div className="section-head"><div><h2>Results</h2><p>The same work, with and without Ethereum skills.</p></div>
       <Link className="text-link" href={`/compare/?mode=${mode}`}>Compare configurations →</Link></div>
-      <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} />{mode === "vanilla" && <p className="mode-note">{modelOnlyNote}</p>}</div>
+      <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} /><p className="mode-note">{modeHints[mode]}</p></div>
       {agents.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Leaderboard. Scroll horizontally for all columns.">
         <table className="leaderboard"><caption className="sr-only">Configuration scores, sorted by {sort.key} {sort.ascending ? "ascending" : "descending"}</caption>
           <colgroup><col className="config-col" />{columns.map(([key]) => <col key={key} className="score-col" />)}</colgroup>
@@ -182,7 +183,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
                   onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} />}</td>)}
             </tr>)}</tbody></table></div>{mode === "skills" && <div className="table-note">+pp is the change over Internet.</div>}</div> :
         <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current tasks. Browse the task catalog below.</p></div>}
-      <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on the four pillars of Ethereum work. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them.</div>
+      <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on three pillars: Concepts, Build, and Act. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them.</div>
     </section>
     <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task · {modeNames[evalsMode]}</h2><p>A detailed view of the Leaderboard. See how many trials each agent passed on every task, grouped by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />

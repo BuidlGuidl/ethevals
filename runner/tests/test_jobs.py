@@ -46,6 +46,28 @@ def test_catalog_hashes_every_real_task_with_harbors_package_digest(tmp_path):
         "sha256:" + Packager.compute_content_hash(path)[0] for path in paths]
 
 
+def test_catalog_lists_the_jobs_model_names(tmp_path):
+    from ethevals.job_config import load_job
+    from ethevals.jobs import write_catalog
+
+    write_catalog([task_folder(tmp_path)], tmp_path / "catalog")
+    catalog = json.loads((tmp_path / "catalog/catalog.json").read_text())
+    assert catalog["models"] == [model.name for model in load_job().models.values()]
+
+
+@pytest.mark.parametrize("pillar", ["security", "transactions", "building"])
+def test_catalog_refuses_removed_pillars(tmp_path, pillar):
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', f'pillar = "{pillar}"'))
+    renamed = task.parent.parent / pillar / task.name
+    renamed.parent.mkdir()
+    task.rename(renamed)
+    result = cli("-m", "ethevals.cli", "catalog", "--tasks", renamed, "--output", tmp_path / "catalog")
+    assert result.returncode == 2
+    assert "metadata.pillar must name a board pillar" in result.stderr
+
+
 def test_row_builder_refuses_a_saved_trial_with_a_different_lock_digest(tmp_path):
     import shutil
     from ethevals.trial_rows import results_row
@@ -394,9 +416,66 @@ def test_catalog_contains_only_public_task_fields(tmp_path):
     catalog = json.loads((output / "catalog.json").read_text())
     entry = catalog["tasks"][0]
     assert {key: value for key, value in entry.items() if key != "hash"} == {
-        "id": "concepts/question", "pillar": "concepts", "name": "buidlguidl/question", "description": "Check a reply.",
+        "id": "concepts/question", "pillar": "concepts", "area": None, "layer": None,
+        "name": "buidlguidl/question", "description": "Check a reply.",
         "instruction": "Name a unit.\n", "modes": ["internet"]}
     assert entry["hash"] == "sha256:" + Packager.compute_content_hash(task)[0]
+
+
+def test_catalog_carries_the_task_area(tmp_path):
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "concepts"\narea = "Tokens"'))
+    output = tmp_path / "catalog"
+    result = cli("-m", "ethevals.cli", "catalog", "--tasks", task, "--output", output)
+    assert result.returncode == 0, result.stderr
+    entry = json.loads((output / "catalog.json").read_text())["tasks"][0]
+    assert (entry["id"], entry["area"]) == ("concepts/question", "Tokens")
+
+
+def build_task_folder(tmp_path, layer):
+    task = task_folder(tmp_path)
+    build = task.parent.parent / "build/question"
+    build.parent.mkdir()
+    task.rename(build)
+    settings = build / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', f'pillar = "build"\nlayer = {layer}'))
+    return build
+
+
+def test_catalog_carries_a_build_tasks_layer(tmp_path):
+    task = build_task_folder(tmp_path, '"frontend"')
+    output = tmp_path / "catalog"
+    result = cli("-m", "ethevals.cli", "catalog", "--tasks", task, "--output", output)
+    assert result.returncode == 0, result.stderr
+    entry = json.loads((output / "catalog.json").read_text())["tasks"][0]
+    assert (entry["id"], entry["layer"]) == ("build/question", "frontend")
+
+
+@pytest.mark.parametrize("layer", ['"pages"', '""', '["contracts"]'])
+def test_task_lint_refuses_an_unknown_layer(tmp_path, layer):
+    result = cli("-m", "ethevals.cli", "lint", "--tasks", build_task_folder(tmp_path, layer))
+    assert result.returncode == 2
+    assert "metadata.layer must be contracts, frontend, or backend, on a build task" in result.stderr
+
+
+def test_task_lint_refuses_a_layer_outside_build(tmp_path):
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "concepts"\nlayer = "contracts"'))
+    result = cli("-m", "ethevals.cli", "lint", "--tasks", task)
+    assert result.returncode == 2
+    assert "metadata.layer must be contracts, frontend, or backend, on a build task" in result.stderr
+
+
+@pytest.mark.parametrize("area", ['""', '"   "', "42", "true", '[]'])
+def test_task_lint_refuses_an_empty_or_non_string_area(tmp_path, area):
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', f'pillar = "concepts"\narea = {area}'))
+    result = cli("-m", "ethevals.cli", "lint", "--tasks", task)
+    assert result.returncode == 2
+    assert "metadata.area must be a nonempty string" in result.stderr
 
 
 @pytest.mark.parametrize("command", ["lint", "catalog", "plan", "export-hf"])

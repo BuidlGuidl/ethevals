@@ -50,6 +50,18 @@ def test_lint_enforces_judge_rules(tmp_path, before, after, message):
         lint_task(task)
 
 
+def test_lint_accepts_a_quiz_judge_that_reads_only_the_final_reply(tmp_path):
+    task = task_folder(tmp_path)
+    add_judge(task)
+    judge = task / "tests/judge.toml"
+    judge.write_text(judge.read_text().replace(
+        'atif-trajectory = "/logs/agent/trajectory.json"', 'files = ["/logs/verifier/final-reply.txt"]'))
+    lint_task(task)
+    judge.write_text(judge.read_text().replace("/logs/verifier/final-reply.txt", "/app/reply.txt"))
+    with pytest.raises(ValueError, match="only files under /logs/verifier/"):
+        lint_task(task)
+
+
 def test_lint_requires_all_pass_across_judges_and_tests(tmp_path):
     task = task_folder(tmp_path)
     add_judge(task)
@@ -58,6 +70,21 @@ def test_lint_requires_all_pass_across_judges_and_tests(tmp_path):
     reward.write_text(reward.read_text().replace('aggregation = "all-pass"', 'aggregation = "weighted-mean"'))
     with pytest.raises(ValueError, match="criteria and tests must contribute to all-pass reward"):
         lint_task(task)
+
+
+def test_lint_accepts_verifier_files_without_a_trajectory(tmp_path):
+    task = task_folder(tmp_path)
+    add_judge(task)
+    judge = task / "tests/judge.toml"
+    original = judge.read_text()
+    for files in ['["/logs/verifier/page.txt"]', '["/logs/verifier/final-reply.txt"]']:
+        judge.write_text(original.replace('atif-trajectory = "/logs/agent/trajectory.json"', f'files = {files}'))
+        lint_task(task)
+    for files in ['[]', '["/app/page.txt"]', '["/logs/verifier/../agent/trajectory.json"]',
+                  '["/logs/verifier/page.txt", "/app/source.tsx"]', '["/logs/verifier/*.txt"]']:
+        judge.write_text(original.replace('atif-trajectory = "/logs/agent/trajectory.json"', f'files = {files}'))
+        with pytest.raises(ValueError, match="trajectory or only files"):
+            lint_task(task)
 
 
 @pytest.mark.parametrize("variable", ["CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CUSTOM_SECRET"])
@@ -230,8 +257,7 @@ def test_free_check_skips_nested_judges_and_preserves_programmatic_checks(tmp_pa
 def test_task_criterion_runs_in_rewardkit_and_reaches_the_row(tmp_path, confirmed):
     from ethevals.trial_rows import results_row
 
-    root = Path(__file__).resolve().parents[2]
-    task = next(path.parent.parent for path in (root / "tasks").rglob("tests/transfer.toml"))
+    task = Path(__file__).parent / "fixtures/harbor/act/send-six-decimal-token"
     tests = tmp_path / "tests"
     tests.mkdir()
     fixture = Path(__file__).parent / "fixtures/harbor/recorded-trial"
@@ -360,8 +386,7 @@ def test_claude_plan_token_does_not_reach_a_shared_verifier(tmp_path, monkeypatc
     from harbor.job import Job
     from harbor.models.job.config import JobConfig
 
-    root = Path(__file__).resolve().parents[2]
-    source = next(path.parent.parent for path in (root / "tasks").rglob("tests/transfer.toml"))
+    source = Path(__file__).parent / "fixtures/harbor/act/send-six-decimal-token"
     task = tmp_path / source.parent.name / "credential-proof"
     shutil.copytree(source, task)
     (task / "tests/transfer.toml").unlink()
@@ -439,8 +464,7 @@ def reach_host(task: Path) -> None:
 def test_plain_harbor_and_board_agree_on_a_saved_judged_chain_trial(tmp_path, monkeypatch):
     from ethevals.trial_rows import results_row
 
-    root = Path(__file__).resolve().parents[2]
-    source = next(path.parent.parent for path in (root / "tasks").rglob("tests/transfer.toml"))
+    source = Path(__file__).parent / "fixtures/harbor/act/send-six-decimal-token"
     task = tmp_path / source.parent.name / "judged-chain"
     shutil.copytree(source, task)
     reach_host(task)
@@ -476,7 +500,7 @@ def test_plain_harbor_and_board_agree_on_a_saved_judged_chain_trial(tmp_path, mo
             from harbor.publisher.packager import Packager
             # The catalog would lint this copy, and lint rightly refuses the test's host mapping.
             digest = "sha256:" + Packager.compute_content_hash(task)[0]
-            metadata = {"task_id": "transactions/judged-chain", "task_hash": digest, "skills_hash": None,
+            metadata = {"task_id": "act/judged-chain", "task_hash": digest, "skills_hash": None,
                 "agent": agent, "model": "local/model", "effort": None, "mode": "internet", "trial": 1,
                 "retry": 0, "paid_by": "free", "agent_version": result["agent_info"]["version"],
                 "harbor_version": "0.24.0",
