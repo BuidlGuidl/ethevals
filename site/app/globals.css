@@ -33,7 +33,7 @@
   h2 { @apply font-terminal text-[40px] leading-none; letter-spacing: .01em; }
   h2::before { content: "## "; color: var(--color-accent); }
   h3 { @apply font-semibold text-[15px] leading-snug; }
-  pre { @apply border border-border bg-[#07090e] p-4 text-[12px] text-[#cfd3e3]; white-space: pre-wrap; overflow-wrap: anywhere; }
+  pre { @apply border border-border-strong bg-tint px-5 py-4 text-[13px] leading-[1.75] text-ink; white-space: pre-wrap; overflow-wrap: anywhere; }
   code { @apply text-[12px]; overflow-wrap: anywhere; }
   section[id] { scroll-margin-top: 90px; }
 }
@@ -69,11 +69,12 @@
   .results-section { @apply mb-16 grid gap-5; }
   .section-head { @apply flex flex-wrap items-start justify-between gap-5; }
   .section-head p { @apply mt-2 max-w-[850px] text-muted; }
-  .toolbar { @apply flex flex-wrap items-center justify-between gap-4; }
+  .toolbar { @apply flex flex-wrap items-center gap-4; }
   .mode-toggle { @apply flex flex-wrap items-center gap-3; }
   .mode-toggle > div { @apply min-w-0 max-w-full flex-wrap; }
   .mode-separator { @apply h-6 w-px bg-border-strong; }
-  .mode-note { @apply border-l-2 border-accent bg-tint px-4 py-2 text-xs text-muted; }
+  .mode-note { @apply bg-tint px-3 py-2 text-xs text-muted; }
+  .badge { @apply inline-block border border-border-strong bg-tint px-2 py-0.5 text-[10px] text-muted; }
   .button { @apply inline-flex items-center justify-center gap-2 border border-border-strong px-3 py-2 text-xs text-ink; }
   .button:hover { @apply bg-accent text-sheet; text-decoration: none; }
   .text-link { @apply text-accent text-xs; }
@@ -139,7 +140,6 @@
   .drawer-header h1 { @apply text-[24px]; }
   .back-button { @apply flex w-fit items-center gap-2 text-xs text-muted; }
   .detail-section { @apply grid gap-3; }
-  .why { @apply border-l-2 border-accent pl-4; }
   .eval-list section + section { @apply mt-6; }
   .eval-list-row { @apply flex min-h-11 w-full items-center gap-3 border-b border-border py-3 text-left; }
   .eval-list-row:hover { @apply bg-tint; }
@@ -197,7 +197,7 @@
   .how-section { @apply grid gap-6; }
   .how-head { @apply grid gap-2; }
   .how-head > p:not(.eyebrow), .how-intro { @apply max-w-[850px] text-muted; }
-  .pillars-grid { @apply grid grid-cols-4 border border-border bg-sheet; }
+  .pillars-grid { @apply grid grid-cols-3 border border-border bg-sheet; }
   .pillars-grid li { @apply grid gap-3 border-r border-border p-5; grid-template-rows: auto 1fr; }
   .pillars-grid li:last-child { border-right: 0; }
   .pillars-grid p { @apply text-muted; }
@@ -271,7 +271,7 @@
 @keyframes cursor-blink { 50% { opacity: 0; } }
 @keyframes diagram-pulse { 0% { stroke-dashoffset: 100; opacity: 0; } 10%, 85% { opacity: 1; } 100% { stroke-dashoffset: 4; opacity: 0; } }
 @keyframes sheet-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
-@media (max-width: 1100px) { .navtag { display: none; } .pillars-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .pillars-grid li:nth-child(2) { border-right: 0; } .pillars-grid li:nth-child(n+3) { border-top: 1px solid var(--color-border); } }
+@media (max-width: 1100px) { .navtag { display: none; } }
 @media (max-width: 760px) {
   .sheet { padding-inline: 16px; }
   .runs-table { min-width: 0; }
@@ -282,6 +282,7 @@
   .run-stats > div { padding-inline: 8px; }
   .run-stats dd { font-size: 14px; }
   .page { padding: 28px 18px; }
+  pre { padding: 16px; }
   .topnav { gap: 12px; padding-inline: 18px; }
   .brand { width: 88px; }
   .navlinks { gap: 15px; font-size: 11px; }

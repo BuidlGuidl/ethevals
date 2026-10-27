@@ -9,6 +9,10 @@ assert.ok(html.includes('id="leaderboard"') && html.includes('id="evals"'), "The
 assert.ok(html.includes("Internet + Skills") && html.includes("Model only"));
 assert.equal((html.match(/aria-label="Which results"/g) ?? []).length, 1, "The leaderboard must have a mode toggle.");
 assert.equal((html.match(/aria-label="Which task results"/g) ?? []).length, 1, "The matrix must have its own mode toggle.");
+for (const label of ["Internet + Skills", "Model only"]) {
+  assert.equal((html.match(new RegExp(`<button[^>]*disabled=""[^>]*>${label.replace("+", "\\+")}</button>`, "g")) ?? []).length, 2);
+}
+assert.equal((html.match(/aria-checked="true"[^>]*>Internet<\/button>/g) ?? []).length, 2);
 assert.ok(existsSync("out/compare/index.html"));
 const how = readFileSync("out/how-it-works/index.html", "utf8");
 assert.ok(how.includes("<h1>Automated, open tasks for AI on Ethereum</h1>"));

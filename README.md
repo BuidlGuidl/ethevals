@@ -6,7 +6,7 @@
   <a href="docs/add-a-task.md">Add a task</a>
 </h4>
 
-ETH Evals is an open task framework built on [Harbor](https://harborframework.com). It evaluates AI agents and models across four pillars of Ethereum work: concepts, transactions, building, and security.
+ETH Evals is an open task framework built on [Harbor](https://harborframework.com). It evaluates AI agents and models across three pillars: Concepts, Build, and Act.
 
 - **A task is a Harbor folder**: an instruction, an environment, a verifier, and a solution.
 - **New models on launch day**: adding one is a config change.

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { agentKey, pillars, type BoardData, type Mode, type Agent } from "../../src/board";
+import { agentKey, pillars, type BoardData, type Agent } from "../../src/board";
+import { readMode } from "../../src/modes";
 import { Configuration } from "../../components/configuration";
-import { modelOnlyNote, names } from "../../src/labels";
+import { modeHints, names } from "../../src/labels";
 import { ModeToggle } from "../../components/mode-toggle";
 import { Hint, formulas, percent, money, pp } from "../../components/scores";
 import { TooltipProvider } from "../../components/ui/tooltip";
@@ -12,7 +13,7 @@ import { updateQuery, useQuery } from "../../components/url-state";
 
 export default function Compare({ data }: { data: BoardData }) {
   const query = useQuery();
-  const mode: Mode = query.get("mode") === "skills" ? "skills" : query.get("mode") === "vanilla" ? "vanilla" : "internet";
+  const mode = readMode(query.get("mode"));
   const table = data.tables[mode];
   const keys = table.agents.map(agentKey);
   const defaults = [...table.agents].sort((a, b) => (table.summaries[agentKey(b)].scores.overall ?? -1) - (table.summaries[agentKey(a)].scores.overall ?? -1)).slice(0, 3).map(agentKey);
@@ -34,8 +35,8 @@ export default function Compare({ data }: { data: BoardData }) {
       {table.agents.map((agent) => <ToggleGroupItem key={agentKey(agent)} value={agentKey(agent)} disabled={!chosen.includes(agentKey(agent)) && chosen.length >= 5}>
         <Configuration agent={agent} /></ToggleGroupItem>)}
     </ToggleGroup></div>
-    <ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: JSON.stringify(chosen) })} />
-    {mode === "vanilla" && <p className="mode-note">{modelOnlyNote}</p>}
+    <div className="toolbar"><ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: JSON.stringify(chosen) })} />
+      <p className="mode-note">{modeHints[mode]}</p></div>
     {selected.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Configuration comparison">
       <table className="comparison"><caption className="sr-only">Compare scores and costs for selected configurations</caption><thead><tr><th scope="col">Metric</th>
         {selected.map((agent, index) => <th scope="col" key={agentKey(agent)}><span className={`compare-swatch tone-${index}`} /><Configuration agent={agent} /></th>)}</tr></thead>

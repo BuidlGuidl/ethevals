@@ -1,6 +1,8 @@
 # ETH Evals board
 
 The site builds a static board from Harbor task declarations and results rows.
+It groups tasks into three pillars: Concepts, Build, and Act.
+Concepts holds quizzes, Build holds builds, and Act holds tasks where the agent acts on a chain.
 The browser receives public instructions and check records, without verifier files or targets.
 
 ## Build
@@ -22,6 +24,7 @@ A missing explicit file fails the build.
 Malformed rows and duplicate trials fail with their file and line.
 The loader accepts schema version 8 and skips older rows.
 It shows only current task hashes and, for skills-mode rows, the current skills hash.
+It shows only models listed in the job settings.
 The 160 Inspect rows have been removed.
 
 ## Scores and trajectories

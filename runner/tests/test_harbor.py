@@ -259,11 +259,11 @@ def test_task_lint_requires_the_declared_pillar_to_match_the_folder(tmp_path):
 
     task = task_folder(tmp_path)
     settings = task / "task.toml"
-    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "building"'))
+    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "build"'))
     with pytest.raises(SystemExit) as error:
         main(["lint", "--tasks", str(task)])
     assert error.value.code == 2
-    settings.write_text(settings.read_text().replace('pillar = "building"', 'pillar = "concepts"'))
+    settings.write_text(settings.read_text().replace('pillar = "build"', 'pillar = "concepts"'))
     assert main(["lint", "--tasks", str(task)]) == 0
 
 
