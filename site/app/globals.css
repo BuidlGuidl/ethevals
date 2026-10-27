@@ -13,6 +13,9 @@
   --color-green: #5ee69a;
   --color-amber: #f2bf4f;
   --color-red: #ff7b7b;
+  --color-concepts: #8fa0ff;
+  --color-build: #67c8f0;
+  --color-act: #f09ad0;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
   --font-terminal: var(--font-vt323), monospace;
   --font-diagram: var(--font-archivo), sans-serif;
@@ -140,6 +143,12 @@
   .task-totals .task-number { @apply mt-2 block text-[64px] leading-none tracking-tight; }
   .task-totals button[aria-pressed="true"] { @apply border-accent bg-accent text-sheet; }
   .task-totals button[aria-pressed="true"] .eyebrow { @apply text-sheet; }
+  .pillar-concepts { --pillar: var(--color-concepts); }
+  .pillar-build { --pillar: var(--color-build); }
+  .pillar-act { --pillar: var(--color-act); }
+  .task-totals button[class*="pillar-"]:not([aria-pressed="true"]) .eyebrow { color: var(--pillar); }
+  .task-totals button[class*="pillar-"][aria-pressed="true"] { background: var(--pillar); border-color: var(--pillar); }
+  .task-badges .badge[class*="pillar-"] { color: var(--pillar); border-color: color-mix(in srgb, var(--pillar) 45%, transparent); }
   .task-areas { @apply flex flex-wrap gap-2; }
   .task-areas button { @apply inline-flex min-h-9 items-center gap-2 text-xs transition-colors; }
   .task-areas button span { @apply font-semibold; }

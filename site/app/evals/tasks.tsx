@@ -1,8 +1,8 @@
 "use client";
 
 import { updateQuery, useQuery } from "../../components/url-state";
-import { pillars, type Eval } from "../../src/board";
-import { names, unwrapPrompt } from "../../src/labels";
+import { layers, pillars, type Eval } from "../../src/board";
+import { layerNames, names, unwrapPrompt } from "../../src/labels";
 import { repo } from "../../src/repo";
 
 export function Tasks({ tasks }: { tasks: Eval[] }) {
@@ -11,26 +11,35 @@ export function Tasks({ tasks }: { tasks: Eval[] }) {
 
 export function TaskList({ tasks, query }: { tasks: Eval[]; query: URLSearchParams }) {
   const pillar = pillars.find((value) => value === query.get("pillar"));
+  // Only Build tasks have a layer, so the layer filter needs Build selected.
+  const layer = pillar === "build" ? layers.find((value) => value === query.get("layer")) : undefined;
   const areas = [...new Set(tasks.flatMap((task) => task.area ? [task.area] : []))].sort((a, b) => a.localeCompare(b));
   const area = areas.find((value) => value === query.get("area"));
   const inArea = tasks.filter((task) => !area || task.area === area);
-  const inPillar = tasks.filter((task) => !pillar || task.pillar === pillar);
-  const filtered = inArea.filter((task) => !pillar || task.pillar === pillar);
+  const inPillar = tasks.filter((task) => (!pillar || task.pillar === pillar) && (!layer || task.layer === layer));
+  const filtered = inPillar.filter((task) => !area || task.area === area);
   const ordered = pillars.flatMap((pillar) => filtered.filter((task) => task.pillar === pillar)
     .sort((a, b) => a.title.localeCompare(b.title)));
   return <main id="main" className="page tasks-page">
     <h1>Tasks</h1>
     <section aria-label="Task counts" className="task-counts">
       <div className="task-totals" role="group" aria-label="Filter by pillar">
-        <button type="button" aria-pressed={!pillar} onClick={() => updateQuery({ pillar: null })}>
+        <button type="button" aria-pressed={!pillar} onClick={() => updateQuery({ pillar: null, layer: null })}>
           <span className="eyebrow">Total tasks</span><span className="task-number">{inArea.length}</span>
         </button>
-        {pillars.map((value) => <button type="button" key={value} aria-pressed={pillar === value}
-          onClick={() => updateQuery({ pillar: pillar === value ? null : value })}>
+        {pillars.map((value) => <button type="button" key={value} className={`pillar-${value}`} aria-pressed={pillar === value}
+          onClick={() => updateQuery({ pillar: pillar === value ? null : value, layer: null })}>
           <span className="eyebrow">{names[value]}</span>
           <span className="task-number">{inArea.filter((task) => task.pillar === value).length}</span>
         </button>)}
       </div>
+      {pillar === "build" && <div className="task-areas" role="group" aria-label="Filter Build tasks by layer">
+        {layers.map((value) => {
+          const count = inArea.filter((task) => task.pillar === "build" && task.layer === value).length;
+          return <button type="button" className="badge" key={value} aria-pressed={layer === value} disabled={count === 0}
+            onClick={() => updateQuery({ layer: layer === value ? null : value })}>{layerNames[value]} <span>{count}</span></button>;
+        })}
+      </div>}
       {areas.length > 0 && <div className="task-areas" role="group" aria-label="Filter by area">
         {areas.map((value) => {
           const count = inPillar.filter((task) => task.area === value).length;
@@ -41,12 +50,12 @@ export function TaskList({ tasks, query }: { tasks: Eval[]; query: URLSearchPara
     </section>
     <div className="task-filter-status">
       <p role="status">{filtered.length} {filtered.length === 1 ? "task" : "tasks"}</p>
-      {(pillar || area) && <button type="button" className="button" onClick={() => updateQuery({ pillar: null, area: null })}>Clear filters</button>}
+      {(pillar || area) && <button type="button" className="button" onClick={() => updateQuery({ pillar: null, area: null, layer: null })}>Clear filters</button>}
     </div>
     <section aria-label="All tasks" className="task-catalog">
       {ordered.map((task) => <details key={task.id} className="task-row">
         <summary><span className="task-title">{task.title}</span><span className="task-badges">
-          <span className="badge">{names[task.pillar]}</span>
+          <span className={`badge pillar-${task.pillar}`}>{names[task.pillar]}</span>
           {task.area && <span className="badge">{task.area}</span>}
         </span></summary>
         <div className="task-instruction"><p className="eyebrow">Instruction</p>

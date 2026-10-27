@@ -14,9 +14,9 @@ function taskCatalog(t: TestContext) {
   mkdirSync(path.join(root, ".catalog"));
   const entries = [
     { id: "act/supply-tokens", pillar: "act", area: "Lending", instruction: "Supply tokens.\nKeep the receipt." },
-    { id: "build/zebra-vault", pillar: "build", area: "Lending", instruction: "Build a vault." },
+    { id: "build/zebra-vault", pillar: "build", area: "Lending", layer: "contracts", instruction: "Build a vault." },
     { id: "concepts/units", pillar: "concepts", area: null, instruction: "Name a unit." },
-    { id: "build/alpha-token", pillar: "build", area: "Tokens", instruction: "Build a token." },
+    { id: "build/alpha-token", pillar: "build", area: "Tokens", layer: "frontend", instruction: "Build a token." },
     { id: "concepts/fees", pillar: "concepts", instruction: "Explain fees." },
   ].map((entry) => ({ hash: "current", description: "A task.", modes: ["internet"], ...entry }));
   writeFileSync(path.join(root, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "pack", models: [], tasks: entries }));
@@ -54,7 +54,7 @@ test("the Tasks page renders catalog counts, titles, badges, instructions, and R
   const rows = [...html.matchAll(/<details class="task-row">(.*?)<\/details>/gs)].map((match) => match[1]);
   assert.deepEqual(rows.map((row) => row.match(/class="task-title">([^<]+)/)?.[1]),
     ["Fees", "Units", "Alpha token", "Zebra vault", "Supply tokens"]);
-  assert.deepEqual(rows.map((row) => [...row.matchAll(/class="badge">([^<]+)/g)].map((match) => match[1])),
+  assert.deepEqual(rows.map((row) => [...row.matchAll(/class="badge[^"]*">([^<]+)/g)].map((match) => match[1])),
     [["Concepts"], ["Concepts"], ["Build", "Tokens"], ["Build", "Lending"], ["Act", "Lending"]]);
   for (const instruction of ["Explain fees.", "Name a unit.", "Build a token.", "Build a vault.", "Supply tokens. Keep the receipt."]) {
     assert.ok(html.includes(`<pre>${instruction}</pre>`));
@@ -127,7 +127,27 @@ test("valid URL filters with no shared tasks show an empty result and can be cle
   assert.ok(html.includes(">Clear filters</button>"));
 });
 
-test("the catalog loader selects demo tasks and rejects a blank area", (t) => {
+test("Build shows layer filters that narrow the list and follow the area", (t) => {
+  const tasks = taskCatalog(t).evals;
+  const html = renderToStaticMarkup(createElement(TaskList, { tasks, query: new URLSearchParams("pillar=build&layer=contracts") }));
+  assert.deepEqual(titles(html), ["Zebra vault"]);
+  assert.deepEqual(buttons(html, "Filter Build tasks by layer"), [
+    { text: "Contracts 1", pressed: true, disabled: false },
+    { text: "Frontend 1", pressed: false, disabled: false },
+    { text: "Backend 0", pressed: false, disabled: true },
+  ]);
+  assert.deepEqual(buttons(html, "Filter by area"), [
+    { text: "Lending 1", pressed: false, disabled: false },
+    { text: "Tokens 0", pressed: false, disabled: true },
+  ]);
+  const withArea = renderToStaticMarkup(createElement(TaskList, { tasks, query: new URLSearchParams("pillar=build&area=Tokens") }));
+  assert.deepEqual(buttons(withArea, "Filter Build tasks by layer").map((button) => button.text), ["Contracts 0", "Frontend 1", "Backend 0"]);
+  const withoutBuild = renderToStaticMarkup(createElement(TaskList, { tasks, query: new URLSearchParams("layer=contracts") }));
+  assert.ok(!withoutBuild.includes("Filter Build tasks by layer"));
+  assert.equal(titles(withoutBuild).length, 5);
+});
+
+test("the catalog loader selects demo tasks and rejects a blank area or an unknown layer", (t) => {
   const root = mkdtempSync(path.join(os.tmpdir(), "ethevals-task-demo-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(path.join(root, "demo"));
@@ -138,5 +158,7 @@ test("the catalog loader selects demo tasks and rejects a blank area", (t) => {
   assert.deepEqual(loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root).evals,
     [{ ...task, title: "Send token" }]);
   writeFileSync(file, JSON.stringify({ skills_hash: "pack", models: [], tasks: [{ ...task, area: " " }] }));
+  assert.throws(() => loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root), /cannot load task catalog/);
+  writeFileSync(file, JSON.stringify({ skills_hash: "pack", models: [], tasks: [{ ...task, layer: "pages" }] }));
   assert.throws(() => loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root), /cannot load task catalog/);
 });

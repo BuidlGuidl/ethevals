@@ -14,7 +14,7 @@ It refreshes `.catalog/catalog.json` through `ethevals catalog`.
 The catalog lists tasks and the current skills hash.
 
 The Tasks page at `/evals/` shows catalog counts by pillar and area without results data.
-Select a pillar and an area to filter tasks, then share the URL to keep those filters.
+Select a pillar and an area to filter tasks. With Build selected, a layer filter appears too. Share the URL to keep those filters.
 Expand a task to read its instruction and open its README on GitHub.
 
 Run `ETHEVALS_DEMO=1 pnpm build` for an invented board.

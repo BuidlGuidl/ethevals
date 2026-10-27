@@ -163,6 +163,9 @@ _Avoid_: category, stage, track
 **Area**:
 The part of dapp development a task belongs to, such as Lending or Swaps.
 
+**Layer**:
+What a Build task's agent writes: contracts, a frontend, or backend code.
+
 ## What the system publishes
 
 **Agent table**:
