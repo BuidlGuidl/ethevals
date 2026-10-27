@@ -1,27 +1,48 @@
+"use client";
+
+import { updateQuery, useQuery } from "../../components/url-state";
 import { pillars, type Eval } from "../../src/board";
 import { names, unwrapPrompt } from "../../src/labels";
 import { repo } from "../../src/repo";
 
 export function Tasks({ tasks }: { tasks: Eval[] }) {
-  const ordered = pillars.flatMap((pillar) => tasks.filter((task) => task.pillar === pillar)
+  return <TaskList tasks={tasks} query={useQuery()} />;
+}
+
+export function TaskList({ tasks, query }: { tasks: Eval[]; query: URLSearchParams }) {
+  const pillar = pillars.find((value) => value === query.get("pillar"));
+  const areas = [...new Set(tasks.flatMap((task) => task.area ? [task.area] : []))].sort((a, b) => a.localeCompare(b));
+  const area = areas.find((value) => value === query.get("area"));
+  const inArea = tasks.filter((task) => !area || task.area === area);
+  const inPillar = tasks.filter((task) => !pillar || task.pillar === pillar);
+  const filtered = inArea.filter((task) => !pillar || task.pillar === pillar);
+  const ordered = pillars.flatMap((pillar) => filtered.filter((task) => task.pillar === pillar)
     .sort((a, b) => a.title.localeCompare(b.title)));
-  const areas = new Map<string, number>();
-  for (const task of tasks) {
-    if (task.area) areas.set(task.area, (areas.get(task.area) ?? 0) + 1);
-  }
   return <main id="main" className="page tasks-page">
     <h1>Tasks</h1>
     <section aria-label="Task counts" className="task-counts">
-      <dl className="task-totals">
-        <div><dt className="eyebrow">Total tasks</dt><dd>{tasks.length}</dd></div>
-        {pillars.map((pillar) => <div key={pillar}><dt className="eyebrow">{names[pillar]}</dt>
-          <dd>{tasks.filter((task) => task.pillar === pillar).length}</dd></div>)}
-      </dl>
-      {areas.size > 0 && <dl className="hero-plate task-areas" aria-label="Tasks by area">
-        {[...areas].sort(([a], [b]) => a.localeCompare(b)).map(([area, count]) =>
-          <div key={area}><dt>{area}</dt><dd>{count}</dd></div>)}
-      </dl>}
+      <div className="task-totals" role="group" aria-label="Filter by pillar">
+        <button type="button" aria-pressed={!pillar} onClick={() => updateQuery({ pillar: null })}>
+          <span className="eyebrow">Total tasks</span><span className="task-number">{inArea.length}</span>
+        </button>
+        {pillars.map((value) => <button type="button" key={value} aria-pressed={pillar === value}
+          onClick={() => updateQuery({ pillar: pillar === value ? null : value })}>
+          <span className="eyebrow">{names[value]}</span>
+          <span className="task-number">{inArea.filter((task) => task.pillar === value).length}</span>
+        </button>)}
+      </div>
+      {areas.length > 0 && <div className="task-areas" role="group" aria-label="Filter by area">
+        {areas.map((value) => {
+          const count = inPillar.filter((task) => task.area === value).length;
+          return <button type="button" className="badge" key={value} aria-pressed={area === value} disabled={count === 0}
+            onClick={() => updateQuery({ area: area === value ? null : value })}>{value} <span>{count}</span></button>;
+        })}
+      </div>}
     </section>
+    <div className="task-filter-status">
+      <p role="status">{filtered.length} {filtered.length === 1 ? "task" : "tasks"}</p>
+      {(pillar || area) && <button type="button" className="button" onClick={() => updateQuery({ pillar: null, area: null })}>Clear filters</button>}
+    </div>
     <section aria-label="All tasks" className="task-catalog">
       {ordered.map((task) => <details key={task.id} className="task-row">
         <summary><span className="task-title">{task.title}</span><span className="task-badges">
@@ -34,6 +55,7 @@ export function Tasks({ tasks }: { tasks: Eval[] }) {
         </div>
       </details>)}
       {tasks.length === 0 && <p className="empty">No tasks yet.</p>}
+      {tasks.length > 0 && filtered.length === 0 && <p className="empty">No tasks match these filters.</p>}
     </section>
   </main>;
 }
