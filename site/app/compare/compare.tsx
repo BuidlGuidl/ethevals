@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { agentKey, pillars, type BoardData, type Mode, type Agent } from "../../src/board";
+import { agentKey, pillars, type BoardData, type Agent } from "../../src/board";
+import { readMode } from "../../src/modes";
 import { Configuration } from "../../components/configuration";
 import { modelOnlyNote, names } from "../../src/labels";
 import { ModeToggle } from "../../components/mode-toggle";
@@ -12,7 +13,7 @@ import { updateQuery, useQuery } from "../../components/url-state";
 
 export default function Compare({ data }: { data: BoardData }) {
   const query = useQuery();
-  const mode: Mode = query.get("mode") === "skills" ? "skills" : query.get("mode") === "vanilla" ? "vanilla" : "internet";
+  const mode = readMode(query.get("mode"));
   const table = data.tables[mode];
   const keys = table.agents.map(agentKey);
   const defaults = [...table.agents].sort((a, b) => (table.summaries[agentKey(b)].scores.overall ?? -1) - (table.summaries[agentKey(a)].scores.overall ?? -1)).slice(0, 3).map(agentKey);

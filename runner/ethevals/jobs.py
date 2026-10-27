@@ -15,7 +15,7 @@ from harbor.publisher.packager import Packager
 from pydantic import ValidationError
 
 from .files import write_whole
-from .job_config import JobSettings, check_credentials, check_judge_key
+from .job_config import JobSettings, check_credentials, check_judge_key, load_job
 from .harbor_tasks import lint_task, task_host_variables, task_judges
 from .skills import SkillsPack, pack_skills
 from .secret_check import check_output, remember_secrets, secret_values
@@ -48,7 +48,8 @@ def write_catalog(paths: list[Path], output: Path) -> None:
             raise ValueError(f"Duplicate task name: {entry['name']}")
         names.add(entry["name"])
     output.mkdir(parents=True, exist_ok=True)
-    (output / "catalog.json").write_text(json.dumps({"tasks": entries, "skills_hash": pack_skills().hash}, indent=2) + "\n")
+    models = [model.name for model in load_job().models.values()]
+    (output / "catalog.json").write_text(json.dumps({"tasks": entries, "skills_hash": pack_skills().hash, "models": models}, indent=2) + "\n")
 
 
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,

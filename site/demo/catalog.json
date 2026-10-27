@@ -1,5 +1,6 @@
 {
   "skills_hash": "demo-pack",
+  "models": ["Demo model A", "Demo model B", "Demo model C"],
   "tasks": [
     {
       "description": "Check whether an agent builds a token with the requested supply and transfer rules.",

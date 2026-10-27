@@ -11,8 +11,10 @@ const programs = new Map([
 ]);
 const models = new Map([
   ["anthropic/claude-opus-5-5", "Opus 5.5"],
+  ["anthropic/claude-fable-5-1", "Fable 5.1"],
   ["openai/gpt-6.1-sol", "GPT-6.1 Sol"],
-  ["openrouter/moonshotai/kimi-k3", "Kimi K3"],
+  ["openai/gpt-6-astra", "GPT-6 Astra"],
+  ["openrouter/moonshotai/kimi-k3.1-pro", "Kimi K3.1 Pro"],
   ["openrouter/z-ai/glm-5.3", "GLM 5.3"],
   ["openrouter/deepseek/deepseek-v4.1-flash-1017", "DeepSeek V4.1 Flash"],
   ["openrouter/x-ai/grok-4.7", "Grok 4.7"],

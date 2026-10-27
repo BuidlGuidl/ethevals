@@ -16,11 +16,17 @@ models:
   opus-5.5:
     name: anthropic/claude-opus-5-5
     effort: high
+  fable-5.1:
+    name: anthropic/claude-fable-5-1
+    effort: high
   gpt-6.1-sol:
     name: openai/gpt-6.1-sol
     effort: high
-  kimi-k3:
-    name: openrouter/moonshotai/kimi-k3
+  gpt-6-astra:
+    name: openai/gpt-6-astra
+    effort: high
+  kimi-k3.1-pro:
+    name: openrouter/moonshotai/kimi-k3.1-pro
     effort: high
   glm-5.3:
     name: openrouter/z-ai/glm-5.3
@@ -53,10 +59,10 @@ agents:
     cost_limit_usd: 20.0
     env:
       OPENAI_API_KEY: '${OPENAI_API_KEY:-}'
-  vanilla-kimi-k3:
+  vanilla-kimi-k3.1-pro:
     name: ethevals.vanilla:VanillaAgent
     version: 0.1.0
-    model: kimi-k3
+    model: kimi-k3.1-pro
     modes: [vanilla]
     paid_by: api_key
     cost_limit_usd: 20.0
@@ -109,6 +115,17 @@ agents:
       # Harbor 0.24.0 redacts AUTH values; uppercase preserves JSON numbers and booleans.
       CLAUDE_FORCE_OAUTH: "YES"
     required_env: [CLAUDE_CODE_OAUTH_TOKEN]
+  claude-code-fable-5.1:
+    name: claude-code
+    version: 2.1.284
+    model: fable-5.1
+    modes: [internet, skills]
+    paid_by: plan
+    cost_limit_usd: 20.0
+    env:
+      # Harbor 0.24.0 redacts AUTH values; uppercase preserves JSON numbers and booleans.
+      CLAUDE_FORCE_OAUTH: "YES"
+    required_env: [CLAUDE_CODE_OAUTH_TOKEN]
   codex-gpt-6.1-sol:
     name: codex
     version: 0.163.0
@@ -123,10 +140,24 @@ agents:
     required_files:
       - path: '${CODEX_AUTH_JSON_PATH:-~/.codex/auth.json}'
         policy: plan_tokens
-  opencode-kimi-k3:
+  codex-gpt-6-astra:
+    name: codex
+    version: 0.163.0
+    model: gpt-6-astra
+    modes: [internet, skills]
+    paid_by: plan
+    cost_limit_usd: 20.0
+    env:
+      CODEX_FORCE_AUTH_JSON: "YES"
+      # CI writes the credential file; reserve its input name and clear the raw JSON.
+      CODEX_AUTH_JSON: ""
+    required_files:
+      - path: '${CODEX_AUTH_JSON_PATH:-~/.codex/auth.json}'
+        policy: plan_tokens
+  opencode-kimi-k3.1-pro:
     name: opencode
     version: 1.18.33
-    model: kimi-k3
+    model: kimi-k3.1-pro
     modes: [internet, skills]
     paid_by: api_key
     cost_limit_usd: 20.0

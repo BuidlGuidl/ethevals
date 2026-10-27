@@ -46,6 +46,15 @@ def test_catalog_hashes_every_real_task_with_harbors_package_digest(tmp_path):
         "sha256:" + Packager.compute_content_hash(path)[0] for path in paths]
 
 
+def test_catalog_lists_the_jobs_model_names(tmp_path):
+    from ethevals.job_config import load_job
+    from ethevals.jobs import write_catalog
+
+    write_catalog([task_folder(tmp_path)], tmp_path / "catalog")
+    catalog = json.loads((tmp_path / "catalog/catalog.json").read_text())
+    assert catalog["models"] == [model.name for model in load_job().models.values()]
+
+
 @pytest.mark.parametrize("pillar", ["security", "transactions", "building"])
 def test_catalog_refuses_removed_pillars(tmp_path, pillar):
     task = task_folder(tmp_path)

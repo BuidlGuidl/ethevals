@@ -14,6 +14,7 @@ import { TooltipProvider } from "../components/ui/tooltip";
 import { Score, Hint, formulas, heat, percent, money } from "../components/scores";
 import { updateQuery, useQuery } from "../components/url-state";
 import { repo } from "../components/shell";
+import { readMode } from "../src/modes";
 
 type Sort = "overall" | Pillar | "costPerPass";
 const verdictLabels = { passed: "PASS", failed: "FAIL", error: "ERROR" };
@@ -128,8 +129,8 @@ export default function Board({ data }: { data: BoardData }) {
 }
 
 export function Results({ data, query }: { data: BoardData; query: URLSearchParams }) {
-  const mode: Mode = query.get("mode") === "skills" ? "skills" : query.get("mode") === "vanilla" ? "vanilla" : "internet";
-  const evalsMode: Mode = query.get("evals") === "skills" ? "skills" : query.get("evals") === "vanilla" ? "vanilla" : "internet";
+  const mode = readMode(query.get("mode"));
+  const evalsMode = readMode(query.get("evals"));
   const [sort, setSort] = useState<{ key: Sort; ascending: boolean }>({ key: "overall", ascending: false });
   const pushed = useRef(false);
   const opener = useRef<HTMLElement | null>(null);

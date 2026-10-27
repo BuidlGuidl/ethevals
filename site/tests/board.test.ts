@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Board, { Detail, Results } from "../app/board";
 import { buildBoard, trialCost, agentKey, type Eval, type Row, type Agent } from "../src/board";
-import { loadBoard, parseRows } from "../src/load";
+import { currentRows, loadBoard, parseRows } from "../src/load";
 import { decodeSelection, encodeSelection } from "../src/selection";
 import { Configuration } from "../components/configuration";
 
@@ -142,14 +142,15 @@ test("cost adds both roles and keeps a missing price unknown", () => {
   assert.equal(trialCost(row({ model_cost_usd: 0, judge_cost_usd: 0 })), 0);
 });
 
-test("the agent switch and skills details use their own scores", () => {
+test("the mode switch disables upcoming modes and retains skills details", () => {
   const data = buildBoard([{ ...evaluation, modes: ["vanilla", "internet", "skills"] }],
     [row(), row({ mode: "skills", ...failure })]);
   const html = renderToStaticMarkup(createElement(Board, { data }));
   assert.ok(html.includes('aria-label="Which results"'));
   assert.match(html, /aria-checked="true"[^>]*>Internet<\/button>/);
-  assert.match(html, /aria-checked="false"[^>]*>Internet \+ Skills<\/button>/);
-  assert.ok(html.includes('>Model only</button>'));
+  for (const label of ["Internet + Skills", "Model only"]) {
+    assert.match(html, new RegExp(`<button[^>]*disabled=""[^>]*>${label.replace("+", "\\+")}</button>`));
+  }
   const panel = renderToStaticMarkup(createElement(Detail, {
     data, selection: { evaluation, pillar: "concepts", agent, mode: "skills", run: 1 },
     onSelect: () => {},
@@ -255,23 +256,25 @@ test("trial links keep their task, mode, and list context and reject trials outs
   assert.equal(decode({ ...input, eval: undefined }), null);
 });
 
-test("each results table reads its own mode from the URL", () => {
+test("both results tables fall back to Internet for unavailable URL modes", () => {
   const data = buildBoard([{ ...evaluation, modes: ["internet", "skills", "vanilla"] }], [
     row(), row({ mode: "skills", ...failure }), row({ mode: "vanilla", agent: null }),
   ]);
-  for (const [query, leaderboard, matrix] of [
-    ["mode=vanilla&evals=skills", "Model", "Internet + Skills"],
-    ["mode=vanilla&evals=internet", "Model", "Internet"],
-    ["mode=skills&evals=vanilla", "Configuration", "Model only"],
+  for (const query of [
+    "mode=vanilla&evals=skills",
+    "mode=vanilla&evals=internet",
+    "mode=skills&evals=vanilla",
+    "mode=unknown&evals=unknown",
+    "mode=internet&evals=internet",
   ]) {
     const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams(query) }));
     const top = html.slice(html.indexOf('id="leaderboard"'), html.indexOf('id="evals"'));
     const bottom = html.slice(html.indexOf('id="evals"'));
-    assert.ok(top.includes(`class="row-label">${leaderboard}<small>`));
-    assert.ok(bottom.includes(`<h2>Results by task · ${matrix}</h2>`));
-    if (matrix === "Internet + Skills") assert.ok(bottom.includes("0 of 1 trials passed. Open details."));
-    else assert.ok(bottom.includes("1 of 1 trials passed. Open details."));
-    assert.ok(top.includes(leaderboard === "Model" ? "model-a. 100%. Open details." : "agent-a / model-a. 0%. Open details."));
+    assert.ok(top.includes('class="row-label">Configuration<small>'));
+    assert.ok(bottom.includes("<h2>Results by task · Internet</h2>"));
+    assert.ok(bottom.includes("1 of 1 trials passed. Open details."));
+    assert.ok(top.includes("agent-a / model-a. 100%. Open details."));
+    for (const section of [top, bottom]) assert.match(section, /aria-checked="true"[^>]*>Internet<\/button>/);
   }
 });
 
@@ -285,8 +288,10 @@ test("details link directly to the trial trajectory and show its payment source"
 test("configurations show one agent logo beside the name, or one provider logo for model-only rows", () => {
   for (const [model, agent, provider, icon, label] of [
     ["anthropic/claude-opus-5-5", "claude-code", "claude", "claude-code"],
-    ["openai/gpt-5.5", "codex", "openai", "codex"],
-    ["openrouter/moonshotai/kimi-k3", "opencode", "openrouter", "opencode", "Kimi K3"],
+    ["anthropic/claude-fable-5-1", "claude-code", "claude", "claude-code", "Fable 5.1"],
+    ["openai/gpt-6.1-sol", "codex", "openai", "codex", "GPT-6.1 Sol"],
+    ["openai/gpt-6-astra", "codex", "openai", "codex", "GPT-6 Astra"],
+    ["openrouter/moonshotai/kimi-k3.1-pro", "opencode", "openrouter", "opencode", "Kimi K3.1 Pro"],
     ["openrouter/z-ai/glm-5.3", "opencode", "openrouter", "opencode", "GLM 5.3"],
     ["openrouter/deepseek/deepseek-v4.1-flash-1017", "opencode", "openrouter", "opencode", "DeepSeek V4.1 Flash"],
     ["openrouter/x-ai/grok-4.7", "opencode", "openrouter", "opencode", "Grok 4.7"],
@@ -318,4 +323,16 @@ test("demo loading is explicit and produces scores from fixture rows and catalog
   assert.deepEqual([data.demo, cell.passed, cell.total, cell.score], [true, 2, 3, 2 / 3]);
   assert.throws(() => loadBoard({ ETHEVALS_DEMO: "true" }), /ETHEVALS_DEMO must be 0 or 1/);
   assert.throws(() => loadBoard({ ETHEVALS_DEMO: "1", ETHEVALS_ROWS: "rows.jsonl" }), /Choose ETHEVALS_DEMO or ETHEVALS_ROWS/);
+});
+
+test("the board keeps a listed model and drops a retired model with a current task hash", () => {
+  const rows = currentRows([row(), row({ model: "retired-model" })], {
+    evals: [evaluation], skills_hash: "current-pack", models: ["model-a"],
+  });
+  assert.deepEqual(rows.map((entry) => entry.model), ["model-a"]);
+  const data = buildBoard([evaluation], rows);
+  assert.deepEqual(data.tables.internet.agents, [agent]);
+  const html = renderToStaticMarkup(createElement(Board, { data }));
+  assert.ok(html.includes("agent-a / model-a. 100%. Open details."));
+  assert.equal(html.includes("retired-model"), false);
 });
