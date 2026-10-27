@@ -7,6 +7,7 @@ import { connect, prepareAction, submitAction, dismiss, visibleValues } from './
 import { CouldNotDrive } from './control-vocabulary.mjs';
 import { walletWrites, walletIdle } from './rpc-policy.mjs';
 import { createHarness, until } from './harness.mjs';
+import { warmSavings } from './warm.mjs';
 
 export const CHECKS = ['deposit_usdc', 'shows_deposit', 'shows_apy', 'withdraw_partial', 'withdraw_all',
   'deposit_usdt_leftover_allowance', 'refuses_over_cap'];
@@ -36,7 +37,7 @@ let active;
 const started = Date.now();
 
 try {
-  harness = await createHarness({ workspace, output, sourceContext: process.argv[4] || '/chain/chain_context.json', funding });
+  harness = await createHarness({ workspace, output, sourceContext: process.argv[4] || '/chain/chain_context.json', funding, warm: warmSavings });
   const { mainRpc, account, sourceBlock } = harness;
   const initial = await reserve(mainRpc);
   await saveJson('fixture.json', { address: account.address, sourceBlock, ...initial });
@@ -52,7 +53,7 @@ try {
       }
     } });
     await connect(active.page, account.address);
-    await until(async () => (await visibleValues(active.page, 'USDC')).percentages.length > 0, 8000);
+    await until(async () => (await visibleValues(active.page, 'USDC')).percentages.length > 0, 30_000);
     return active;
   }
   async function seedUSDC() {
