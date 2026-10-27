@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import type { Mode } from "../src/board";
-import { modeNames } from "../src/labels";
+import { modelOnlyNote, modeNames } from "../src/labels";
 import { isLiveMode } from "../src/modes";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 const descriptions = {
-  vanilla: "Measures what the model knows from pre-training, with a plain call to the provider.",
+  vanilla: modelOnlyNote,
   skills: "Measures whether giving agents skills makes them better at Ethereum work.",
 };
 // Each tab draws its own border: solid when live, dashed when coming soon.
