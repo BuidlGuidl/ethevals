@@ -41,6 +41,7 @@ Each test is one check. The reward is 1 only when every check passes.
 | `test_creatorEarnsFees` | The creator receives 1% of gross trades or 1% on top of net trades, and a stranger receives none | fees |
 | `test_everyoneCanSellBack` | Several buyers can each sell their full balance and recover ETH | curve accounting |
 | `test_curvesAreSeparate` | Buying one token changes neither another token's price nor its ability to graduate | curve accounting |
+| `test_graduationSpendsOnlyItsCurve` | Graduation leaves another curve's reserve and its own creator's unclaimed fees in place | curve accounting |
 
 ## Why it matters
 
@@ -69,5 +70,6 @@ Blocking token deposits before migration is one defence against a stranger's ope
 - The opening price must fall between 0.8 and 1.25 times the last buy's average price. The average uses ETH spent after refunds and tokens received. This band allows the creator fee and price movement within the last chunk.
 - The stranger buys near graduation and donates 0.1 ETH against a tiny token amount. A snapshot control repeats the buys, graduation, and final sale without donations or `sync`. The seeded sequence cannot leave the stranger with more ETH than the control. Both sequences withdraw the WETH received from the final sale.
 - For buy value V, the creator fee falls between V/101 and V/100. For seller receipts R, it falls between R/100 and R/99. The combined payment allows four wei for rounding.
+- The graduation check funds a second curve from another creator, then graduates the first without claiming. Fees can reach the creator during graduation or through a later `claimFees`.
 - After graduation, curve calls can revert or leave the caller's ETH and token balances unchanged. An unfunded curve's graduation can revert or return, but its pair must hold no ETH.
 - Unused supply can stay in the launchpad or burn. The checks do not prescribe a curve formula or inspect its storage.

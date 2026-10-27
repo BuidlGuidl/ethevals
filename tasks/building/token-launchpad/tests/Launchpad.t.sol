@@ -285,4 +285,26 @@ contract LaunchpadTest is Test {
         assertEq(afterOtherTrades.spent, baseline.spent, "other curve changes no payment");
         assertEq(afterOtherTrades.received, baseline.received, "other curve changes no price");
     }
+
+    function test_graduationSpendsOnlyItsCurve() public {
+        address first = create();
+        address otherCreator = makeAddr("other creator");
+        vm.prank(otherCreator);
+        address second = pad.create("Other", "OTH");
+        address third = makeAddr("third buyer");
+        vm.deal(third, 10 ether);
+        buy(second, third, 2 ether);
+        uint256 buyerBefore = buyer.balance;
+        // Fees paid during graduation count, so the creator's balance is read before it.
+        uint256 creatorBefore = creator.balance;
+        fill(first);
+        uint256 spent = buyerBefore - buyer.balance;
+        vm.prank(creator);
+        try pad.claimFees(first) {} catch {}
+        uint256 paid = creator.balance - creatorBefore;
+        assertGe(paid + 4, spent / 101, "graduation keeps the creator's unclaimed fees");
+        assertLe(paid, spent / 100 + 4, "the creator gets only this curve's fees");
+        // The other curve's buyer still recovers ETH from its own reserve.
+        sellAll(second, third);
+    }
 }
