@@ -20,7 +20,7 @@ export async function until(fn, timeout = 20_000) {
 }
 
 // All callbacks and funding data come from verifier-owned task files.
-export async function createHarness({ workspace, output, sourceContext = '/chain/chain_context.json', funding, prepare = async () => {} }) {
+export async function createHarness({ workspace, output, sourceContext = '/chain/chain_context.json', funding, prepare = async () => {}, warm }) {
   const processes = [];
   let browser;
   let preview;
@@ -73,6 +73,7 @@ export async function createHarness({ workspace, output, sourceContext = '/chain
     await prepare(mainRpc);
     const account = privateKeyToAccount(generatePrivateKey());
     await fundWallet(mainRpc, account, funding);
+    await warm?.(mainRpc, account);
     let snapshot = await rpc(mainRpc, 'evm_snapshot');
     async function reset() {
       if (active) { await active.context.close(); active = null; }

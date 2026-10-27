@@ -127,6 +127,9 @@ A page that reads them shows holders what the governor will do. A page that gues
   - The free check skips the judge, and the code checks still separate the reference page from the untouched starter.
 - The test proposals exist only on the verifier's fork, so the agent's chain never shows the cases the checks use.
 - Pages here make many RPC reads per block, which a public RPC would throttle. No check covers that load.
+- **Slow reads on the verifier's fork.** The fork loads chain state on first read, and each journey's reset drops what it loaded.
+  Before the first snapshot, setup reads the governance views a holder's page uses, for every proposal, holder and the verifier's wallet, so page reads stay on the fork.
+  A vote control gets 20 seconds to enable.
 - The verifier's browser and its libraries are root-only, so the agent can't use or change them. With internet access, an agent can still download a browser and the system libraries it needs, and test its own page.
 
 Run these free commands from the repository root:
