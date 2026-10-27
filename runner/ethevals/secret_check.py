@@ -74,13 +74,19 @@ def secret_values(config: JobSettings, paths: list[Path]) -> dict[str, set[bytes
     return values
 
 
-def check_folder(folder: Path, secrets: dict[str, set[bytes]]) -> tuple[list[str], str]:
-    """Check every filename and byte, including binary files, and return names and a digest."""
+def check_folder(folder: Path, secrets: dict[str, set[bytes]], files: set[str] | None = None) -> tuple[list[str], str]:
+    """Check every filename and byte, including binary files, and return names and a digest.
+    `files`, if given, collects the paths that matched."""
     found, digest = set(), hashlib.sha256()
     overlap = max((len(value) for values in secrets.values() for value in values), default=1) - 1
 
-    def matches(data):
-        found.update(name for name, values in secrets.items() if any(value in data for value in values))
+    def matches(data, where=None):
+        names = {name for name, values in secrets.items() if any(value in data for value in values)}
+        found.update(names)
+        if names and files is not None:
+            # A file name that holds a secret is itself private.
+            files.add(where or "a file name")
+        return bool(names)
 
     try:
         if folder.is_symlink() or not folder.is_dir():
@@ -90,19 +96,19 @@ def check_folder(folder: Path, secrets: dict[str, set[bytes]]) -> tuple[list[str
             if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
                 raise ValueError("Publication forbids symlinks and special files")
             name = path.relative_to(folder).as_posix().encode()
-            matches(name)
+            where = None if matches(name) else name.decode()
             # Artifact uploads keep files only, so empty folders stay out of the digest.
             if stat.S_ISDIR(mode):
                 continue
             if path.name == RECEIPT and path.parent == folder:
-                matches(path.read_bytes())
+                matches(path.read_bytes(), where)
                 continue
             digest.update(len(name).to_bytes(8) + name)
             digest.update(path.stat().st_size.to_bytes(8))
             tail = b""
             with path.open("rb") as file:
                 while chunk := file.read(1024 * 1024):
-                    matches(tail + chunk)
+                    matches(tail + chunk, where)
                     tail = (tail + chunk)[-overlap:] if overlap else b""
                     digest.update(chunk)
     except OSError:
@@ -151,8 +157,12 @@ def check_output(output: Path, secrets: dict[str, set[bytes]], *, require_invent
                 missing = [name for name, hashes in recorded.items() if set(hashes) - available.get(name, set())]
                 if missing:
                     raise ValueError
-            names, digest = check_folder(folder, secrets)
-            reason = f"Trial withheld: secret found for {', '.join(names)}. Rotate the credential." if names else None
+            files = set()
+            names, digest = check_folder(folder, secrets, files)
+            # CI runners are gone after the job, so name the files to say what leaked it.
+            shown = sorted(files)[:5] + ([f"{len(files) - 5} more"] if len(files) > 5 else [])
+            reason = (f"Trial withheld: secret found for {', '.join(names)} in {', '.join(shown)}. "
+                      "Rotate the credential.") if names else None
             kind = "secret"
         except (ValueError, OSError):
             names, digest = [], None
