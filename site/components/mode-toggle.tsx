@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Mode } from "../src/board";
 import { modeNames } from "../src/labels";
 import { isLiveMode } from "../src/modes";
@@ -12,10 +13,13 @@ const descriptions = {
 };
 
 function UpcomingMode({ value }: { value: keyof typeof descriptions }) {
+  const [open, setOpen] = useState(false);
   const disabled = !isLiveMode(value);
   const button = <ToggleGroupItem value={value} disabled={disabled} className="disabled:pointer-events-none">{modeNames[value]}</ToggleGroupItem>;
   if (!disabled) return button;
-  return <Tooltip disableHoverableContent><TooltipTrigger asChild><span className="inline-flex" tabIndex={0}>{button}</span></TooltipTrigger>
+  // Touch screens have no hover, so a tap opens the tooltip too. preventDefault skips Radix's close on click.
+  return <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent><TooltipTrigger asChild>
+    <span className="inline-flex" tabIndex={0} onClick={(event) => { event.preventDefault(); setOpen(true); }}>{button}</span></TooltipTrigger>
     <TooltipContent className="max-w-80"><span className="badge">Coming soon</span><p className="mt-2">{descriptions[value]}</p></TooltipContent>
   </Tooltip>;
 }
