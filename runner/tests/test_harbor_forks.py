@@ -90,9 +90,7 @@ def test_pinned_fork_keeps_its_secret_out_of_setup_agent_and_logs(tmp_path, monk
         docker("exec", name, "cast", "rpc", "anvil_setBalance", "0x0000000000000000000000000000000000001234",
                "0x7ce66c50e2840000")
         docker("exec", name, "cast", "rpc", "evm_mine")
-        source = next(path.parent.parent for path in (ROOT / "tasks").rglob("environment/docker-compose.yaml")
-                      if "chain" in yaml.safe_load(path.read_text())["services"]
-                      and not task_host_variables(path.parent.parent))
+        source = ROOT / "runner/tests/fixtures/harbor/act/send-six-decimal-token"
         task = tmp_path / source.parent.name / "fork"
         shutil.copytree(source, task)
         compose = task / "environment/docker-compose.yaml"

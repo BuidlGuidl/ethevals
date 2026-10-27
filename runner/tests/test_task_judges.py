@@ -257,8 +257,7 @@ def test_free_check_skips_nested_judges_and_preserves_programmatic_checks(tmp_pa
 def test_task_criterion_runs_in_rewardkit_and_reaches_the_row(tmp_path, confirmed):
     from ethevals.trial_rows import results_row
 
-    root = Path(__file__).resolve().parents[2]
-    task = next(path.parent.parent for path in (root / "tasks").rglob("tests/transfer.toml"))
+    task = Path(__file__).parent / "fixtures/harbor/act/send-six-decimal-token"
     tests = tmp_path / "tests"
     tests.mkdir()
     fixture = Path(__file__).parent / "fixtures/harbor/recorded-trial"
@@ -387,8 +386,7 @@ def test_claude_plan_token_does_not_reach_a_shared_verifier(tmp_path, monkeypatc
     from harbor.job import Job
     from harbor.models.job.config import JobConfig
 
-    root = Path(__file__).resolve().parents[2]
-    source = next(path.parent.parent for path in (root / "tasks").rglob("tests/transfer.toml"))
+    source = Path(__file__).parent / "fixtures/harbor/act/send-six-decimal-token"
     task = tmp_path / source.parent.name / "credential-proof"
     shutil.copytree(source, task)
     (task / "tests/transfer.toml").unlink()
@@ -466,8 +464,7 @@ def reach_host(task: Path) -> None:
 def test_plain_harbor_and_board_agree_on_a_saved_judged_chain_trial(tmp_path, monkeypatch):
     from ethevals.trial_rows import results_row
 
-    root = Path(__file__).resolve().parents[2]
-    source = next(path.parent.parent for path in (root / "tasks").rglob("tests/transfer.toml"))
+    source = Path(__file__).parent / "fixtures/harbor/act/send-six-decimal-token"
     task = tmp_path / source.parent.name / "judged-chain"
     shutil.copytree(source, task)
     reach_host(task)
