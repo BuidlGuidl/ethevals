@@ -63,8 +63,8 @@ It opens the page with an injected wallet, acting as holders it finds in public 
 | --- | --- | --- |
 | `compile` | `pnpm build` and `pnpm exec tsc --noEmit` both pass | frontend compilation |
 | `lists_every_proposal` | The page lists all five ordinary and ten test proposals | proposal discovery |
-| `status_and_tallies_match` | Captures proposal views before and after the twins' original end | governor reads |
-| `quorum_counts_for_only` | Captures the For-only quorum cases for the judge | counting rules |
+| `status_and_tallies_match` | The verifier reaches every proposal's view, before and after the twins' original end | governor reads |
+| `quorum_counts_for_only` | The verifier reaches the For+Abstain, passed and extended proposals | counting rules |
 | `end_moves_with_late_quorum` | The extended proposal accepts a For vote with weight after its twin closes | voting end |
 | `wrap_then_delegate` | Deposit and delegation calls give the holder 1,000 wrapped tokens and votes | voting power |
 | `votes_at_snapshot` | Captures old and new weights; the new proposal records 1,000 For | snapshot votes |
@@ -119,11 +119,12 @@ A page that reads them shows holders what the governor will do. A page that gues
   - Setup deploys the `token-governor` task's contracts unchanged, with OpenZeppelin 5.7.0. The timelock owns Protocol and holds 10 ETH.
   - Four holders wrap and delegate 12 million of the 100 million TOKEN. The deployer keeps the rest unwrapped. Anvil's default accounts hold nothing.
   - Voting runs in blocks and the timelock in seconds. No check depends on wall time.
-- Setup makes its keys at random inside the chain container. The agent cannot read them or the setup files.
-- The judge needs `ANTHROPIC_API_KEY` through `[verifier.env]`. It uses Opus 5.5 at high effort with `guard = "flag"`.
-  Saved-page judge runs cost $0.021 to $0.524 per trial, from usage in `reward-details.json`.
-  The largest capture exceeds the aim of less than $0.50 per trial.
-  Builds and the browser receive no model keys. The free check skips the judge.
+- Setup makes its keys at random inside the chain container. The agent can't read them or the setup files.
+- **The judge.**
+  - It's Opus 5.5 at high effort, and it needs `ANTHROPIC_API_KEY` through `[verifier.env]`. Builds and the browser get no model keys.
+  - One judge call per trial costs $0.02 to $0.52 on the saved pages. Longer pages cost more.
+  - `tests/hand-cases.json` holds 16 inputs with their right marks. Each got its mark in two separate runs.
+  - The free check skips the judge, and the code checks still separate the reference page from the untouched starter.
 - The test proposals exist only on the verifier's fork, so the agent's chain never shows the cases the checks use.
 - Pages here make many RPC reads per block, which a public RPC would throttle. No check covers that load.
 - The verifier's browser and its libraries are root-only, so the agent can't use or change them. With internet access, an agent can still download a browser and the system libraries it needs, and test its own page.

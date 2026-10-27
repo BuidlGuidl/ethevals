@@ -52,3 +52,9 @@ Setup generates random keys inside the chain container.
 The verifier finds holders through public logs and impersonates them only on its fork.
 
 This decision changes neither result identity nor paid-run admission.
+
+## Known gaps
+
+- The judge reads text from the agent's page, so a page could add words aimed at the judge. `guard = "flag"` records such an attempt in `reward-details.json` without changing the reward. It flagged none of the 16 saved-page runs.
+- A judged trial costs one judge call, up to $0.52 on the longest saved page, and a plain Harbor run needs the user's own judge key.
+- The canceled and already-voted checks failed no saved page. They cover cases a page could get wrong, not misses seen in trials.
