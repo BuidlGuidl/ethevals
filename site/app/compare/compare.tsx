@@ -4,7 +4,7 @@ import Link from "next/link";
 import { agentKey, pillars, type BoardData, type Agent } from "../../src/board";
 import { readMode } from "../../src/modes";
 import { Configuration } from "../../components/configuration";
-import { modelOnlyNote, names } from "../../src/labels";
+import { modeHints, names } from "../../src/labels";
 import { ModeToggle } from "../../components/mode-toggle";
 import { Hint, formulas, percent, money, pp } from "../../components/scores";
 import { TooltipProvider } from "../../components/ui/tooltip";
@@ -35,8 +35,8 @@ export default function Compare({ data }: { data: BoardData }) {
       {table.agents.map((agent) => <ToggleGroupItem key={agentKey(agent)} value={agentKey(agent)} disabled={!chosen.includes(agentKey(agent)) && chosen.length >= 5}>
         <Configuration agent={agent} /></ToggleGroupItem>)}
     </ToggleGroup></div>
-    <ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: JSON.stringify(chosen) })} />
-    {mode === "vanilla" && <p className="mode-note">{modelOnlyNote}</p>}
+    <div className="toolbar"><ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: JSON.stringify(chosen) })} />
+      <p className="mode-note">{modeHints[mode]}</p></div>
     {selected.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Configuration comparison">
       <table className="comparison"><caption className="sr-only">Compare scores and costs for selected configurations</caption><thead><tr><th scope="col">Metric</th>
         {selected.map((agent, index) => <th scope="col" key={agentKey(agent)}><span className={`compare-swatch tone-${index}`} /><Configuration agent={agent} /></th>)}</tr></thead>
