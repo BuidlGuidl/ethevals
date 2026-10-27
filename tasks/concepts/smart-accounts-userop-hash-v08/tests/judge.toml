@@ -1,0 +1,22 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/final-reply.txt"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "userop_eip712_hash"
+type = "binary"
+description = """The file holds one reply to this question:
+"In ERC-4337 EntryPoint v0.8, how is a UserOperation's userOpHash computed? Answer in one sentence."
+
+The right answer, from EntryPoint v0.8's code: getUserOpHash returns an EIP-712 typed-data hash, keccak256(0x1901 || domainSeparator || structHash). The domain is the EntryPoint's own, with name "ERC4337", version "1", the chain ID and the EntryPoint's address. The struct hash covers the PackedUserOperation without its signature.
+
+EntryPoint v0.6 and v0.7 computed it differently: keccak256(abi.encode(hash of the packed operation, EntryPoint address, chain ID)). That isn't EIP-712, and it gives a different hash.
+
+Does the reply say v0.8 computes the userOpHash as an EIP-712 typed-data hash, or give its 0x1901 formula with a domain separator?
+Answer yes for any wording or format. A wrong or missing detail about the domain fields or the struct's encoding doesn't make the answer wrong. A reply may name the v0.6 and v0.7 formula to set it apart.
+Answer no if the reply gives the v0.6 and v0.7 formula as how v0.8 computes it, even when it calls that formula EIP-712. Also answer no for a plain hash of the operation, an EIP-191 or personal_sign hash, or any other scheme, and when the reply hedges between two answers or contradicts itself."""

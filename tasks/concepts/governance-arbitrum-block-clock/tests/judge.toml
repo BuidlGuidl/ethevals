@@ -1,0 +1,22 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/final-reply.txt"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "l1_clock_seven_days"
+type = "binary"
+description = """The file holds one reply to this question:
+"A Governor on Arbitrum One uses block.number as its clock, with votingPeriod = 50,400. About how long does a vote stay open? Answer with the duration, then explain in one sentence."
+
+The right answer, from Arbitrum's docs: inside a contract on Arbitrum One, block.number returns an approximate Ethereum L1 block number, not Arbitrum's own block number. L1 blocks come about every 12 seconds, so 50,400 of them last about 604,800 seconds, which is about 7 days or one week. Missed L1 slots can make it a little longer.
+
+Arbitrum's own blocks come about every quarter second, and counting those gives about 3.5 hours, which is wrong here.
+
+Does the reply give about 7 days, or the same duration in another unit, as how long the vote stays open?
+Answer yes for any wording or format. A duration a little over 7 days, or a narrow range around it, is right. A reply may name the 3.5-hour figure to set it apart.
+Answer no if the reply gives about 3.5 hours, another duration, or no duration as its answer, even next to 7 days. Also answer no if the reply hedges between two durations or contradicts itself."""

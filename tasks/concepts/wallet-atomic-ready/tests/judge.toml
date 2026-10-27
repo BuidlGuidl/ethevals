@@ -1,0 +1,24 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/final-reply.txt"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "supported_now_ready_upgrade"
+type = "binary"
+description = """The file holds one reply to this question:
+"Under EIP-5792, a wallet's wallet_getCapabilities reports the atomic capability for a chain. What is the difference between status "supported" and status "ready"? Answer in one sentence."
+
+The right answer, from EIP-5792:
+- "supported" means the wallet will execute the calls atomically now.
+- "ready" means the wallet can upgrade to "supported" atomic execution, pending the user's approval.
+
+EIP-5792 doesn't name the upgrade, so any account change the wallet makes with the user's approval, such as an EIP-7702 delegation, counts as the upgrade. The reply doesn't need to mention approval.
+
+Does the reply give both meanings this way?
+Answer yes for any wording, order, or format, including a reply that repeats the question or adds correct detail.
+Answer no if the reply swaps the meanings, says "supported" still needs setup or an upgrade, says "ready" already runs atomically, leaves out either state's meaning, hedges between two meanings, or gives any other meaning."""

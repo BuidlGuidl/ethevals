@@ -1,0 +1,90 @@
+{
+  "note": "Replies the judge must mark correctly. 'want' is the correct mark: right passes the quiz, wrong fails it.",
+  "cases": [
+    {
+      "want": "right",
+      "label": "the oracle's reply",
+      "reply": "An EIP-712 typed-data hash. EntryPoint v0.8 combines the UserOperation struct hash with its ERC4337 version 1 domain, chain ID, and EntryPoint address."
+    },
+    {
+      "want": "right",
+      "label": "opens with \"The\"",
+      "reply": "The userOpHash is the EIP-712 typed-data hash of the PackedUserOperation under the EntryPoint's own domain."
+    },
+    {
+      "want": "right",
+      "label": "formula only",
+      "reply": "keccak256(0x1901 ‖ domainSeparator ‖ structHash), where the domain is \"ERC4337\", version \"1\", the chain ID and the EntryPoint as verifyingContract."
+    },
+    {
+      "want": "right",
+      "label": "sets the old formula apart",
+      "reply": "Unlike v0.7's keccak256(abi.encode(userOp.hash(), entryPoint, chainId)), v0.8 hashes the operation as EIP-712 typed data under the EntryPoint's domain separator."
+    },
+    {
+      "want": "right",
+      "label": "names toTypedDataHash",
+      "reply": "getUserOpHash returns MessageHashUtils.toTypedDataHash(getDomainSeparatorV4(), userOp.hash(...)), which is standard typed structured data hashing."
+    },
+    {
+      "want": "right",
+      "label": "wrong domain version",
+      "reply": "It's an EIP-712 hash of the packed UserOperation fields, with a domain whose version is \"0.8\" and that includes the chain ID and EntryPoint address."
+    },
+    {
+      "want": "right",
+      "label": "mentions the EIP-7702 override",
+      "reply": "As EIP-712 typed data: the PackedUserOperation struct hash, with the EIP-7702 delegate standing in for initCode when used, under the EntryPoint's domain."
+    },
+    {
+      "want": "right",
+      "label": "a real reply (formula and domain)",
+      "reply": "**An EIP-712 typed-data hash.**\n\n`userOpHash = keccak256(0x1901 || domainSeparator || structHash)`, using the `\"ERC4337\"`/`\"1\"` domain bound to the chain ID and EntryPoint address, and the typed `PackedUserOperation` struct hash excluding `signature`, with EIP-7702’s `initCode` hash adjustment when applicable."
+    },
+    {
+      "want": "right",
+      "label": "a real reply (domain and struct fields)",
+      "reply": "**As an EIP-712 typed-data hash.**\n\nIn v0.8, `getUserOpHash` returns `keccak256(0x1901 ‖ domainSeparator ‖ structHash)`, where:\n\n- **Domain:** name `\"ERC4337\"`, version `\"1\"`, the chain ID, and the EntryPoint address as `verifyingContract`.\n- **Struct hash:** the `PackedUserOperation` fields (sender, nonce, and hashes of initCode, callData and paymasterAndData, plus accountGasLimits, preVerificationGas and gasFees). For EIP-7702 accounts, the delegate address is folded into the initCode hash.\n\nThis replaces v0.7's ad-hoc `keccak256(abi.encode(hash(userOp), entryPoint, chainId))`."
+    },
+    {
+      "want": "wrong",
+      "label": "a real reply (the old formula)",
+      "reply": "Packed-op hash bound to EntryPoint and chain.\n\nIt is `keccak256(abi.encode(userOp.hash(), address(entryPoint), block.chainid))`, with `userOp.hash()` hashing sender, nonce, initCode/callData hashes, packed gas fields, and paymasterAndData hash while excluding `signature`."
+    },
+    {
+      "want": "wrong",
+      "label": "a real reply (the old formula, spelled out)",
+      "reply": "**Short phrase:** It's `keccak256(abi.encode(keccak256(packUserOp(userOp)), block.chainid, address(this)))` — a keccak of the packed UserOperation, domain-separated by chain ID and the EntryPoint address.\n\n**One sentence:** Specifically, the inner pack is `abi.encodePacked(sender, nonce, keccak256(initCode), keccak256(callData), 0, 0, 0, keccak256(paymasterAndData))` — i.e., every field except the `signature` (treated as empty) and the bundler-adjustable gas fields (`accountGasLimits`, `gasFees`, `preVerificationGas`, all zeroed) — so the account/paymaster signs a hash that stays valid regardless of the gas values the bundler later fills in, and that is bound to the specific chain and EntryPoint instance."
+    },
+    {
+      "want": "wrong",
+      "label": "the old formula",
+      "reply": "keccak256(abi.encode(userOp.hash(), address(this), block.chainid)), the same scheme as v0.7."
+    },
+    {
+      "want": "wrong",
+      "label": "the old formula called EIP-712",
+      "reply": "It's an EIP-712 style hash: keccak256(abi.encode(keccak256(packedUserOp), entryPoint, chainId)), which binds the operation to this EntryPoint and chain."
+    },
+    {
+      "want": "wrong",
+      "label": "EIP-712, then the old formula",
+      "reply": "An EIP-712 typed-data hash; concretely, v0.8 still returns keccak256(abi.encode(userOp.hash(), address(this), block.chainid))."
+    },
+    {
+      "want": "wrong",
+      "label": "hedges",
+      "reply": "Either an EIP-712 typed-data hash or keccak256(abi.encode(userOp.hash(), entryPoint, chainId)), depending on the deployment."
+    },
+    {
+      "want": "wrong",
+      "label": "EIP-191",
+      "reply": "It's an EIP-191 personal_sign hash of the packed UserOperation, prefixed with \"\\x19Ethereum Signed Message:\\n32\"."
+    },
+    {
+      "want": "wrong",
+      "label": "a plain hash",
+      "reply": "It's keccak256 of the ABI-encoded UserOperation with the signature field left out."
+    }
+  ]
+}

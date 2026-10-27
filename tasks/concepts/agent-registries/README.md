@@ -5,9 +5,7 @@ The answer is [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004), Trustless Age
 
 ## The instruction
 
-```text
-which ERC defines onchain identity, reputation and validation registries for AI agents? just the number please
-```
+> Which ERC defines onchain identity, reputation and validation registries for AI agents? Answer with the ERC number only.
 
 ## What it touches
 

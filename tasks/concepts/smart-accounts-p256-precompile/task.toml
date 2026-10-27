@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/smart-accounts-p256-precompile"
+description = "Check Ethereum mainnet's P-256 verification precompile and address."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["p256","precompile","eip-7951"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

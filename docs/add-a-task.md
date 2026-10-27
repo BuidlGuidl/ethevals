@@ -179,6 +179,8 @@ You pick the checks that fit your task, and you can use more than one kind:
 | a RewardKit judge file, like `tests/transfer.toml`  | the trajectory, with criteria a judge answers    |
 
 **Target.** For a quiz, you write a rule that accepts the right reply, and the check runs it on the agent's final reply.
+A rule fits a fixed-form answer: yes or no, a number, an address, an exact string, or a name.
+When the model explains the answer in its own words, a rule fails right replies, so a judge grades the final reply instead ([ADR 0016](adr/0016-quizzes-with-explained-answers-use-a-judge.md)). [`wallet-atomic-ready`](../tasks/concepts/wallet-atomic-ready) is the example, with its hand cases in `tests/hand-cases.json`.
 
 <details>
 <summary>Example target</summary>
@@ -277,7 +279,7 @@ description = "Before reporting success, did the agent confirm on-chain that the
 Lint checks every judge file against the board's rules:
 
 - Every criterion is yes-or-no, with its own name.
-- The judge reads `/logs/agent/trajectory.json`.
+- The judge reads `/logs/agent/trajectory.json`, or a quiz's judge reads only the final reply, `/logs/verifier/final-reply.txt`.
 - Its guard is `flag` or `penalize`.
 - Every criterion counts toward `all-pass`.
 
@@ -403,7 +405,7 @@ memory_mb = 1024
 `instruction.md` asks the way a person would:
 
 ```text
-which ERC defines onchain identity, reputation and validation registries for AI agents? just the number please
+Which ERC defines onchain identity, reputation and validation registries for AI agents? Answer with the ERC number only.
 ```
 
 <details>

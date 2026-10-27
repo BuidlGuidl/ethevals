@@ -50,6 +50,18 @@ def test_lint_enforces_judge_rules(tmp_path, before, after, message):
         lint_task(task)
 
 
+def test_lint_accepts_a_quiz_judge_that_reads_only_the_final_reply(tmp_path):
+    task = task_folder(tmp_path)
+    add_judge(task)
+    judge = task / "tests/judge.toml"
+    judge.write_text(judge.read_text().replace(
+        'atif-trajectory = "/logs/agent/trajectory.json"', 'files = ["/logs/verifier/final-reply.txt"]'))
+    lint_task(task)
+    judge.write_text(judge.read_text().replace("/logs/verifier/final-reply.txt", "/app/reply.txt"))
+    with pytest.raises(ValueError, match="only the final reply"):
+        lint_task(task)
+
+
 def test_lint_requires_all_pass_across_judges_and_tests(tmp_path):
     task = task_folder(tmp_path)
     add_judge(task)

@@ -1,0 +1,22 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/wallet-batch-status-600"
+description = "Check the partial onchain revert meaning of EIP-5792 status 600."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["wallet","eip-5792","batch"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[environment]
+cpus = 1
+memory_mb = 1024
