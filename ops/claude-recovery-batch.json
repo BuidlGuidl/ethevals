@@ -1,14 +1,21 @@
 {
-  "budget_usd": 12,
-  "plan_lane": 1,
+  "budget_usd": 24,
+  "plan_lane": 2,
   "selection": [
-    ["concepts/permit2-zero-expiration", "claude-code-opus-5.5", 2],
-    ["concepts/signatures-permit2-witness-string", "claude-code-opus-5.5", 1],
-    ["concepts/signatures-permit2-witness-string", "claude-code-opus-5.5", 2],
-    ["concepts/signatures-usdc-contract-permit", "claude-code-opus-5.5", 1],
-    ["concepts/signatures-usdc-contract-permit", "claude-code-opus-5.5", 2],
-    ["concepts/smart-accounts-p256-precompile", "claude-code-opus-5.5", 1],
-    ["concepts/smart-accounts-p256-precompile", "claude-code-opus-5.5", 2],
-    ["concepts/smart-accounts-userop-hash-v08", "claude-code-opus-5.5", 1]
+    [
+      "build/aave-savings-page",
+      "claude-code-opus-5.5",
+      1
+    ],
+    [
+      "build/keeper-deposits",
+      "claude-code-opus-5.5",
+      1
+    ],
+    [
+      "build/signed-votes",
+      "claude-code-opus-5.5",
+      2
+    ]
   ]
 }
