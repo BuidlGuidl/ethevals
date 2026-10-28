@@ -9,9 +9,7 @@ export const formulas = {
   overall: "Overall = mean of scored pillar scores; pillars without a score are skipped.",
   pillar: "Pillar score = mean of scored task pass rates; tasks without scores are skipped.",
   eval: "Task pass rate = passed trials ÷ scored trials; errors are excluded.",
-  cost: "$ / pass = model cost of scored trials ÷ passed trials; no passes or missing prices show –.",
   lift: "Lift = mean change over tasks scored in both modes for the same configuration, in percentage points. Overall averages paired pillar lifts.",
-  tokens: "Tokens per trial = median total model and judge tokens across scored trials.",
 };
 export function Hint({ text, children }: { text: string; children: React.ReactElement }) {
   return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent className="whitespace-pre-line">{text}</TooltipContent></Tooltip>;

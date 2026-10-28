@@ -54,9 +54,11 @@
   .navlinks a[aria-current] { @apply text-ink; box-shadow: inset 0 -2px 0 var(--color-accent); }
   .logo-flight { @apply pointer-events-none fixed z-50; transform-origin: 0 0; }
   .logo-flight svg { @apply h-full w-full; }
-  .sitefoot { @apply mx-auto flex max-w-[1440px] flex-wrap items-center gap-4 border-t border-border px-8 py-6 text-[11px] text-muted; overflow-wrap: anywhere; }
+  .sitefoot { @apply mx-auto flex max-w-[1440px] flex-wrap items-center gap-4 border-t border-border px-8 py-6 text-[13px] text-muted; overflow-wrap: anywhere; }
   .sitefoot > * { min-width: 0; }
-  .sitefoot b { @apply text-ink text-[13px]; }
+  .sitefoot b { @apply text-ink text-[14px]; }
+  .footer-description { @apply inline-flex flex-wrap items-center gap-1.5; }
+  .dataset-link { @apply inline-flex items-center gap-2; }
   .skip-link { @apply sr-only; }
   .skip-link:focus { @apply not-sr-only fixed left-4 top-4 z-[80] bg-accent px-4 py-2 text-sheet; }
   .hero { @apply mb-14 grid grid-cols-[minmax(0,1fr)] gap-4; }
@@ -70,6 +72,8 @@
   .hero-desc { @apply max-w-[940px] text-[14px] text-muted; }
   .hero-desc b { @apply text-ink font-medium; }
   .results-section { @apply mb-16 grid gap-5; }
+  .page.results-page { padding-bottom: 24px; }
+  .results-page #evals { margin-bottom: 0; }
   .section-head { @apply flex flex-wrap items-start justify-between gap-5; }
   .section-head p { @apply mt-2 max-w-[850px] text-muted; }
   .toolbar { @apply flex flex-wrap items-center gap-4; }
@@ -106,12 +110,12 @@
   .score-cell:hover { box-shadow: inset 0 0 0 2px var(--color-accent); }
   .score-cell small { @apply absolute bottom-1 right-2 text-[10px] font-medium; }
   .score-cell[data-empty="true"] { @apply bg-transparent text-dim; }
-  .cost-value { @apply block py-4 text-center text-[13px] font-semibold; }
   .table-note { @apply border-t border-border px-4 py-3 text-[11px] text-muted; }
   .read-note { @apply max-w-[1100px] border-t border-border pt-4 text-muted; }
   .read-note b { @apply text-ink; }
-  .matrix-title { @apply border-b border-border bg-tint px-4 py-3 text-xs text-green; }
-  .matrix-title::before { content: "$ "; color: var(--color-dim); }
+  .matrix-scroll { max-height: clamp(160px, calc(100svh - 240px), 72vh); overflow: auto; }
+  .matrix thead th { position: sticky; top: 0; z-index: 20; }
+  .matrix thead .row-label { z-index: 25; }
   .matrix { width: max-content; min-width: 100%; }
   .matrix thead th:not(.row-label) { @apply min-w-[132px] max-w-[180px] text-center; }
   .matrix .row-label { @apply min-w-[280px] max-w-[360px]; }
@@ -176,7 +180,8 @@
   .drawer-header h1 { @apply text-[24px]; }
   .back-button { @apply flex w-fit items-center gap-2 text-xs text-muted; }
   .detail-section { @apply grid gap-3; }
-  .eval-list section + section { @apply mt-6; }
+  .eval-list section + section { @apply mt-8; }
+  .eval-list section > h3 { @apply mb-2 border-l-2 px-3 py-2 text-[18px]; color: var(--pillar); border-color: var(--pillar); background: color-mix(in srgb, var(--pillar) 8%, transparent); }
   .eval-list-row { @apply flex min-h-11 w-full items-center gap-3 border-b border-border py-3 text-left; }
   .eval-list-row:hover { @apply bg-tint; }
   .eval-list-title { @apply mr-auto grid gap-1 text-left; }
@@ -217,16 +222,25 @@
   .issue { @apply border border-amber/30 bg-amber/5 p-3; overflow-wrap: anywhere; }
   .trajectory-links { @apply flex flex-wrap items-center gap-4; }
   .compare-page { @apply grid gap-6; }
-  .configuration-picks { @apply flex flex-wrap gap-2 border-0; }
+  .configuration-picks { @apply gap-2; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
   .configuration-picks button { @apply min-w-0 max-w-full border border-border-strong; }
-  .configuration-picks button[data-state="on"] small { @apply text-sheet/75; }
-  .pick-row { @apply grid gap-3; }
-  .comparison { @apply min-w-[700px]; }
+  .compare-picker { @apply border-y border-border; }
+  .compare-picker summary { @apply flex cursor-pointer items-center gap-3 py-3 text-[13px]; list-style: none; }
+  .compare-picker summary::-webkit-details-marker { display: none; }
+  .compare-picker summary::before { content: "+"; @apply text-accent; }
+  .compare-picker[open] summary::before { content: "−"; }
+  .compare-picker summary span { @apply ml-auto text-[11px] text-muted; }
+  .compare-picker .configuration-picks { @apply pb-4; }
+  .comparison thead th { min-width: 180px; text-align: center; }
+  .comparison thead th:first-child { min-width: 120px; text-align: left; }
+  .comparison tr > th:first-child { @apply sticky left-0 z-10 bg-sheet; }
+  .comparison thead tr > th:first-child { @apply bg-tint; }
   .comparison td, .comparison tbody th { @apply px-4 py-4 text-[13px]; }
   .comparison td { @apply text-center; }
+  .comparison tbody tr:first-child { @apply text-ink font-semibold; }
+  .comparison tbody tr:first-child td { @apply text-[20px]; }
+  .comparison tbody th { color: var(--pillar, var(--color-ink)); }
   .comparison .best { @apply bg-accent/10 text-ink font-bold; box-shadow: inset 0 -2px 0 var(--color-accent); }
-  .compare-swatch { @apply mb-2 inline-block h-2 w-2; }
-  .tone-0 { @apply bg-accent; } .tone-1 { @apply bg-green; } .tone-2 { @apply bg-amber; } .tone-3 { @apply bg-red; } .tone-4 { @apply bg-muted; }
   .how-page { @apply grid gap-16; }
   .how-hero { @apply grid gap-4; }
   .lead { @apply max-w-[900px] text-[15px] text-muted; }
@@ -323,6 +337,9 @@
   .run-stats > div { padding-inline: 8px; }
   .run-stats dd { font-size: 14px; }
   .page { padding: 28px 18px; }
+  .page.results-page { padding-bottom: 24px; }
+  .results-page #evals { margin-bottom: 0; }
+  .matrix-scroll { max-height: clamp(160px, calc(100svh - 340px), 72vh); }
   pre { padding: 16px; }
   .topnav { gap: 12px; padding-inline: 18px; }
   .brand { width: 88px; }
@@ -339,9 +356,6 @@
   .leaderboard .row-label { padding-inline: 10px; }
   .configuration b { font-size: 12px; }
   .score-cell { min-height: 58px; font-size: 19px; }
-  .matrix-scroll { max-height: 72vh; overflow: auto; }
-  .matrix thead th { position: sticky; top: 0; z-index: 20; }
-  .matrix thead .row-label { z-index: 25; }
   .matrix .row-label { min-width: 128px; width: 128px; max-width: 128px; padding: 8px 10px; }
   .matrix .row-label small { display: none; }
   .matrix .configuration small { display: block; }

@@ -6,7 +6,7 @@ import { readMode } from "../../src/modes";
 import { Configuration } from "../../components/configuration";
 import { modeHints, names } from "../../src/labels";
 import { ModeToggle } from "../../components/mode-toggle";
-import { Hint, formulas, percent, money, pp } from "../../components/scores";
+import { Hint, formulas, percent, pp } from "../../components/scores";
 import { TooltipProvider } from "../../components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "../../components/ui/toggle-group";
 import { updateQuery, useQuery } from "../../components/url-state";
@@ -19,34 +19,32 @@ export default function Compare({ data }: { data: BoardData }) {
   const defaults = [...table.agents].sort((a, b) => (table.summaries[agentKey(b)].scores.overall ?? -1) - (table.summaries[agentKey(a)].scores.overall ?? -1)).slice(0, 3).map(agentKey);
   const chosen = query.has("pick") ? parseSelection(query.get("pick"), keys) : defaults;
   const selected = chosen.map((key) => table.agents.find((agent) => agentKey(agent) === key)!);
-  const metrics: { label: string; formula: string; value: (agent: Agent) => number | null; format: (value: number | null) => string; lower?: boolean }[] = [
+  const metrics: { label: string; formula: string; value: (agent: Agent) => number | null; format: (value: number | null) => string; className?: string }[] = [
     { label: "Overall", formula: formulas.overall, value: (agent) => table.summaries[agentKey(agent)].scores.overall, format: percent },
-    ...pillars.map((pillar) => ({ label: names[pillar], formula: formulas.pillar, value: (agent: Agent) => table.summaries[agentKey(agent)].scores[pillar], format: percent })),
+    ...pillars.map((pillar) => ({ label: names[pillar], formula: formulas.pillar, value: (agent: Agent) => table.summaries[agentKey(agent)].scores[pillar], format: percent, className: `pillar-${pillar}` })),
     ...(mode === "skills" ? [{ label: "Lift from skills", formula: formulas.lift, value: (agent: Agent) => data.lifts[agentKey(agent)]?.overall ?? null, format: pp }] : []),
-    { label: "$ / pass ↓", formula: formulas.cost, value: (agent) => table.summaries[agentKey(agent)].costPerPass, format: money, lower: true },
-    { label: "Tokens per run ↓", formula: formulas.tokens, value: (agent) => table.summaries[agentKey(agent)].medianTokens, format: (value) => value === null ? "–" : value.toLocaleString("en"), lower: true },
   ];
   return <TooltipProvider delayDuration={200}><main id="main" className="page compare-page">
     {data.demo && <aside className="banner"><strong>Demo data</strong> · Invented results for a board preview.</aside>}
-    <p className="eyebrow"><Link href={`/?mode=${mode}`}>Results</Link> / Compare</p>
-    <div className="section-head"><h1>Compare configurations</h1><Link className="button" href={`/?mode=${mode}`}>← Back to results</Link></div>
-    <div className="pick-row"><p className="muted">Select up to 5:</p><ToggleGroup type="multiple" className="configuration-picks" value={chosen}
-      onValueChange={(values) => { if (values.length <= 5) updateQuery({ pick: JSON.stringify(values) }); }} aria-label="Configurations to compare">
-      {table.agents.map((agent) => <ToggleGroupItem key={agentKey(agent)} value={agentKey(agent)} disabled={!chosen.includes(agentKey(agent)) && chosen.length >= 5}>
-        <Configuration agent={agent} /></ToggleGroupItem>)}
-    </ToggleGroup></div>
+    <div className="section-head"><h1>Compare configurations</h1><Link className="text-link" href={`/?mode=${mode}`}>← Back to results</Link></div>
     <div className="toolbar"><ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: JSON.stringify(chosen) })} />
-      <p className="mode-note">{modeHints[mode]}</p></div>
+      <p className="muted">{modeHints[mode]}</p></div>
+    {table.agents.length > 0 && <details className="compare-picker" open><summary>Change configurations <span>{chosen.length} of 5 selected</span></summary>
+      <ToggleGroup type="multiple" className="configuration-picks grid border-0" value={chosen}
+      onValueChange={(values) => { if (values.length <= 5) updateQuery({ pick: JSON.stringify(values) }); }} aria-label="Configurations to compare">
+      {table.agents.map((agent) => <ToggleGroupItem key={agentKey(agent)} value={agentKey(agent)} className="justify-start text-left data-[state=on]:bg-accent/10 data-[state=on]:text-ink data-[state=on]:border-accent" disabled={!chosen.includes(agentKey(agent)) && chosen.length >= 5}>
+        <Configuration agent={agent} /></ToggleGroupItem>)}
+    </ToggleGroup></details>}
     {selected.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Configuration comparison">
-      <table className="comparison"><caption className="sr-only">Compare scores and costs for selected configurations</caption><thead><tr><th scope="col">Metric</th>
-        {selected.map((agent, index) => <th scope="col" key={agentKey(agent)}><span className={`compare-swatch tone-${index}`} /><Configuration agent={agent} /></th>)}</tr></thead>
+      <table className="comparison"><caption className="sr-only">Compare scores for selected configurations</caption><thead><tr><th scope="col">Score</th>
+        {selected.map((agent) => <th scope="col" key={agentKey(agent)}><Configuration agent={agent} /></th>)}</tr></thead>
         <tbody>{metrics.map((metric) => {
           const values = selected.map(metric.value), scored = values.filter((value): value is number => value !== null);
-          const best = metric.lower ? Math.min(...scored) : Math.max(...scored);
-          return <tr key={metric.label}><th scope="row">{metric.label}</th>{values.map((value, index) => <td key={agentKey(selected[index])} className={value !== null && value === best ? "best" : ""}>
+          const best = Math.max(...scored);
+          return <tr key={metric.label} className={metric.className}><th scope="row">{metric.label}</th>{values.map((value, index) => <td key={agentKey(selected[index])} className={scored.length > 1 && value !== null && value === best ? "best" : ""}>
             <Hint text={metric.formula}><span tabIndex={0}>{metric.format(value)}</span></Hint></td>)}</tr>;
-        })}</tbody></table></div><div className="table-note">Best value in each row is highlighted · ↓ lower is better</div></div> :
-      <div className="empty"><h3>{table.agents.length ? "Select configurations to compare" : "No configurations yet"}</h3><p>Published results supply the scores and costs.</p></div>}
+        })}</tbody></table></div><div className="table-note">Highest scores are highlighted when at least two configurations have scores. Missing scores show –.</div></div> :
+      <div className="empty"><h3>{table.agents.length ? "Select configurations to compare" : "No configurations yet"}</h3><p>{table.agents.length ? 'Open "Change configurations" to choose whose scores to compare.' : "Scores will appear when results are published."}</p></div>}
   </main></TooltipProvider>;
 }
 
