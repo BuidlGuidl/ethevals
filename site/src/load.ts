@@ -4,6 +4,7 @@ import { z } from "zod";
 import { buildBoard, layers, pillars, agentKey, type BoardData, type Eval } from "./board";
 import { rowSchema, type Row } from "./rows";
 import { siteRoot } from "./paths";
+import { taskTags } from "./areas";
 
 // This checks the JSON transport. The runner owns task declarations and hashes.
 const catalogSchema = z.object({
@@ -27,7 +28,8 @@ export function loadCatalog(filename: string): { evals: Eval[]; skills_hash: str
       n_attempts: catalog.n_attempts,
       evals: catalog.tasks.map((entry) => {
         const name = entry.id.split("/").at(-1)!.replace(/[-_]/g, " ");
-        return { ...entry, title: name.charAt(0).toUpperCase() + name.slice(1) };
+        const area = entry.area ?? taskTags[entry.id]?.area, layer = entry.layer ?? taskTags[entry.id]?.layer;
+        return { ...entry, ...(area && { area }), ...(layer && { layer }), title: name.charAt(0).toUpperCase() + name.slice(1) };
       }),
     };
   } catch (error) {

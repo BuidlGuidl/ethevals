@@ -162,3 +162,14 @@ test("the catalog loader selects demo tasks and rejects a blank area or an unkno
   writeFileSync(file, JSON.stringify({ skills_hash: "pack", n_attempts: 3, models: [], tasks: [{ ...task, layer: "pages" }] }));
   assert.throws(() => loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root), /cannot load task catalog/);
 });
+
+test("the catalog loader adds the board's area and layer tags to a listed task", (t) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "ethevals-task-tags-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(path.join(root, "demo"));
+  const task = { id: "build/swap-page", hash: "demo", pillar: "build", description: "Build a swap page.",
+    instruction: "Build a swap page.", modes: ["internet"] };
+  writeFileSync(path.join(root, "demo/catalog.json"), JSON.stringify({ skills_hash: "pack", n_attempts: 2, models: [], tasks: [task] }));
+  const [entry] = loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root).evals;
+  assert.deepEqual([entry.area, entry.layer], ["Swaps", "frontend"]);
+});
