@@ -30,6 +30,9 @@ if args.batch:
     batch = json.loads(args.batch.read_text())
     SELECTION = batch["selection"]
     BUDGET = batch["budget_usd"]
+recovery_args = ["--retry-judge-error"] if args.batch and batch.get("retry_judge_error") else []
+if recovery_args and len(SELECTION) != 1:
+    raise ValueError("Judge recovery requires exactly one selected trial")
 args.output.mkdir(parents=True, exist_ok=False)
 rows = args.output / "rows.jsonl"
 ci.write_rows(rows, ci.result_record(ci.read_rows(Path(__file__).with_name("selected-recovery-rows.jsonl"))))
@@ -40,7 +43,7 @@ for index, (task, agent, trial) in enumerate(SELECTION):
     status = ci.plan_trials(
         argparse.Namespace(output=part, restore_results=False, github_output=outputs),
         ["--tasks", f"tasks/{task}", "--agents", agent, "--modes", "internet",
-         "--trial", str(trial), "--rows", str(rows), "--budget", str(BUDGET)],
+         "--trial", str(trial), "--rows", str(rows), "--budget", str(BUDGET), *recovery_args],
     )
     if status:
         raise RuntimeError(f"Planning failed for {task}, {agent}, trial {trial}")

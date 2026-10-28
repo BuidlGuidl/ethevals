@@ -1,41 +1,6 @@
 {
-  "budget_usd": 84,
-  "plan_lane": 0,
-  "selection": [
-    [
-      "concepts/smart-accounts-userop-hash-v08",
-      "claude-code-opus-5.5",
-      2
-    ],
-    [
-      "concepts/swaps-permit2-zero-expiration",
-      "claude-code-opus-5.5",
-      1
-    ],
-    [
-      "concepts/swaps-permit2-zero-expiration",
-      "claude-code-opus-5.5",
-      2
-    ],
-    [
-      "concepts/wallet-atomic-ready",
-      "claude-code-opus-5.5",
-      1
-    ],
-    [
-      "concepts/wallet-atomic-ready",
-      "claude-code-opus-5.5",
-      2
-    ],
-    [
-      "concepts/wallet-batch-status-600",
-      "claude-code-opus-5.5",
-      1
-    ],
-    [
-      "concepts/wallet-batch-status-600",
-      "claude-code-opus-5.5",
-      2
-    ]
-  ]
+  "budget_usd": 12,
+  "plan_lane": 1,
+  "retry_judge_error": true,
+  "selection": [["act/treasury-eth-sale", "claude-code-opus-5.5", 1]]
 }
