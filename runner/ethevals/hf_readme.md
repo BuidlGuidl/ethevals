@@ -72,39 +72,44 @@ A trial passes when its reward is 1.
 
 ## Choose your agent
 
-For the treasury example, replace the `--agent` and `--model` options with those below.
-Keep the RPC URL and judge key set.
+Each example below runs the agent registries task, which needs no RPC URL or judge key.
+Choose one agent and set up its credentials.
 
 A ChatGPT or Claude plan can pay for the agent.
-It cannot pay for the judge, which still needs `ANTHROPIC_API_KEY`.
+For the treasury task, keep the RPC URL and judge key from the earlier example.
+A plan cannot pay for the judge, which still needs `ANTHROPIC_API_KEY`.
 
 <details>
 <summary>Codex with a ChatGPT plan or OpenAI API key</summary>
 
 For a ChatGPT plan, install [Codex](https://developers.openai.com/codex/cli/).
-Sign in with file storage so Harbor can copy the login into the task's container:
+Sign in and tell Harbor to use your plan login:
 
 ```sh
-codex -c 'cli_auth_credentials_store="file"' login
-export CODEX_AUTH_JSON_PATH="$HOME/.codex/auth.json"
+codex login
 export CODEX_FORCE_AUTH_JSON=YES
 ```
 
-If your login file lives elsewhere, set `CODEX_AUTH_JSON_PATH` to that file.
-The file must contain your ChatGPT plan login.
+Harbor reads `~/.codex/auth.json` and copies it into the task's container.
+If Codex uses your OS credential store, sign in with `codex -c 'cli_auth_credentials_store="file"' login` first.
+If your login file lives elsewhere, run `export CODEX_AUTH_JSON_PATH='/path/to/auth.json'`.
 See [Codex authentication](https://developers.openai.com/codex/auth) for login and storage options.
-
-Use these options:
-
-```text
---agent codex --model openai/gpt-6-astra
-```
 
 To pay through the OpenAI API instead, clear the plan settings and set your key:
 
 ```sh
 unset CODEX_FORCE_AUTH_JSON CODEX_AUTH_JSON_PATH
 export OPENAI_API_KEY='your-agent-api-key'
+```
+
+Run the task with either authentication method:
+
+```sh
+harbor run --repo https://huggingface.co/datasets/{repo} \
+  --include-task-name concepts--agent-registries \
+  --agent codex \
+  --model openai/gpt-6-astra \
+  --n-concurrent 1
 ```
 
 </details>
@@ -128,12 +133,6 @@ export CLAUDE_FORCE_OAUTH=YES
 
 `CLAUDE_FORCE_OAUTH` tells Harbor to use the plan even when the judge's Anthropic key is present.
 
-Use these options:
-
-```text
---agent claude-code --model anthropic/claude-opus-5-5
-```
-
 To pay through the Anthropic API instead, clear the plan settings and set your key:
 
 ```sh
@@ -141,7 +140,17 @@ unset CLAUDE_CODE_OAUTH_TOKEN CLAUDE_FORCE_OAUTH
 export ANTHROPIC_API_KEY='your-api-key'
 ```
 
-In this case, the Anthropic key pays for both the agent and the judge.
+For a task with an LLM judge, the Anthropic key pays for both the agent and the judge.
+
+Run the task with either authentication method:
+
+```sh
+harbor run --repo https://huggingface.co/datasets/{repo} \
+  --include-task-name concepts--agent-registries \
+  --agent claude-code \
+  --model anthropic/claude-opus-5-5 \
+  --n-concurrent 1
+```
 
 </details>
 
@@ -154,10 +163,14 @@ Set your OpenRouter key:
 export OPENROUTER_API_KEY='your-agent-api-key'
 ```
 
-Use these options:
+Run the task:
 
-```text
---agent opencode --model openrouter/moonshotai/kimi-k3.1-pro
+```sh
+harbor run --repo https://huggingface.co/datasets/{repo} \
+  --include-task-name concepts--agent-registries \
+  --agent opencode \
+  --model openrouter/moonshotai/kimi-k3.1-pro \
+  --n-concurrent 1
 ```
 
 The treasury example already uses this setup.
