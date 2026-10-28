@@ -38,6 +38,8 @@ Plan-funded agents reserve no API spend, but their criteria still need a judge k
 Harbor installs Node.js and the agent's CLI inside the task container before every trial, with a 360-second limit.
 On a slow network, add `--agent-setup-timeout-multiplier 3` to `run`.
 It scales only that limit, CI leaves it unset, and an interrupted job resumes only with the same value.
+Harbor also copies an agent's credential file into the task as root and keeps its mode, and task images run as `agent`.
+`run` therefore uploads a readable copy from a private temporary directory and deletes it afterward, so Codex's own `~/.codex/auth.json` works unchanged.
 Read [Board jobs](../docs/harbor.md#board-jobs) for payment sources, recovery, and trajectory links.
 
 Use `uv run harbor view results/local/jobs` to browse saved jobs locally.

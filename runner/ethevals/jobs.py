@@ -1,9 +1,12 @@
 """Plan missing trials and run them through Harbor."""
+from contextlib import contextmanager
 import hashlib
 import json
 import math
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from harbor.job import Job
@@ -15,7 +18,7 @@ from harbor.publisher.packager import Packager
 from pydantic import ValidationError
 
 from .files import write_whole
-from .job_config import JobSettings, check_credentials, check_judge_key, load_job
+from .job_config import JobSettings, check_credentials, check_judge_key, credential_file, load_job
 from .harbor_tasks import lint_task, task_host_variables, task_judges
 from .skills import SkillsPack, pack_skills
 from .secret_check import check_output, remember_secrets, secret_values
@@ -154,6 +157,43 @@ def budget_check(report: dict, budget: float | None, *, required=False) -> dict:
     return report
 
 
+@contextmanager
+def readable_credentials(config: JobSettings, keys: set[str]):
+    """Point Harbor at readable copies of the selected agents' credential files while trials run.
+
+    Harbor copies a credential file into the task as root and keeps its mode, and task images run as
+    `agent`, so a private file such as Codex's own `~/.codex/auth.json` is unreadable there and the
+    agent runs logged out. The copies live in a private temporary directory and go when the run ends.
+    Yields the copy for each host variable, since an agent env that fixes the variable outranks the
+    host env in Harbor. A path declared without a host variable is left to Harbor as it is.
+    """
+    sources: dict[str, Path] = {}
+    for key in sorted(keys):
+        agent = config.agents[key]
+        for credential in agent.required_files:
+            variable, path = credential_file(agent, credential, key)
+            if variable is None or not path.is_file():
+                continue
+            if sources.setdefault(variable, path) != path:
+                raise ValueError(f"{variable} names different credential files")
+    previous = {variable: os.environ.get(variable) for variable in sources}
+    with tempfile.TemporaryDirectory(prefix="ethevals-credentials-") as directory:
+        copies = {}
+        try:
+            for variable, path in sources.items():
+                copy = Path(directory) / f"{variable}-{path.name}"
+                shutil.copyfile(path, copy)
+                copy.chmod(0o644)
+                os.environ[variable] = copies[variable] = str(copy)
+            yield copies
+        finally:
+            for variable, value in previous.items():
+                if value is None:
+                    os.environ.pop(variable, None)
+                else:
+                    os.environ[variable] = value
+
+
 async def run(report: dict, config: JobSettings, output: Path, previous: list[dict], *,
               skills_pack: SkillsPack | None = None,
               publication_secrets: dict[str, set[bytes]] | None = None,
@@ -178,62 +218,64 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             raise ValueError("The task differs from the plan; plan the trials again")
         if item["judge"]:
             check_judge_key(config.judge)
-    prepared = []
-    for item in report["missing"]:
-        path = Path(item["task_path"])
-        missing = [name for name in task_host_variables(path) if not os.environ.get(name)]
-        if missing:
-            raise ValueError(f"{path}: missing {', '.join(missing)}")
-        agent = config.agents[item["agent_key"]]
-        model = config.models[agent.model]
-        check_credentials(agent, item["agent_key"])
-        kwargs = {**model.kwargs, **agent.kwargs, "version": agent.version}
-        # Harbor prefers a known name over import_path, so pass only one.
-        harbor = AgentConfig(name=None if agent.import_path else agent.name, import_path=agent.import_path,
-                             model_name=model.name, kwargs=kwargs, env=agent.env)
-        options = AgentFactory.get_agent_class_from_config(harbor).options_model
-        fields = options.model_fields if options is not None else {}
-        if model.effort is not None:
-            # OpenCode has no effort option; its model variant sets the provider's effort.
-            effort = "variant" if "variant" in fields and "reasoning_effort" not in fields else "reasoning_effort"
-            harbor.kwargs[effort] = model.effort
-        if agent.paid_by == "api_key" and "max_budget_usd" in fields:
-            harbor.kwargs["max_budget_usd"] = str(agent.cost_limit_usd)
-        if item["mode"] == "skills":
-            harbor.skills = [str(skills_path)]
-        prepared.append((item, harbor))
     rows = previous
-    for item, harbor in prepared:
-        try:
-            name = hashlib.sha256(json.dumps([item, harbor.model_dump(mode="json")], sort_keys=True).encode()).hexdigest()[:24]
-            destination = output / "jobs" / name
-            destination.mkdir(parents=True, exist_ok=True)
-            remember_secrets(destination, secrets)
-            write_whole(destination / "board.json", json.dumps(item, indent=2) + "\n", output)
-            config_path = destination / "config.json"
-            if config_path.exists():
-                try:
-                    JobConfig.model_validate_json(config_path.read_text())
-                except ValidationError:
-                    if (any(child.is_dir() for child in destination.iterdir())
-                            or (destination / "lock.json").exists() or (destination / "result.json").exists()):
-                        raise ValueError(f"{config_path}: unreadable config beside started trials; preserve the saved job")
-                    config_path.unlink()
-            job = await Job.create(JobConfig(
-                job_name=name, jobs_dir=output / "jobs", n_concurrent_trials=1, quiet=True,
-                agents=[harbor], tasks=[{"path": item["task_path"]}],
-                verifier={"env": {
-                    "REWARDKIT_JUDGE": config.judge.model,
-                    "REWARDKIT_REASONING_EFFORT": config.judge.effort,
-                    "CLAUDE_CODE_OAUTH_TOKEN": "", "REWARDKIT_FORCE_SUBSCRIPTION": "",
-                } if item["judge"] else {}}, environment={"type": "docker"},
-                agent_setup_timeout_multiplier=agent_setup_timeout_multiplier,
-            ))
-            await job.run()
-        finally:
-            check_output(output, secrets, require_inventory=True)
-            rows = fold_rows(rows, recover_rows(output))
-            write_rows(output / "rows.jsonl", rows)
+    with readable_credentials(config, {item["agent_key"] for item in report["missing"]}) as copies:
+        prepared = []
+        for item in report["missing"]:
+            path = Path(item["task_path"])
+            missing = [name for name in task_host_variables(path) if not os.environ.get(name)]
+            if missing:
+                raise ValueError(f"{path}: missing {', '.join(missing)}")
+            agent = config.agents[item["agent_key"]]
+            model = config.models[agent.model]
+            check_credentials(agent, item["agent_key"])
+            kwargs = {**model.kwargs, **agent.kwargs, "version": agent.version}
+            env = {**agent.env, **{name: copies[name] for name in agent.env if name in copies}}
+            # Harbor prefers a known name over import_path, so pass only one.
+            harbor = AgentConfig(name=None if agent.import_path else agent.name, import_path=agent.import_path,
+                                 model_name=model.name, kwargs=kwargs, env=env)
+            options = AgentFactory.get_agent_class_from_config(harbor).options_model
+            fields = options.model_fields if options is not None else {}
+            if model.effort is not None:
+                # OpenCode has no effort option; its model variant sets the provider's effort.
+                effort = "variant" if "variant" in fields and "reasoning_effort" not in fields else "reasoning_effort"
+                harbor.kwargs[effort] = model.effort
+            if agent.paid_by == "api_key" and "max_budget_usd" in fields:
+                harbor.kwargs["max_budget_usd"] = str(agent.cost_limit_usd)
+            if item["mode"] == "skills":
+                harbor.skills = [str(skills_path)]
+            prepared.append((item, harbor))
+        for item, harbor in prepared:
+            try:
+                name = hashlib.sha256(json.dumps([item, harbor.model_dump(mode="json")], sort_keys=True).encode()).hexdigest()[:24]
+                destination = output / "jobs" / name
+                destination.mkdir(parents=True, exist_ok=True)
+                remember_secrets(destination, secrets)
+                write_whole(destination / "board.json", json.dumps(item, indent=2) + "\n", output)
+                config_path = destination / "config.json"
+                if config_path.exists():
+                    try:
+                        JobConfig.model_validate_json(config_path.read_text())
+                    except ValidationError:
+                        if (any(child.is_dir() for child in destination.iterdir())
+                                or (destination / "lock.json").exists() or (destination / "result.json").exists()):
+                            raise ValueError(f"{config_path}: unreadable config beside started trials; preserve the saved job")
+                        config_path.unlink()
+                job = await Job.create(JobConfig(
+                    job_name=name, jobs_dir=output / "jobs", n_concurrent_trials=1, quiet=True,
+                    agents=[harbor], tasks=[{"path": item["task_path"]}],
+                    verifier={"env": {
+                        "REWARDKIT_JUDGE": config.judge.model,
+                        "REWARDKIT_REASONING_EFFORT": config.judge.effort,
+                        "CLAUDE_CODE_OAUTH_TOKEN": "", "REWARDKIT_FORCE_SUBSCRIPTION": "",
+                    } if item["judge"] else {}}, environment={"type": "docker"},
+                    agent_setup_timeout_multiplier=agent_setup_timeout_multiplier,
+                ))
+                await job.run()
+            finally:
+                check_output(output, secrets, require_inventory=True)
+                rows = fold_rows(rows, recover_rows(output))
+                write_rows(output / "rows.jsonl", rows)
     selected = {tuple(identity) for identity in report["selected"]}
     observed = {trial_identity(row): row for row in rows if trial_identity(row) in selected}
     return len(observed) == len(selected) and all(row["status"] != "error" for row in observed.values())

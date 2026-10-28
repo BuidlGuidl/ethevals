@@ -137,6 +137,53 @@ def test_run_forwards_the_agent_setup_timeout_multiplier(tmp_path, monkeypatch):
     assert seen == [None, 4]
 
 
+def test_run_uploads_a_readable_copy_of_each_credential_file(tmp_path, monkeypatch):
+    import asyncio
+    import os
+    import stat
+    from harbor.job import Job
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
+
+    path = job_config(tmp_path, "plan")
+    data = json.loads(path.read_text())
+    data["agents"]["local"]["required_files"] = [{"path": "${AUTH_PATH:-~/.codex/auth.json}", "policy": "plan_tokens"}]
+    path.write_text(json.dumps(data))
+    # Codex writes its own auth.json with mode 0600; Harbor copies it into the task as root and keeps the mode.
+    auth = tmp_path / "auth.json"
+    auth.write_text(json.dumps({"auth_mode": "chatgpt", "tokens": {"access_token": "offline-plan-token"}}))
+    auth.chmod(0o600)
+    monkeypatch.setenv("AUTH_PATH", str(auth))
+    config, task = load_job(path), task_folder(tmp_path)
+    report = budget_check(plan([task], config, [], n_attempts=1), 0)
+
+    class Planned(Exception):
+        pass
+
+    seen = []
+
+    async def capture(config):
+        copy = Path(os.environ["AUTH_PATH"])
+        seen.append((copy, copy.read_text(), stat.S_IMODE(copy.stat().st_mode), stat.S_IMODE(copy.parent.stat().st_mode),
+                     config.agents[0].env.get("AUTH_PATH")))
+        raise Planned
+
+    monkeypatch.setattr(Job, "create", capture)
+    with pytest.raises(Planned):
+        asyncio.run(run(report, config, tmp_path / "out", []))
+    copy, text, mode, parent_mode, agent_env = seen[0]
+    assert copy != auth and text == auth.read_text() and mode == 0o644 and parent_mode == 0o700
+    assert agent_env is None and not copy.exists() and os.environ["AUTH_PATH"] == str(auth)
+    assert stat.S_IMODE(auth.stat().st_mode) == 0o600
+
+    # An agent env that fixes the variable outranks the host env in Harbor, so the copy goes there too.
+    config.agents["local"].env["AUTH_PATH"] = str(auth)
+    with pytest.raises(Planned):
+        asyncio.run(run(report, config, tmp_path / "fixed", []))
+    copy, text, mode, _, agent_env = seen[1]
+    assert agent_env == str(copy) and copy != auth and text == auth.read_text() and mode == 0o644
+
+
 def test_opencode_gets_the_model_effort_as_its_variant(tmp_path, monkeypatch):
     import asyncio
     from harbor.job import Job
