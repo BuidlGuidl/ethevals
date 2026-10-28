@@ -29,7 +29,7 @@ export default function Compare({ data }: { data: BoardData }) {
     <div className="section-head"><h1>Compare configurations</h1><Link className="text-link" href={`/?mode=${mode}`}>← Back to results</Link></div>
     <div className="toolbar"><ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: JSON.stringify(chosen) })} />
       <p className="muted">{modeHints[mode]}</p></div>
-    {table.agents.length > 0 && <details className="compare-picker"><summary>Change configurations <span>{chosen.length} of 5 selected</span></summary>
+    {table.agents.length > 0 && <details className="compare-picker" open><summary>Change configurations <span>{chosen.length} of 5 selected</span></summary>
       <ToggleGroup type="multiple" className="configuration-picks grid border-0" value={chosen}
       onValueChange={(values) => { if (values.length <= 5) updateQuery({ pick: JSON.stringify(values) }); }} aria-label="Configurations to compare">
       {table.agents.map((agent) => <ToggleGroupItem key={agentKey(agent)} value={agentKey(agent)} className="justify-start text-left data-[state=on]:bg-accent/10 data-[state=on]:text-ink data-[state=on]:border-accent" disabled={!chosen.includes(agentKey(agent)) && chosen.length >= 5}>
