@@ -23,6 +23,9 @@ from ethevals.trial_rows import SCHEMA_VERSION, fold_rows, previous_rows, read_r
 
 BASE_BRANCH = "main"
 RESULTS_BRANCH = "ci/results"
+# Each lane is one GitHub concurrency group, so it runs one trial at a time.
+PLAN_LANES = 2  # trials at once on one plan credential
+KEY_LANES = 16  # key-paid trials at once; GitHub Free runs 20 jobs, so 4 runners stay free for plan lanes
 
 
 def command(*args, **kwargs):
@@ -70,7 +73,7 @@ def plan_trials(args, run_args):
     report = json.loads(captured.getvalue())
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     # A zero CI budget disables even plan-paid trials whose API reserve is zero.
-    scheduled, matrix, plan_counts = [], [], {}
+    scheduled, matrix, plan_counts, key_count = [], [], {}, 0
     if report["within_budget"] and options.budget and options.budget > 0:
         for row in report["missing"]:
             group = config.agents[row["agent_key"]].name if row["paid_by"] == "plan" else ""
@@ -81,10 +84,14 @@ def plan_trials(args, run_args):
             item = {**row, "task_path": os.path.relpath(row["task_path"])}
             scheduled.append({"missing": [item], "selected": [trial_identity(row)],
                               "missing_trials": 1, "worst_case_usd": row["worst_case_usd"]})
-            matrix.append({"index": index, "task_id": row["task_id"], "agent_key": row["agent_key"],
-                           "mode": row["mode"], "trial": row["trial"], "plan_group": group})
             if group:
+                lane = f"plan-{group}-{plan_counts.get(group, 0) % PLAN_LANES}"
                 plan_counts[group] = plan_counts.get(group, 0) + 1
+            else:
+                lane = f"key-{key_count % KEY_LANES}"
+                key_count += 1
+            matrix.append({"index": index, "task_id": row["task_id"], "agent_key": row["agent_key"],
+                           "mode": row["mode"], "trial": row["trial"], "plan_group": group, "lane": lane})
     (args.output / "trials.json").write_text(json.dumps(scheduled, indent=2) + "\n")
     deferred = len(report["missing"]) - len(scheduled)
     if deferred:

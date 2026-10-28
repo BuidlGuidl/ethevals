@@ -176,10 +176,10 @@ def test_ci_plan_groups_plan_trials_and_keeps_key_trials_independent(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
     matrix = json.loads(emitted["matrix"])["include"]
-    assert [(row["agent_key"], row["trial"], row["plan_group"]) for row in matrix] == [
-        ("local", 1, "nop"), ("local", 2, "nop"),
-        ("other-model", 1, "nop"), ("other-model", 2, "nop"),
-        ("key", 1, ""), ("key", 2, "")]
+    assert [(row["agent_key"], row["trial"], row["plan_group"], row["lane"]) for row in matrix] == [
+        ("local", 1, "nop", "plan-nop-0"), ("local", 2, "nop", "plan-nop-1"),
+        ("other-model", 1, "nop", "plan-nop-0"), ("other-model", 2, "nop", "plan-nop-1"),
+        ("key", 1, "", "key-0"), ("key", 2, "", "key-1")]
     assert emitted["scheduled_trials"] == "6"
     assert all(not Path(row["task_path"]).is_absolute()
                for report in json.loads((output / "trials.json").read_text()) for row in report["missing"])
