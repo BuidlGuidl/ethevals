@@ -1,4 +1,4 @@
-"""Plan the seven trials selected on October 28 with the existing CI planner."""
+"""Plan selected recovery trials with the existing CI planner."""
 import argparse
 import json
 from pathlib import Path
@@ -24,7 +24,12 @@ SOURCE_COMMIT = "a976a77ae8c3943c1611359d1e169ce1101a8971"
 parser = argparse.ArgumentParser()
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--github-output", type=Path, required=True)
+parser.add_argument("--batch", type=Path)
 args = parser.parse_args()
+if args.batch:
+    batch = json.loads(args.batch.read_text())
+    SELECTION = batch["selection"]
+    BUDGET = batch["budget_usd"]
 args.output.mkdir(parents=True, exist_ok=False)
 rows = args.output / "rows.jsonl"
 ci.write_rows(rows, ci.result_record(ci.read_rows(Path(__file__).with_name("selected-recovery-rows.jsonl"))))
@@ -60,7 +65,7 @@ report = ci.budget_check({
     "worst_case_usd": sum(entry["worst_case_usd"] for entry in scheduled),
 }, BUDGET, required=True)
 if not report["within_budget"]:
-    raise RuntimeError("The seven-trial selection exceeds its reviewed budget")
+    raise RuntimeError("The selected trials exceed their reviewed budget")
 (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
 (args.output / "trials.json").write_text(json.dumps(scheduled, indent=2) + "\n")
 with args.github_output.open("a") as output:

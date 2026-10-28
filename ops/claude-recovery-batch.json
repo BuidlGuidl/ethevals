@@ -1,0 +1,7 @@
+{
+  "budget_usd": 24,
+  "selection": [
+    ["concepts/agent-registries", "claude-code-fable-5.1", 1],
+    ["concepts/agent-registries", "claude-code-opus-5.5", 1]
+  ]
+}
