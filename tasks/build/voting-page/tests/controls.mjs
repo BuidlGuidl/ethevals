@@ -57,7 +57,7 @@ export async function openProposal(page, description) {
   return await firstVisible(page.getByRole('dialog')) || card;
 }
 
-export async function findDescription(page, description) {
+export async function findDescription(page, description, capture = async () => {}) {
   const root = new URL(page.url());
   const visible = () => firstVisible(page.getByText(description, { exact: false }));
   if (await visible()) return true;
@@ -66,6 +66,7 @@ export async function findDescription(page, description) {
     const governance = await firstVisible(governanceControls(page));
     if (governance) await governance.click();
     await until(visible, 1000);
+    await capture();
     if (await visible()) return true;
   }
   const visited = new Set();
@@ -80,23 +81,27 @@ export async function findDescription(page, description) {
     if (!next) break;
     await next.click();
     await until(visible, 1000);
+    await capture();
     if (await visible()) return true;
   }
   return false;
 }
 export async function listedDescriptions(page, descriptions, capture = async () => {}) {
-  await until(async () => await page.evaluate(descriptions => descriptions.some(description => document.body.innerText.includes(description)), descriptions)
-    || await emptyProposals(page), 15000);
+  await until(() => page.evaluate(descriptions => descriptions.some(description => document.body.innerText.includes(description)), descriptions), 15000);
+  await capture();
   const listed = [];
-  for (const description of descriptions) if (await findDescription(page, description)) { listed.push(description); await capture(); }
+  for (const description of descriptions) if (await findDescription(page, description, capture)) { listed.push(description); await capture(); }
   return listed;
 }
 
-export async function emptyProposals(page) {
-  const message = await firstVisible(page.getByText(/^(?:no proposals(?:\s+(?:yet|found|available))?[.!]?|0 proposals|proposals\s*[:(]?\s*0\)?)$/i));
-  if (!message) return false;
-  const text = await settled(message);
-  return /^(?:no proposals(?:\s+(?:yet|found|available))?[.!]?|0 proposals|proposals\s*[:(]?\s*0\)?)$/i.test(text.trim());
+export async function captureProposalList(session, descriptions, capture) {
+  const listViews = [];
+  const titlesFound = await listedDescriptions(session.page, descriptions, async () => {
+    const text = await capture();
+    if (!listViews.includes(text)) listViews.push(text);
+  });
+  return { titlesFound, governanceFound: session.governanceFound || await governanceControls(session.page).count() > 0,
+    governor: { count: descriptions.length, titles: descriptions }, listViews };
 }
 
 export async function dismiss(page) {
@@ -210,7 +215,7 @@ export async function delegate(session, address) {
   }
   if (count() === before) {
     const dialog = await firstVisible(page.getByRole('dialog'));
-    const submit = await firstVisible((dialog || page).getByRole('button', { name: /^(?:confirm delegation|delegate)$/i }));
+    const submit = await firstVisible((dialog || page).getByRole('button', { name: /^(?:(?:confirm|update) delegation|delegate)$/i }));
     if (submit) {
       if (!await until(() => count() > before || submit.isEnabled(), 8000)) throw new CouldNotDrive('delegate control stayed disabled');
       if (count() === before) await submit.click();

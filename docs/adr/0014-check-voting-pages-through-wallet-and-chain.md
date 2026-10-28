@@ -53,6 +53,8 @@ The verifier finds holders through public logs and impersonates them only on its
 
 This decision changes neither result identity nor paid-run admission.
 
+[ADR 0019](0019-fail-voting-pages-that-claim-no-proposals.md) adds a judge for empty claims and proposal load errors.
+
 ## Known gaps
 
 - The judge reads text from the agent's page, so a page could add words aimed at the judge. `guard = "flag"` records such an attempt in `reward-details.json` without changing the reward. It flagged none of the 16 saved-page runs.

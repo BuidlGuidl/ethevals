@@ -7,8 +7,8 @@ export async function journey(checks, name, run, save) {
     await save();
   }
 }
-export function proposalListVerdict({ shown, total, governance, empty }) {
-  if (!shown && governance && !empty) return 'could-not-drive';
+export function proposalListVerdict({ shown, total, governance }) {
+  if (!shown && governance) return 'could-not-drive';
   return shown === total ? 'pass' : 'fail';
 }
 export function forVoteMatches(requests, events, weight) {

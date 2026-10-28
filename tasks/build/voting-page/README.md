@@ -9,7 +9,7 @@ Three of the governor's rules differ from what most pages assume:
 - Votes count at each proposal's snapshot.
 
 Code drives the built page and checks wallet requests and chain results.
-A RewardKit judge compares captured page text with the governor's values.
+RewardKit judges compare captured page text with the governor's values.
 
 Every number on a voting page has a source on chain, and a page can guess each one from events and defaults instead.
 Live pages make those guesses today.
@@ -57,7 +57,7 @@ After the agent finishes, the verifier builds the page and starts its own fork o
 One test proposal gets canceled while Pending.
 The snapshot journey later creates a fresh proposal after the holder delegates.
 
-It opens the page with an injected wallet, acting as holders it finds in public `DelegateChanged` logs. It follows the page's own tabs, links and vote dialogs, and captures plain text for the judge alongside the governor's values.
+It opens the page with an injected wallet, acting as holders it finds in public `DelegateChanged` logs. It follows the page's own tabs, links and vote dialogs, and captures plain text for the judges alongside the governor's values.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
@@ -70,6 +70,7 @@ It opens the page with an injected wallet, acting as holders it finds in public 
 | `votes_at_snapshot` | Captures old and new weights; the new proposal records 1,000 For | snapshot votes |
 | `canceled_status` | Trying to vote on a canceled proposal sends no vote request | closed proposals |
 | `already_voted` | A holder who already voted sends no second vote request | duplicate votes |
+| `shown_proposal_list` | A view without titles shows no false proposal count or proposal load error | judge |
 | `shown_status_and_tallies` | Captured statuses and tallies match the governor | judge |
 | `shown_for_only_quorum` | Captured quorum uses For votes only | judge |
 | `shown_extended_end` | Captures show the later end and the twins' states | judge |
@@ -78,15 +79,23 @@ It opens the page with an injected wallet, acting as holders it finds in public 
 | `shown_canceled_status` | Captures show the canceled proposal's status | judge |
 
 Code checks and binary judge criteria combine under RewardKit's `all-pass` reward.
-The judge reads only `/logs/verifier/page-evidence.txt`, never source or the trajectory.
+The page-value judge reads only `/logs/verifier/page-evidence.txt`.
+The list judge reads only `/logs/verifier/proposal-list-evidence.txt`.
+Neither reads source or the trajectory.
 
 A check fails a page only for what the page showed or asked the wallet to sign.
 A requested value missing from every captured view fails the judge criterion.
-When code cannot finish a flow, it records "could not drive" and the judge passes that uncaptured criterion. Then:
+When code cannot finish a flow, it records "could not drive".
+The page-value judge passes that uncaptured criterion.
 
 - Every check passes: the reward is 1.
 - Any check fails: the reward is 0.
 - Nothing fails, but some check could not be driven: the trial is an error for a human to look at.
+
+When no titles appear in a governance view, the list judge reads the captured list views and governor count and titles.
+An empty claim, a contradictory total count, or a proposal load error fails.
+A missing list alone passes this criterion, and the code check stays "could not drive".
+If code finds any titles, the list criterion passes and `lists_every_proposal` checks whether every title appears.
 
 ## Why it matters
 
@@ -120,11 +129,13 @@ A page that reads them shows holders what the governor will do. A page that gues
   - Four holders wrap and delegate 12 million of the 100 million TOKEN. The deployer keeps the rest unwrapped. Anvil's default accounts hold nothing.
   - Voting runs in blocks and the timelock in seconds. No check depends on wall time.
 - Setup makes its keys at random inside the chain container. The agent can't read them or the setup files.
-- **The judge.**
-  - It's Opus 5.5 at high effort, and it needs `ANTHROPIC_API_KEY` through `[verifier.env]`. Builds and the browser get no model keys.
-  - One judge call per trial costs $0.02 to $0.52 on the saved pages. Longer pages cost more.
+- **The judges.**
+  - Both use Opus 5.5 at high effort and need `ANTHROPIC_API_KEY` through `[verifier.env]`. Builds and the browser get no model keys.
+  - The page-value judge costs $0.02 to $0.52 on the saved pages. Longer pages cost more.
+  - A separate list judge adds one call per trial. [ADR 0019](../../../docs/adr/0019-fail-voting-pages-that-claim-no-proposals.md) records its measured cost.
   - `tests/hand-cases.json` holds 16 inputs with their right marks. Each got its mark in two separate runs.
-  - The free check skips the judge, and the code checks still separate the reference page from the untouched starter.
+  - `tests/proposal-list-hand-cases.json` holds six list inputs with their right marks. Each got its mark in two separate runs.
+  - The free check skips both judges, and the code checks still separate the reference page from the untouched starter.
 - The test proposals exist only on the verifier's fork, so the agent's chain never shows the cases the checks use.
 - Pages here make many RPC reads per block, which a public RPC would throttle. No check covers that load.
 - **Slow reads on the verifier's fork.** The fork loads chain state on first read, and each journey's reset drops what it loaded.

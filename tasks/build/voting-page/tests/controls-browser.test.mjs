@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from './deps.mjs';
 import { encodeFunctionData } from './deps.mjs';
-import { governorAbi, votesAbi, executedCalls, voteRequests } from './chain.mjs';
-import { forVoteMatches, proposalListVerdict } from './checks.mjs';
-import { wrap, castVote, delegate, connect, openProposal, usableChoices, listedDescriptions, settled, emptyProposals } from './controls.mjs';
+import { governorAbi, votesAbi, executedCalls, voteRequests, requestedCalls } from './chain.mjs';
+import { forVoteMatches, proposalListVerdict, journey } from './checks.mjs';
+import { CouldNotDrive } from './control-vocabulary.mjs';
+import { wrap, castVote, delegate, connect, openProposal, usableChoices, listedDescriptions, settled, captureProposalList } from './controls.mjs';
 
 const HOLDER = '0x0000000000000000000000000000000000000001';
 const GOVERNOR = '0x0000000000000000000000000000000000000002';
@@ -87,6 +88,18 @@ test('self-delegation waits for a delayed direct control', async () => {
     <script>setTimeout(()=>document.querySelector('button').disabled=false,400)</script>`, async session => {
     await delegate(session, HOLDER);
     assert.deepEqual(session.wallet.payloads, [{ action: 'delegate' }]);
+  });
+});
+
+test('Delegate to me fills the address and Update delegation submits once', async () => {
+  await fixture(`<input aria-label="Delegate address">
+    <button onclick="document.querySelector('input').value='${HOLDER}'">Delegate to me</button>
+    <button onclick="recordWrite({action:'delegate',address:document.querySelector('input').value})">Update delegation</button>`, async session => {
+    await delegate(session, HOLDER);
+    assert.deepEqual(session.wallet.payloads, [{ action: 'delegate', address: HOLDER }]);
+    assert.deepEqual(requestedCalls(session.wallet, TOKEN, votesAbi), [{ functionName: 'delegate', args: [HOLDER] }]);
+    assert.equal(session.wallet.requests.length, 1);
+    assert.equal(session.wallet.requests[0].params[0].to, TOKEN);
   });
 });
 
@@ -220,19 +233,23 @@ test('unsettled loading values produce a driver error', async () => {
     await assert.rejects(settled(page.locator('article'), { timeout: 400, quiet: 100 }), { message: 'could not drive: page values or controls did not settle' });
   });
 });
-test('a settled empty Governance list is evidence of missing proposals', async () => {
-  for (const message of ['No proposals', '0 proposals', 'Proposals: 0']) {
-    await fixture(`<h1>Governance</h1><p>${message}</p>`, async ({ page }) => {
-      const empty = await emptyProposals(page);
-      const descriptions = await listedDescriptions(page, ['Set the protocol fee']);
-      assert.equal(empty, true);
-      assert.deepEqual(descriptions, []);
-      assert.equal(proposalListVerdict({ shown: descriptions.length, total: 1, governance: true, empty }), 'fail');
-      assert.equal(proposalListVerdict({ shown: 0, total: 1, governance: true, empty: false }), 'could-not-drive');
-    });
-  }
-  await fixture('<article>Set the protocol fee<br>For 3<br>Against 4</article>', async ({ page }) => {
-    assert.equal(await emptyProposals(page), false);
-    assert.deepEqual(await listedDescriptions(page, ['Set the protocol fee']), ['Set the protocol fee']);
+test('a governance view without titles captures list evidence and stays unresolved in code', async () => {
+  await fixture('<button>Governance</button><p>Total proposals 0</p><p>Could not load proposals</p>', async session => {
+    const checks = {};
+    let evidence;
+    await journey(checks, 'lists_every_proposal', async () => {
+      evidence = await captureProposalList(session, ['Set the protocol fee'], () => session.page.locator('body').innerText());
+      const result = proposalListVerdict({ shown: evidence.titlesFound.length, total: evidence.governor.count, governance: evidence.governanceFound });
+      if (result === 'could-not-drive') throw new CouldNotDrive('governance navigation showed no readable proposals');
+      checks.lists_every_proposal = { passed: result === 'pass' };
+    }, async () => {});
+    assert.deepEqual(evidence, { titlesFound: [], governanceFound: true,
+      governor: { count: 1, titles: ['Set the protocol fee'] },
+      listViews: ['Governance\n\nTotal proposals 0\n\nCould not load proposals'] });
+    assert.deepEqual(checks, { lists_every_proposal: { passed: false, couldNotDrive: true,
+      reason: 'could not drive: governance navigation showed no readable proposals' } });
+    assert.equal(proposalListVerdict({ shown: 1, total: 1, governance: true }), 'pass');
+    assert.equal(proposalListVerdict({ shown: 1, total: 2, governance: true }), 'fail');
+    assert.equal(proposalListVerdict({ shown: 0, total: 1, governance: false }), 'fail');
   });
 });
