@@ -127,7 +127,7 @@ Both layers matter when limiting future spending.
 
 - The main container has one CPU and 4 GiB of memory, and the chain sidecar has a 3 GiB limit. The task sets no agent time limit.
 - The solution is a reference page with an explicit fresh-price review. Its token picker uses buttons and a dialog to exercise a different control shape. It uses exact approvals and takes the fee from output inside the router transaction.
-- The task-local wallet adds transaction classification arguments to its `beforeSend` callback. The task-local RPC helper and the verifier's viem clients use 120-second timeouts for fork reads and market transactions, since the fork loads mainnet state on first read. The savings copies do not include these swap-specific changes.
+- The task-local wallet adds transaction classification arguments to its `beforeSend` callback. The task-local RPC helper and the verifier's viem clients use 120-second timeouts for fork reads and market transactions, since the fork loads mainnet state on first read. The chain reader sends past-block reads one at a time: with one CPU, Anvil hangs when a second past-block `eth_getBalance` waits while another past-block read fetches state. The savings copies do not include these swap-specific changes.
 - ETH settlement, empty routers, and receipt amounts partly repeat checks in other page tasks.
 - Slippage of 2% or more can let `moved` and `reverted` succeed without testing a stale-price revert.
 

@@ -74,9 +74,19 @@ export function observedSpenders(wallet, treasury) {
 
 export function chainReader(url, owner, treasury) {
   const client = createPublicClient({ transport: http(url, { timeout: 120_000 }) });
+  // Anvil serves a past-block read under one lock and fetches missing state from the source chain while holding it.
+  // On one CPU, a second past-block eth_getBalance blocks the only thread that fetch needs and the fork hangs, so these reads queue.
+  let pastReads = Promise.resolve();
+  function at(blockNumber, request) {
+    if (blockNumber === undefined) return request();
+    const result = pastReads.then(request);
+    pastReads = result.catch(() => {});
+    return result;
+  }
   async function balances(address, blockNumber) {
     return Object.fromEntries(await Promise.all(Object.entries(TOKENS).map(async ([symbol, token]) => [symbol,
-      symbol === 'ETH' ? await client.getBalance({ address, blockNumber }) : await client.readContract({ address: token, abi: ERC20, functionName: 'balanceOf', args: [address], blockNumber }),
+      await at(blockNumber, () => symbol === 'ETH' ? client.getBalance({ address, blockNumber })
+        : client.readContract({ address: token, abi: ERC20, functionName: 'balanceOf', args: [address], blockNumber })),
     ])));
   }
   async function state(spenders = [], blockNumber) {
@@ -89,10 +99,10 @@ export function chainReader(url, owner, treasury) {
     for (const [symbol, token] of tokens) {
       for (const [name, spender] of approvals) {
         erc20Allowances.push({ token: symbol, spender: name, address: spender,
-          amount: await client.readContract({ address: token, abi: ERC20, functionName: 'allowance', args: [owner, spender], blockNumber }) });
+          amount: await at(blockNumber, () => client.readContract({ address: token, abi: ERC20, functionName: 'allowance', args: [owner, spender], blockNumber })) });
       }
       for (const [name, spender] of routers) {
-        const [amount, expiration, nonce] = await client.readContract({ address: PERMIT2, abi: P2ABI, functionName: 'allowance', args: [owner, token, spender], blockNumber });
+        const [amount, expiration, nonce] = await at(blockNumber, () => client.readContract({ address: PERMIT2, abi: P2ABI, functionName: 'allowance', args: [owner, token, spender], blockNumber }));
         permit2Allowances.push({ token: symbol, spender: name, address: spender, amount, expiration, nonce });
       }
     }
