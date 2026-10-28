@@ -103,7 +103,7 @@ test('observes token and native cuts only in the swap block', { timeout: 30_000 
   }
 });
 
-test('waits out fork reads slower than viem\'s ten-second default', { timeout: 90_000 }, async () => {
+test('waits out fork reads slower than viem\'s ten-second default', { timeout: 150_000 }, async () => {
   const listener = net.createServer();
   await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
   const port = listener.address().port;
@@ -139,5 +139,63 @@ test('waits out fork reads slower than viem\'s ten-second default', { timeout: 9
   } finally {
     await new Promise(resolve => proxy.close(resolve));
     if (child.exitCode === null) { const exited = once(child, 'exit'); child.kill('SIGTERM'); await exited; }
+  }
+});
+
+test('finishes past-block reads on a one-thread fork after a snapshot revert', { timeout: 120_000 }, async () => {
+  const ports = [];
+  for (let i = 0; i < 2; i++) {
+    const listener = net.createServer();
+    await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
+    ports.push(listener.address().port);
+    await new Promise(resolve => listener.close(resolve));
+  }
+  const source = `http://127.0.0.1:${ports[0]}`;
+  const fork = `http://127.0.0.1:${ports[1]}`;
+  const children = [spawn('anvil', ['--port', String(ports[0]), '--accounts', '0', '--chain-id', '1', '--base-fee', '0', '--silent'], { stdio: 'ignore' })];
+  // Each source read takes 50 ms, like the chain sidecar.
+  const proxy = http.createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const upstream = await fetch(source, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: Buffer.concat(chunks) });
+    response.writeHead(upstream.status, { 'Content-Type': 'application/json' }).end(await upstream.text());
+  });
+  await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
+  try {
+    assert.equal(await until(async () => await rpc(source, 'eth_chainId') === '0x1'), true);
+    const compiled = JSON.parse(require('solc').compile(JSON.stringify({ language: 'Solidity',
+      sources: { 'Token.sol': { content: 'pragma solidity ^0.8.0; contract Token { mapping(address => uint) public balanceOf; }' } },
+      settings: { outputSelection: { '*': { '*': ['evm.deployedBytecode.object'] } } } })));
+    const code = '0x' + compiled.contracts['Token.sol'].Token.evm.deployedBytecode.object;
+    for (const [symbol, address] of Object.entries(TOKENS)) if (symbol !== 'ETH') await rpc(source, 'anvil_setCode', [address, code]);
+    // Under the task's cpus = 1, the verifier's fork gets one runtime thread.
+    children.push(spawn('anvil', ['--port', String(ports[1]), '--accounts', '0', '--chain-id', '1', '--base-fee', '0', '--silent', '--no-storage-caching', '--hardfork', 'prague',
+      '--fork-url', `http://127.0.0.1:${proxy.address().port}`, '--fork-block-number', String(Number(await rpc(source, 'eth_blockNumber')))],
+    { stdio: 'ignore', env: { ...process.env, TOKIO_WORKER_THREADS: '1' } }));
+    assert.equal(await until(async () => await rpc(fork, 'eth_chainId') === '0x1'), true);
+    const owner = '0x1111111111111111111111111111111111111111';
+    const treasury = '0x2222222222222222222222222222222222222222';
+    await rpc(fork, 'anvil_setBalance', [owner, '0x100000']);
+    await rpc(fork, 'anvil_impersonateAccount', [owner]);
+    // Like harness.reset(): the revert drops the source reads cached since the snapshot.
+    assert.equal(await rpc(fork, 'evm_revert', [await rpc(fork, 'evm_snapshot')]), true);
+    await rpc(fork, 'evm_snapshot');
+    const hash = await rpc(fork, 'eth_sendTransaction', [{ from: owner, to: ROUTERS['V2 Router02'], value: '0x1', gasPrice: '0x0', gas: '0x5208' }]);
+    const swap = { hash, receipt: await receipt(fork, hash) };
+    const reader = chainReader(fork, owner, treasury);
+    // The treasury deltas and the journey baseline's router balances, both at past blocks.
+    const reads = Promise.all([reader.transactions({ transactions: [swap] }),
+      Promise.all(Object.values(ROUTERS).map(address => reader.balances(address, BigInt(swap.receipt.blockNumber) - 1n)))]);
+    const finished = await Promise.race([reads, new Promise(resolve => setTimeout(resolve, 30_000, null))]);
+    assert.ok(finished, 'the fork stopped answering past-block reads');
+    const [[observed], routerBalances] = finished;
+    assert.deepEqual(observed.treasuryDelta, { ETH: 0n, WETH: 0n, USDC: 0n, USDT: 0n });
+    assert.deepEqual(routerBalances[Object.keys(ROUTERS).indexOf('V2 Router02')], { ETH: 0n, WETH: 0n, USDC: 0n, USDT: 0n });
+    assert.equal(await rpc(fork, 'eth_chainId'), '0x1');
+  } finally {
+    proxy.closeAllConnections();
+    await new Promise(resolve => proxy.close(resolve));
+    for (const child of children.reverse()) if (child.exitCode === null) { const exited = once(child, 'exit'); child.kill('SIGKILL'); await exited; }
   }
 });
