@@ -54,9 +54,10 @@
   .navlinks a[aria-current] { @apply text-ink; box-shadow: inset 0 -2px 0 var(--color-accent); }
   .logo-flight { @apply pointer-events-none fixed z-50; transform-origin: 0 0; }
   .logo-flight svg { @apply h-full w-full; }
-  .sitefoot { @apply mx-auto flex max-w-[1440px] flex-wrap items-center gap-4 border-t border-border px-8 py-6 text-[11px] text-muted; overflow-wrap: anywhere; }
+  .sitefoot { @apply mx-auto flex max-w-[1440px] flex-wrap items-center gap-4 border-t border-border px-8 py-6 text-[13px] text-muted; overflow-wrap: anywhere; }
   .sitefoot > * { min-width: 0; }
-  .sitefoot b { @apply text-ink text-[13px]; }
+  .sitefoot b { @apply text-ink text-[14px]; }
+  .dataset-link { @apply inline-flex items-center gap-2; }
   .skip-link { @apply sr-only; }
   .skip-link:focus { @apply not-sr-only fixed left-4 top-4 z-[80] bg-accent px-4 py-2 text-sheet; }
   .hero { @apply mb-14 grid grid-cols-[minmax(0,1fr)] gap-4; }
@@ -106,7 +107,6 @@
   .score-cell:hover { box-shadow: inset 0 0 0 2px var(--color-accent); }
   .score-cell small { @apply absolute bottom-1 right-2 text-[10px] font-medium; }
   .score-cell[data-empty="true"] { @apply bg-transparent text-dim; }
-  .cost-value { @apply block py-4 text-center text-[13px] font-semibold; }
   .table-note { @apply border-t border-border px-4 py-3 text-[11px] text-muted; }
   .read-note { @apply max-w-[1100px] border-t border-border pt-4 text-muted; }
   .read-note b { @apply text-ink; }
@@ -176,7 +176,8 @@
   .drawer-header h1 { @apply text-[24px]; }
   .back-button { @apply flex w-fit items-center gap-2 text-xs text-muted; }
   .detail-section { @apply grid gap-3; }
-  .eval-list section + section { @apply mt-6; }
+  .eval-list section + section { @apply mt-8; }
+  .eval-list section > h3 { @apply mb-2 border-l-2 px-3 py-2 text-[18px]; color: var(--pillar); border-color: var(--pillar); background: color-mix(in srgb, var(--pillar) 8%, transparent); }
   .eval-list-row { @apply flex min-h-11 w-full items-center gap-3 border-b border-border py-3 text-left; }
   .eval-list-row:hover { @apply bg-tint; }
   .eval-list-title { @apply mr-auto grid gap-1 text-left; }

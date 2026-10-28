@@ -40,7 +40,7 @@ A pillar score averages its task pass rates.
 Overall averages scored pillars.
 The mode controls select Internet or Model only. Internet + Skills is marked coming soon.
 Different agents, models, and efforts stay separate.
-`$ / pass` divides model cost for scored trials by passed trials.
+Compare's `$ / pass` divides model cost for scored trials by passed trials.
 No passes or unknown cost produce `–`.
 Cost adds agent and judge API prices, even when a plan paid.
 

@@ -16,7 +16,7 @@ import { updateQuery, useQuery } from "../components/url-state";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
 
-type Sort = "overall" | Pillar | "costPerPass";
+type Sort = "overall" | Pillar;
 const verdictLabels = { passed: "PASS", failed: "FAIL", error: "ERROR" };
 
 function Verdict({ trial }: { trial: Trial }) {
@@ -34,7 +34,7 @@ function EvalList({ table, evaluations, agent, pillar, onEval }: {
 }) {
   const key = agentKey(agent);
   return <div className="eval-list">{pillars.filter((value) => !pillar || pillar === value).map((value) =>
-    <section key={value}>{!pillar && <h3>{names[value]}</h3>}
+    <section key={value} className={`pillar-${value}`}>{!pillar && <h3>{names[value]}</h3>}
       {table.pillars[value].evals.filter((entry) => entry.cells[key].state !== "na").map((entry) => {
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
@@ -147,13 +147,12 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
     if (pushed.current) { pushed.current = false; window.history.back(); }
     else updateQuery({ d: null });
   };
-  const value = (agent: Agent, key: Sort) => key === "costPerPass"
-    ? table.summaries[agentKey(agent)].costPerPass : table.summaries[agentKey(agent)].scores[key];
+  const value = (agent: Agent, key: Sort) => table.summaries[agentKey(agent)].scores[key];
   const agents = [...table.agents].sort((a, b) => {
     const x = value(a, sort.key), y = value(b, sort.key);
     return x === null ? y === null ? agentKey(a).localeCompare(agentKey(b)) : 1 : y === null ? -1 : (sort.ascending ? 1 : -1) * (x - y) || agentKey(a).localeCompare(agentKey(b));
   });
-  const columns: [Sort, string][] = [["overall", "Overall"], ...pillars.map((pillar): [Sort, string] => [pillar, names[pillar]]), ["costPerPass", "$ / pass"]];
+  const columns: [Sort, string][] = [["overall", "Overall"], ...pillars.map((pillar): [Sort, string] => [pillar, names[pillar]])];
   const matrixAgents = [...matrixTable.agents].sort((a, b) =>
     (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(b)].scores.overall ?? -1) -
     (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(a)].scores.overall ?? -1));
@@ -173,19 +172,19 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
           <colgroup><col className="config-col" />{columns.map(([key]) => <col key={key} className="score-col" />)}</colgroup>
           <thead><tr><th scope="col" className="row-label">{mode === "vanilla" ? "Model" : "Configuration"}<small>model · agent</small></th>
             {columns.map(([key, name]) => <th key={key} scope="col" aria-sort={sort.key === key ? sort.ascending ? "ascending" : "descending" : "none"}>
-              <button className="sort-button" onClick={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : key === "costPerPass" })}>{name}{sort.key === key && (sort.ascending ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}</button>
+              <button className="sort-button" onClick={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : false })}>{name}{sort.key === key && (sort.ascending ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}</button>
             </th>)}</tr></thead><tbody>{agents.map((agent) => <tr key={agentKey(agent)}><th scope="row" className="row-label"><Configuration agent={agent} /></th>
-              {columns.map(([key]) => <td key={key}>{key === "costPerPass" ? <Hint text={formulas.cost}><span className="cost-value">{money(value(agent, key))}</span></Hint> :
+              {columns.map(([key]) => <td key={key}>
                 <Score score={value(agent, key)} lift={mode === "skills" ? data.lifts[agentKey(agent)]?.[key] : undefined}
                   formula={key === "overall" ? formulas.overall : formulas.pillar}
                   label={`${key === "overall" ? "Overall" : names[key]}, ${agentLabel(agent)}`}
                   empty={key !== "overall" && table.pillars[key].cells[agentKey(agent)].state === "empty" ? "No tasks yet" : "No trials yet"}
-                  onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} />}</td>)}
+                  onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} /></td>)}
             </tr>)}</tbody></table></div>{mode === "skills" && <div className="table-note">+pp is the change over Internet.</div>}</div> :
         <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current tasks. Browse the task catalog below.</p></div>}
       <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on three pillars: Concepts, Build, and Act. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them.</div>
     </section>
-    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task · {modeNames[evalsMode]}</h2><p>A detailed view of the Leaderboard. See how many trials each agent passed on every task, grouped by pillar.</p></div>
+    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task</h2><p>A detailed view of the Leaderboard. See how many trials each agent passed on every task, grouped by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />
       <a className="button" href={`${repo}/blob/main/docs/add-a-task.md`} target="_blank" rel="noreferrer">How to add a task ↗</a></div>
       <p className="eyebrow">{pillars.reduce((sum, pillar) => sum + matrixTable.pillars[pillar].evals.length, 0)} tasks · {modeNames[evalsMode]}</p>
