@@ -48,36 +48,7 @@ def write_hf(paths: list[Path], output: Path, repo: str = DEFAULT_REPO,
             "tags": ["ethereum", "rl-environment", "harbor"]}
     if license:
         card["license"] = license
-    (output / "README.md").write_text("---\n" + yaml.safe_dump(card, sort_keys=False) + "---\n\n" + f"""# ETH Evals
-
-This dataset contains {len(tasks)} Ethereum tasks in Harbor format.
-Each folder contains its instruction, environment, tests, and solution.
-The export contains exactly the files Harbor's packager counts, with their bytes unchanged.
-Each task's `[task].name` stays the same in the source folder, registry, and Harbor trials.
-Shared images use pinned GHCR tags. ETH Evals code is not required.
-
-Install Harbor 0.24.0 and Docker, then run an oracle check:
-
-```sh
-harbor run --repo https://huggingface.co/datasets/{repo} --agent oracle --n-concurrent 1
-```
-
-Use `--include-task-name NAME` to select one folder name under `tasks/`.
-Use `--agent nop` to check that untouched work fails.
-Use `--dataset ethevals@1.0` to select the explicit registry entry.
-Append `@gh-SHORT_SHA` to the repository URL to pin a published source revision.
-The registry resolves task paths against the selected dataset commit.
-
-Each task's compose file declares its host variables through `${{VAR:?message}}` interpolation.
-Set those variables before running the task. Compose stops with the message if a value is missing or empty.
-
-{chr(10).join(requirements)}
-
-Plain Harbor runs execute every test and criterion through RewardKit in the task's verifier.
-Tasks with a judge TOML under `tests/` require `ANTHROPIC_API_KEY` through `[verifier.env]`.
-Set a judge-only API key with its own spend limit. A missing key stops Harbor with the variable's name.
-Claude plan tokens cannot pay for the judge.
-The task's judge is the default; the board overrides its model and effort from the job config.
-These public solutions can appear in training data. Scores alone do not establish unseen Ethereum knowledge.
-""")
+    guide = Path(__file__).with_name("hf_readme.md").read_text().format(
+        repo=repo, requirements="\n".join(requirements) or "These tasks need no host variables.")
+    (output / "README.md").write_text("---\n" + yaml.safe_dump(card, sort_keys=False) + "---\n\n" + guide)
     return {"repo": repo, "output": str(output), "tasks": len(tasks), "license": license}
