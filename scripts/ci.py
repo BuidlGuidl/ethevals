@@ -24,8 +24,8 @@ from ethevals.trial_rows import SCHEMA_VERSION, fold_rows, previous_rows, read_r
 BASE_BRANCH = "main"
 RESULTS_BRANCH = "ci/results"
 # Each lane is one GitHub concurrency group, so it runs one trial at a time.
-PLAN_LANES = 2  # trials at once on one plan credential
-KEY_LANES = 16  # key-paid trials at once; GitHub Free runs 20 jobs, so 4 runners stay free for plan lanes
+PLAN_LANES = 5  # trials at once on one plan credential
+KEY_LANES = 10  # key-paid trials at once; GitHub Free runs 20 jobs, so 10 runners stay free for plan lanes
 
 
 def command(*args, **kwargs):
@@ -73,15 +73,23 @@ def plan_trials(args, run_args):
     report = json.loads(captured.getvalue())
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     # A zero CI budget disables even plan-paid trials whose API reserve is zero.
-    scheduled, matrix, plan_counts, key_count = [], [], {}, 0
+    scheduled, matrix, plan_counts, key_count, vanilla_jobs = [], [], {}, 0, {}
     if report["within_budget"] and options.budget and options.budget > 0:
         for row in report["missing"]:
             group = config.agents[row["agent_key"]].name if row["paid_by"] == "plan" else ""
+            item = {**row, "task_path": os.path.relpath(row["task_path"])}
+            # A vanilla trial is one API call, shorter than a job's setup, so one job runs all of a model's vanilla trials.
+            if row["mode"] == "vanilla" and row["agent_key"] in vanilla_jobs:
+                batch = scheduled[vanilla_jobs[row["agent_key"]]]
+                batch["missing"].append(item)
+                batch["selected"].append(trial_identity(row))
+                batch["missing_trials"] += 1
+                batch["worst_case_usd"] += row["worst_case_usd"]
+                continue
             # GitHub accepts at most 100 pending jobs per concurrency group.
             if len(scheduled) == 256 or group and plan_counts.get(group, 0) == 100:
                 continue
             index = len(scheduled)
-            item = {**row, "task_path": os.path.relpath(row["task_path"])}
             scheduled.append({"missing": [item], "selected": [trial_identity(row)],
                               "missing_trials": 1, "worst_case_usd": row["worst_case_usd"]})
             if group:
@@ -90,10 +98,13 @@ def plan_trials(args, run_args):
             else:
                 lane = f"key-{key_count % KEY_LANES}"
                 key_count += 1
-            matrix.append({"index": index, "task_id": row["task_id"], "agent_key": row["agent_key"],
-                           "mode": row["mode"], "trial": row["trial"], "plan_group": group, "lane": lane})
+            if row["mode"] == "vanilla":
+                vanilla_jobs[row["agent_key"]] = index
+            matrix.append({"index": index, "agent_key": row["agent_key"], "mode": row["mode"], "plan_group": group, "lane": lane,
+                           **({"task_id": "vanilla tasks", "trial": "all"} if row["mode"] == "vanilla"
+                              else {"task_id": row["task_id"], "trial": row["trial"]})})
     (args.output / "trials.json").write_text(json.dumps(scheduled, indent=2) + "\n")
-    deferred = len(report["missing"]) - len(scheduled)
+    deferred = len(report["missing"]) - sum(entry["missing_trials"] for entry in scheduled)
     if deferred:
         print(f"Deferred {deferred} trials to a later run.", file=sys.stderr)
     if args.github_output:

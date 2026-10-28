@@ -28,6 +28,7 @@ A missing explicit file fails the build.
 Malformed rows and duplicate trials fail with their file and line.
 The loader accepts schema version 8 and skips older rows.
 It shows only current task hashes and, for skills-mode rows, the current skills hash.
+It also drops trials numbered past the job's `n_attempts`.
 It shows only models listed in the job settings.
 The 160 Inspect rows have been removed.
 
@@ -37,7 +38,7 @@ The task matrix shows passed trials out of scored trials.
 Errors stay visible in the drawer and do not enter scores.
 A pillar score averages its task pass rates.
 Overall averages scored pillars.
-The mode controls select Internet, Internet + Skills, or Model only.
+The mode controls select Internet or Model only. Internet + Skills is marked coming soon.
 Different agents, models, and efforts stay separate.
 `$ / pass` divides model cost for scored trials by passed trials.
 No passes or unknown cost produce `–`.

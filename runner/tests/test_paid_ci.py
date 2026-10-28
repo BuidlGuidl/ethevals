@@ -178,11 +178,36 @@ def test_ci_plan_groups_plan_trials_and_keeps_key_trials_independent(tmp_path):
     matrix = json.loads(emitted["matrix"])["include"]
     assert [(row["agent_key"], row["trial"], row["plan_group"], row["lane"]) for row in matrix] == [
         ("local", 1, "nop", "plan-nop-0"), ("local", 2, "nop", "plan-nop-1"),
-        ("other-model", 1, "nop", "plan-nop-0"), ("other-model", 2, "nop", "plan-nop-1"),
+        ("other-model", 1, "nop", "plan-nop-2"), ("other-model", 2, "nop", "plan-nop-3"),
         ("key", 1, "", "key-0"), ("key", 2, "", "key-1")]
     assert emitted["scheduled_trials"] == "6"
     assert all(not Path(row["task_path"]).is_absolute()
                for report in json.loads((output / "trials.json").read_text()) for row in report["missing"])
+
+
+def test_ci_plan_runs_each_models_vanilla_trials_in_one_job(tmp_path):
+    config = job_config(tmp_path, "api_key")
+    data = json.loads(config.read_text())
+    data["modes"] = ["internet", "vanilla"]
+    data["agents"]["bare"] = {"name": "ethevals.vanilla:VanillaAgent", "version": "0.1.0", "model": "local",
+                              "modes": ["vanilla"], "paid_by": "api_key", "cost_limit_usd": 2}
+    config.write_text(json.dumps(data))
+    task = task_folder(tmp_path)
+    toml = task / "task.toml"
+    toml.write_text(toml.read_text().replace('modes = ["internet"]', 'modes = ["vanilla", "internet"]'))
+    output, github_output = tmp_path / "plan", tmp_path / "github-output"
+    result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config, "--tasks", task,
+                 "--modes", "internet", "vanilla", "--budget", 100, "--rows", tmp_path / "none",
+                 "--output", output, "--github-output", github_output)
+    assert result.returncode == 0, result.stdout + result.stderr
+    emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
+    matrix = json.loads(emitted["matrix"])["include"]
+    assert [(row["agent_key"], row["mode"], row["trial"]) for row in matrix] == [
+        ("local", "internet", 1), ("local", "internet", 2), ("bare", "vanilla", "all")]
+    trials = json.loads((output / "trials.json").read_text())
+    assert [(row["agent_key"], row["trial"]) for row in trials[2]["missing"]] == [("bare", 1), ("bare", 2)]
+    assert (trials[2]["missing_trials"], len(trials[2]["selected"])) == (2, 2)
+    assert "Deferred" not in result.stderr
 
 
 def test_ci_defers_plan_trials_beyond_github_queue_capacity(tmp_path):

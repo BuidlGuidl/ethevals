@@ -1,5 +1,5 @@
 harbor_version: 0.24.0
-n_attempts: 3
+n_attempts: 2
 retry:
   max_retries: 1
 hub:
@@ -47,7 +47,7 @@ agents:
     model: opus-5.5
     modes: [vanilla]
     paid_by: api_key
-    cost_limit_usd: 20.0
+    cost_limit_usd: 2.0
     env:
       ANTHROPIC_API_KEY: '${ANTHROPIC_API_KEY:-}'
   vanilla-gpt-6.1-sol:
@@ -56,7 +56,25 @@ agents:
     model: gpt-6.1-sol
     modes: [vanilla]
     paid_by: api_key
-    cost_limit_usd: 20.0
+    cost_limit_usd: 2.0
+    env:
+      OPENAI_API_KEY: '${OPENAI_API_KEY:-}'
+  vanilla-fable-5.1:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: fable-5.1
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 2.0
+    env:
+      ANTHROPIC_API_KEY: '${ANTHROPIC_API_KEY:-}'
+  vanilla-gpt-6-astra:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: gpt-6-astra
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 2.0
     env:
       OPENAI_API_KEY: '${OPENAI_API_KEY:-}'
   vanilla-kimi-k3.1-pro:
@@ -65,7 +83,7 @@ agents:
     model: kimi-k3.1-pro
     modes: [vanilla]
     paid_by: api_key
-    cost_limit_usd: 20.0
+    cost_limit_usd: 2.0
     env:
       OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
   vanilla-glm-5.3:
@@ -74,7 +92,7 @@ agents:
     model: glm-5.3
     modes: [vanilla]
     paid_by: api_key
-    cost_limit_usd: 20.0
+    cost_limit_usd: 2.0
     env:
       OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
   vanilla-deepseek-v4.1-flash-1017:
@@ -83,7 +101,7 @@ agents:
     model: deepseek-v4.1-flash-1017
     modes: [vanilla]
     paid_by: api_key
-    cost_limit_usd: 20.0
+    cost_limit_usd: 2.0
     env:
       OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
   vanilla-grok-4.7:
@@ -92,7 +110,7 @@ agents:
     model: grok-4.7
     modes: [vanilla]
     paid_by: api_key
-    cost_limit_usd: 20.0
+    cost_limit_usd: 2.0
     env:
       OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
   vanilla-gemini-4-argon:
@@ -101,7 +119,7 @@ agents:
     model: gemini-4-argon
     modes: [vanilla]
     paid_by: api_key
-    cost_limit_usd: 20.0
+    cost_limit_usd: 2.0
     env:
       OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
   claude-code-opus-5.5:

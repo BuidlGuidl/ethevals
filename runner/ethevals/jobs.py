@@ -49,8 +49,10 @@ def write_catalog(paths: list[Path], output: Path) -> None:
             raise ValueError(f"Duplicate task name: {entry['name']}")
         names.add(entry["name"])
     output.mkdir(parents=True, exist_ok=True)
-    models = [model.name for model in load_job().models.values()]
-    (output / "catalog.json").write_text(json.dumps({"tasks": entries, "skills_hash": pack_skills().hash, "models": models}, indent=2) + "\n")
+    job = load_job()
+    models = [model.name for model in job.models.values()]
+    catalog = {"tasks": entries, "skills_hash": pack_skills().hash, "models": models, "n_attempts": job.n_attempts}
+    (output / "catalog.json").write_text(json.dumps(catalog, indent=2) + "\n")
 
 
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,
