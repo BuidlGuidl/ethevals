@@ -8,7 +8,7 @@ const solc = require('solc');
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const BLOCK = 26260992n;
 export function createMarket({ url, output }) {
-  const publicClient = createPublicClient({ transport: http(url) });
+  const publicClient = createPublicClient({ transport: http(url, { timeout: 120_000 }) });
   const rpc = (method, params = []) => request(url, method, params);
   const call = (to, signature, args = []) => publicClient.readContract({ address: to, abi: parseAbi([signature]), functionName: signature.match(/function (\w+)/)[1], args });
   const save = (name, value) => fs.writeFileSync(path.join(output, name), JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2) + '\n');

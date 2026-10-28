@@ -14,6 +14,7 @@ modes = ["internet", "skills"]
 [verifier]
 environment_mode = "shared"
 user = "root"
+timeout_sec = 1800
 
 [verifier.env]
 ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"

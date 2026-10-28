@@ -73,7 +73,7 @@ export function observedSpenders(wallet, treasury) {
 }
 
 export function chainReader(url, owner, treasury) {
-  const client = createPublicClient({ transport: http(url) });
+  const client = createPublicClient({ transport: http(url, { timeout: 120_000 }) });
   async function balances(address, blockNumber) {
     return Object.fromEntries(await Promise.all(Object.entries(TOKENS).map(async ([symbol, token]) => [symbol,
       symbol === 'ETH' ? await client.getBalance({ address, blockNumber }) : await client.readContract({ address: token, abi: ERC20, functionName: 'balanceOf', args: [address], blockNumber }),
