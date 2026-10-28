@@ -24,14 +24,10 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - run_id: '40683192885'
-            source_commit: a976a77ae8c3943c1611359d1e169ce1101a8971
-          - run_id: '40683214104'
-            source_commit: a976a77ae8c3943c1611359d1e169ce1101a8971
-          - run_id: '40683261030'
-            source_commit: a976a77ae8c3943c1611359d1e169ce1101a8971
-          - run_id: '40683754949'
-            source_commit: a976a77ae8c3943c1611359d1e169ce1101a8971
+          - run_id: '40648625953'
+            source_commit: cd26134ea3a13586f527bbab1eadf55d06baec69
+            expected_artifacts: 198
+            expected_rows: 405
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -42,12 +38,26 @@ jobs:
         with:
           enable-cache: false
       - run: uv sync --frozen
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ matrix.run_id }}
-          pattern: trial-run-${{ matrix.run_id }}-*
-          path: results/artifact
+      - name: Download every saved trial artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULTS_REPO: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ matrix.run_id }}
+          EXPECTED_ARTIFACTS: ${{ matrix.expected_artifacts }}
+          EXPECTED_ROWS: ${{ matrix.expected_rows }}
+        run: |
+          gh run download "$SOURCE_RUN_ID" --repo "$RESULTS_REPO" \
+            --pattern "trial-run-$SOURCE_RUN_ID-*" --dir results/artifact
+          uv run python - <<'PY'
+          import os
+          from pathlib import Path
+          from ethevals.trial_rows import fold_rows, recover_rows
+          artifacts = sorted(Path("results/artifact").glob("trial-run-*"))
+          assert len(artifacts) == int(os.environ["EXPECTED_ARTIFACTS"]), len(artifacts)
+          rows = fold_rows(*(recover_rows(path) for path in artifacts))
+          assert len(rows) == int(os.environ["EXPECTED_ROWS"]), len(rows)
+          print(f"Downloaded {len(artifacts)} artifacts; recovered {len(rows)} rows.")
+          PY
       - name: Publish checked artifacts and record rows
         env:
           GH_TOKEN: ${{ github.token }}
