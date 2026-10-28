@@ -156,7 +156,8 @@ def budget_check(report: dict, budget: float | None, *, required=False) -> dict:
 
 async def run(report: dict, config: JobSettings, output: Path, previous: list[dict], *,
               skills_pack: SkillsPack | None = None,
-              publication_secrets: dict[str, set[bytes]] | None = None) -> bool:
+              publication_secrets: dict[str, set[bytes]] | None = None,
+              agent_setup_timeout_multiplier: float | None = None) -> bool:
     if not report["within_budget"]:
         raise ValueError("Budget exceeded; no trials started")
     secrets = publication_secrets if publication_secrets is not None else secret_values(
@@ -226,6 +227,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
                     "REWARDKIT_REASONING_EFFORT": config.judge.effort,
                     "CLAUDE_CODE_OAUTH_TOKEN": "", "REWARDKIT_FORCE_SUBSCRIPTION": "",
                 } if item["judge"] else {}}, environment={"type": "docker"},
+                agent_setup_timeout_multiplier=agent_setup_timeout_multiplier,
             ))
             await job.run()
         finally:

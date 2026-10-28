@@ -35,6 +35,9 @@ uv run ethevals run --modes internet --n-attempts 1 --budget 100 --output result
 Every execution requires an explicit budget.
 The reserve covers remaining API-key executions and paid criteria.
 Plan-funded agents reserve no API spend, but their criteria still need a judge key and budget.
+Harbor installs Node.js and the agent's CLI inside the task container before every trial, with a 360-second limit.
+On a slow network, add `--agent-setup-timeout-multiplier 3` to `run`.
+It scales only that limit, CI leaves it unset, and an interrupted job resumes only with the same value.
 Read [Board jobs](../docs/harbor.md#board-jobs) for payment sources, recovery, and trajectory links.
 
 Use `uv run harbor view results/local/jobs` to browse saved jobs locally.

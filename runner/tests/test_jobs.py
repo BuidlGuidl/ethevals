@@ -106,6 +106,37 @@ def test_board_job_uses_harbor_timeouts_without_overrides(tmp_path, monkeypatch)
         asyncio.run(run(report, config, tmp_path / "out", []))
 
 
+def test_run_forwards_the_agent_setup_timeout_multiplier(tmp_path, monkeypatch):
+    import asyncio
+    from harbor.job import Job
+    from ethevals.cli import parse_args
+    from ethevals.job_config import load_job
+    from ethevals.jobs import budget_check, plan, run
+
+    assert parse_args(["run", "--agent-setup-timeout-multiplier", "4"])[1].agent_setup_timeout_multiplier == 4.0
+    with pytest.raises(SystemExit):
+        parse_args(["run", "--agent-setup-timeout-multiplier", "0"])
+
+    config, task = load_job(job_config(tmp_path, "free")), task_folder(tmp_path)
+    report = budget_check(plan([task], config, [], n_attempts=1), 0)
+
+    class Planned(Exception):
+        pass
+
+    seen = []
+
+    async def capture(config):
+        seen.append(config.agent_setup_timeout_multiplier)
+        raise Planned
+
+    monkeypatch.setattr(Job, "create", capture)
+    with pytest.raises(Planned):
+        asyncio.run(run(report, config, tmp_path / "default", []))
+    with pytest.raises(Planned):
+        asyncio.run(run(report, config, tmp_path / "slow", [], agent_setup_timeout_multiplier=4))
+    assert seen == [None, 4]
+
+
 def test_opencode_gets_the_model_effort_as_its_variant(tmp_path, monkeypatch):
     import asyncio
     from harbor.job import Job
