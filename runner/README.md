@@ -60,6 +60,7 @@ The workflow needs these GitHub secrets:
 - `CODEX_AUTH_JSON`: the full ChatGPT `auth.json`. Rotate it weekly.
 - `ANTHROPIC_API_KEY`: the judge and Anthropic vanilla trials.
 - `OPENAI_API_KEY` and `OPENROUTER_API_KEY`: vanilla trials for those providers; OpenCode also uses OpenRouter.
+  OpenCode runs as [`ethevals.opencode`](ethevals/opencode.py), whose `shell.env` plugin blanks its keys in the agent's shell commands.
 - `EXA_API_KEY`, `MAINNET_RPC_URL`, and `BASE_RPC_URL`: optional search and task-declared fork credentials.
 - `HARBOR_API_KEY`: Harbor Hub API key, available only to the upload step.
 

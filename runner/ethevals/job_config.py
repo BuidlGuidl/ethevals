@@ -41,6 +41,8 @@ class FileCredential(Declaration):
 
 class AgentSettings(Declaration):
     name: str
+    # Load a different class while results keep `name`, e.g. a Harbor agent with an ETH Evals fix.
+    import_path: str | None = None
     version: str = Field(min_length=1, pattern=r"^\d+\.\d+\.\d+[^\s]*$")
     model: str
     paid_by: Literal["plan", "api_key", "free"]

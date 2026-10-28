@@ -185,7 +185,9 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
         model = config.models[agent.model]
         check_credentials(agent, item["agent_key"])
         kwargs = {**model.kwargs, **agent.kwargs, "version": agent.version}
-        harbor = AgentConfig(name=agent.name, model_name=model.name, kwargs=kwargs, env=agent.env)
+        # Harbor prefers a known name over import_path, so pass only one.
+        harbor = AgentConfig(name=None if agent.import_path else agent.name, import_path=agent.import_path,
+                             model_name=model.name, kwargs=kwargs, env=agent.env)
         options = AgentFactory.get_agent_class_from_config(harbor).options_model
         fields = options.model_fields if options is not None else {}
         if model.effort is not None:
