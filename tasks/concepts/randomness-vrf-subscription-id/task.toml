@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/randomness-vrf-subscription-id"
+description = "Check whether a model knows that a VRF 2.5 subscription id is a 256-bit hash, not a small counter."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["chainlink", "vrf", "randomness"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

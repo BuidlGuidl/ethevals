@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/randomness-historical-blockhash"
+description = "Check whether a model knows that EIP-2935 lets mainnet contracts read block hashes older than 256 blocks, and where."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["eip-2935", "blockhash", "randomness"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

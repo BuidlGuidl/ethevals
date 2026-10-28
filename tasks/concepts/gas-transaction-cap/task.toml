@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/gas-transaction-cap"
+description = "Check whether a model knows the per-transaction gas cap that EIP-7825 put on mainnet."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["eip-7825", "gas", "fusaka"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024
