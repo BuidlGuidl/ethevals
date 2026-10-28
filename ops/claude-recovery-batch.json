@@ -1,21 +1,21 @@
 {
   "budget_usd": 24,
-  "plan_lane": 2,
+  "plan_lane": 3,
   "selection": [
     [
       "build/aave-savings-page",
       "claude-code-opus-5.5",
-      1
+      2
     ],
     [
       "build/keeper-deposits",
       "claude-code-opus-5.5",
-      1
+      2
     ],
     [
-      "build/signed-votes",
+      "build/token-lending-market",
       "claude-code-opus-5.5",
-      2
+      1
     ]
   ]
 }
