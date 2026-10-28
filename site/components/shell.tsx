@@ -49,8 +49,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       initial={{ x: 0, y: 0, scale: 1 }} animate={{ x: flight.dx, y: flight.dy, scale: flight.scale }}
       transition={{ duration: .48, ease: [.2, .8, .2, 1] }} onAnimationComplete={() => setFlight(null)}><Logo id="flight-logo" /></motion.div>}
     {children}
-    <footer className="sitefoot"><b>ETH Evals</b><span>Open benchmark for AI on Ethereum</span><span aria-hidden="true">·</span>
+    <footer className="sitefoot"><b>ETH Evals</b><span className="footer-description"><span>Open benchmark for AI on Ethereum</span><span aria-hidden="true">·</span>
       <a className="dataset-link" href="https://huggingface.co/datasets/buidlguidl/ethevals-test" target="_blank" rel="noreferrer">
-        <Image src="/logos/huggingface.svg" width={20} height={19} alt="" />Hugging Face dataset ↗</a></footer>
+        <Image src="/logos/huggingface.svg" width={20} height={19} alt="" />Hugging Face dataset ↗</a></span></footer>
   </>;
 }

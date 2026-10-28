@@ -57,6 +57,7 @@
   .sitefoot { @apply mx-auto flex max-w-[1440px] flex-wrap items-center gap-4 border-t border-border px-8 py-6 text-[13px] text-muted; overflow-wrap: anywhere; }
   .sitefoot > * { min-width: 0; }
   .sitefoot b { @apply text-ink text-[14px]; }
+  .footer-description { @apply inline-flex flex-wrap items-center gap-1.5; }
   .dataset-link { @apply inline-flex items-center gap-2; }
   .skip-link { @apply sr-only; }
   .skip-link:focus { @apply not-sr-only fixed left-4 top-4 z-[80] bg-accent px-4 py-2 text-sheet; }
@@ -110,8 +111,9 @@
   .table-note { @apply border-t border-border px-4 py-3 text-[11px] text-muted; }
   .read-note { @apply max-w-[1100px] border-t border-border pt-4 text-muted; }
   .read-note b { @apply text-ink; }
-  .matrix-title { @apply border-b border-border bg-tint px-4 py-3 text-xs text-green; }
-  .matrix-title::before { content: "$ "; color: var(--color-dim); }
+  .matrix-scroll { max-height: 72vh; overflow: auto; }
+  .matrix thead th { position: sticky; top: 0; z-index: 20; }
+  .matrix thead .row-label { z-index: 25; }
   .matrix { width: max-content; min-width: 100%; }
   .matrix thead th:not(.row-label) { @apply min-w-[132px] max-w-[180px] text-center; }
   .matrix .row-label { @apply min-w-[280px] max-w-[360px]; }
@@ -340,9 +342,6 @@
   .leaderboard .row-label { padding-inline: 10px; }
   .configuration b { font-size: 12px; }
   .score-cell { min-height: 58px; font-size: 19px; }
-  .matrix-scroll { max-height: 72vh; overflow: auto; }
-  .matrix thead th { position: sticky; top: 0; z-index: 20; }
-  .matrix thead .row-label { z-index: 25; }
   .matrix .row-label { min-width: 128px; width: 128px; max-width: 128px; padding: 8px 10px; }
   .matrix .row-label small { display: none; }
   .matrix .configuration small { display: block; }

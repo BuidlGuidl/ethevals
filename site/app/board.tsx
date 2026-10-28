@@ -188,7 +188,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />
       <a className="button" href={`${repo}/blob/main/docs/add-a-task.md`} target="_blank" rel="noreferrer">How to add a task ↗</a></div>
       <p className="eyebrow">{pillars.reduce((sum, pillar) => sum + matrixTable.pillars[pillar].evals.length, 0)} tasks · {modeNames[evalsMode]}</p>
-      <div className="table-shell"><div className="matrix-title">Task matrix · {modeNames[evalsMode]}</div><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Task matrix. Scroll for more configurations.">
+      <div className="table-shell"><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Task matrix. Scroll for more tasks and configurations.">
         <table className="matrix"><caption className="sr-only">Passed trials / scored trials for each task and configuration</caption><thead><tr><th className="row-label" scope="col">Task</th>
           {matrixAgents.map((agent) => <th key={agentKey(agent)} scope="col"><Configuration agent={agent} /></th>)}</tr></thead>
           <tbody>{pillars.map((pillar) => <Fragment key={pillar}><tr className="pillar-band"><th scope="colgroup" colSpan={matrixAgents.length + 1}><span className="band-label">{names[pillar]}<small>{matrixTable.pillars[pillar].evals.length} tasks</small></span></th></tr>
