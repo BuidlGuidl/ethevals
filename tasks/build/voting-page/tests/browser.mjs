@@ -4,7 +4,7 @@ import { createHarness } from './harness.mjs';
 import { warmGovernance } from './warm.mjs';
 import { CouldNotDrive } from './control-vocabulary.mjs';
 import { connect, openProposal, castVote, wrap, delegate, dismiss, usableChoices,
-  listedDescriptions, governanceControls, emptyProposals } from './controls.mjs';
+  captureProposalList } from './controls.mjs';
 import { UNIT, prepareFork, discoverAccounts, localAccounts, proposals, proposalState, governorAbi, votesAbi,
   value, mineTo, voteEvents, voteRequests, castRequests, executedCalls, createProposal } from './chain.mjs';
 import { balance } from './rpc.mjs';
@@ -22,7 +22,12 @@ let checks = {};
 try { const previous = JSON.parse(await fs.readFile(path.join(output, 'checks.json'), 'utf8')); if (previous.compile) checks.compile = previous.compile; } catch {}
 const evidence = { units: 'Governor tallies, quorum and holderVotes use whole tokens. Event weights use raw units with 18 decimals. End and snapshot are block numbers. States use OpenZeppelin Governor numbering.',
   texts: {}, checks: Object.fromEntries(CHECKS.slice(1, -1).map(name => [name, { captured: false, observations: [] }])) };
-const persist = async () => { await save('checks.json', checks); await save('page-evidence.txt', evidence); };
+let proposalListEvidence = { titlesFound: [], governanceFound: false, governor: { count: 0, titles: [] }, listViews: [] };
+const persist = async () => {
+  await save('checks.json', checks);
+  await save('page-evidence.txt', evidence);
+  await save('proposal-list-evidence.txt', proposalListEvidence);
+};
 const record = async (name, passed, reason) => { checks[name] = { passed: Boolean(passed), reason }; await persist(); };
 const check = async (name, run) => {
   await journey(checks, name, run, persist);
@@ -74,22 +79,24 @@ try {
     }
     const selected = name => ({ ...fixture.proposals[name], id: BigInt(fixture.proposals[name].id) });
     const all = await proposals(url, context.governor);
-    let s, absent = false, empty = false;
+    let s, absent = false;
     await check('lists_every_proposal', async () => {
       s = await session();
-      const listed = await listedDescriptions(s.page, all.map(p => p.description), async () => { await capture(s, 'list-' + Object.keys(evidence.texts).length); });
+      proposalListEvidence = await captureProposalList(s, all.map(p => p.description), async () => {
+        const view = await capture(s, 'list-' + Object.keys(evidence.texts).length);
+        return evidence.texts[view];
+      });
       await capture(s, 'initial');
-      empty = !listed.length && await emptyProposals(s.page);
+      const listed = proposalListEvidence.titlesFound;
+      absent = !listed.length && !proposalListEvidence.governanceFound;
       const result = proposalListVerdict({ shown: listed.length, total: all.length,
-        governance: s.governanceFound || await governanceControls(s.page).count() > 0, empty });
+        governance: proposalListEvidence.governanceFound });
       if (result === 'could-not-drive') throw new CouldNotDrive('governance navigation showed no readable proposals');
-      absent = !listed.length && !empty;
       await record('lists_every_proposal', result === 'pass', `The fork has ${all.length} proposals; the page lists ${listed.length}. See initial-page.txt.`);
     });
-    if (absent || empty) {
+    if (absent) {
       for (const name of CHECKS.slice(1)) {
-        if (absent) await record(name, false, 'The page has no governance control and shows no proposals.');
-        else await check(name, async () => { throw new CouldNotDrive('the Governance page shows an empty proposal list'); });
+        await record(name, false, 'The page has no governance control and shows no proposals.');
       }
     } else {
       await check('status_and_tallies_match', async () => {

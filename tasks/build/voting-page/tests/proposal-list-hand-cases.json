@@ -1,0 +1,219 @@
+{
+  "note": "These inputs test only proposal-list-judge.toml. The saved load-error text comes from run 40640049320 verifier/initial-page.txt. The saved solution text comes from the round-7 solution capture. Each case must get its expected mark in two separate judge runs.",
+  "cases": [
+    {
+      "label": "saved proposal load error",
+      "want": {
+        "shown_proposal_list": false
+      },
+      "input": {
+        "titlesFound": [],
+        "governanceFound": true,
+        "governor": {
+          "count": 15,
+          "titles": [
+            "Set the protocol fee to 6 basis points",
+            "Set the protocol fee to 7 basis points",
+            "Set the protocol fee to 8 basis points",
+            "Set the protocol fee to 9 basis points",
+            "Set the protocol fee to 10 basis points",
+            "Set the protocol fee to 11 basis points",
+            "Set the protocol fee to 12 basis points",
+            "Set the protocol fee to 13 basis points",
+            "Set the protocol fee to 14 basis points",
+            "Set the protocol fee to 15 basis points",
+            "Set the protocol fee to 16 basis points",
+            "Set the protocol fee to 17 basis points",
+            "Set the protocol fee to 18 basis points",
+            "Set the protocol fee to 19 basis points",
+            "Set the protocol fee to 20 basis points"
+          ]
+        },
+        "listViews": [
+          "TOKEN\nGovernance\nHolder portal\nGovernance network\n0x91dC…04eE\nCOMMUNITY-OWNED. ON-CHAIN.\nYour tokens.\nYour voice.\n\nWrap your TOKEN, delegate your voting power, and help shape the protocol’s future—one proposal at a time.\n\nTOTAL PROPOSALS\n—\nACTIVE NOW\n0\nGOVERNANCE\nOn-chain\nDirect & transparent\nYOUR VOTING POWER\nParticipate\nV\n0\nvTOKEN votes\nTOKEN balance\n1,000\nvTOKEN balance\n0\nNot delegated yet\nWrap TOKEN\n1 TOKEN = 1 vTOKEN\nTOKEN\nMAX\n\nWrapping does not delegate automatically.\n\nWrap TOKEN\n↗\nDelegate votes\nDelegate to me\n\nDelegate before a proposal’s snapshot to vote with your vTOKEN.\n\nUpdate delegation\n\nYour tokens, your voice. Votes are cast directly from your wallet. The team handles queueing and execution separately.\n\nDECISIONS IN MOTION\nProposals\nAll proposals\n0\nActive\n0\nLIVE FROM GOVERNOR\n!\nCouldn’t load proposals\n\nThe contract function \"getVotes\" reverted with the following signature: 0xecd3f81e\n\nTry again\nT\nTOKEN Governance\nGovernor\n0x5066…7888\n·\nChain 31337\nPowered by the community"
+        ]
+      }
+    },
+    {
+      "label": "no proposals yet",
+      "want": {
+        "shown_proposal_list": false
+      },
+      "input": {
+        "titlesFound": [],
+        "governanceFound": true,
+        "governor": {
+          "count": 15,
+          "titles": [
+            "Set the protocol fee to 6 basis points",
+            "Set the protocol fee to 7 basis points",
+            "Set the protocol fee to 8 basis points",
+            "Set the protocol fee to 9 basis points",
+            "Set the protocol fee to 10 basis points",
+            "Set the protocol fee to 11 basis points",
+            "Set the protocol fee to 12 basis points",
+            "Set the protocol fee to 13 basis points",
+            "Set the protocol fee to 14 basis points",
+            "Set the protocol fee to 15 basis points",
+            "Set the protocol fee to 16 basis points",
+            "Set the protocol fee to 17 basis points",
+            "Set the protocol fee to 18 basis points",
+            "Set the protocol fee to 19 basis points",
+            "Set the protocol fee to 20 basis points"
+          ]
+        },
+        "listViews": [
+          "Governance\nNo proposals yet."
+        ]
+      }
+    },
+    {
+      "label": "zero total proposals",
+      "want": {
+        "shown_proposal_list": false
+      },
+      "input": {
+        "titlesFound": [],
+        "governanceFound": true,
+        "governor": {
+          "count": 15,
+          "titles": [
+            "Set the protocol fee to 6 basis points",
+            "Set the protocol fee to 7 basis points",
+            "Set the protocol fee to 8 basis points",
+            "Set the protocol fee to 9 basis points",
+            "Set the protocol fee to 10 basis points",
+            "Set the protocol fee to 11 basis points",
+            "Set the protocol fee to 12 basis points",
+            "Set the protocol fee to 13 basis points",
+            "Set the protocol fee to 14 basis points",
+            "Set the protocol fee to 15 basis points",
+            "Set the protocol fee to 16 basis points",
+            "Set the protocol fee to 17 basis points",
+            "Set the protocol fee to 18 basis points",
+            "Set the protocol fee to 19 basis points",
+            "Set the protocol fee to 20 basis points"
+          ]
+        },
+        "listViews": [
+          "Governance\nTotal proposals 0"
+        ]
+      }
+    },
+    {
+      "label": "unreached proposals tab",
+      "want": {
+        "shown_proposal_list": true
+      },
+      "input": {
+        "titlesFound": [],
+        "governanceFound": true,
+        "governor": {
+          "count": 15,
+          "titles": [
+            "Set the protocol fee to 6 basis points",
+            "Set the protocol fee to 7 basis points",
+            "Set the protocol fee to 8 basis points",
+            "Set the protocol fee to 9 basis points",
+            "Set the protocol fee to 10 basis points",
+            "Set the protocol fee to 11 basis points",
+            "Set the protocol fee to 12 basis points",
+            "Set the protocol fee to 13 basis points",
+            "Set the protocol fee to 14 basis points",
+            "Set the protocol fee to 15 basis points",
+            "Set the protocol fee to 16 basis points",
+            "Set the protocol fee to 17 basis points",
+            "Set the protocol fee to 18 basis points",
+            "Set the protocol fee to 19 basis points",
+            "Set the protocol fee to 20 basis points"
+          ]
+        },
+        "listViews": [
+          "Governance\nOverview\nYour votes 0\nActive 0\nProposal list is available in the Proposals tab."
+        ]
+      }
+    },
+    {
+      "label": "saved solution list",
+      "want": {
+        "shown_proposal_list": true
+      },
+      "input": {
+        "titlesFound": [],
+        "governanceFound": true,
+        "governor": {
+          "count": 15,
+          "titles": [
+            "Set the protocol fee to 6 basis points",
+            "Set the protocol fee to 7 basis points",
+            "Set the protocol fee to 8 basis points",
+            "Set the protocol fee to 9 basis points",
+            "Set the protocol fee to 10 basis points",
+            "Set the protocol fee to 11 basis points",
+            "Set the protocol fee to 12 basis points",
+            "Set the protocol fee to 13 basis points",
+            "Set the protocol fee to 14 basis points",
+            "Set the protocol fee to 15 basis points",
+            "Set the protocol fee to 16 basis points",
+            "Set the protocol fee to 17 basis points",
+            "Set the protocol fee to 18 basis points",
+            "Set the protocol fee to 19 basis points",
+            "Set the protocol fee to 20 basis points"
+          ]
+        },
+        "listViews": [
+          "ConnectionGovernance\nConnection\n\n0xE017275a2BeC8B6E0B83f5C21De4fc10f140B85c Disconnect\n\nGovernance\nVoting power\nTOKEN balance\n1,000\nWrapped vTOKEN\n0\nYour votes\n0\nWrap TOKEN\nWrap\nActivate voting power\n\nProposals\nSet the protocol fee to 20 basis points\n\nCanceled\n\nFor\n0\nAgainst\n0\n\nQuorum: 0 / 4,000,000 not reached\n\nVoting ends at block 266,393\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 19 basis points\n\nPending\n\nFor\n0\nAgainst\n0\n\nQuorum: 0 / 4,000,000 not reached\n\nVoting ends at block 266,393\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 18 basis points\n\nActive\n\nFor\n3,000,000\nAgainst\n0\n\nQuorum: 3,000,000 / 4,000,000 not reached\n\nVoting ends at block 256,447\n\nVoting power at snapshot: 0\n\nVote ForVote Against\nSet the protocol fee to 17 basis points\n\nActive\n\nFor\n3,000,000\nAgainst\n0\n\nQuorum: 3,000,000 / 4,000,000 not reached\n\nVoting ends at block 208,846\n\nVoting power at snapshot: 0\n\nVote ForVote Against\nSet the protocol fee to 16 basis points\n\nActive\n\nFor\n4,500,000\nAgainst\n0\n\nQuorum: 4,500,000 / 4,000,000 reached\n\nVoting ends at block 215,047\n\nVoting power at snapshot: 0\n\nVote ForVote Against\nSet the protocol fee to 15 basis points\n\nExecuted\n\nFor\n4,500,000\nAgainst\n0\n\nQuorum: 4,500,000 / 4,000,000 reached\n\nVoting ends at block 136,840\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 14 basis points\n\nQueued\n\nFor\n4,500,000\nAgainst\n0\n\nQuorum: 4,500,000 / 4,000,000 reached\n\nVoting ends at block 136,840\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 13 basis points\n\nQueued\n\nFor\n4,500,000\nAgainst\n0\n\nQuorum: 4,500,000 / 4,000,000 reached\n\nVoting ends at block 136,840\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 12 basis points\n\nSucceeded\n\nFor\n4,500,000\nAgainst\n0\n\nQuorum: 4,500,000 / 4,000,000 reached\n\nVoting ends at block 136,840\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 11 basis points\n\nDefeated\n\nFor\n3,000,000\nAgainst\n2,000,000\n\nQuorum: 3,000,000 / 4,000,000 not reached\n\nVoting ends at block 136,840\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 10 basis points\n\nDefeated\n\nFor\n0\nAgainst\n0\n\nQuorum: 0 / 4,000,000 not reached\n\nVoting ends at block 136,839\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 9 basis points\n\nDefeated\n\nFor\n2,000,000\nAgainst\n500,000\n\nQuorum: 2,000,000 / 4,000,000 not reached\n\nVoting ends at block 129,633\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 8 basis points\n\nQueued\n\nFor\n4,500,000\nAgainst\n0\n\nQuorum: 4,500,000 / 4,000,000 reached\n\nVoting ends at block 57,627\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 7 basis points\n\nDefeated\n\nFor\n3,000,000\nAgainst\n4,500,000\n\nQuorum: 3,000,000 / 4,000,000 not reached\n\nVoting ends at block 57,627\n\nVoting power at snapshot: 0\n\nSet the protocol fee to 6 basis points\n\nExecuted\n\nFor\n4,500,000\nAgainst\n0\n\nQuorum: 4,500,000 / 4,000,000 reached\n\nVoting ends at block 57,627\n\nVoting power at snapshot: 0"
+        ]
+      }
+    },
+    {
+      "label": "code found every title",
+      "want": {
+        "shown_proposal_list": true
+      },
+      "input": {
+        "titlesFound": [
+          "Set the protocol fee to 6 basis points",
+          "Set the protocol fee to 7 basis points",
+          "Set the protocol fee to 8 basis points",
+          "Set the protocol fee to 9 basis points",
+          "Set the protocol fee to 10 basis points",
+          "Set the protocol fee to 11 basis points",
+          "Set the protocol fee to 12 basis points",
+          "Set the protocol fee to 13 basis points",
+          "Set the protocol fee to 14 basis points",
+          "Set the protocol fee to 15 basis points",
+          "Set the protocol fee to 16 basis points",
+          "Set the protocol fee to 17 basis points",
+          "Set the protocol fee to 18 basis points",
+          "Set the protocol fee to 19 basis points",
+          "Set the protocol fee to 20 basis points"
+        ],
+        "governanceFound": true,
+        "governor": {
+          "count": 15,
+          "titles": [
+            "Set the protocol fee to 6 basis points",
+            "Set the protocol fee to 7 basis points",
+            "Set the protocol fee to 8 basis points",
+            "Set the protocol fee to 9 basis points",
+            "Set the protocol fee to 10 basis points",
+            "Set the protocol fee to 11 basis points",
+            "Set the protocol fee to 12 basis points",
+            "Set the protocol fee to 13 basis points",
+            "Set the protocol fee to 14 basis points",
+            "Set the protocol fee to 15 basis points",
+            "Set the protocol fee to 16 basis points",
+            "Set the protocol fee to 17 basis points",
+            "Set the protocol fee to 18 basis points",
+            "Set the protocol fee to 19 basis points",
+            "Set the protocol fee to 20 basis points"
+          ]
+        },
+        "listViews": [
+          "Governance\nProposals"
+        ]
+      }
+    }
+  ]
+}
