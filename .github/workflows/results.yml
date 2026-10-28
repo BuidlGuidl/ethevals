@@ -61,7 +61,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     concurrency:
-      group: ${{ matrix.plan_group && format('ethevals-plan-{0}', matrix.plan_group) || format('ethevals-key-{0}-{1}-{2}', github.run_id, github.run_attempt, matrix.index) }}
+      # Plan lanes are shared across runs, since they share a credential. Key lanes belong to one run.
+      group: ${{ matrix.plan_group && format('ethevals-{0}', matrix.lane) || format('ethevals-{0}-{1}-{2}', github.run_id, github.run_attempt, matrix.lane) }}
       queue: max
       cancel-in-progress: false
     steps:
