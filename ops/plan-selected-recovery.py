@@ -53,6 +53,8 @@ for index, (task, agent, trial) in enumerate(SELECTION):
         job["index"] = len(scheduled)
         if not job["plan_group"]:
             job["lane"] = f"key-{len(scheduled) % ci.KEY_LANES}"
+        elif args.batch:
+            job["lane"] = f"plan-{job['plan_group']}-{batch.get('plan_lane', 0)}"
         scheduled.append(item)
         matrix.append(job)
     if index == 0:

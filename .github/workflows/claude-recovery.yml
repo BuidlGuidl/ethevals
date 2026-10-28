@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ethevals-claude-recovery
+  group: ethevals-claude-recovery-${{ github.run_id }}
   queue: max
   cancel-in-progress: false
 jobs:
