@@ -1,7 +1,13 @@
 {
   "budget_usd": 24,
   "selection": [
-    ["concepts/agent-registries", "claude-code-fable-5.1", 1],
-    ["concepts/agent-registries", "claude-code-opus-5.5", 1]
+    ["concepts/agent-registries", "claude-code-opus-5.5", 2],
+    ["concepts/governance-arbitrum-block-clock", "claude-code-opus-5.5", 1],
+    ["concepts/governance-arbitrum-block-clock", "claude-code-opus-5.5", 2],
+    ["concepts/lending-small-position-close-factor", "claude-code-opus-5.5", 1],
+    ["concepts/lending-small-position-close-factor", "claude-code-opus-5.5", 2],
+    ["concepts/permit2-7702-signature", "claude-code-opus-5.5", 1],
+    ["concepts/permit2-7702-signature", "claude-code-opus-5.5", 2],
+    ["concepts/permit2-zero-expiration", "claude-code-opus-5.5", 1]
   ]
 }
