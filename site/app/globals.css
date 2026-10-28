@@ -222,16 +222,25 @@
   .issue { @apply border border-amber/30 bg-amber/5 p-3; overflow-wrap: anywhere; }
   .trajectory-links { @apply flex flex-wrap items-center gap-4; }
   .compare-page { @apply grid gap-6; }
-  .configuration-picks { @apply flex flex-wrap gap-2 border-0; }
+  .configuration-picks { @apply gap-2; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
   .configuration-picks button { @apply min-w-0 max-w-full border border-border-strong; }
-  .configuration-picks button[data-state="on"] small { @apply text-sheet/75; }
-  .pick-row { @apply grid gap-3; }
-  .comparison { @apply min-w-[700px]; }
+  .compare-picker { @apply border-y border-border; }
+  .compare-picker summary { @apply flex cursor-pointer items-center gap-3 py-3 text-[13px]; list-style: none; }
+  .compare-picker summary::-webkit-details-marker { display: none; }
+  .compare-picker summary::before { content: "+"; @apply text-accent; }
+  .compare-picker[open] summary::before { content: "−"; }
+  .compare-picker summary span { @apply ml-auto text-[11px] text-muted; }
+  .compare-picker .configuration-picks { @apply pb-4; }
+  .comparison thead th { min-width: 180px; text-align: center; }
+  .comparison thead th:first-child { min-width: 120px; text-align: left; }
+  .comparison tr > th:first-child { @apply sticky left-0 z-10 bg-sheet; }
+  .comparison thead tr > th:first-child { @apply bg-tint; }
   .comparison td, .comparison tbody th { @apply px-4 py-4 text-[13px]; }
   .comparison td { @apply text-center; }
+  .comparison tbody tr:first-child { @apply text-ink font-semibold; }
+  .comparison tbody tr:first-child td { @apply text-[20px]; }
+  .comparison tbody th { color: var(--pillar, var(--color-ink)); }
   .comparison .best { @apply bg-accent/10 text-ink font-bold; box-shadow: inset 0 -2px 0 var(--color-accent); }
-  .compare-swatch { @apply mb-2 inline-block h-2 w-2; }
-  .tone-0 { @apply bg-accent; } .tone-1 { @apply bg-green; } .tone-2 { @apply bg-amber; } .tone-3 { @apply bg-red; } .tone-4 { @apply bg-muted; }
   .how-page { @apply grid gap-16; }
   .how-hero { @apply grid gap-4; }
   .lead { @apply max-w-[900px] text-[15px] text-muted; }

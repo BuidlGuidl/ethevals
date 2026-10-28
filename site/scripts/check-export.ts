@@ -52,7 +52,8 @@ if (expected === "demo") {
   assert.ok(html.includes("2 of 3 trials passed"));
   assert.ok(html.includes('aria-label="Concepts, Demo agent A / Demo model A. 83%.'), "The concepts pillar must show the rounded mean of 2/3 and 1/1.");
   assert.ok(!html.includes("$ / pass"));
-  assert.ok(readFileSync("out/compare/index.html", "utf8").includes("$ / pass"));
+  const comparison = readFileSync("out/compare/index.html", "utf8");
+  assert.ok(!comparison.includes("$ / pass") && !comparison.includes("Tokens per run"));
   assert.ok(html.includes('<span class="eval-title">Units</span>'));
 } else {
   assert.ok(html.includes("No agent trials yet") && html.includes("No tasks yet"));
