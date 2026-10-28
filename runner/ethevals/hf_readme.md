@@ -25,7 +25,7 @@ It needs no RPC URL or judge key.
 Run its bundled solution:
 
 ```sh
-harbor run --repo https://huggingface.co/datasets/{repo} \
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
   --include-task-name concepts--agent-registries \
   --agent oracle \
   --n-concurrent 1
@@ -59,7 +59,7 @@ The OpenRouter key pays for the agent's model calls.
 Run the task:
 
 ```sh
-harbor run --repo https://huggingface.co/datasets/{repo} \
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
   --include-task-name act--treasury-eth-sale \
   --agent opencode \
   --model openrouter/moonshotai/kimi-k3.1-pro \
@@ -82,12 +82,19 @@ A plan cannot pay for the judge, which still needs `ANTHROPIC_API_KEY`.
 <details>
 <summary>Codex with a ChatGPT plan or OpenAI API key</summary>
 
-For a ChatGPT plan, install [Codex](https://developers.openai.com/codex/cli/).
-Sign in and tell Harbor to use your plan login:
+### With a ChatGPT plan
+
+Install [Codex](https://developers.openai.com/codex/cli/), then sign in and run the task:
 
 ```sh
 codex login
 export CODEX_FORCE_AUTH_JSON=YES
+
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
+  --include-task-name concepts--agent-registries \
+  --agent codex \
+  --model openai/gpt-6-astra \
+  --n-concurrent 1
 ```
 
 Harbor reads `~/.codex/auth.json` and copies it into the task's container.
@@ -95,17 +102,15 @@ If Codex uses your OS credential store, sign in with `codex -c 'cli_auth_credent
 If your login file lives elsewhere, run `export CODEX_AUTH_JSON_PATH='/path/to/auth.json'`.
 See [Codex authentication](https://developers.openai.com/codex/auth) for login and storage options.
 
-To pay through the OpenAI API instead, clear the plan settings and set your key:
+### With an OpenAI API key
+
+Clear the plan settings, set your key, and run the task:
 
 ```sh
 unset CODEX_FORCE_AUTH_JSON CODEX_AUTH_JSON_PATH
 export OPENAI_API_KEY='your-agent-api-key'
-```
 
-Run the task with either authentication method:
-
-```sh
-harbor run --repo https://huggingface.co/datasets/{repo} \
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
   --include-task-name concepts--agent-registries \
   --agent codex \
   --model openai/gpt-6-astra \
@@ -117,56 +122,57 @@ harbor run --repo https://huggingface.co/datasets/{repo} \
 <details>
 <summary>Claude Code with a Claude plan or Anthropic API key</summary>
 
-For a Claude plan, install [Claude Code](https://code.claude.com/docs/en/setup).
-Create a token:
+### With a Claude plan
+
+Install [Claude Code](https://code.claude.com/docs/en/setup), then create a token:
 
 ```sh
 claude setup-token
 ```
 
-Set the token in your shell:
+Copy the returned token into `CLAUDE_CODE_OAUTH_TOKEN`, then run the task:
 
 ```sh
 export CLAUDE_CODE_OAUTH_TOKEN='your-plan-token'
 export CLAUDE_FORCE_OAUTH=YES
-```
 
-`CLAUDE_FORCE_OAUTH` tells Harbor to use the plan even when the judge's Anthropic key is present.
-
-To pay through the Anthropic API instead, clear the plan settings and set your key:
-
-```sh
-unset CLAUDE_CODE_OAUTH_TOKEN CLAUDE_FORCE_OAUTH
-export ANTHROPIC_API_KEY='your-api-key'
-```
-
-For a task with an LLM judge, the Anthropic key pays for both the agent and the judge.
-
-Run the task with either authentication method:
-
-```sh
-harbor run --repo https://huggingface.co/datasets/{repo} \
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
   --include-task-name concepts--agent-registries \
   --agent claude-code \
   --model anthropic/claude-opus-5-5 \
   --n-concurrent 1
 ```
 
+`CLAUDE_FORCE_OAUTH` tells Harbor to use the plan even when the judge's Anthropic key is present.
+
+### With an Anthropic API key
+
+Clear the plan settings, set your key, and run the task:
+
+```sh
+unset CLAUDE_CODE_OAUTH_TOKEN CLAUDE_FORCE_OAUTH
+export ANTHROPIC_API_KEY='your-api-key'
+
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
+  --include-task-name concepts--agent-registries \
+  --agent claude-code \
+  --model anthropic/claude-opus-5-5 \
+  --n-concurrent 1
+```
+
+For a task with an LLM judge, the Anthropic key pays for both the agent and the judge.
+
 </details>
 
 <details>
 <summary>OpenCode with OpenRouter</summary>
 
-Set your OpenRouter key:
+Set your OpenRouter key and run the task:
 
 ```sh
 export OPENROUTER_API_KEY='your-agent-api-key'
-```
 
-Run the task:
-
-```sh
-harbor run --repo https://huggingface.co/datasets/{repo} \
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
   --include-task-name concepts--agent-registries \
   --agent opencode \
   --model openrouter/moonshotai/kimi-k3.1-pro \
@@ -180,7 +186,7 @@ Its Anthropic key pays for the judge separately.
 
 ## Before running another task
 
-Browse the [task folders](https://huggingface.co/datasets/{repo}/tree/main/tasks).
+Browse the [task folders](https://huggingface.co/datasets/buidlguidl/ethevals-test/tree/main/tasks).
 Use the folder name with `--include-task-name`, such as `concepts--agent-registries`.
 
 Read the task's README for its instruction and checks.

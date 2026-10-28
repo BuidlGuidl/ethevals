@@ -48,7 +48,8 @@ def write_hf(paths: list[Path], output: Path, repo: str = DEFAULT_REPO,
             "tags": ["ethereum", "rl-environment", "harbor"]}
     if license:
         card["license"] = license
-    guide = Path(__file__).with_name("hf_readme.md").read_text().format(
-        repo=repo, requirements="\n".join(requirements) or "These tasks need no host variables.")
+    guide = Path(__file__).with_name("hf_readme.md").read_text().replace(
+        f"https://huggingface.co/datasets/{DEFAULT_REPO}", f"https://huggingface.co/datasets/{repo}",
+    ).format(requirements="\n".join(requirements) or "These tasks need no host variables.")
     (output / "README.md").write_text("---\n" + yaml.safe_dump(card, sort_keys=False) + "---\n\n" + guide)
     return {"repo": repo, "output": str(output), "tasks": len(tasks), "license": license}
