@@ -1,0 +1,141 @@
+name: Continue trials without Claude plan
+on:
+  push:
+    branches: [ops/pause-claude-plan-20261028]
+    paths: ['.github/workflows/continue-without-claude-plan.yml']
+permissions:
+  contents: read
+concurrency:
+  group: eval-results
+  queue: max
+  cancel-in-progress: false
+jobs:
+  plan:
+    name: Plan missing trials
+    if: github.ref == 'refs/heads/ops/pause-claude-plan-20261028'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      scheduled_trials: ${{ steps.plan.outputs.scheduled_trials }}
+      sha: ${{ steps.plan.outputs.sha }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: false
+      - run: uv sync --frozen
+      - name: Check the budget and emit the matrix
+        id: plan
+        env:
+          RUN_BUDGET: "10000"
+          MAINNET_RPC_URL: &mainnet-rpc ${{ secrets.MAINNET_RPC_URL }}
+          BASE_RPC_URL: &base-rpc ${{ secrets.BASE_RPC_URL }}
+        run: |
+          uv run python scripts/ci.py plan-trials --agents vanilla-opus-5.5 vanilla-gpt-6.1-sol vanilla-fable-5.1 vanilla-gpt-6-astra vanilla-kimi-k3.1-pro vanilla-glm-5.3 vanilla-deepseek-v4.1-flash-1017 vanilla-grok-4.7 vanilla-gemini-4-argon codex-gpt-6.1-sol codex-gpt-6-astra opencode-kimi-k3.1-pro opencode-glm-5.3 opencode-deepseek-v4.1-flash-1017 opencode-grok-4.7 opencode-gemini-4-argon --modes internet vanilla --budget "$RUN_BUDGET" --restore-results --output results/ci-plan --github-output "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: trial-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: results/ci-plan/
+          retention-days: 14
+          if-no-files-found: error
+  matrix:
+    name: ${{ matrix.task_id }} / ${{ matrix.agent_key }} / ${{ matrix.mode }} / trial ${{ matrix.trial }}
+    needs: plan
+    if: needs.plan.outputs.scheduled_trials != '0'
+    runs-on: ubuntu-latest
+    # Harbor builds task environments and runs their declared sidecars.
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    concurrency:
+      # Plan lanes are shared across runs, since they share a credential. Key lanes belong to one run.
+      group: ${{ matrix.plan_group && format('ethevals-{0}', matrix.lane) || format('ethevals-{0}-{1}-{2}', github.run_id, github.run_attempt, matrix.lane) }}
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: trial-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: results/ci-plan
+      # Keep Docker's default builder. A buildx container builder can't see these local images and pulls from GHCR.
+      - run: uv run python scripts/ci.py images
+      - name: Run one planned trial
+        timeout-minutes: 190
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          MAINNET_RPC_URL: *mainnet-rpc
+          BASE_RPC_URL: *base-rpc
+        run: >-
+          uv run python scripts/ci.py run-trial --plan results/ci-plan
+          --index ${{ matrix.index }} --output results/ci-run
+      - name: Upload checked trials to Harbor Hub
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          HARBOR_API_KEY: ${{ secrets.HARBOR_API_KEY }}
+        run: >-
+          uv run ethevals upload-hub --output results/ci-run
+          --config results/ci-plan/config.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: trial-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.index }}
+          path: results/ci-run/public/
+          retention-days: 14
+          if-no-files-found: warn
+          # The publication check covers hidden files, such as an agent's .gitignore.
+          include-hidden-files: true
+  publish:
+    name: Publish results
+    needs: [plan, matrix]
+    if: always() && github.ref == 'refs/heads/ops/pause-claude-plan-20261028' && needs.plan.result == 'success' && needs.plan.outputs.scheduled_trials != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # Publish trial assets and append the results branch.
+      pull-requests: write # Open the results PR.
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: trial-run-${{ github.run_id }}-*
+          path: results/artifact
+      - name: Publish trial assets and update the results PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULTS_REPO: ${{ github.repository }}
+          RESULTS_RUN_ID: ${{ github.run_id }}
+          RESULTS_COMMIT: ${{ needs.plan.outputs.sha }}
+        run: >-
+          uv run python scripts/ci.py publish-results
+          --output results/artifact --repo "$RESULTS_REPO"
+          --run-id "$RESULTS_RUN_ID" --commit "$RESULTS_COMMIT" --publish

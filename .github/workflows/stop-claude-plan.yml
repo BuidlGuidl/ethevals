@@ -1,0 +1,21 @@
+name: Stop Claude plan trials
+on:
+  push:
+    branches: [ops/pause-claude-plan-20261028]
+    paths: ['.github/workflows/stop-claude-plan.yml']
+permissions: {}
+jobs:
+  stop:
+    name: Stop Claude plan lane ${{ matrix.lane }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [0, 1, 2, 3, 4]
+    concurrency:
+      group: ethevals-plan-claude-code-${{ matrix.lane }}
+      queue: single
+      cancel-in-progress: true
+    steps:
+      - run: echo "Stopped the running and pending Claude plan trials in this lane."
