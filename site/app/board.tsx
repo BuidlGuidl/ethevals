@@ -156,7 +156,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
   const matrixAgents = [...matrixTable.agents].sort((a, b) =>
     (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(b)].scores.overall ?? -1) -
     (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(a)].scores.overall ?? -1));
-  return <TooltipProvider delayDuration={200}><main id="main" className="page">
+  return <TooltipProvider delayDuration={200}><main id="main" className="page results-page">
     {data.demo && <aside className="banner"><strong>Demo data</strong> · Invented results for a board preview.</aside>}
     <header className="hero"><div className="hero-brand"><h1 id="hero-logo" aria-label="ETH Evals"><Logo id="hero-gradient" /></h1>
       <p className="hero-plate"><span><b>{data.counts.evals}</b> tasks</span><span><b>{data.counts.agents}</b> agents</span><span><b>{data.counts.runs.toLocaleString("en")}</b> trials</span></p></div>

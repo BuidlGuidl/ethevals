@@ -72,6 +72,8 @@
   .hero-desc { @apply max-w-[940px] text-[14px] text-muted; }
   .hero-desc b { @apply text-ink font-medium; }
   .results-section { @apply mb-16 grid gap-5; }
+  .page.results-page { padding-bottom: 24px; }
+  .results-page #evals { margin-bottom: 0; }
   .section-head { @apply flex flex-wrap items-start justify-between gap-5; }
   .section-head p { @apply mt-2 max-w-[850px] text-muted; }
   .toolbar { @apply flex flex-wrap items-center gap-4; }
@@ -111,7 +113,7 @@
   .table-note { @apply border-t border-border px-4 py-3 text-[11px] text-muted; }
   .read-note { @apply max-w-[1100px] border-t border-border pt-4 text-muted; }
   .read-note b { @apply text-ink; }
-  .matrix-scroll { max-height: 72vh; overflow: auto; }
+  .matrix-scroll { max-height: clamp(160px, calc(100svh - 240px), 72vh); overflow: auto; }
   .matrix thead th { position: sticky; top: 0; z-index: 20; }
   .matrix thead .row-label { z-index: 25; }
   .matrix { width: max-content; min-width: 100%; }
@@ -326,6 +328,9 @@
   .run-stats > div { padding-inline: 8px; }
   .run-stats dd { font-size: 14px; }
   .page { padding: 28px 18px; }
+  .page.results-page { padding-bottom: 24px; }
+  .results-page #evals { margin-bottom: 0; }
+  .matrix-scroll { max-height: clamp(160px, calc(100svh - 340px), 72vh); }
   pre { padding: 16px; }
   .topnav { gap: 12px; padding-inline: 18px; }
   .brand { width: 88px; }
