@@ -156,6 +156,7 @@ agents:
         policy: plan_tokens
   opencode-kimi-k3.1-pro:
     name: opencode
+    import_path: ethevals.opencode:OpenCode
     version: 1.18.33
     model: kimi-k3.1-pro
     modes: [internet, skills]
@@ -169,6 +170,7 @@ agents:
       OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'
   opencode-glm-5.3:
     name: opencode
+    import_path: ethevals.opencode:OpenCode
     version: 1.18.33
     model: glm-5.3
     modes: [internet, skills]
@@ -182,6 +184,7 @@ agents:
       OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'
   opencode-deepseek-v4.1-flash-1017:
     name: opencode
+    import_path: ethevals.opencode:OpenCode
     version: 1.18.33
     model: deepseek-v4.1-flash-1017
     modes: [internet, skills]
@@ -195,6 +198,7 @@ agents:
       OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'
   opencode-grok-4.7:
     name: opencode
+    import_path: ethevals.opencode:OpenCode
     version: 1.18.33
     model: grok-4.7
     modes: [internet, skills]
@@ -208,6 +212,7 @@ agents:
       OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'
   opencode-gemini-4-argon:
     name: opencode
+    import_path: ethevals.opencode:OpenCode
     version: 1.18.33
     model: gemini-4-argon
     modes: [internet, skills]
