@@ -191,3 +191,5 @@ try {
   await save('checks.json', checks);
   await save('timing.json', { browserSeconds: (Date.now() - start) / 1000 });
 }
+// A fork stuck on an upstream read can keep handles open after close, so end here and let test.sh go on.
+process.exit(process.exitCode ?? 0);

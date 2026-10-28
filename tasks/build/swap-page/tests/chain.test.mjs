@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -98,6 +99,45 @@ test('observes token and native cuts only in the swap block', { timeout: 30_000 
     assert.equal(routersEmpty(expanded, await reader.state([custom])), false);
     assert.equal(routersEmpty(expanded, await reader.state([custom], baseline.block)), true);
   } finally {
+    if (child.exitCode === null) { const exited = once(child, 'exit'); child.kill('SIGTERM'); await exited; }
+  }
+});
+
+test('waits out fork reads slower than viem\'s ten-second default', { timeout: 90_000 }, async () => {
+  const listener = net.createServer();
+  await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
+  const port = listener.address().port;
+  await new Promise(resolve => listener.close(resolve));
+  const url = `http://127.0.0.1:${port}`;
+  const child = spawn('anvil', ['--port', String(port), '--accounts', '0', '--chain-id', '1', '--base-fee', '0', '--silent'], { stdio: 'ignore' });
+  // Every read through this proxy takes 11 seconds, like a fork loading mainnet state under load.
+  const proxy = http.createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    await new Promise(resolve => setTimeout(resolve, 11_000));
+    const upstream = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: Buffer.concat(chunks) });
+    response.writeHead(upstream.status, { 'Content-Type': 'application/json' }).end(await upstream.text());
+  });
+  await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
+  try {
+    assert.equal(await until(async () => await rpc(url, 'eth_chainId') === '0x1'), true);
+    const compiled = JSON.parse(require('solc').compile(JSON.stringify({ language: 'Solidity',
+      sources: { 'Token.sol': { content: 'pragma solidity ^0.8.0; contract Token { mapping(address => uint) public balanceOf; }' } },
+      settings: { outputSelection: { '*': { '*': ['evm.deployedBytecode.object'] } } } })));
+    const code = '0x' + compiled.contracts['Token.sol'].Token.evm.deployedBytecode.object;
+    for (const [symbol, address] of Object.entries(TOKENS)) if (symbol !== 'ETH') await rpc(url, 'anvil_setCode', [address, code]);
+    const owner = '0x1111111111111111111111111111111111111111';
+    const treasury = '0x2222222222222222222222222222222222222222';
+    await rpc(url, 'anvil_setBalance', [owner, '0x100000']);
+    await rpc(url, 'anvil_impersonateAccount', [owner]);
+    const hash = await rpc(url, 'eth_sendTransaction', [{ from: owner, to: ROUTERS['V2 Router02'], value: '0x1', gasPrice: '0x0', gas: '0x5208' }]);
+    const mined = await receipt(url, hash);
+    const reader = chainReader(`http://127.0.0.1:${proxy.address().port}`, owner, treasury);
+    const [observed] = await reader.transactions({ transactions: [{ hash, receipt: mined }] });
+    assert.equal(observed.relevant, true);
+    assert.deepEqual(observed.treasuryDelta, { ETH: 0n, WETH: 0n, USDC: 0n, USDT: 0n });
+  } finally {
+    await new Promise(resolve => proxy.close(resolve));
     if (child.exitCode === null) { const exited = once(child, 'exit'); child.kill('SIGTERM'); await exited; }
   }
 });
