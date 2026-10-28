@@ -20,19 +20,10 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     npm install --global pnpm@9.14.2 && npm cache clean --force
 WORKDIR /workspace
 COPY verifier/package.json verifier/package-lock.json /root/voting-verifier/
-RUN cd /root/voting-verifier && npm ci --ignore-scripts && \
-    apt-get update && \
-    (npx playwright install-deps --dry-run chromium || test "$?" = 1) > /tmp/browser-deps && \
-    sed -n 's/^  \([a-z0-9][a-z0-9.+:-]*\)$/\1/p' /tmp/browser-deps > /tmp/browser-packages && \
-    test -s /tmp/browser-packages && \
-    xargs apt-get install -y --download-only --no-install-recommends < /tmp/browser-packages && \
-    mkdir -p /root/voting-libs && \
-    for package in /var/cache/apt/archives/*.deb; do dpkg-deb -x "$package" /root/voting-libs; done && \
-    PLAYWRIGHT_BROWSERS_PATH=/root/voting-browsers npx playwright install chromium && \
-    chmod 700 /root/voting-verifier /root/voting-browsers /root/voting-libs && \
-    rm -f /var/cache/apt/archives/*.deb && \
-    npm cache clean --force && rm -rf /var/lib/apt/lists/*
-COPY verifier/fonts.conf /root/voting-fonts.conf
+RUN cd /root/voting-verifier && npm ci --ignore-scripts && chmod 700 /root/voting-verifier && npm cache clean --force
+COPY --from=contracts /opt/governance/frontend/ /root/voting-contracts/
+COPY starter/ /root/voting-starter/
+RUN chmod 700 /root/voting-contracts /root/voting-starter
 USER agent
 COPY --chown=agent:agent starter/package.json starter/pnpm-lock.yaml starter/.npmrc ./
 RUN pnpm install --frozen-lockfile && rm -rf /home/agent/.local/share/pnpm/store

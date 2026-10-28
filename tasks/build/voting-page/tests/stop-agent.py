@@ -1,4 +1,4 @@
-"""Stop agent code before the verifier starts its unfiltered fork."""
+"""Stop agent code before reading submitted files and after building them."""
 import os
 from pathlib import Path
 import pwd
