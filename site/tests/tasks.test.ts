@@ -19,7 +19,7 @@ function taskCatalog(t: TestContext) {
     { id: "build/alpha-token", pillar: "build", area: "Tokens", layer: "frontend", instruction: "Build a token." },
     { id: "concepts/fees", pillar: "concepts", instruction: "Explain fees." },
   ].map((entry) => ({ hash: "current", description: "A task.", modes: ["internet"], ...entry }));
-  writeFileSync(path.join(root, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "pack", models: [], tasks: entries }));
+  writeFileSync(path.join(root, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "pack", n_attempts: 3, models: [], tasks: entries }));
   return loadTaskCatalog({ ETHEVALS_ROWS: "missing-results.jsonl" }, root);
 }
 
@@ -154,11 +154,11 @@ test("the catalog loader selects demo tasks and rejects a blank area or an unkno
   const file = path.join(root, "demo/catalog.json");
   const task = { id: "act/send-token", hash: "demo", pillar: "act", description: "Send a token.",
     instruction: "Send one token.", modes: ["internet"], area: "Tokens" };
-  writeFileSync(file, JSON.stringify({ skills_hash: "pack", models: [], tasks: [task] }));
+  writeFileSync(file, JSON.stringify({ skills_hash: "pack", n_attempts: 3, models: [], tasks: [task] }));
   assert.deepEqual(loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root).evals,
     [{ ...task, title: "Send token" }]);
-  writeFileSync(file, JSON.stringify({ skills_hash: "pack", models: [], tasks: [{ ...task, area: " " }] }));
+  writeFileSync(file, JSON.stringify({ skills_hash: "pack", n_attempts: 3, models: [], tasks: [{ ...task, area: " " }] }));
   assert.throws(() => loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root), /cannot load task catalog/);
-  writeFileSync(file, JSON.stringify({ skills_hash: "pack", models: [], tasks: [{ ...task, layer: "pages" }] }));
+  writeFileSync(file, JSON.stringify({ skills_hash: "pack", n_attempts: 3, models: [], tasks: [{ ...task, layer: "pages" }] }));
   assert.throws(() => loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root), /cannot load task catalog/);
 });

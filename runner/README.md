@@ -50,6 +50,7 @@ Pass the same `--config` when the run used separate job settings.
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
 It runs the [Harbor free check](../docs/harbor.md).
 [results.yml](../.github/workflows/results.yml) queues paid trials after changes to `main`, except results-only changes.
+It plans the internet and vanilla modes ([ADR 0019](../docs/adr/0019-two-trials-and-model-only-runs-in-ci.md)).
 A manual budget overrides `ETHEVALS_BUDGET_USD`; the fallback is zero.
 A zero budget saves the plan and schedules no trials, including plan-paid trials with no API reserve.
 A positive budget must cover all missing trials' remaining API executions, including judge costs.

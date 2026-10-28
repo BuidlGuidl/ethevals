@@ -28,7 +28,7 @@ function fixture(t: TestContext) {
   mkdirSync(path.join(site, ".catalog"), { recursive: true });
   mkdirSync(path.join(root, "tasks"));
   mkdirSync(path.join(root, "results"));
-  writeFileSync(path.join(site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", models: ["model-a"], tasks: [evaluation] }));
+  writeFileSync(path.join(site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", n_attempts: 3, models: ["model-a"], tasks: [evaluation] }));
   const rows = path.join(root, "results/rows.jsonl");
   return { root, site, rows, write: (values: Partial<Row>[]) => {
     writeFileSync(rows, "\n" + values.map((value) => JSON.stringify({ ...paid,
@@ -45,7 +45,7 @@ for (const [name, change, message] of [
 ] as const) {
   test(`loader rejects ${name} with the file and physical line`, (t) => {
     const f = fixture(t);
-    writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack",
+    writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", n_attempts: 3,
       models: ["model-a"],
       tasks: [{ ...evaluation, modes: ["internet"] }] }));
     f.write([change]);
@@ -83,6 +83,13 @@ test("v7 cost limits retain runner reasons and count as failed trials", (t) => {
   const cell = loadBoard({}, f.site).tables.internet.pillars.concepts.evals[0].cells['["model-a","agent-a","high"]'];
   assert.deepEqual([cell.score, cell.total, cell.errors, cell.trials[0].issue],
     [0, 1, 0, "Trial reached cost limit 5.0. Budget spent."]);
+});
+
+test("loader keeps trials past the job's n_attempts off the board", (t) => {
+  const f = fixture(t);
+  f.write([{}, { trial: 3 }, { trial: 4 }]);
+  const cell = loadBoard({}, f.site).tables.internet.pillars.concepts.evals[0].cells['["model-a","agent-a","high"]'];
+  assert.deepEqual(cell.trials.map((trial) => trial.trial), [1, 3]);
 });
 
 test("loader excludes stale rows and keeps skills in a separate agent table", (t) => {
@@ -129,7 +136,7 @@ test("an empty catalog needs no legacy task root and excludes old rows", (t) => 
   f.write([{}]);
   assert.equal(loadBoard({}, f.site).tables.internet.agents[0].model, "model-a");
   rmSync(path.join(f.root, "tasks"), { recursive: true });
-  writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", models: ["model-a"], tasks: [] }));
+  writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", n_attempts: 3, models: ["model-a"], tasks: [] }));
   f.write([{}]);
   const board = loadBoard({}, f.site);
   assert.deepEqual(board.evaluations, {});

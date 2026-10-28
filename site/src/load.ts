@@ -9,6 +9,7 @@ import { siteRoot } from "./paths";
 const catalogSchema = z.object({
   skills_hash: z.string().min(1),
   models: z.array(z.string().min(1)),
+  n_attempts: z.number().int().positive(),
   tasks: z.array(z.object({
     id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
     area: z.string().trim().min(1).nullish(), layer: z.enum(layers).nullish(),
@@ -17,12 +18,13 @@ const catalogSchema = z.object({
   })),
 });
 
-export function loadCatalog(filename: string): { evals: Eval[]; skills_hash: string; models: string[] } {
+export function loadCatalog(filename: string): { evals: Eval[]; skills_hash: string; models: string[]; n_attempts: number } {
   try {
     const catalog = catalogSchema.parse(JSON.parse(readFileSync(filename, "utf8")));
     return {
       skills_hash: catalog.skills_hash,
       models: catalog.models,
+      n_attempts: catalog.n_attempts,
       evals: catalog.tasks.map((entry) => {
         const name = entry.id.split("/").at(-1)!.replace(/[-_]/g, " ");
         return { ...entry, title: name.charAt(0).toUpperCase() + name.slice(1) };
@@ -68,8 +70,10 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
 export function currentRows(rows: Row[], catalog: ReturnType<typeof loadCatalog>): Row[] {
   const current = new Map(catalog.evals.map((task) => [task.id, task.hash]));
   const models = new Set(catalog.models);
+  // Trials past the job's n_attempts stay in the data but leave the board.
   return rows.filter((row) => current.get(row.task_id) === row.task_hash
     && models.has(row.model)
+    && row.trial <= catalog.n_attempts
     && (row.mode !== "skills" || row.skills_hash === catalog.skills_hash));
 }
 

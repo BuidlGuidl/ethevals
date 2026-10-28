@@ -53,6 +53,7 @@ def test_catalog_lists_the_jobs_model_names(tmp_path):
     write_catalog([task_folder(tmp_path)], tmp_path / "catalog")
     catalog = json.loads((tmp_path / "catalog/catalog.json").read_text())
     assert catalog["models"] == [model.name for model in load_job().models.values()]
+    assert catalog["n_attempts"] == load_job().n_attempts
 
 
 @pytest.mark.parametrize("pillar", ["security", "transactions", "building"])

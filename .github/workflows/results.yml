@@ -42,7 +42,7 @@ jobs:
           MAINNET_RPC_URL: &mainnet-rpc ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: &base-rpc ${{ secrets.BASE_RPC_URL }}
         run: |
-          uv run python scripts/ci.py plan-trials --modes internet --budget "$RUN_BUDGET" --restore-results --output results/ci-plan --github-output "$GITHUB_OUTPUT"
+          uv run python scripts/ci.py plan-trials --modes internet vanilla --budget "$RUN_BUDGET" --restore-results --output results/ci-plan --github-output "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

@@ -142,16 +142,15 @@ test("cost adds both roles and keeps a missing price unknown", () => {
   assert.equal(trialCost(row({ model_cost_usd: 0, judge_cost_usd: 0 })), 0);
 });
 
-test("the mode switch disables upcoming modes and retains skills details", () => {
+test("the mode switch disables Internet + Skills, enables Model only, and retains skills details", () => {
   const data = buildBoard([{ ...evaluation, modes: ["vanilla", "internet", "skills"] }],
     [row(), row({ mode: "skills", ...failure })]);
   const html = renderToStaticMarkup(createElement(Board, { data }));
   assert.ok(html.includes('aria-label="Which results"'));
   assert.match(html, /aria-checked="true"[^>]*>Internet<\/button>/);
   assert.ok(html.includes(">Measures how agents do Ethereum work with web access, the way developers use them</p>"));
-  for (const label of ["Internet + Skills", "Model only"]) {
-    assert.match(html, new RegExp(`<button[^>]*disabled=""[^>]*>${label.replace("+", "\\+")}</button>`));
-  }
+  assert.match(html, /<button[^>]*disabled=""[^>]*>Internet \+ Skills<\/button>/);
+  assert.doesNotMatch(html, /<button[^>]*disabled=""[^>]*>Model only<\/button>/);
   const panel = renderToStaticMarkup(createElement(Detail, {
     data, selection: { evaluation, pillar: "concepts", agent, mode: "skills", run: 1 },
     onSelect: () => {},
@@ -257,14 +256,12 @@ test("trial links keep their task, mode, and list context and reject trials outs
   assert.equal(decode({ ...input, eval: undefined }), null);
 });
 
-test("both results tables fall back to Internet for unavailable URL modes", () => {
+test("both results tables fall back to Internet for unavailable URL modes and open Model only", () => {
   const data = buildBoard([{ ...evaluation, modes: ["internet", "skills", "vanilla"] }], [
     row(), row({ mode: "skills", ...failure }), row({ mode: "vanilla", agent: null }),
   ]);
   for (const query of [
-    "mode=vanilla&evals=skills",
-    "mode=vanilla&evals=internet",
-    "mode=skills&evals=vanilla",
+    "mode=skills&evals=skills",
     "mode=unknown&evals=unknown",
     "mode=internet&evals=internet",
   ]) {
@@ -277,6 +274,10 @@ test("both results tables fall back to Internet for unavailable URL modes", () =
     assert.ok(top.includes("agent-a / model-a. 100%. Open details."));
     for (const section of [top, bottom]) assert.match(section, /aria-checked="true"[^>]*>Internet<\/button>/);
   }
+  const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams("mode=vanilla&evals=vanilla") }));
+  const top = html.slice(html.indexOf('id="leaderboard"'), html.indexOf('id="evals"'));
+  assert.ok(top.includes('class="row-label">Model<small>'));
+  assert.match(top, /aria-checked="true"[^>]*>Model only<\/button>/);
 });
 
 test("details link directly to the trial trajectory and show its payment source", () => {
@@ -328,7 +329,7 @@ test("demo loading is explicit and produces scores from fixture rows and catalog
 
 test("the board keeps a listed model and drops a retired model with a current task hash", () => {
   const rows = currentRows([row(), row({ model: "retired-model" })], {
-    evals: [evaluation], skills_hash: "current-pack", models: ["model-a"],
+    evals: [evaluation], skills_hash: "current-pack", n_attempts: 3, models: ["model-a"],
   });
   assert.deepEqual(rows.map((entry) => entry.model), ["model-a"]);
   const data = buildBoard([evaluation], rows);
