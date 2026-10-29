@@ -127,6 +127,52 @@ The option also admits missing or broken reward output on a judged trial.
 Malformed judge replies can cause this.
 Other errors retain the configured retry policy.
 
+For the two saved Claude voting source errors, use the narrower saved-source recovery path.
+It reuses the checked source bundle and successful compile record without running an agent or starting a chain.
+It accepts only the original voting task hash named in [ADR 0023](../docs/adr/0023-rejudge-saved-voting-source-with-explicit-provenance.md).
+Plan each selected trial in a fresh directory:
+
+```sh
+uv run ethevals plan-voting-rejudge --source-job SAVED_JOB --output RECOVERY_DIR --reserve-usd 5
+```
+
+Planning makes no model call.
+Review `RECOVERY_DIR/plan.json`, its input digests, and its reserve before executing it.
+The minimum reserve uses the installed provider prices and the verifier's full request and output limits.
+Use the existing $592 authorization; this recovery grants no extra budget.
+After parent review, execute the saved plan:
+
+```sh
+uv run ethevals rejudge-voting --plan RECOVERY_DIR/plan.json --budget 5
+```
+
+Execution permits one judge request and claims the plan before that request.
+Repeated execution fails, including after an error or interruption.
+Unknown provider costs keep the entire reserve held.
+Changed source files, verifier files, or plan fields require a fresh reviewed plan.
+The saved bundle lacks a trusted governor creation receipt.
+Its original public deployment protocol proves that the governor creation block is at least 5.
+Recovery adds this lower bound, its source revision and digests, and the saved public governor address.
+The exact historical creation block remains unknown.
+This public proof contains no private proposal facts or earlier verdicts.
+Unknown judge decisions remain errors.
+Future deployments add their actual creation receipt to public context.
+
+Recovery retains the original task hash, agent measurements, and original verifier records.
+Rows add `rejudge` provenance with separate source, evidence, and verifier digests and the added judge cost.
+`judge_cost_usd` includes both the original judge cost and the new cost when both are known.
+Original saved jobs and `results/rows.jsonl` stay unchanged.
+`RECOVERY_DIR/rows.jsonl` contains the recovered row after the existing secret check.
+Use `publish-logs` to stage its verifier archive and trajectory after review.
+Fold the recovered row through the existing results PR flow.
+Harbor Hub uploads skip these recovery jobs because they retain the source job's Harbor metadata.
+
+Rejudged rows cannot fill the corrected task's board cells because they retain the original task hash.
+A normal merge changes the voting hash and admits sixteen trials across eight eligible agent configurations.
+The current fresh-task plan reserves $592, including retries and judge costs.
+Before merge, review that plan against the remaining authorization or use the existing zero-budget setting.
+This change does not alter automatic CI admission.
+
 The publisher has no model keys and runs after failed matrix jobs on `main`.
 It downloads every workflow retry's artifacts and rebuilds rows from saved Harbor trials at their downloaded paths.
 It folds retries before staging one trajectory JSON and one verifier archive per trial.

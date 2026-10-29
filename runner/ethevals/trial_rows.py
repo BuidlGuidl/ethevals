@@ -68,7 +68,7 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
     elapsed = (result.finished_at - result.started_at).total_seconds() if result.finished_at and result.started_at else None
     execution = result.agent_execution
     working = (execution.finished_at - execution.started_at).total_seconds() if execution and execution.finished_at and execution.started_at else None
-    return {
+    row = {
         "schema_version": SCHEMA_VERSION,
         **{key: metadata[key] for key in (
             "task_id", "task_hash", "skills_hash", "agent", "model", "effort", "mode", "trial", "retry",
@@ -86,6 +86,16 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
         "trajectory_url": trajectory_url or (f"/trajectories/{result.id}.json" if trajectory.is_file() else None),
         "verifier_files": str((folder / "verifier").resolve()),
     }
+    if metadata.get('rejudge'):
+        recovery = metadata['rejudge']
+        if (recovery.get('operation') != 'voting-source-rejudge'
+                or recovery.get('source_task_hash') != metadata['task_hash']):
+            raise ValueError('Rejudge provenance differs from the source trial.')
+        row['rejudge'] = recovery
+        row['total_seconds'] = recovery['source_total_seconds']
+        old, added = recovery['original_judge_cost_usd'], recovery['added_judge_cost_usd']
+        row['judge_cost_usd'] = old + added if old is not None and added is not None else None
+    return row
 
 
 def read_rows(path: Path) -> list[dict]:

@@ -1,0 +1,1088 @@
+{
+  "files": [
+    {
+      "path": ".npmrc",
+      "sha256": "90f6d467f744642ddf6754978d53afa3fa2823bba9516690b8a536347689fdfb",
+      "bytes": 24,
+      "first_line": 1,
+      "last_line": 1,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "README.md",
+      "sha256": "872e702aa80d0d8e5ff5728d6b7c27bb26de9477e25e8afa36ee083f26304f81",
+      "bytes": 566,
+      "first_line": 1,
+      "last_line": 10,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "chain_context.json",
+      "sha256": "0a69fd98a83a948bf6519993a64d7bdd04e30dcae4bf84403ef456d5f3f17a98",
+      "bytes": 294,
+      "first_line": 1,
+      "last_line": 8,
+      "reason": "Submitted application chain context, exact bytes. Compare with public-deployment/chain_context.json."
+    },
+    {
+      "path": "contracts/abi/IVoteToken.json",
+      "sha256": "63acd8a3f8b52f1eb227cdfa0adc680c1507e26651adc31ecc78cc93a77f137b",
+      "bytes": 8371,
+      "first_line": 1,
+      "last_line": 452,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/abi/Protocol.json",
+      "sha256": "74e8dbe89ff67afb93efa590d6a58a8b493e0226c10b730dfee7dbfef188dd03",
+      "bytes": 932,
+      "first_line": 1,
+      "last_line": 54,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/abi/TimelockController.json",
+      "sha256": "1e34d86f1cbac7e2c89ebe5f708b0769d5e5e1ca09e4bc1e75569065d8266fcc",
+      "bytes": 18966,
+      "first_line": 1,
+      "last_line": 998,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/abi/Token.json",
+      "sha256": "9578fcb499b4ba5fac51462a67a2654d9f803e0ea3af9bdb19130ff695808542",
+      "bytes": 5715,
+      "first_line": 1,
+      "last_line": 315,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/abi/TokenGovernor.json",
+      "sha256": "c45155ce4ce85430e9dce856d1d54d3e10f0b411f4b569d6c3b40dfaf2d66d41",
+      "bytes": 31915,
+      "first_line": 1,
+      "last_line": 1671,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/abi/VoteToken.json",
+      "sha256": "058224c9b09af9dfc264cee28911f1755d33e688868a406d6edcc880b492348a",
+      "bytes": 17507,
+      "first_line": 1,
+      "last_line": 946,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/src/Protocol.sol",
+      "sha256": "5e1c8eda87ee65d8c115715ff3918905bba1de287c64f22f9ecc654f285d0124",
+      "bytes": 483,
+      "first_line": 1,
+      "last_line": 21,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/src/Token.sol",
+      "sha256": "7155a18dfef69798a5af1ddac987db999201d6fbdae143a10b8f54997174d517",
+      "bytes": 251,
+      "first_line": 1,
+      "last_line": 10,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/src/TokenGovernor.sol",
+      "sha256": "e3d9abfc5b14875dee51422f93092df44b7774b2eea849212e38e686e63d65c2",
+      "bytes": 4135,
+      "first_line": 1,
+      "last_line": 90,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/src/VoteToken.sol",
+      "sha256": "b7828cb384c97e91ab4f68d84ac26197ea811327a9bef481d0ee0bd855b0646e",
+      "bytes": 1511,
+      "first_line": 1,
+      "last_line": 34,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "contracts/src/interfaces/IVoteToken.sol",
+      "sha256": "f3c36ac4134afac48d3bd3cbdf5fb60cef200978ddb72799df9b2e6430562a62",
+      "bytes": 847,
+      "first_line": 1,
+      "last_line": 16,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "index.html",
+      "sha256": "d3ab4c7bda06a8d894d447a0c7c21a90dbfbce54905ba01759e7452132a0f0f6",
+      "bytes": 299,
+      "first_line": 1,
+      "last_line": 12,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "package.json",
+      "sha256": "2a1a9a7d8c112a6c351c2b22914c897d27cbdcbc41d8b09bc8c5994c36a6ee99",
+      "bytes": 531,
+      "first_line": 1,
+      "last_line": 25,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "9d5c3b4dd14160b7d7bbefcbdfe4891f91d329d4c28a6dbedd5ecdaab8da5f43",
+      "bytes": 47727,
+      "first_line": 1,
+      "last_line": 1457,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/App.tsx",
+      "sha256": "6d427b7867b844b75639f70e319f7f71335467c89275c3d4b04c8de7c81a86d4",
+      "bytes": 2917,
+      "first_line": 1,
+      "last_line": 115,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/governance/GovernancePage.tsx",
+      "sha256": "70f7b5c8b2f5cd55dcf2aa8a6cd347928ed2f441f69b631fd7631ca192ed837a",
+      "bytes": 1327,
+      "first_line": 1,
+      "last_line": 37,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/governance/ProposalList.tsx",
+      "sha256": "1bcc7f72a66eb98c362422ee03845834e58cca4e9fb4c9994212f7a329495b6c",
+      "bytes": 8788,
+      "first_line": 1,
+      "last_line": 271,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/governance/TxStatusLine.tsx",
+      "sha256": "5efea24fac9ff6473c369155820b046589b24593c2ed6f5af993766bc89688e5",
+      "bytes": 720,
+      "first_line": 1,
+      "last_line": 25,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/governance/VotingPowerPanel.tsx",
+      "sha256": "15f26511a7277deaf623865c0f09197ae0de0e0712a557bcb28e16e73e01d6ec",
+      "bytes": 8576,
+      "first_line": 1,
+      "last_line": 276,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/governance/abis.ts",
+      "sha256": "d8fcdf08d0a9d32f6beee0d8dd049be97709522c84f1488d06dd872f5e797179",
+      "bytes": 3230,
+      "first_line": 1,
+      "last_line": 69,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/governance/config.ts",
+      "sha256": "92265c89e4a4275985dbfe95774d06dc9e3640c9b522e73d6435cfea151a985a",
+      "bytes": 803,
+      "first_line": 1,
+      "last_line": 24,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/governance/format.ts",
+      "sha256": "2aad9f90c5eae4869dce378a2a5fa2b3c5a470fba212471c1e2e0d47f9aca932",
+      "bytes": 2003,
+      "first_line": 1,
+      "last_line": 58,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/governance/useProposals.ts",
+      "sha256": "e39c89804925752ee17450149aa0c40bd516a30b1d9906006fa0f3290821f917",
+      "bytes": 6891,
+      "first_line": 1,
+      "last_line": 209,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/governance/useTx.ts",
+      "sha256": "9cdedfe6ea9836d9b706657092649e103dbca02943397ee3877af16a7e044ddd",
+      "bytes": 1532,
+      "first_line": 1,
+      "last_line": 43,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/index.css",
+      "sha256": "a5959443fc4b8290f3f03cf74a5154cefbe09babb5d38f7c45bbe588bd6f4129",
+      "bytes": 4662,
+      "first_line": 1,
+      "last_line": 325,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/main.tsx",
+      "sha256": "82c5a4b3f9120f11fadbb034ac0ff971bda907f22f7dca6a00240f27d05fb8fb",
+      "bytes": 563,
+      "first_line": 1,
+      "last_line": 21,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/vite-env.d.ts",
+      "sha256": "1260f382a129ea300f0c882f303be9146bf29780701de43667e9ea92c491213c",
+      "bytes": 100,
+      "first_line": 1,
+      "last_line": 5,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "src/wagmi.ts",
+      "sha256": "8c0fcf434f6552fb064a23e30521be83c54b8fceb90bbdd7050da514ca061184",
+      "bytes": 405,
+      "first_line": 1,
+      "last_line": 18,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "980d6cbe977ddfb52d3ab1bdd3fba30f8c1db9371b3b14aa4557d32bb00ce54b",
+      "bytes": 605,
+      "first_line": 1,
+      "last_line": 25,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "tsconfig.node.json",
+      "sha256": "9e2abb169ea87b7190613a1d4da57ca608463a453bd4231fa3aeee5e308370dd",
+      "bytes": 213,
+      "first_line": 1,
+      "last_line": 10,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "vite.config.ts",
+      "sha256": "cb4ae147a3ebd883fe1abaa2cab331882475381a13b1b25f285affd8332e1244",
+      "bytes": 163,
+      "first_line": 1,
+      "last_line": 7,
+      "reason": "Full application source, local helper, or package/configuration input."
+    },
+    {
+      "path": "public-deployment/chain_context.json",
+      "sha256": "f1b3699996fe8cfcbc58c2a38892eb015478218e2d1bad02cd4b298844609b99",
+      "bytes": 294,
+      "first_line": 1,
+      "last_line": 8,
+      "reason": "Public deployment context, selected fields only."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Votes.sol",
+      "sha256": "9e9b494831630db53ffd1d0bce7fe22d606ce9263fc8d4d1983d235261e918e9",
+      "bytes": 3606,
+      "first_line": 1,
+      "last_line": 83,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol",
+      "sha256": "7753753c3c8cbfd75c9ceab1917fbfbc862d205f894eeb29c438a2c5cc5223af",
+      "bytes": 30156,
+      "first_line": 1,
+      "last_line": 881,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/math/Math.sol",
+      "sha256": "bdfdbe133991c0c78042957ff5cd97167926fcaf6d15664f3835a076cb066457",
+      "bytes": 32664,
+      "first_line": 1,
+      "last_line": 763,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol",
+      "sha256": "5779bc848bde39f1ad7bc02b4f708a0040888e0083b1a33f119cd94639350134",
+      "bytes": 34940,
+      "first_line": 1,
+      "last_line": 1162,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/Panic.sol",
+      "sha256": "270fc8401c1a13fae6a7a4a2dd6e381b95d658896701e51f0d3e2688acab3dec",
+      "bytes": 1973,
+      "first_line": 1,
+      "last_line": 57,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/utils/Votes.sol",
+      "sha256": "aba45a51c702b1edc1ee0d239a98b87ea01ff3c274f34841e21b881fe11345e0",
+      "bytes": 9531,
+      "first_line": 1,
+      "last_line": 245,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/ERC6372Utils.sol",
+      "sha256": "c413d812a3e36abc03443b5d4eab8f2cabc954132a177cf08fb7abbbae60cb08",
+      "bytes": 2154,
+      "first_line": 1,
+      "last_line": 53,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/types/Time.sol",
+      "sha256": "8085f943150cce1a10aa843f83519960c3010efe5792a9ee58f87c1993d33472",
+      "bytes": 5155,
+      "first_line": 1,
+      "last_line": 133,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/IERC6372.sol",
+      "sha256": "cc16276c221713bc438556c8236a8a785aef60adc25318d9fc06712ad8fadd38",
+      "bytes": 565,
+      "first_line": 1,
+      "last_line": 19,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol",
+      "sha256": "e3758f08ce5e53ada22c743450d3b61d965c92d4c76fcc8633a7eebd0455eb7c",
+      "bytes": 12126,
+      "first_line": 1,
+      "last_line": 284,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol",
+      "sha256": "1023ca2a7f9590767a9cf7b7ed1259801d81c576787b7e25d5a40683c8c3fd97",
+      "bytes": 6988,
+      "first_line": 1,
+      "last_line": 168,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/IERC5267.sol",
+      "sha256": "f89772d2d4fafcbef8b73bb10ee9a3373edec2eedb2f1b302320915b351dc3d1",
+      "bytes": 740,
+      "first_line": 1,
+      "last_line": 28,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/ShortStrings.sol",
+      "sha256": "0b66f6166641f1951f7a412d55df071224f1ba3a629bab73d185505026851c06",
+      "bytes": 4310,
+      "first_line": 1,
+      "last_line": 122,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/StorageSlot.sol",
+      "sha256": "75704538dcb223239280c6726d9a31cf769a7816718517c997fc7d63bdb70778",
+      "bytes": 4182,
+      "first_line": 1,
+      "last_line": 143,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol",
+      "sha256": "538a0d7c4f0ec5a8562f58561890f7b49d14580674ecf58bc5f505b45c73df65",
+      "bytes": 8631,
+      "first_line": 1,
+      "last_line": 228,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/Strings.sol",
+      "sha256": "e318709bbe73a7831d64c1351e8bdc43780b245f25191234e361e6ab9b98c67b",
+      "bytes": 21538,
+      "first_line": 1,
+      "last_line": 532,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/Bytes.sol",
+      "sha256": "78b01e1da6f6e6aaa8ef97b5d5ed885f638520bfdafb65e813b900a14c9d4eac",
+      "bytes": 14701,
+      "first_line": 1,
+      "last_line": 329,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/math/SignedMath.sol",
+      "sha256": "1ed50b1056af886752f0fb48a0165d381e69bb4a4b18b893b066dc144a7e08d7",
+      "bytes": 2613,
+      "first_line": 1,
+      "last_line": 68,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/Nonces.sol",
+      "sha256": "6a98ef6eaaac8dfc73307cb0ebbed97bfa20cf825c7fe96b734e3eda7e935e09",
+      "bytes": 1491,
+      "first_line": 1,
+      "last_line": 47,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/Context.sol",
+      "sha256": "847fda5460fee70f56f4200f59b82ae622bb03c79c77e67af010e31b7e2cc5b6",
+      "bytes": 963,
+      "first_line": 1,
+      "last_line": 28,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/IERC5805.sol",
+      "sha256": "2b1e317a9ad0303948d00cfee78c42f99f7558c8d2002a7c63f04d2b70324cac",
+      "bytes": 272,
+      "first_line": 1,
+      "last_line": 9,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/utils/IVotes.sol",
+      "sha256": "059fcf54ee8e21e9dac976491d7d7441049ce12e351a8c66b894846243b60a0b",
+      "bytes": 2323,
+      "first_line": 1,
+      "last_line": 60,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol",
+      "sha256": "50f34ae16a067a41c2c1091445d11d63788e54c717677cb6d6b0e4cdea2ad21d",
+      "bytes": 10800,
+      "first_line": 1,
+      "last_line": 305,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/draft-IERC6093.sol",
+      "sha256": "fa7068f56bc180571a6095be6eaef06d51dbe81e30cb128397d993c9599ecc30",
+      "bytes": 6540,
+      "first_line": 1,
+      "last_line": 162,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol",
+      "sha256": "0b7132f17d14d1d84b41b0bb429be62dafdff00fd3470f68724d8018eb07f57a",
+      "bytes": 684,
+      "first_line": 1,
+      "last_line": 26,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol",
+      "sha256": "01b6f5c4fa45fd38822b286ecef6daf983d27306dd6362496fa71b3e4600b72c",
+      "bytes": 2781,
+      "first_line": 1,
+      "last_line": 79,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Wrapper.sol",
+      "sha256": "9774d9296176bc9452bce95d4dc8cc53f7244277e8e0e9ce3e27e999b2a97474",
+      "bytes": 3854,
+      "first_line": 1,
+      "last_line": 93,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol",
+      "sha256": "93685e4e976be584a5e6abfc37376fe17c99bee53e07610efcc1ce51868e90d1",
+      "bytes": 13961,
+      "first_line": 1,
+      "last_line": 292,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/IERC20Metadata.sol",
+      "sha256": "0ef8d844d8e066abd5c0d8cc1c550c89f2628a4ea9c9bb16c7593d4207800ca8",
+      "bytes": 216,
+      "first_line": 1,
+      "last_line": 6,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/IERC1363.sol",
+      "sha256": "9c3a75a925a6dac9e88b03cddc58d42fe3131b0aaaad84408521f3f7af2f991b",
+      "bytes": 4454,
+      "first_line": 1,
+      "last_line": 86,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/IERC165.sol",
+      "sha256": "dfb3f56fa928a7c6cae41a7ce2c86b9210fa18d33fa26389099d66a0fa790368",
+      "bytes": 193,
+      "first_line": 1,
+      "last_line": 6,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol",
+      "sha256": "9055c2994b37dea1a41b7b7926dcb510f05dbe2540b0aafc5fbee9558fffd0ca",
+      "bytes": 871,
+      "first_line": 1,
+      "last_line": 25,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol",
+      "sha256": "0158e2d3e0e28bedd99eec13dcf1a8aa3a70a5b7e4bb2ad709609c95fcc740d1",
+      "bytes": 182,
+      "first_line": 1,
+      "last_line": 6,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/extensions/GovernorTimelockControl.sol",
+      "sha256": "8acda7f5ee65953c090702eb64ad1c98b22ec62d26c2e10f84ad42b04203dc00",
+      "bytes": 6619,
+      "first_line": 1,
+      "last_line": 167,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/TimelockController.sol",
+      "sha256": "50265193f9ded275033a7b87cd4f6d883f77154b000bf1c5ca7b805052b855c4",
+      "bytes": 16260,
+      "first_line": 1,
+      "last_line": 470,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/Address.sol",
+      "sha256": "73e54e15285455f0e01e136c3663732641537614723ae5dbd820eb3cb036b1fd",
+      "bytes": 6803,
+      "first_line": 1,
+      "last_line": 167,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/LowLevelCall.sol",
+      "sha256": "e128cbe9c6c406d5a42c26e4079c0a95b369ce552f2d0c3dfd2fcb836c5708f2",
+      "bytes": 5547,
+      "first_line": 1,
+      "last_line": 127,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/Errors.sol",
+      "sha256": "0704b9d6c032cca8512a3bc3f30f49f86f1f03102d2896a3d23e794b82efea66",
+      "bytes": 896,
+      "first_line": 1,
+      "last_line": 34,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol",
+      "sha256": "ee184c9620ae770a9ccf9d21d1e6fd1177eed668f4e92707b51e9ef36d7c9469",
+      "bytes": 1343,
+      "first_line": 1,
+      "last_line": 42,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC1155/IERC1155Receiver.sol",
+      "sha256": "3df310870e0187a59020ea48e910ed2693778b1f758b57b97a47365d74b92af5",
+      "bytes": 2599,
+      "first_line": 1,
+      "last_line": 59,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/introspection/ERC165.sol",
+      "sha256": "61a2b12c96857aaa35f48aeda67a4281637a42494c0b3795be0ae976aa7b3793",
+      "bytes": 879,
+      "first_line": 1,
+      "last_line": 25,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.sol",
+      "sha256": "2d50f70b857cae57572c0139e3d9d84cbe3edcc18492581af36befa15c36cb3f",
+      "bytes": 819,
+      "first_line": 1,
+      "last_line": 26,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol",
+      "sha256": "eafee3ffdc7cb2fba4bf6bd16fb28f8e5b4679742e81c2ad42a1b1df5c179feb",
+      "bytes": 997,
+      "first_line": 1,
+      "last_line": 28,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
+      "sha256": "a6893a46a6270c2016db590e3e597c32b004052dad63ccc929ad23ee2ec85473",
+      "bytes": 7035,
+      "first_line": 1,
+      "last_line": 206,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/access/IAccessControl.sol",
+      "sha256": "140304b7e99d517c57a13f391dfd3b550ca633a507f7b2af130f391b6cd89cc5",
+      "bytes": 3343,
+      "first_line": 1,
+      "last_line": 98,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/Governor.sol",
+      "sha256": "13829371c4148716c4e072e14a2702f6ae26996d19baa4d70b8964c9b654c853",
+      "bytes": 32182,
+      "first_line": 1,
+      "last_line": 825,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/IGovernor.sol",
+      "sha256": "fad9bf07114189a7f34e8909951547a69f5b39746552e88b0f07311d61efbee2",
+      "bytes": 16530,
+      "first_line": 1,
+      "last_line": 454,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/structs/DoubleEndedQueue.sol",
+      "sha256": "3f587ff09a00fceadea80d913e3d6309cd72d8d259aaf337cde222d5a11a332f",
+      "bytes": 10538,
+      "first_line": 1,
+      "last_line": 280,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/utils/cryptography/SignatureChecker.sol",
+      "sha256": "47d1946002462b91cf656aada822d1ea862f82af27358a83b10d835c086dc4b9",
+      "bytes": 8804,
+      "first_line": 1,
+      "last_line": 199,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/IERC7913.sol",
+      "sha256": "f66aad4249885b0f11369bfa825dded60aa4baa0d76d9becdac9daa48c350350",
+      "bytes": 674,
+      "first_line": 1,
+      "last_line": 18,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/interfaces/IERC1271.sol",
+      "sha256": "2d17bba201aa2f9c55e317315b872272a60361848dfceb6b1e77081265c79a27",
+      "bytes": 656,
+      "first_line": 1,
+      "last_line": 17,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/extensions/GovernorPreventLateQuorum.sol",
+      "sha256": "e28b377963d2af57d968371ebbfae75dc86953a3e0709ae705df2c8eb8f25b7d",
+      "bytes": 5583,
+      "first_line": 1,
+      "last_line": 116,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/extensions/GovernorCountingSimple.sol",
+      "sha256": "7b57caea0515e9121f2f2d64229b588609caab302eac01909c9d8361ae212554",
+      "bytes": 3249,
+      "first_line": 1,
+      "last_line": 96,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/extensions/GovernorVotes.sol",
+      "sha256": "b4b59a03de6e9b8ec53701b47fa68722c80e0034824b11d8b94095c5c1582b2d",
+      "bytes": 2060,
+      "first_line": 1,
+      "last_line": 64,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/src/interfaces/IVoteToken.sol",
+      "sha256": "f3c36ac4134afac48d3bd3cbdf5fb60cef200978ddb72799df9b2e6430562a62",
+      "bytes": 847,
+      "first_line": 1,
+      "last_line": 16,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/src/TokenGovernor.sol",
+      "sha256": "e3d9abfc5b14875dee51422f93092df44b7774b2eea849212e38e686e63d65c2",
+      "bytes": 4135,
+      "first_line": 1,
+      "last_line": 90,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/governance/extensions/GovernorSettings.sol",
+      "sha256": "bff3837e8deb8411352a71e43a0706d266b3dce29ef6fb5ce810af87eae3dbf7",
+      "bytes": 3554,
+      "first_line": 1,
+      "last_line": 106,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/src/VoteToken.sol",
+      "sha256": "b7828cb384c97e91ab4f68d84ac26197ea811327a9bef481d0ee0bd855b0646e",
+      "bytes": 1511,
+      "first_line": 1,
+      "last_line": 34,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Permit.sol",
+      "sha256": "53584e84cd4851447b3149219f8c1b41397f7c753f85da07eda7f17ac6846e47",
+      "bytes": 2721,
+      "first_line": 1,
+      "last_line": 77,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Permit.sol",
+      "sha256": "c302edfbf7f396e1130be81278c5c994543868f0f5bf0c0fb3f557e166d8d3f2",
+      "bytes": 3808,
+      "first_line": 1,
+      "last_line": 90,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/src/Token.sol",
+      "sha256": "7155a18dfef69798a5af1ddac987db999201d6fbdae143a10b8f54997174d517",
+      "bytes": 251,
+      "first_line": 1,
+      "last_line": 10,
+      "reason": "Task deployment contract behavior or imported interface, full file."
+    },
+    {
+      "path": "public-contracts/abi/Token.json",
+      "sha256": "9578fcb499b4ba5fac51462a67a2654d9f803e0ea3af9bdb19130ff695808542",
+      "bytes": 5715,
+      "first_line": 1,
+      "last_line": 315,
+      "reason": "Public contract interface."
+    },
+    {
+      "path": "public-contracts/abi/VoteToken.json",
+      "sha256": "058224c9b09af9dfc264cee28911f1755d33e688868a406d6edcc880b492348a",
+      "bytes": 17507,
+      "first_line": 1,
+      "last_line": 946,
+      "reason": "Public contract interface."
+    },
+    {
+      "path": "public-contracts/abi/TokenGovernor.json",
+      "sha256": "c45155ce4ce85430e9dce856d1d54d3e10f0b411f4b569d6c3b40dfaf2d66d41",
+      "bytes": 31915,
+      "first_line": 1,
+      "last_line": 1671,
+      "reason": "Public contract interface."
+    }
+  ],
+  "imports": [
+    {
+      "owner": "src/App.tsx",
+      "specifier": "react",
+      "resolved": "package:react"
+    },
+    {
+      "owner": "src/App.tsx",
+      "specifier": "wagmi",
+      "resolved": "package:wagmi"
+    },
+    {
+      "owner": "src/App.tsx",
+      "specifier": "./governance/GovernancePage.tsx",
+      "resolved": "src/governance/GovernancePage.tsx"
+    },
+    {
+      "owner": "src/governance/GovernancePage.tsx",
+      "specifier": "wagmi",
+      "resolved": "package:wagmi"
+    },
+    {
+      "owner": "src/governance/GovernancePage.tsx",
+      "specifier": "./config.ts",
+      "resolved": "src/governance/config.ts"
+    },
+    {
+      "owner": "src/governance/GovernancePage.tsx",
+      "specifier": "./ProposalList.tsx",
+      "resolved": "src/governance/ProposalList.tsx"
+    },
+    {
+      "owner": "src/governance/GovernancePage.tsx",
+      "specifier": "./VotingPowerPanel.tsx",
+      "resolved": "src/governance/VotingPowerPanel.tsx"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "react",
+      "resolved": "package:react"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "viem",
+      "resolved": "package:viem"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "wagmi",
+      "resolved": "package:wagmi"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "./abis.ts",
+      "resolved": "src/governance/abis.ts"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "./config.ts",
+      "resolved": "src/governance/config.ts"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "./format.ts",
+      "resolved": "src/governance/format.ts"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "./TxStatusLine.tsx",
+      "resolved": "src/governance/TxStatusLine.tsx"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "./useProposals.ts",
+      "resolved": "src/governance/useProposals.ts"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "./useProposals.ts",
+      "resolved": "src/governance/useProposals.ts"
+    },
+    {
+      "owner": "src/governance/ProposalList.tsx",
+      "specifier": "./useTx.ts",
+      "resolved": "src/governance/useTx.ts"
+    },
+    {
+      "owner": "src/governance/TxStatusLine.tsx",
+      "specifier": "./format.ts",
+      "resolved": "src/governance/format.ts"
+    },
+    {
+      "owner": "src/governance/TxStatusLine.tsx",
+      "specifier": "./useTx.ts",
+      "resolved": "src/governance/useTx.ts"
+    },
+    {
+      "owner": "src/governance/VotingPowerPanel.tsx",
+      "specifier": "react",
+      "resolved": "package:react"
+    },
+    {
+      "owner": "src/governance/VotingPowerPanel.tsx",
+      "specifier": "viem",
+      "resolved": "package:viem"
+    },
+    {
+      "owner": "src/governance/VotingPowerPanel.tsx",
+      "specifier": "wagmi",
+      "resolved": "package:wagmi"
+    },
+    {
+      "owner": "src/governance/VotingPowerPanel.tsx",
+      "specifier": "./abis.ts",
+      "resolved": "src/governance/abis.ts"
+    },
+    {
+      "owner": "src/governance/VotingPowerPanel.tsx",
+      "specifier": "./config.ts",
+      "resolved": "src/governance/config.ts"
+    },
+    {
+      "owner": "src/governance/VotingPowerPanel.tsx",
+      "specifier": "./format.ts",
+      "resolved": "src/governance/format.ts"
+    },
+    {
+      "owner": "src/governance/VotingPowerPanel.tsx",
+      "specifier": "./TxStatusLine.tsx",
+      "resolved": "src/governance/TxStatusLine.tsx"
+    },
+    {
+      "owner": "src/governance/VotingPowerPanel.tsx",
+      "specifier": "./useTx.ts",
+      "resolved": "src/governance/useTx.ts"
+    },
+    {
+      "owner": "src/governance/abis.ts",
+      "specifier": "viem",
+      "resolved": "package:viem"
+    },
+    {
+      "owner": "src/governance/config.ts",
+      "specifier": "viem",
+      "resolved": "package:viem"
+    },
+    {
+      "owner": "src/governance/format.ts",
+      "specifier": "viem",
+      "resolved": "package:viem"
+    },
+    {
+      "owner": "src/governance/useProposals.ts",
+      "specifier": "@tanstack/react-query",
+      "resolved": "package:@tanstack/react-query"
+    },
+    {
+      "owner": "src/governance/useProposals.ts",
+      "specifier": "viem",
+      "resolved": "package:viem"
+    },
+    {
+      "owner": "src/governance/useProposals.ts",
+      "specifier": "wagmi",
+      "resolved": "package:wagmi"
+    },
+    {
+      "owner": "src/governance/useProposals.ts",
+      "specifier": "./abis.ts",
+      "resolved": "src/governance/abis.ts"
+    },
+    {
+      "owner": "src/governance/useProposals.ts",
+      "specifier": "./config.ts",
+      "resolved": "src/governance/config.ts"
+    },
+    {
+      "owner": "src/governance/useTx.ts",
+      "specifier": "@tanstack/react-query",
+      "resolved": "package:@tanstack/react-query"
+    },
+    {
+      "owner": "src/governance/useTx.ts",
+      "specifier": "react",
+      "resolved": "package:react"
+    },
+    {
+      "owner": "src/governance/useTx.ts",
+      "specifier": "viem",
+      "resolved": "package:viem"
+    },
+    {
+      "owner": "src/governance/useTx.ts",
+      "specifier": "wagmi",
+      "resolved": "package:wagmi"
+    },
+    {
+      "owner": "src/governance/useTx.ts",
+      "specifier": "wagmi/actions",
+      "resolved": "package:wagmi/actions"
+    },
+    {
+      "owner": "src/governance/useTx.ts",
+      "specifier": "./format.ts",
+      "resolved": "src/governance/format.ts"
+    },
+    {
+      "owner": "src/main.tsx",
+      "specifier": "@tanstack/react-query",
+      "resolved": "package:@tanstack/react-query"
+    },
+    {
+      "owner": "src/main.tsx",
+      "specifier": "react",
+      "resolved": "package:react"
+    },
+    {
+      "owner": "src/main.tsx",
+      "specifier": "react-dom/client",
+      "resolved": "package:react-dom/client"
+    },
+    {
+      "owner": "src/main.tsx",
+      "specifier": "wagmi",
+      "resolved": "package:wagmi"
+    },
+    {
+      "owner": "src/main.tsx",
+      "specifier": "./App.tsx",
+      "resolved": "src/App.tsx"
+    },
+    {
+      "owner": "src/main.tsx",
+      "specifier": "./wagmi.ts",
+      "resolved": "src/wagmi.ts"
+    },
+    {
+      "owner": "src/main.tsx",
+      "specifier": "./index.css",
+      "resolved": "src/index.css"
+    },
+    {
+      "owner": "src/wagmi.ts",
+      "specifier": "wagmi",
+      "resolved": "package:wagmi"
+    },
+    {
+      "owner": "src/wagmi.ts",
+      "specifier": "wagmi/connectors",
+      "resolved": "package:wagmi/connectors"
+    },
+    {
+      "owner": "src/wagmi.ts",
+      "specifier": "./governance/config.ts",
+      "resolved": "src/governance/config.ts"
+    },
+    {
+      "owner": "vite.config.ts",
+      "specifier": "@vitejs/plugin-react",
+      "resolved": "package:@vitejs/plugin-react"
+    },
+    {
+      "owner": "vite.config.ts",
+      "specifier": "vite",
+      "resolved": "package:vite"
+    },
+    {
+      "owner": "index.html",
+      "specifier": "/src/main.tsx",
+      "html": true,
+      "resolved": "src/main.tsx"
+    }
+  ],
+  "unresolved": [],
+  "omissions": [
+    {
+      "path": ".gitignore",
+      "reason": "Non-code asset; no workflow behavior inferred from its contents."
+    },
+    {
+      "path": "contracts/lib/",
+      "reason": "Submitted contract dependency tree is not deployed behavior; full public deployment dependencies are supplied separately."
+    },
+    {
+      "path": "dist/",
+      "reason": "Dependency, repository, or generated output directory; not application source."
+    },
+    {
+      "path": "node_modules/",
+      "reason": "Dependency, repository, or generated output directory; not application source."
+    }
+  ]
+}

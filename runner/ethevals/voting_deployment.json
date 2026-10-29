@@ -1,0 +1,52 @@
+{
+  "source_revision": "260b2aaea325fb338e20bc6a25e7a9bedbacf761",
+  "governorCreationBlockLowerBound": 5,
+  "evidence_kind": "Lower bound from the original public deployment protocol, not a recovered creation receipt.",
+  "proof": [
+    "The chain starter enables automining before the voting setup starts.",
+    "The setup broadcasts Token and Protocol creations in two successive completed forge create commands.",
+    "The deployment script then broadcasts VoteToken, TimelockController, and TokenGovernor creations, in that order.",
+    "The script uses --slow. Foundry 1.5.1 waits for each transaction to succeed before sending the next.",
+    "Each confirmed transaction therefore precedes the next transaction's block. The fifth creation cannot occur before block 5."
+  ],
+  "limitations": [
+    "The exact historical creation block, transaction hash, and block hash are unavailable.",
+    "This inference relies on the checked trial having used its locked task and pinned chain image."
+  ],
+  "sources": [
+    {
+      "path": "tasks/build/voting-page/environment/setup/start.py",
+      "sha256": "2a5faeb5ef77bce353bb7b9b1fa6107e73603877d9d5d9245defeef79419f9c7",
+      "url": "https://github.com/BuidlGuidl/ethevals/blob/260b2aaea325fb338e20bc6a25e7a9bedbacf761/tasks/build/voting-page/environment/setup/start.py"
+    },
+    {
+      "path": "tasks/build/voting-page/environment/setup/seed.py",
+      "sha256": "aa8edcdb51bab89a78d99b056731eaaffe4b4dd1e717ed9cb0dc8a469212aeaa",
+      "url": "https://github.com/BuidlGuidl/ethevals/blob/260b2aaea325fb338e20bc6a25e7a9bedbacf761/tasks/build/voting-page/environment/setup/seed.py"
+    },
+    {
+      "path": "tasks/build/voting-page/environment/contracts/script/Deploy.s.sol",
+      "sha256": "22807554abbd938712c928910d25939f7d69693fdcb9e13fd10bc273c4e1c750",
+      "url": "https://github.com/BuidlGuidl/ethevals/blob/260b2aaea325fb338e20bc6a25e7a9bedbacf761/tasks/build/voting-page/environment/contracts/script/Deploy.s.sol"
+    },
+    {
+      "path": "runner/ethevals/images/start_chain.py",
+      "sha256": "fff8a29922101eda4854c814b9911d31468738e705d41d262b49f35ccc226efc",
+      "url": "https://github.com/BuidlGuidl/ethevals/blob/260b2aaea325fb338e20bc6a25e7a9bedbacf761/runner/ethevals/images/start_chain.py"
+    },
+    {
+      "path": "runner/ethevals/images/Chain.Dockerfile",
+      "sha256": "9e576aab988be2666f0b02cbd04dd67dc22025e801cfce4ff7c022013db203e3",
+      "url": "https://github.com/BuidlGuidl/ethevals/blob/260b2aaea325fb338e20bc6a25e7a9bedbacf761/runner/ethevals/images/Chain.Dockerfile"
+    },
+    {
+      "path": "tasks/build/voting-page/environment/Chain.Dockerfile",
+      "sha256": "e9df4424eacf86596f01523d4cf6256154494ca7acd3d0831094fe03bb34b81d",
+      "url": "https://github.com/BuidlGuidl/ethevals/blob/260b2aaea325fb338e20bc6a25e7a9bedbacf761/tasks/build/voting-page/environment/Chain.Dockerfile"
+    },
+    {
+      "url": "https://github.com/foundry-rs/foundry/blob/v1.5.1/crates/script/src/lib.rs",
+      "fact": "--slow waits for the previous transaction to succeed; it also forces the broadcast batch size to one."
+    }
+  ]
+}

@@ -137,6 +137,19 @@ def bundle(workspace: Path, public_context: Path, contracts: Path, output: Path)
         context_name = 'public-deployment/chain_context.json'
         contents[context_name] = json.dumps({key: context[key] for key in
             ('chainId', 'rpcUrl', 'token', 'voteToken', 'governor', 'timelock')}, indent=2) + '\n'
+        if 'governorDeployment' in context:
+            deployment = context['governorDeployment']
+            if (not isinstance(deployment, dict)
+                or set(deployment) != {'governor', 'blockNumber', 'blockHash', 'transactionHash'}
+                or not isinstance(deployment['governor'], str)
+                or deployment['governor'].lower() != context['governor'].lower()
+                or type(deployment['blockNumber']) is not int or deployment['blockNumber'] < 0
+                or any(not isinstance(deployment[key], str) or not re.fullmatch(r'0x[0-9a-fA-F]{64}', deployment[key])
+                    for key in ('blockHash', 'transactionHash'))):
+                raise EvidenceError('Invalid public governor creation receipt')
+            public = json.loads(contents[context_name])
+            public['governorDeployment'] = deployment
+            contents[context_name] = json.dumps(public, indent=2) + '\n'
         data = contents[context_name].encode()
         manifest['files'].append({'path': context_name, 'sha256': digest(data), 'bytes': len(data),
             'first_line': 1, 'last_line': len(data.decode().splitlines()), 'reason': 'Public deployment context, selected fields only.'})

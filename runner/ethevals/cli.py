@@ -18,6 +18,13 @@ def parse_args(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     parsers = {name: commands.add_parser(name) for name in
                ("run", "plan", "catalog", "export-hf", "publish-logs", "upload-hub")}
+    recovery_plan = commands.add_parser('plan-voting-rejudge', help='Plan one saved Claude voting source rejudge without model calls.')
+    recovery_plan.add_argument('--source-job', type=Path, required=True)
+    recovery_plan.add_argument('--output', type=Path, required=True)
+    recovery_plan.add_argument('--reserve-usd', type=float, required=True)
+    recovery_run = commands.add_parser('rejudge-voting', help='Execute one reviewed saved-source plan without an agent or sidecars.')
+    recovery_run.add_argument('--plan', type=Path, required=True)
+    recovery_run.add_argument('--budget', type=float, required=True)
     for name in ("lint", "free-check"):
         parsers[name] = commands.add_parser(name, help="Check Harbor task folders.")
         parsers[name].add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
@@ -62,6 +69,15 @@ def parse_args(argv=None):
 def main(argv=None) -> int:
     parser, args = parse_args(argv)
     try:
+        if args.command == 'plan-voting-rejudge':
+            from .voting_rejudge import plan_rejudge
+            print(json.dumps(plan_rejudge(args.source_job, args.output, args.reserve_usd), indent=2))
+            return 0
+        if args.command == 'rejudge-voting':
+            from .voting_rejudge import execute_rejudge
+            row = execute_rejudge(args.plan, args.budget)
+            print(f"Recovery status: {row['status']}; rows: {args.plan.parent / 'rows.jsonl'}")
+            return 0 if row['status'] != 'error' else 1
         if args.command in {"plan", "run", "catalog"}:
             from . import jobs
             from .job_config import load_job

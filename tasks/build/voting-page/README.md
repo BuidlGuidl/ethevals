@@ -34,6 +34,8 @@ The page must follow approval, deposit, delegation, receipts, and refreshed read
 RewardKit 0.2.3 owns judgment, guard, named checks, aggregation, usage records, and both reward files.
 One Opus 5.5 high-effort judge owns the eight workflows.
 Each decision includes a causal trace and file/line citations.
+The provider response schema requires a structured reason object with every field, including `limitations`.
+The verifier checks the object before encoding it for RewardKit's string parser.
 It follows reachable controls through reads, UI state, handlers, transaction targets and arguments, receipts, and refresh.
 Any control wording and component names can pass.
 Source judgment establishes implementation behavior, not successful browser or transaction execution.
@@ -71,10 +73,12 @@ OpenZeppelin's [governance API](https://docs.openzeppelin.com/contracts/5.x/api/
 
 ## Notes
 
-The instruction, chain setup, governor behavior, and solution stay unchanged.
+The instruction, governor behavior, and solution stay unchanged.
 The verifier no longer runs the task's browser driver or creates hidden test proposals.
 No browser selector or `couldNotDrive` prerequisite contributes to production scoring.
-The public chain context supplies deployment addresses; private chain context never enters judge input.
+The public chain context supplies deployment addresses and the governor's actual creation receipt.
+The receipt records the creation block and its block and transaction hashes.
+Private chain context never enters judge input.
 The environment keeps a root-only copy of public contract sources for the verifier.
 
 The repository free check removes the judge file.
@@ -83,6 +87,10 @@ The solution passes this comparison and untouched work fails it.
 A changed comment can pass that comparison; it proves no workflow semantics.
 Replay tests exercise the parser, guard, named results, aggregation, and usage path without a model call.
 Paid judge validation remains separate.
+Saved submissions can use the [reviewed recovery path](../../../runner/README.md#ci-and-publication).
+Recovery keeps their original task hash and adds separate verifier provenance.
+Their saved bundles lack trusted creation receipts, so their exact historical deployment blocks remain unproved.
+Recovery can add the lower bound from their locked public deployment protocol, with source digests and explicit assumptions.
 
 Run from the repository root with all provider keys unset:
 

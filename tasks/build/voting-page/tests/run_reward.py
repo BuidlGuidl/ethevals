@@ -19,6 +19,17 @@ MAX_OUTPUT_TOKENS = 24576
 MAX_REQUEST_BYTES = 970_000
 
 
+def reason_schema():
+    return {'type': 'object', 'properties': {
+        'decision': {'type': 'string', 'enum': ['pass', 'fail', 'unknown']},
+        'trace': {'type': 'string'},
+        'citations': {'type': 'array', 'items': {'type': 'object', 'properties': {
+            'path': {'type': 'string'}, 'start_line': {'type': 'integer'}, 'end_line': {'type': 'integer'}},
+            'required': ['path', 'start_line', 'end_line'], 'additionalProperties': False}},
+        'limitations': {'type': 'array', 'items': {'type': 'string'}}},
+        'required': ['decision', 'trace', 'citations', 'limitations'], 'additionalProperties': False}
+
+
 class InvalidJudgeResponse(ValueError):
     def __init__(self, reason, response):
         super().__init__(reason)
@@ -44,7 +55,8 @@ def validate_reply(text, manifest):
         entry = reply[name]
         if not isinstance(entry, dict) or set(entry) != {'score', 'reasoning'} or entry['score'] not in ('yes', 'no'):
             raise ValueError(f'Invalid RewardKit workflow entry: {name}')
-        reason = json.loads(entry['reasoning'], object_pairs_hook=unique_object)
+        reason = (json.loads(entry['reasoning'], object_pairs_hook=unique_object)
+            if isinstance(entry['reasoning'], str) else entry['reasoning'])
         if not isinstance(reason, dict) or set(reason) != {'decision', 'trace', 'citations', 'limitations'}:
             raise ValueError(f'Invalid structured reason: {name}')
         decision = reason['decision']
@@ -89,6 +101,13 @@ def install_completion_boundary(output, manifest, completion=None):
             raise ValueError('Voting-page requires Opus 5.5 at high effort.')
         if 'api_key' in kwargs:
             raise ValueError('Judge credentials must use ANTHROPIC_API_KEY, not inline or subscription credentials.')
+        # RewardKit's string schema cannot enforce the fields inside a JSON-encoded reason.
+        if 'response_format' in kwargs:
+            schema = kwargs['response_format']['json_schema']['schema']
+            if set(schema['properties']) != set(WORKFLOWS) | {'guard'}:
+                raise ValueError('Unexpected voting judge response schema.')
+            for name in WORKFLOWS:
+                schema['properties'][name]['properties']['reasoning'] = reason_schema()
         if len(json.dumps(kwargs, ensure_ascii=False).encode()) > MAX_REQUEST_BYTES:
             raise ValueError('RewardKit request exceeds the input limit.')
         (output / 'rewardkit-request.json').write_text(json.dumps(kwargs, indent=2) + '\n')
@@ -103,7 +122,13 @@ def install_completion_boundary(output, manifest, completion=None):
                 raise ValueError('Judge could not determine every workflow; see source-decisions.json.')
         except (ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
             raise InvalidJudgeResponse(str(error), response) from error
-        return response
+        # Keep the raw provider reply above. RewardKit still parses ordinary string reasons.
+        normalized = response.model_copy(deep=True)
+        reply = json.loads(normalized.choices[0].message.content, object_pairs_hook=unique_object)
+        for name in WORKFLOWS:
+            reply[name]['reasoning'] = json.dumps(decisions[name], ensure_ascii=False)
+        normalized.choices[0].message.content = json.dumps(reply, ensure_ascii=False)
+        return normalized
 
     async def recorded_call(judge, criteria, weights, *args, **kwargs):
         try:
@@ -129,10 +154,7 @@ def install_completion_boundary(output, manifest, completion=None):
     return restore
 
 
-def main():
-    tests = Path(sys.argv[1] if len(sys.argv) > 1 else '/tests')
-    output = Path(os.environ.get('REWARD_OUTPUT', '/logs/verifier/reward.json'))
-    workspace = Path(os.environ.get('REWARD_WORKSPACE', '/workspace'))
+def run_verifier(tests, output, workspace):
     for name in (output.name, 'reward.txt', 'reward-details.json', 'judge-response.json', 'source-decisions.json', 'rewardkit-request.json'):
         (output.parent / name).unlink(missing_ok=True)
     if not (tests / 'judge.toml').exists():
@@ -156,6 +178,12 @@ def main():
         raise
     finally:
         restore()
+
+
+def main():
+    run_verifier(Path(sys.argv[1] if len(sys.argv) > 1 else '/tests'),
+        Path(os.environ.get('REWARD_OUTPUT', '/logs/verifier/reward.json')),
+        Path(os.environ.get('REWARD_WORKSPACE', '/workspace')))
 
 
 if __name__ == '__main__':

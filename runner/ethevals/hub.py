@@ -24,6 +24,9 @@ def upload_hub(output: Path, config: JobSettings) -> None:
     secrets = secret_values(config, [])
     for board in sorted((output / "jobs").glob("*/board.json")):
         folder = board.parent
+        if json.loads(board.read_text()).get('rejudge'):
+            print('Saved-source rejudges use release publication; Harbor Hub upload skipped.', file=sys.stderr)
+            continue
         try:
             require_checked(folder)
             # Harbor leaves resumable upload state on failure. Keep it outside checked files.

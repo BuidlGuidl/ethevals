@@ -122,7 +122,16 @@ def deploy(url, root, private, key):
     for tx in transactions:
         if tx["transactionType"] == "CREATE":
             addresses[tx["contractName"]] = tx["contractAddress"]
-    return addresses
+    creation = next(tx for tx in transactions if tx.get("contractName") == "TokenGovernor"
+                    and tx["transactionType"] == "CREATE")
+    confirmed = receipt(url, creation["hash"])
+    if (confirmed.get("status") != "0x1"
+            or confirmed["transactionHash"].lower() != creation["hash"].lower()
+            or confirmed["contractAddress"].lower() != addresses["TokenGovernor"].lower()):
+        raise RuntimeError("Governor creation receipt does not match the deployment.")
+    deployment = dict(governor=confirmed["contractAddress"], blockNumber=int(confirmed["blockNumber"], 16),
+                      blockHash=confirmed["blockHash"], transactionHash=confirmed["transactionHash"])
+    return addresses, deployment
 
 
 def seed(url, root, public, private):
@@ -139,7 +148,7 @@ def seed(url, root, public, private):
         rpc(url, "anvil_setBalance", [address, hex(1000 * UNIT)])
         accounts.append(dict(address=address, key=key))
     deployer, *holders = accounts
-    addresses = deploy(url, root, private, deployer["key"])
+    addresses, deployment = deploy(url, root, private, deployer["key"])
     token, votes = addresses["Token"], addresses["VoteToken"]
     governor, timelock, protocol = addresses["TokenGovernor"], addresses["TimelockController"], addresses["Protocol"]
     send(url, deployer["key"], protocol, "transferOwnership(address)", timelock)
@@ -150,7 +159,8 @@ def seed(url, root, public, private):
         send(url, holder["key"], votes, "depositFor(address,uint256)", holder["address"], amount * UNIT)
         send(url, holder["key"], votes, "delegate(address)", holder["address"])
 
-    context = dict(rpcUrl="http://chain:8545", chainId=31337, token=token, voteToken=votes, governor=governor, timelock=timelock)
+    context = dict(rpcUrl="http://chain:8545", chainId=31337, token=token, voteToken=votes,
+                   governor=governor, timelock=timelock, governorDeployment=deployment)
     private_context = dict(deployer=deployer, holders=holders, protocol=protocol, proposals={})
     seed_proposals(url, context, private_context, checks=False)
     private_context["setupBlock"] = int(rpc(url, "eth_blockNumber"), 16)

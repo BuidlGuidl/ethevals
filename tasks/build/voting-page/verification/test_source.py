@@ -384,3 +384,105 @@ def test_local_package_references_cannot_escape_evidence(inputs, version):
     (app / 'entry.tsx').write_text('import "local-tools";')
     with pytest.raises(EvidenceError, match='local package dependency'):
         bundle(*inputs)
+
+
+@pytest.mark.parametrize('trial,message', [
+    (1, 'Judge could not determine every workflow; see source-decisions.json.'),
+    (2, 'Invalid structured reason: lists_every_proposal'),
+])
+def test_real_saved_error_replies_remain_errors(tmp_path, trial, message):
+    fixtures = Path(__file__).with_name('fixtures')
+    response = litellm.ModelResponse(**json.loads((fixtures / f'trial-{trial}-judge-response.json').read_text()))
+    manifest = json.loads((fixtures / f'trial-{trial}-source-manifest.json').read_text())
+    async def replay(**kwargs):
+        return response
+    restore = install_completion_boundary(tmp_path, manifest, replay)
+    try:
+        with pytest.raises(ValueError) as caught:
+            asyncio.run(litellm.acompletion(model='anthropic/claude-opus-5-5', reasoning_effort='high', messages=[]))
+        assert str(caught.value) == message
+        assert json.loads((tmp_path / 'judge-response.json').read_text())['choices'] == response.model_dump()['choices']
+        if trial == 1:
+            decisions = json.loads((tmp_path / 'source-decisions.json').read_text())
+            assert decisions['lists_every_proposal']['decision'] == 'unknown'
+            assert 'No deployment evidence' in decisions['lists_every_proposal']['limitations'][0]
+    finally:
+        restore()
+
+
+def test_structured_object_reply_passes_real_rewardkit(inputs, monkeypatch):
+    output = stage_main(inputs, monkeypatch)
+    structured = reply()
+    for name in WORKFLOWS:
+        structured[name]['reasoning'] = json.loads(structured[name]['reasoning'])
+    requests = []
+    async def replay(**kwargs):
+        requests.append(kwargs)
+        return litellm.ModelResponse(model='claude-opus-5-5', choices=[{'finish_reason': 'stop',
+            'message': {'content': json.dumps(structured)}}])
+    monkeypatch.setattr(litellm, 'acompletion', replay)
+    main()
+    assert json.loads((output / 'reward.json').read_text()) == {'reward': 1.0}
+    schema = requests[0]['response_format']['json_schema']['schema']
+    for name in WORKFLOWS:
+        reason = schema['properties'][name]['properties']['reasoning']
+        assert reason['type'] == 'object'
+        assert reason['required'] == ['decision', 'trace', 'citations', 'limitations']
+        assert reason['additionalProperties'] is False
+    details = json.loads((output / 'reward-details.json').read_text())
+    judge = next(item['detail'] for item in details['reward']['components'] if item['name'] == 'judge')
+    assert json.loads(judge['criteria'][0]['reasoning']) == structured['lists_every_proposal']['reasoning']
+
+
+def test_verified_public_creation_receipt_enters_bundle(inputs):
+    context = json.loads(inputs[1].read_text())
+    context['governorDeployment'] = {'governor': context['governor'], 'blockNumber': 7,
+        'blockHash': '0x' + 'b' * 64, 'transactionHash': '0x' + 'a' * 64}
+    context['private_chain_context'] = 'NEVER_INCLUDE_PRIVATE_CONTEXT'
+    inputs[1].write_text(json.dumps(context))
+    bundle(*inputs)
+    evidence = (inputs[3] / 'source-evidence.txt').read_text()
+    assert '"blockNumber": 7' in evidence
+    assert 'NEVER_INCLUDE_PRIVATE_CONTEXT' not in evidence
+    context['governorDeployment']['governor'] = '0x' + 'e' * 40
+    inputs[1].write_text(json.dumps(context))
+    with pytest.raises(EvidenceError, match='Invalid public governor creation receipt'):
+        bundle(*inputs)
+
+
+def test_setup_records_the_actual_governor_creation_receipt(tmp_path, monkeypatch):
+    import importlib.util
+    path = HERE.parent / 'environment/setup/seed.py'
+    spec = importlib.util.spec_from_file_location('voting_seed_receipt', path)
+    seed = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(seed)
+    root = tmp_path / 'contracts'
+    broadcast = root / 'broadcast/Deploy.s.sol/31337/run-latest.json'
+    broadcast.parent.mkdir(parents=True)
+    governor = '0x' + 'a' * 40
+    transaction_hash = '0x' + 'b' * 64
+    broadcast.write_text(json.dumps({'transactions': [{'transactionType': 'CREATE',
+        'contractName': 'TokenGovernor', 'contractAddress': governor, 'hash': transaction_hash}]}))
+    private = tmp_path / 'private'
+    private.mkdir()
+    def command(*args, **kwargs):
+        if args[:2] == ('forge', 'create'):
+            return json.dumps({'deployedTo': '0x' + ('1' if args[2].endswith(':Token') else '2') * 40})
+        return 'No private output enters public context.'
+    monkeypatch.setattr(seed, 'command', command)
+    calls = []
+    def receipt(url, transaction):
+        calls.append((url, transaction))
+        return {'status': '0x1', 'contractAddress': governor, 'blockNumber': '0x7',
+            'blockHash': '0x' + 'c' * 64, 'transactionHash': transaction_hash, 'private': 'DO_NOT_INCLUDE'}
+    monkeypatch.setattr(seed, 'receipt', receipt)
+    addresses, deployment = seed.deploy('http://original-chain', root, private, 'private-deployer-key')
+    assert deployment == {'governor': governor, 'blockNumber': 7, 'blockHash': '0x' + 'c' * 64,
+        'transactionHash': transaction_hash}
+    assert calls == [('http://original-chain', transaction_hash)]
+    assert addresses['TokenGovernor'] == governor
+    def wrong_receipt(*args):
+        return {**receipt(*args), 'contractAddress': '0x' + 'd' * 40}
+    monkeypatch.setattr(seed, 'receipt', wrong_receipt)
+    with pytest.raises(RuntimeError, match='Governor creation receipt does not match'):
+        seed.deploy('http://original-chain', root, private, 'private-deployer-key')
