@@ -1,4 +1,28 @@
-import type { Layer } from "./board";
+import type { Eval, Layer } from "./board";
+
+export const domains = ["dapp-development", "security"] as const;
+export type Domain = typeof domains[number];
+export const domainNames: Record<Domain, string> = {
+  "dapp-development": "Dapp development",
+  security: "Security",
+};
+
+export const areaDomains: Readonly<Partial<Record<string, Domain>>> = {
+  Agents: "dapp-development",
+  Audits: "security",
+  Governance: "dapp-development",
+  Lending: "dapp-development",
+  Payments: "dapp-development",
+  Signatures: "dapp-development",
+  "Smart accounts": "dapp-development",
+  Swaps: "dapp-development",
+  Tokens: "dapp-development",
+  Wallets: "dapp-development",
+};
+
+export function taskDomain(task: Pick<Eval, "area">): Domain {
+  return areaDomains[task.area ?? ""] ?? "dapp-development";
+}
 
 // Board-only tags. Tags in task.toml would change task hashes and retire every recorded trial.
 // A task.toml `area` or `layer` takes precedence.

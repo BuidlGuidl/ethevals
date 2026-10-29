@@ -1,8 +1,9 @@
 import { pillars } from "../../src/board";
+import { pageMetadata } from "../../src/metadata";
 import { names } from "../../src/labels";
 import { PipelineDiagram, RunDiagram } from "../../components/diagrams";
 
-export const metadata = { title: "How it works · ETH Evals" };
+export const metadata = pageMetadata("How it works · ETH Evals", "/how-it-works/");
 const scope = {
   concepts: "Quizzes on Ethereum concepts. A bare model or an agent answers, and the verifier checks the reply.",
   build: "The agent writes contracts, pages, or apps, and the tests run what it wrote.",
