@@ -1,0 +1,20 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/accounts-4337-unused-gas-penalty"
+description = "Check whether an EntryPoint v0.7 paymaster pays a penalty for excessive unused execution gas."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "security", "audits", "accounts"]
+
+[metadata]
+pillar = "concepts"
+area = "Audits"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

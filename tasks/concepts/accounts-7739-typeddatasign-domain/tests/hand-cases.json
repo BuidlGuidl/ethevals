@@ -1,0 +1,72 @@
+[
+  {
+    "label": "real accepting reply, Opus 5.5, round 1, JSONL line 8",
+    "reply": "**Dapp.**\n\nIn ERC-7739's TypedDataSign workflow, the final digest is `keccak256(0x1901 ‖ appDomainSeparator ‖ hashStruct(TypedDataSign{contents, name, version, chainId, verifyingContract, salt}))`, so the dapp's separator follows the prefix while the account's domain fields are nested inside the TypedDataSign struct. This binds the signature to that specific account and prevents replay across accounts owned by the same key.",
+    "passed": true
+  },
+  {
+    "label": "real rejecting reply, Kimi K3.1 Pro, round 1, JSONL line 11",
+    "reply": "account\n\nThe TypedDataSign workflow wraps the dapp’s Order hash in an account-scoped EIP-712 struct, producing `0x1901 || accountDomainSeparator || hashStruct(TypedDataSign(...))`, while the dapp’s domain is used only for the inner Order digest.",
+    "passed": false
+  },
+  {
+    "label": "solution",
+    "reply": "Dapp. TypedDataSign keeps the dapp's domain outside and puts the account's domain fields inside the signed structure.",
+    "passed": true
+  },
+  {
+    "label": "target",
+    "reply": "dapp",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**dapp.**",
+    "passed": true
+  },
+  {
+    "label": "hedge",
+    "reply": "dapp or account.",
+    "passed": false
+  },
+  {
+    "label": "near miss",
+    "reply": "dapplication",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "dapp. Final answer: account.",
+    "passed": false
+  },
+  {
+    "label": "wrong target",
+    "reply": "account",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "possessive dapp",
+    "reply": "The dapp's. The account fields sit inside TypedDataSign.",
+    "passed": true
+  },
+  {
+    "label": "application alternate",
+    "reply": "Application. Its domain separator follows 0x1901.",
+    "passed": true
+  },
+  {
+    "label": "account alternative",
+    "reply": "The dapp's or the account's.",
+    "passed": false
+  }
+]

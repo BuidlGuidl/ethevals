@@ -1,0 +1,57 @@
+[
+  {
+    "label": "real accepting reply, Opus 5.5, round 1, JSONL line 28",
+    "reply": "**No.** Permit2's `permitTransferFrom` rebuilds the signed EIP-712 hash with `msg.sender` as the `spender`, so when the searcher calls it directly, the hash no longer matches the user's signature (which named the vault) and the call reverts without moving tokens or using up the nonce, even though `transferDetails.to` is not part of the signed data.",
+    "passed": true
+  },
+  {
+    "label": "real rejecting reply, Kimi K3.1 Pro, round 1, JSONL line 34",
+    "reply": "Yes. A `PermitTransferFrom` signature does not bind the caller or `transferDetails.to`, so—assuming the user has approved Permit2—the searcher can front-run it, receive the tokens, and consume the nonce.",
+    "passed": false
+  },
+  {
+    "label": "solution",
+    "reply": "No. Permit2 hashes the caller as the spender, so the searcher's direct call cannot use the vault's signature.",
+    "passed": true
+  },
+  {
+    "label": "target",
+    "reply": "no",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**no.**",
+    "passed": true
+  },
+  {
+    "label": "hedge",
+    "reply": "no or yes.",
+    "passed": false
+  },
+  {
+    "label": "near miss",
+    "reply": "nothing",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "no. Final answer: yes.",
+    "passed": false
+  },
+  {
+    "label": "wrong target",
+    "reply": "yes",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  }
+]
