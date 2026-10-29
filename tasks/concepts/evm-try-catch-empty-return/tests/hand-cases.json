@@ -1,0 +1,52 @@
+[
+  {
+    "label": "target",
+    "reply": "no",
+    "passed": true
+  },
+  {
+    "label": "solution",
+    "reply": "No. The EOA call returns empty data, and decoding the expected bytes4 reverts in the caller outside the catch clause.",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**no.**",
+    "passed": true
+  },
+  {
+    "label": "wrong target",
+    "reply": "yes",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "alternative answers",
+    "reply": "no or yes",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "no. Final answer: yes.",
+    "passed": false
+  },
+  {
+    "label": "word prefix",
+    "reply": "nothing",
+    "passed": false
+  },
+  {
+    "label": "slash alternatives",
+    "reply": "no/yes",
+    "passed": false
+  }
+]

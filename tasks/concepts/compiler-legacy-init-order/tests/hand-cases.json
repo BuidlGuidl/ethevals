@@ -1,0 +1,67 @@
+[
+  {
+    "label": "target",
+    "reply": "zero address",
+    "passed": true
+  },
+  {
+    "label": "solution",
+    "reply": "The zero address. The legacy pipeline evaluates feeRecipient before Ownable runs its constructor and sets the owner.",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**zero address.**",
+    "passed": true
+  },
+  {
+    "label": "wrong target",
+    "reply": "Alice's address",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "alternative answers",
+    "reply": "zero address or Alice's address",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "zero address. Final answer: Alice's address.",
+    "passed": false
+  },
+  {
+    "label": "address notation",
+    "reply": "address(0)",
+    "passed": true
+  },
+  {
+    "label": "hex notation",
+    "reply": "0x0000000000000000000000000000000000000000",
+    "passed": true
+  },
+  {
+    "label": "invalid hexadecimal suffix",
+    "reply": "0x0g",
+    "passed": false
+  },
+  {
+    "label": "nonzero hex prefix",
+    "reply": "0x01",
+    "passed": false
+  },
+  {
+    "label": "nonzero address cast",
+    "reply": "address(0x1234)",
+    "passed": false
+  }
+]

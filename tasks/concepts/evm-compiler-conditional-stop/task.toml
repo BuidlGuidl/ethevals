@@ -1,0 +1,20 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/evm-compiler-conditional-stop"
+description = "Check whether an inlined helper avoids Solidity 0.8.16 storage-write removal before conditional STOP."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "security", "audits", "evm"]
+
+[metadata]
+pillar = "concepts"
+area = "Audits"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024

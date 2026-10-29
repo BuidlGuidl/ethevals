@@ -1,0 +1,52 @@
+[
+  {
+    "label": "target",
+    "reply": "yes",
+    "passed": true
+  },
+  {
+    "label": "solution",
+    "reply": "Yes. The via-IR clearing-helper collision leaves Bob in persistent pending-owner storage, so he can accept ownership again.",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**yes.**",
+    "passed": true
+  },
+  {
+    "label": "wrong target",
+    "reply": "no",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "alternative answers",
+    "reply": "yes or no",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "yes. Final answer: no.",
+    "passed": false
+  },
+  {
+    "label": "word prefix",
+    "reply": "yesthing",
+    "passed": false
+  },
+  {
+    "label": "slash alternatives",
+    "reply": "yes/no",
+    "passed": false
+  }
+]

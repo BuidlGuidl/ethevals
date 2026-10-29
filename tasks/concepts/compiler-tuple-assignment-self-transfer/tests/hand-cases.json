@@ -1,0 +1,67 @@
+[
+  {
+    "label": "target",
+    "reply": "60",
+    "passed": true
+  },
+  {
+    "label": "solution",
+    "reply": "60",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**60.**",
+    "passed": true
+  },
+  {
+    "label": "wrong target",
+    "reply": "140",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "alternative answers",
+    "reply": "60 or 140",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "60. Final answer: 140.",
+    "passed": false
+  },
+  {
+    "label": "two numeric answers",
+    "reply": "60. 140.",
+    "passed": false
+  },
+  {
+    "label": "two numeric lines",
+    "reply": "60\n140",
+    "passed": false
+  },
+  {
+    "label": "number prefix",
+    "reply": "600",
+    "passed": false
+  },
+  {
+    "label": "decimal prefix",
+    "reply": "60.5",
+    "passed": false
+  },
+  {
+    "label": "numeric explanation",
+    "reply": "60. The final write determines the stored value.",
+    "passed": true
+  }
+]
