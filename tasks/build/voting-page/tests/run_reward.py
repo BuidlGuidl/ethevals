@@ -47,6 +47,18 @@ def unique_object(pairs):
 
 def validate_reply(text, manifest):
     reply = json.loads(text, object_pairs_hook=unique_object)
+    if isinstance(reply, dict) and set(reply) == {'workflows', 'guard'}:
+        if not isinstance(reply['workflows'], list):
+            raise ValueError('Judge workflows must be an array.')
+        named = {'guard': reply['guard']}
+        for entry in reply['workflows']:
+            if not isinstance(entry, dict) or set(entry) != {'name', 'score', 'reasoning'}:
+                raise ValueError('Invalid named workflow entry.')
+            name = entry['name']
+            if not isinstance(name, str) or name not in WORKFLOWS or name in named:
+                raise ValueError('Judge workflow names must be known and unique.')
+            named[name] = {'score': entry['score'], 'reasoning': entry['reasoning']}
+        reply = named
     if not isinstance(reply, dict) or set(reply) != set(WORKFLOWS) | {'guard'}:
         raise ValueError('Judge reply must contain every named workflow and guard exactly once.')
     allowed = {row['path']: row['last_line'] for row in manifest['files']}
@@ -106,8 +118,16 @@ def install_completion_boundary(output, manifest, completion=None):
             schema = kwargs['response_format']['json_schema']['schema']
             if set(schema['properties']) != set(WORKFLOWS) | {'guard'}:
                 raise ValueError('Unexpected voting judge response schema.')
-            for name in WORKFLOWS:
-                schema['properties'][name]['properties']['reasoning'] = reason_schema()
+            entry = {'type': 'object', 'properties': {
+                'name': {'type': 'string', 'enum': list(WORKFLOWS)},
+                'score': {'type': 'string', 'enum': ['yes', 'no']},
+                'reasoning': reason_schema()},
+                'required': ['name', 'score', 'reasoning'], 'additionalProperties': False}
+            kwargs['response_format']['json_schema']['schema'] = {
+                'type': 'object', 'properties': {
+                    'workflows': {'type': 'array', 'items': entry},
+                    'guard': schema['properties']['guard']},
+                'required': ['workflows', 'guard'], 'additionalProperties': False}
         if len(json.dumps(kwargs, ensure_ascii=False).encode()) > MAX_REQUEST_BYTES:
             raise ValueError('RewardKit request exceeds the input limit.')
         (output / 'rewardkit-request.json').write_text(json.dumps(kwargs, indent=2) + '\n')
@@ -125,9 +145,10 @@ def install_completion_boundary(output, manifest, completion=None):
         # Keep the raw provider reply above. RewardKit still parses ordinary string reasons.
         normalized = response.model_copy(deep=True)
         reply = json.loads(normalized.choices[0].message.content, object_pairs_hook=unique_object)
-        for name in WORKFLOWS:
-            reply[name]['reasoning'] = json.dumps(decisions[name], ensure_ascii=False)
-        normalized.choices[0].message.content = json.dumps(reply, ensure_ascii=False)
+        entries = {name: {'score': 'yes' if decisions[name]['decision'] == 'pass' else 'no',
+            'reasoning': json.dumps(decisions[name], ensure_ascii=False)} for name in WORKFLOWS}
+        entries['guard'] = reply['guard']
+        normalized.choices[0].message.content = json.dumps(entries, ensure_ascii=False)
         return normalized
 
     async def recorded_call(judge, criteria, weights, *args, **kwargs):

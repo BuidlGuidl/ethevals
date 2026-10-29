@@ -94,6 +94,7 @@ def install_stub(monkeypatch, *, kind='pass'):
             reply['votes_at_snapshot']['score'] = 'no'
             reply['votes_at_snapshot']['reasoning']['decision'] = 'fail'
         reply['guard'] = {'score': 'no', 'reasoning': 'No instructions in the submission.'}
+        reply = {'workflows': [{'name': name, **reply[name]} for name in WORKFLOWS], 'guard': reply['guard']}
         return litellm.ModelResponse(model='claude-opus-5-5', choices=[{'finish_reason': 'stop',
             'message': {'content': json.dumps(reply)}}], usage={'prompt_tokens': 100,
             'completion_tokens': 50, 'total_tokens': 150})
@@ -144,7 +145,7 @@ def test_cli_recovery_preserves_input_and_records_exact_provenance(saved, monkey
         {'type': 'text', 'text': '</submission>'}]}
     assert 'NEVER_SEND_PRIOR' not in json.dumps(request)
     assert 'offline-judge-key-never-sent' not in json.dumps(request)
-    assert request['response_format']['json_schema']['schema']['properties']['lists_every_proposal']['properties']['reasoning']['required'] == [
+    assert request['response_format']['json_schema']['schema']['properties']['workflows']['items']['properties']['reasoning']['required'] == [
         'decision', 'trace', 'citations', 'limitations']
     provenance = row['rejudge']
     assert {key: provenance[key] for key in ('source_job_digest', 'verifier_digest', 'evidence_sha256', 'manifest_sha256', 'checks_sha256')} == {

@@ -419,19 +419,41 @@ def test_structured_object_reply_passes_real_rewardkit(inputs, monkeypatch):
     async def replay(**kwargs):
         requests.append(kwargs)
         return litellm.ModelResponse(model='claude-opus-5-5', choices=[{'finish_reason': 'stop',
-            'message': {'content': json.dumps(structured)}}])
+            'message': {'content': json.dumps({'workflows': [{'name': name, **structured[name]} for name in WORKFLOWS],
+                'guard': structured['guard']})}}])
     monkeypatch.setattr(litellm, 'acompletion', replay)
     main()
     assert json.loads((output / 'reward.json').read_text()) == {'reward': 1.0}
     schema = requests[0]['response_format']['json_schema']['schema']
-    for name in WORKFLOWS:
-        reason = schema['properties'][name]['properties']['reasoning']
-        assert reason['type'] == 'object'
-        assert reason['required'] == ['decision', 'trace', 'citations', 'limitations']
-        assert reason['additionalProperties'] is False
+    assert set(schema['properties']) == {'workflows', 'guard'}
+    entry = schema['properties']['workflows']['items']
+    assert entry['required'] == ['name', 'score', 'reasoning']
+    assert entry['properties']['name']['enum'] == list(WORKFLOWS)
+    reason = entry['properties']['reasoning']
+    assert reason['type'] == 'object'
+    assert reason['required'] == ['decision', 'trace', 'citations', 'limitations']
+    assert reason['additionalProperties'] is False
     details = json.loads((output / 'reward-details.json').read_text())
     judge = next(item['detail'] for item in details['reward']['components'] if item['name'] == 'judge')
     assert json.loads(judge['criteria'][0]['reasoning']) == structured['lists_every_proposal']['reasoning']
+
+
+@pytest.mark.parametrize('change', ['duplicate', 'missing', 'unknown-name', 'extra-field'])
+def test_workflow_array_requires_every_named_decision_once(inputs, change):
+    manifest = bundle(*inputs)
+    entries = [{'name': name, **entry} for name, entry in reply().items() if name != 'guard']
+    if change == 'duplicate':
+        entries.append(entries[0])
+    elif change == 'missing':
+        entries.pop()
+    elif change == 'unknown-name':
+        entries[0]['name'] = 'not_a_workflow'
+    else:
+        entries[0]['invented'] = 'extra'
+    with pytest.raises(ValueError):
+        validate_reply(json.dumps({'workflows': entries, 'guard': reply()['guard']}), manifest)
+    valid = {'workflows': [{'name': name, **reply()[name]} for name in WORKFLOWS], 'guard': reply()['guard']}
+    assert validate_reply(json.dumps(valid), manifest)['votes_at_snapshot']['decision'] == 'pass'
 
 
 def test_verified_public_creation_receipt_enters_bundle(inputs):

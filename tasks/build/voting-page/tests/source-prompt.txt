@@ -12,7 +12,8 @@ Missing or unresolved evidence requires an unknown decision, never an assumed pa
 
 {criteria}
 
-For each workflow, use RewardKit's score and reasoning fields.
+Return a workflows array and a guard object, as required by the response schema.
+Include every named workflow exactly once, with name, score, and reasoning fields.
 The score is "yes" only for pass; use "no" for fail or unknown.
 Each workflow's reasoning must be an object with exactly these fields, as required by the response schema:
 decision: "pass", "fail", or "unknown".

@@ -11,6 +11,9 @@ Repeating their agents spends money without repairing either cause.
 ## Decision
 
 The voting completion boundary requests structured reason objects through the provider's JSON schema.
+The provider returns one array of named workflows, so the schema defines the shared reason shape once.
+The verifier requires every expected name exactly once before converting the array into RewardKit's named entries.
+This avoids the provider grammar-size limit reached by eight separately nested reason schemas.
 It checks every required field before encoding reasons for RewardKit's string parser.
 Missing fields, invalid citations, and unknown decisions remain verifier errors.
 There is no reply repair, default reason, or automatic paid retry.
