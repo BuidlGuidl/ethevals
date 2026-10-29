@@ -19,6 +19,8 @@ Share the URL to keep those filters. Domains without tasks have dashed borders a
 `src/areas.ts` maps areas to domains. Tasks without a mapped area belong to Dapp development, including demo tasks.
 Expand a task to read its instruction and open its README on GitHub.
 
+The share card is `public/og-image.png`, a 1200x630 screenshot of `scripts/share-card.html`. Render it again when the hero text changes.
+
 Run `ETHEVALS_DEMO=1 pnpm build` for an invented board.
 The banner labels its results, and its trajectory links are examples.
 Demo mode and an explicit rows path cannot be combined.

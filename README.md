@@ -2,7 +2,7 @@
 
 <h4 align="center">
   <a href="https://ethevals.com">Website</a> |
-  <a href="https://ethevals-site.vercel.app/how-it-works">How it works</a> |
+  <a href="https://ethevals.com/how-it-works">How it works</a> |
   <a href="docs/add-a-task.md">Add a task</a>
 </h4>
 

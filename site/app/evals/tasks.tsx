@@ -28,7 +28,7 @@ export function TaskList({ tasks, query }: { tasks: Eval[]; query: URLSearchPara
   const pillar = pillars.find((value) => value === query.get("pillar"));
   // Only Build tasks have a layer, so the layer filter needs Build selected.
   const layer = pillar === "build" ? layers.find((value) => value === query.get("layer")) : undefined;
-  const areas = [...new Set(tasks.flatMap((task) => task.area ? [task.area] : []))].sort((a, b) => a.localeCompare(b));
+  const areas = [...new Set(inDomain.flatMap((task) => task.area ? [task.area] : []))].sort((a, b) => a.localeCompare(b));
   const area = areas.find((value) => value === query.get("area"));
   const inArea = inDomain.filter((task) => !area || task.area === area);
   const inPillar = inDomain.filter((task) => (!pillar || task.pillar === pillar) && (!layer || task.layer === layer));
