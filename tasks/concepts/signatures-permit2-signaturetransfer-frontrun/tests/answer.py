@@ -13,9 +13,13 @@ def accepts(reply: str) -> bool:
     text = text.strip().lstrip("\"'([ ").strip()
     opening = re.match(r"no\b", text)
     conflicting = re.search(
-        r"\b(?:yes\s*(?:[/,;]|or|and)\s*no|no\s*(?:[/,;]|or|and)\s*yes)\b"
-        r"|(?:^|[.!?;\n]\s*|\b(?:actually|instead|(?:final\s+)?answer(?:\s+is)?|correction)\s*[:, ]*)"
-        r"yes\b(?=\s*[,.;:!?]|\s*$)",
+        r"\b(?:no\s*(?:/|or|and)\s*yes|yes\s*(?:/|or|and)\s*no)\b"
+        r"|^no\s*[,;]\s*(?:or|and|/)\s*yes\b"
+        r"|^no\s*[,;]\s*yes\b(?=\s*[,.;:!?]|\s*$)"
+        r"|^no\s*\(\s*(?:or\s+)?yes\b"
+        r"|(?:^|[.!?\n]\s*)(?:the\s+)?(?:final\s+)?answer(?:\s+is)?\s*[:,]?\s*yes\b"
+        r"|\b(?:actually|instead|correction)\s*[:,]?\s*yes\b"
+        r"|(?:^|[.!?\n]\s*)yes\b(?=\s*[.!?]|\s*$)",
         text,
     )
     return opening is not None and conflicting is None

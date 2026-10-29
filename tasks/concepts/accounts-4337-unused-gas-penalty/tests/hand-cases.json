@@ -53,5 +53,30 @@
     "label": "whitespace",
     "reply": " \n ",
     "passed": false
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "No, or yes; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "No (or yes), depending on the setup.",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "No. Yes.",
+    "passed": false
+  },
+  {
+    "label": "sentence-start answer-is revision",
+    "reply": "No. The answer is yes.",
+    "passed": false
+  },
+  {
+    "label": "concession after the answer, explanation after a comma (reviewer case)",
+    "reply": "No. Yes, unused gas is refunded, but a 10% penalty on the unused limit is charged to the paymaster.",
+    "passed": true
   }
 ]

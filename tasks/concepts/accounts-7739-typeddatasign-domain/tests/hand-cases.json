@@ -68,5 +68,35 @@
     "label": "account alternative",
     "reply": "The dapp's or the account's.",
     "passed": false
+  },
+  {
+    "label": "explanation after a comma naming the account (reviewer case)",
+    "reply": "Dapp, the account's fields are nested inside TypedDataSign.",
+    "passed": true
+  },
+  {
+    "label": "account's domain as a sentence subject (reviewer case)",
+    "reply": "Dapp. The account's domain, meanwhile, goes inside TypedDataSign.",
+    "passed": true
+  },
+  {
+    "label": "spec vocabulary: app (reviewer case)",
+    "reply": "App. The app's domain separator follows 0x1901; the account's domain fields are inside the struct.",
+    "passed": true
+  },
+  {
+    "label": "hedge with a comma (reviewer case)",
+    "reply": "Dapp, account.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "Dapp (or account), depending on the workflow.",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "Dapp. Account.",
+    "passed": false
   }
 ]

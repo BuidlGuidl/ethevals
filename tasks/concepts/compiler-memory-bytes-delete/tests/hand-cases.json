@@ -70,13 +70,33 @@
     "passed": false
   },
   {
-    "label": "nonzero hex prefix",
-    "reply": "0x01",
+    "label": "nonzero address cast",
+    "reply": "address(0x1234)",
     "passed": false
   },
   {
-    "label": "nonzero address cast",
-    "reply": "address(0x1234)",
+    "label": "Alice's address as a sentence subject (reviewer case)",
+    "reply": "The zero address. Alice's address, which sat in bytes 1 to 20, is overwritten by the full-word store.",
+    "passed": true
+  },
+  {
+    "label": "control pipeline named in the explanation (reviewer case)",
+    "reply": "The zero address. On the via-IR control the answer is Alice's address.",
+    "passed": true
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "The zero address, or Alice's address; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "The zero address (or Alice's address).",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "The zero address. Alice's address.",
     "passed": false
   }
 ]

@@ -58,5 +58,30 @@
     "label": "slash alternatives",
     "reply": "yes/no",
     "passed": false
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "Yes, or no; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "Yes (or no), depending on the setup.",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "Yes. No.",
+    "passed": false
+  },
+  {
+    "label": "sentence-start answer-is revision",
+    "reply": "Yes. The answer is no.",
+    "passed": false
+  },
+  {
+    "label": "explanation after a comma",
+    "reply": "Yes, because the mechanism the question describes applies here.",
+    "passed": true
   }
 ]

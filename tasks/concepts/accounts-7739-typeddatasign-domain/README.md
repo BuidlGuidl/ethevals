@@ -19,7 +19,7 @@ PersonalSign uses the account's domain in the outer position instead.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `dapp_domain_outside` | The reply opens with `dapp` and gives no explicit alternative or revised target | Audits |
+| `dapp_domain_outside` | The reply opens with `dapp`, `app` or `application` and gives no explicit alternative or revised target | Audits |
 
 ## Why it matters
 
@@ -58,5 +58,3 @@ It does not judge the explanation or prove that every sentence agrees with the o
 `tests/hand-cases.json` includes real accepted and rejected replies, a hedge, a near miss, and the solution.
 
 The task uses `area = "Audits"`, which [PR #79](https://github.com/BuidlGuidl/ethevals/pull/79) maps to Security.
-
-The rule also accepts `the dapp's` and `application`.

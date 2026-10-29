@@ -73,5 +73,30 @@
     "label": "nonzero address cast",
     "reply": "address(0x1234)",
     "passed": false
+  },
+  {
+    "label": "Alice's address as a sentence subject (reviewer case)",
+    "reply": "The zero address. Alice's address, set by Ownable's constructor afterwards, never reaches feeRecipient.",
+    "passed": true
+  },
+  {
+    "label": "control pipeline named in the explanation (reviewer case)",
+    "reply": "The zero address. On the via-IR control the answer is Alice's address.",
+    "passed": true
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "The zero address, or Alice's address; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "The zero address (or Alice's address).",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "The zero address. Alice's address.",
+    "passed": false
   }
 ]
