@@ -13,9 +13,13 @@ The build writes `out/` for a static file host.
 It refreshes `.catalog/catalog.json` through `ethevals catalog`.
 The catalog lists tasks and the current skills hash.
 
-The Tasks page at `/evals/` shows catalog counts by pillar and area without results data.
-Select a pillar and an area to filter tasks. With Build selected, a layer filter appears too. Share the URL to keep those filters.
+The Tasks page at `/evals/` shows catalog counts by domain, pillar, and area without results data.
+Select a domain, pillar, and area to filter tasks. With Build selected, a layer filter appears too.
+Share the URL to keep those filters. Domains without tasks have dashed borders and a coming soon tooltip.
+`src/areas.ts` maps areas to domains. Tasks without a mapped area belong to Dapp development, including demo tasks.
 Expand a task to read its instruction and open its README on GitHub.
+
+The share card is `public/og-image.png`, a 1200x630 screenshot of `scripts/share-card.html`. Render it again when the hero text changes.
 
 Run `ETHEVALS_DEMO=1 pnpm build` for an invented board.
 The banner labels its results, and its trajectory links are examples.

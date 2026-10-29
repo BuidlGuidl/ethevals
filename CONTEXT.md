@@ -160,12 +160,15 @@ The oracle and nop runs for a fork task. A maintainer starts it by hand on a pul
 
 ## How tasks are grouped
 
+**Domain**:
+The field of Ethereum work a task tests: Dapp development or Security.
+
 **Pillar**:
 The kind of work a task asks for: Concepts, Build, or Act. Concepts tasks are quizzes. Build tasks are builds, where the tests run what the agent wrote. In Act tasks the agent acts on a chain, by sending transactions or by writing a script that sends them, and the tests check what changed on the chain.
 _Avoid_: category, stage, track
 
 **Area**:
-The part of dapp development a task belongs to, such as Lending or Swaps.
+The part of a domain a task belongs to, such as Lending or Swaps.
 
 **Layer**:
 What a Build task's agent writes: contracts, a frontend, or backend code.

@@ -161,7 +161,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
     <header className="hero"><div className="hero-brand"><h1 id="hero-logo" aria-label="ETH Evals"><Logo id="hero-gradient" /></h1>
       <p className="hero-plate"><span><b>{data.counts.evals}</b> tasks</span><span><b>{data.counts.agents}</b> agents</span><span><b>{data.counts.runs.toLocaleString("en")}</b> trials</span></p></div>
       <p className="hero-tag">The Open Benchmark for AI on Ethereum</p>
-      <p className="hero-desc">We test AI agents, and the models behind them, on real Ethereum work. Every task, trial and trajectory is public, allowing anyone to run the same tasks.</p>
+      <p className="hero-desc">We evaluate agents used by developers, and the models behind them, on real Ethereum work. Every task, trial and trajectory is public, allowing anyone to run the same tasks.</p>
       <p className="hero-desc">We evaluate <Link href="/how-it-works/#hw-pillars">three pillars</Link>: <b>Concepts</b>, <b>Build</b>, and <b>Act</b>.</p>
     </header>
     <section id="leaderboard" className="results-section"><div className="section-head"><div><h2>Results</h2><p>The same work, with and without Ethereum skills.</p></div>

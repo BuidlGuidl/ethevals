@@ -55,7 +55,8 @@ test("the Tasks page renders catalog counts, titles, badges, instructions, and R
   assert.deepEqual(rows.map((row) => row.match(/class="task-title">([^<]+)/)?.[1]),
     ["Fees", "Units", "Alpha token", "Zebra vault", "Supply tokens"]);
   assert.deepEqual(rows.map((row) => [...row.matchAll(/class="badge[^"]*">([^<]+)/g)].map((match) => match[1])),
-    [["Concepts"], ["Concepts"], ["Build", "Tokens"], ["Build", "Lending"], ["Act", "Lending"]]);
+    [["Dapp development", "Concepts"], ["Dapp development", "Concepts"], ["Dapp development", "Build", "Tokens"],
+      ["Dapp development", "Build", "Lending"], ["Dapp development", "Act", "Lending"]]);
   for (const instruction of ["Explain fees.", "Name a unit.", "Build a token.", "Build a vault.", "Supply tokens. Keep the receipt."]) {
     assert.ok(html.includes(`<pre>${instruction}</pre>`));
   }
@@ -68,6 +69,33 @@ test("the Tasks page renders zero counts and an empty state from an empty catalo
   const html = renderToStaticMarkup(createElement(Tasks, { tasks: [] }));
   assert.deepEqual(buttons(html, "Filter by pillar").map((button) => button.text), ["Total tasks0", "Concepts0", "Build0", "Act0"]);
   assert.ok(html.includes("No tasks yet."));
+});
+
+test("a domain with no tasks has a dashed, disabled coming soon control", (t) => {
+  const html = renderToStaticMarkup(createElement(TaskList, { tasks: taskCatalog(t).evals, query: new URLSearchParams() }));
+  assert.deepEqual(buttons(html, "Filter by domain"), [
+    { text: "Dapp development 5", pressed: false, disabled: false },
+    { text: "Security", pressed: false, disabled: true },
+  ]);
+  assert.match(html, /<button[^>]*class="badge border-dashed pointer-events-none"[^>]*disabled=""[^>]*>Security<\/button>/);
+});
+
+test("a domain URL filters tasks and counts, and a populated Security domain becomes selectable", (t) => {
+  const tasks = [...taskCatalog(t).evals, {
+    id: "concepts/reentrancy", title: "Reentrancy", pillar: "concepts" as const, area: "Audits",
+    hash: "current", description: "Check reentrancy.", instruction: "Find the reentrancy.", modes: ["internet" as const],
+  }];
+  const dapp = renderToStaticMarkup(createElement(TaskList, { tasks, query: new URLSearchParams("domain=dapp-development") }));
+  assert.deepEqual(titles(dapp), ["Fees", "Units", "Alpha token", "Zebra vault", "Supply tokens"]);
+  assert.deepEqual(buttons(dapp, "Filter by pillar").map((button) => button.text), ["Total tasks5", "Concepts2", "Build2", "Act1"]);
+  assert.deepEqual(buttons(dapp, "Filter by domain"), [
+    { text: "Dapp development 5", pressed: true, disabled: false },
+    { text: "Security 1", pressed: false, disabled: false },
+  ]);
+  const security = renderToStaticMarkup(createElement(TaskList, { tasks, query: new URLSearchParams("domain=security") }));
+  assert.deepEqual(titles(security), ["Reentrancy"]);
+  assert.deepEqual(buttons(security, "Filter by pillar").map((button) => button.text), ["Total tasks1", "Concepts1", "Build0", "Act0"]);
+  assert.match(security, /class="badge">Security<\/span>/);
 });
 
 test("a shared pillar and area URL renders matching tasks and counts for each filter", (t) => {
