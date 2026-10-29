@@ -1,5 +1,15 @@
 [
   {
+    "label": "explanation after comma",
+    "reply": "The zero address, Alice's address is assigned to the owner only after the feeRecipient initializer runs.",
+    "passed": true
+  },
+  {
+    "label": "comma alternatives",
+    "reply": "The zero address, Alice's address.",
+    "passed": false
+  },
+  {
     "label": "target",
     "reply": "zero address",
     "passed": true

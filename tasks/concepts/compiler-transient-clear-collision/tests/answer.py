@@ -13,7 +13,8 @@ def accepts(reply: str) -> bool:
     text = text.strip().lstrip("\"'([ ").strip()
     opening = re.match(r"yes\b", text)
     conflicting = re.search(
-        r"\b(?:yes\s*(?:[/,;]|or|and)\s*no|no\s*(?:[/,;]|or|and)\s*yes)\b"
+        r"\b(?:yes\s*(?:/|or|and)\s*no|no\s*(?:/|or|and)\s*yes)\b"
+        r"|\b(?:yes\s*[,;]\s*no|no\s*[,;]\s*yes)\b(?=\s*[,.;:!?]|\s*$)"
         r"|(?:^|[.!?;\n]\s*|\b(?:actually|instead|(?:final\s+)?answer(?:\s+is)?|correction)\s*[:, ]*)"
         r"no\b(?=\s*[,.;:!?]|\s*$)",
         text,

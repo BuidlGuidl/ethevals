@@ -1,5 +1,15 @@
 [
   {
+    "label": "explanation after comma",
+    "reply": "Yes, no access list is needed because execTransaction has already warmed the proxy slot and singleton address.",
+    "passed": true
+  },
+  {
+    "label": "comma alternatives",
+    "reply": "Yes, no.",
+    "passed": false
+  },
+  {
     "label": "target",
     "reply": "yes",
     "passed": true

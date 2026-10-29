@@ -1,5 +1,15 @@
 [
   {
+    "label": "explanation after comma",
+    "reply": "Yes, no storage write is removed because the optimizer inlines finishEarly.",
+    "passed": true
+  },
+  {
+    "label": "comma alternatives",
+    "reply": "Yes, no.",
+    "passed": false
+  },
+  {
     "label": "target",
     "reply": "yes",
     "passed": true

@@ -13,7 +13,9 @@ def accepts(reply: str) -> bool:
     text = text.strip().lstrip("\"'([ ").strip()
     opening = re.match(r"(?:the\s+)?zero(?:\s+address)?\b|address\(0\)(?!\w)|0x0+(?!\w)", text)
     conflicting = re.search(
-        r"^(?:(?:the\s+)?zero(?:\s+address)?|address\(0\)|0x0+)\s*(?:or|and|/|,)\s*alice\b"
+        r"^(?:(?:the\s+)?zero(?:\s+address)?|address\(0\)|0x0+)\s*(?:or|and|/)\s*alice\b"
+        r"|^(?:(?:the\s+)?zero(?:\s+address)?|address\(0\)|0x0+)\s*,\s*"
+        r"alice(?:'s)?(?:\s+address)?(?=\s*[,.;:!?]|\s*$)"
         r"|(?:^|[.!?;\n]\s*|\b(?:actually|instead|(?:final\s+)?answer(?:\s+is)?|correction)\s*[:, ]*)"
         r"alice(?:'s)?(?:\s+address)?(?=\s*[,.;:!?]|\s*$)",
         text,
