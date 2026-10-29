@@ -133,7 +133,7 @@ def remember_secrets(folder: Path, secrets: dict[str, set[bytes]]) -> None:
 
 def check_output(output: Path, secrets: dict[str, set[bytes]], *, require_inventory: bool = False) -> None:
     """Keep raw files local; record a safe error row when a whole Harbor job is withheld."""
-    from .trial_rows import SCHEMA_VERSION
+    from .trial_rows import SCHEMA_VERSION, results_row
 
     for board in sorted((output / "jobs").glob("*/board.json")):
         folder = board.parent
@@ -182,6 +182,12 @@ def check_output(output: Path, secrets: dict[str, set[bytes]], *, require_invent
                    "judge_paid_by": None, "cost_source": "unavailable",
                    "total_seconds": None, "working_seconds": None,
                    "trajectory_file": None, "trajectory_url": None, "verifier_files": None}
+            if metadata.get("rejudge"):
+                result_file, = sorted(folder.glob("*/result.json"))
+                recovery = results_row(result_file.parent, metadata)
+                row.update({key: recovery[key] for key in (
+                    "rejudge", "model_cost_usd", "judge_cost_usd", "judge_paid_by", "cost_source",
+                    "total_tokens", "total_seconds", "working_seconds")})
             # Metadata can contain a leaked value too. Never carry it into the safe row.
             encoded = json.dumps(row)
             for values in secrets.values():

@@ -200,16 +200,28 @@ def test_valid_failure_is_a_zero_reward(saved, monkeypatch):
 
 
 def test_new_secret_withholds_the_whole_recovery(saved, monkeypatch):
-    source, _, output = saved
-    plan_rejudge(source, output, 5)
+    source, trial, output = saved
+    original = results_row(trial, json.loads((source / 'board.json').read_text()))
+    plan = plan_rejudge(source, output, 5)
     install_stub(monkeypatch, kind='secret')
     row = execute_rejudge(output / 'plan.json', 5)
     assert (row['status'], row['error_kind'], row['rewards'], row['verifier_files']) == ('error', 'secret', {}, None)
+    assert (row['model_cost_usd'], row['judge_cost_usd'], row['judge_paid_by']) == (0.75, 1.2514, 'api_key')
+    assert (row['total_tokens'], row['total_seconds'], row['working_seconds']) == (
+        150, original['total_seconds'], original['working_seconds'])
+    assert row['rejudge']['id'] == plan['id']
+    assert row['rejudge']['verifier_digest'] == plan['verifier_digest']
+    assert (row['rejudge']['added_judge_cost_usd'], row['rejudge']['held_reserve_usd']) == (0.0014, 0.0)
+    assert recover_rows(output) == [row]
+    assert fold_rows([original], [row]) == [row]
     assert 'offline-judge-key-never-sent' not in (output / 'rows.jsonl').read_text()
     stage_artifact(output, output / 'public')
     assert sorted(path.name for path in (output / 'public/jobs').rglob('*') if path.is_file()) == ['publication-check.json']
+    assert read_rows(output / 'public/rows.jsonl') == [row]
     release = publish_logs(output, 'owner/repo', 'withheld-test', 'a' * 40)
     assert (release['assets'], release['rows'][0]['error_kind']) == ([], 'secret')
+    assert release['rows'][0]['rejudge'] == row['rejudge']
+    assert release['rows'][0]['judge_cost_usd'] == 1.2514
 
 
 @pytest.mark.parametrize('change', ['evidence', 'source', 'verifier', 'plan', 'budget', 'missing-key'])
