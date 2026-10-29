@@ -67,6 +67,11 @@ The workflow needs these GitHub secrets:
 
 The job graph is `plan → matrix → publish`.
 The plan reads current `main`; later jobs check out its saved SHA.
+Each matrix job downloads the exact plan artifact named by its plan job's output.
+Partial reruns retain that output; full reruns save a new plan artifact for their attempt.
+If that exact artifact is missing or expired, the download fails without using another plan.
+This applies to workflows started after the change lands.
+Old runs keep their original workflow definition when rerun, because [GitHub retains the original commit](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs).
 `scripts/ci.py plan-trials` folds current and pending results, saves the Harbor job config, and emits the admitted matrix.
 CI schedules at most 256 trials, with at most 100 per plan group to fit GitHub's pending-job limit.
 Later runs pick up deferred trials.

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import re
 import shutil
 import tarfile
 
@@ -10,6 +11,39 @@ from test_jobs import job_config, task_folder
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize(("plan_attempt", "matrix_attempt", "expected_name"), [
+    (1, 1, "trial-plan-40826749924-1"),
+    (1, 2, "trial-plan-40826749924-1"),
+    (3, 3, "trial-plan-40826749924-3"),
+    (3, 4, "trial-plan-40826749924-3"),
+])
+def test_matrix_downloads_its_plan_artifact(plan_attempt, matrix_attempt, expected_name):
+    import yaml
+
+    jobs = yaml.safe_load((ROOT / ".github/workflows/results.yml").read_text())["jobs"]
+    upload = next(step for step in jobs["plan"]["steps"]
+                  if step.get("uses", "").startswith("actions/upload-artifact@"))
+    download = next(step for step in jobs["matrix"]["steps"]
+                    if step.get("uses", "").startswith("actions/download-artifact@"))
+
+    # Resolve only dotted context references in artifact names and job outputs.
+    def expand(value, context):
+        return re.sub(r"\$\{\{\s*([\w.]+)\s*\}\}", lambda match: context[match[1]], value)
+
+    plan_context = {
+        "github.run_id": "40826749924", "github.run_attempt": str(plan_attempt),
+        "steps.plan.outputs.matrix": '{"include":[]}',
+        "steps.plan.outputs.scheduled_trials": "1", "steps.plan.outputs.sha": "a" * 40,
+    }
+    uploaded_name = expand(upload["with"]["name"], plan_context)
+    matrix_context = {"github.run_id": "40826749924", "github.run_attempt": str(matrix_attempt)}
+    matrix_context.update({f"needs.plan.outputs.{key}": expand(value, plan_context)
+                           for key, value in jobs["plan"]["outputs"].items()})
+    downloaded_name = expand(download["with"]["name"], matrix_context)
+    assert uploaded_name == expected_name
+    assert downloaded_name == uploaded_name
 
 
 def test_paid_workflow_limits_secrets_to_the_steps_that_use_them():
