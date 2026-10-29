@@ -19,6 +19,7 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
       scheduled_trials: ${{ steps.plan.outputs.scheduled_trials }}
       sha: ${{ steps.plan.outputs.sha }}
+      artifact_name: trial-plan-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -69,7 +70,7 @@ jobs:
       - run: uv sync --frozen
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: trial-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ needs.plan.outputs.artifact_name }}
           path: results/ci-plan
       # Keep Docker's default builder. A buildx container builder can't see these local images and pulls from GHCR.
       - run: uv run python scripts/ci.py images

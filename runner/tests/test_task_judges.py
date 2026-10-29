@@ -205,8 +205,8 @@ def test_export_card_explains_the_required_judge_key(tmp_path):
     output = tmp_path / "hf"
     write_hf([task], output)
     card = (output / "README.md").read_text()
-    assert "require `ANTHROPIC_API_KEY` through `[verifier.env]`" in card
-    assert "A missing key stops Harbor with the variable's name." in card
+    assert "export ANTHROPIC_API_KEY='your-judge-api-key'" in card
+    assert "`[verifier.env]` in `task.toml` names the judge key" in card
     assert (output / "tasks/concepts--question/tests/judge.toml").read_bytes() == (task / "tests/judge.toml").read_bytes()
 
 

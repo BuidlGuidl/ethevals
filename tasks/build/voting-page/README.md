@@ -1,19 +1,7 @@
 # Governance voting page
 
-Tally has shut down, and a protocol's token holders need their own page to wrap, delegate and vote.
-The agent adds a Governance page to a create-wagmi project, for a deployed OpenZeppelin governor.
-Three of the governor's rules differ from what most pages assume:
-
-- Only For votes count toward quorum.
-- A late quorum moves the end of voting.
-- Votes count at each proposal's snapshot.
-
-Code drives the built page and checks wallet requests and chain results.
-RewardKit judges compare captured page text with the governor's values.
-
-Every number on a voting page has a source on chain, and a page can guess each one from events and defaults instead.
-Live pages make those guesses today.
-This task checks whether the page reads them.
+Token holders need a page to wrap, delegate, and vote with the deployed governor.
+The verifier compiles the submitted page and judges eight workflows from complete source and public contract evidence.
 
 ## The instruction
 
@@ -21,132 +9,85 @@ This task checks whether the page reads them.
 
 ## What it touches
 
-The request names what holders must see.
-It doesn't say where each value comes from, and four of them go wrong when a page computes them itself.
+The governor counts only For votes toward quorum.
+Its late-quorum extension changes the effective deadline.
+A holder's voting weight comes from each proposal's snapshot, even after later delegation changes.
 
-- **Status.** Pending, Active, Canceled, Defeated, Succeeded, Queued and Executed come from the governor's `state()`. A page that works status out from the creation event and the tallies is wrong at the deadline, on a tie, and whenever the end moves.
-
-- **When voting ends.** The first time For votes reach quorum late, this governor extends voting by 7,200 blocks and emits `ProposalExtended`. The end block in `ProposalCreated` is then stale, and only `proposalDeadline()` is right.
-
-- **Quorum.** `COUNTING_MODE()` here is `support=bravo&quorum=for`, so Abstain votes don't count toward the 4 million quorum. OpenZeppelin's default counts For and Abstain together. So does any page that hard-codes that default. With For 3M and Abstain 2M, it shows "reached" for a proposal the governor will defeat:
-
-  | Counting | Counted toward the 4M quorum | Quorum |
-  | --- | --- | --- |
-  | For and Abstain, OpenZeppelin's default | 5M | reached |
-  | For only, this governor | 3M | not reached, so the proposal is Defeated |
-
-- **Whose votes count.** Wrapping TOKEN gives vote tokens but no votes, because the wrapper doesn't delegate for the holder. A vote on a proposal weighs what the holder had delegated at its snapshot, not what they hold now. A holder who delegates late goes through this:
-
-  1. A proposal's snapshot passes while the holder has no votes delegated.
-  2. The holder wraps and delegates. Their wallet now shows 1,000 votes.
-  3. The holder votes For on that proposal. The transaction succeeds, and the vote weighs 0.
-
-  A page that trusts the receipt tells them their vote counted.
+Wrapping creates vote tokens without delegated votes.
+The page must follow approval, deposit, delegation, receipts, and refreshed reads into the holder's displayed votes.
 
 ## The checks
 
-The agent starts with the create-wagmi project and the contracts' sources and ABIs under `/workspace/contracts/`. It also gets `chain_context.json`, which names TOKEN, the vote token, the governor and the timelock.
-Its chain has five ordinary proposals: Executed, Defeated, Queued, Active and Pending.
-
-After the agent finishes, the verifier builds the page and starts its own fork of that chain. On the fork it adds ten test proposals the agent never saw. They include:
-
-- one that reaches quorum only if Abstain counts
-- a late-quorum proposal and a twin created in the same block
-- queued proposals before and after their wait
-
-One test proposal gets canceled while Pending.
-The snapshot journey later creates a fresh proposal after the holder delegates.
-
-It opens the page with an injected wallet, acting as holders it finds in public `DelegateChanged` logs. It follows the page's own tabs, links and vote dialogs, and captures plain text for the judges alongside the governor's values.
-
 | Check | What it proves | Area |
 | --- | --- | --- |
-| `compile` | `pnpm build` and `pnpm exec tsc --noEmit` both pass | frontend compilation |
-| `lists_every_proposal` | The page lists all five ordinary and ten test proposals | proposal discovery |
-| `status_and_tallies_match` | The verifier reaches every proposal's view, before and after the twins' original end | governor reads |
-| `quorum_counts_for_only` | The verifier reaches the For+Abstain, passed and extended proposals | counting rules |
-| `end_moves_with_late_quorum` | The extended proposal accepts a For vote with weight after its twin closes | voting end |
-| `wrap_then_delegate` | Deposit and delegation calls give the holder 1,000 wrapped tokens and votes | voting power |
-| `votes_at_snapshot` | Captures old and new weights; the new proposal records 1,000 For | snapshot votes |
-| `canceled_status` | Trying to vote on a canceled proposal sends no vote request | closed proposals |
-| `already_voted` | A holder who already voted sends no second vote request | duplicate votes |
-| `shown_proposal_list` | A view without titles shows no false proposal count or proposal load error | judge |
-| `shown_status_and_tallies` | Captured statuses and tallies match the governor | judge |
-| `shown_for_only_quorum` | Captured quorum uses For votes only | judge |
-| `shown_extended_end` | Captures show the later end and the twins' states | judge |
-| `shown_holder_votes` | Captures show current votes before and after delegation | judge |
-| `shown_snapshot_votes` | Captures show each proposal's snapshot weight | judge |
-| `shown_canceled_status` | Captures show the canceled proposal's status | judge |
+| `compile` | Executed `pnpm build` and `pnpm exec tsc --noEmit` both pass | frontend compilation |
+| `lists_every_proposal` | Complete successful scans reach every proposal, with honest loading and refresh errors | proposal discovery |
+| `status_and_tallies_match` | Governor state and For and Against tallies reach the displayed proposal | governor reads |
+| `quorum_counts_for_only` | Quorum and any progress count For votes only | counting rules |
+| `end_moves_with_late_quorum` | Effective deadlines and voting gates honor extensions and snapshot eligibility | voting end |
+| `wrap_then_delegate` | Approval, wrapping, delegation and refreshed current votes form a usable holder flow | voting power |
+| `votes_at_snapshot` | Display and voting use the proposal snapshot through later delegation changes | snapshot votes |
+| `canceled_status` | Canceled state reaches the display and prevents a vote request | closed proposals |
+| `already_voted` | The connected holder cannot send a duplicate vote request | duplicate votes |
+| `free_submission_changed` | Free mode only: application source differs from the untouched starter | free check |
 
-Code checks and binary judge criteria combine under RewardKit's `all-pass` reward.
-The page-value judge reads only `/logs/verifier/page-evidence.txt`.
-The list judge reads only `/logs/verifier/proposal-list-evidence.txt`.
-Neither reads source or the trajectory.
+RewardKit 0.2.3 owns judgment, guard, named checks, aggregation, usage records, and both reward files.
+One Opus 5.5 high-effort judge owns the eight workflows.
+Each decision includes a causal trace and file/line citations.
+It follows reachable controls through reads, UI state, handlers, transaction targets and arguments, receipts, and refresh.
+Any control wording and component names can pass.
+Source judgment establishes implementation behavior, not successful browser or transaction execution.
 
-A check fails a page only for what the page showed or asked the wallet to sign.
-A requested value missing from every captured view fails the judge criterion.
-When code cannot finish a flow, it records "could not drive".
-The page-value judge passes that uncaptured criterion.
+The bundle includes full application sources and helpers outside `src`.
+It includes package and configuration inputs, public deployment context, and full supporting contract sources and interfaces.
+A static TypeScript parser discovers imports and ordinary local aliases without executing configuration.
+Computed imports, unsupported aliases or local packages, missing imports, unsafe paths, missing public context, and oversized input raise verifier errors.
+HTML scripts also participate in import checks.
+Submitted chain context retains its exact bytes; trusted deployment facts use `public-deployment/chain_context.json`.
+No file is silently truncated.
+The manifest records file hashes, line ranges, inclusion reasons, omissions, and unresolved boundaries.
+Submitted files remain untrusted evidence inside RewardKit's guard.
 
-- Every check passes: the reward is 1.
-- Any check fails: the reward is 0.
-- Nothing fails, but some check could not be driven: the trial is an error for a human to look at.
-
-When no titles appear in a governance view, the list judge reads the captured list views and governor count and titles.
-An empty claim, a contradictory total count, or a proposal load error fails.
-A missing list alone passes this criterion, and the code check stays "could not drive".
-If code finds any titles, the list criterion passes and `lists_every_proposal` checks whether every title appears.
+A concrete compilation or workflow failure gives reward zero.
+Every check must pass for reward one.
+An unknown decision, incomplete response, bad citation, provider error, or timeout gives a verifier error.
+The task permits one provider request with automatic retries disabled.
+The output limit is 24,576 tokens.
+Build commands receive no provider keys.
+`reward-details.json` retains structured reasons and normal usage.
+Invalid replies retain available usage and error records, with no reward file.
+Each invocation clears earlier reward files before checks begin.
+Production judges available source even after compilation fails, so the board retains its required judge record.
+`source-decisions.json`, the request, response, bundle, and manifest support inspection.
 
 ## Why it matters
 
-DAOs now build these pages themselves.
-[Tally announced it was shutting down](https://newsletter.tally.xyz/p/tally-is-shutting-down) in March 2026, and Arbitrum [built its own governance page](https://forum.arbitrum.foundation/t/governance-ui-update/30837) with Offchain Labs.
+Governance pages must show what the governor will count and permit.
+A successful zero-weight receipt cannot prove that the page used the correct snapshot weight.
+A polling interval cannot bound data age after failed refreshes.
 
-The live pages that remain make the guesses this task checks:
-- **Agora**
-  - It [works status out](https://github.com/voteagora/agora-next/blob/e1cda9ce38a741aaafaa62ef6fc906eced477449/src/lib/proposals/status/deriveStatus.ts#L30-L60) from indexed events and its own vote maths, rather than `state()`.
-  - It [counts quorum](https://github.com/voteagora/agora-next/blob/e1cda9ce38a741aaafaa62ef6fc906eced477449/src/lib/proposalUtils.ts#L1110-L1142) through a hard-coded switch per DAO, For plus Abstain by default.
-  - It lets a holder with [zero voting power cast a vote](https://github.com/voteagora/agora-next/blob/e1cda9ce38a741aaafaa62ef6fc906eced477449/src/lib/voteUtils.ts#L273-L276).
-- **nouns.wtf** shows a [quorum threshold of 0](https://github.com/nounsDAO/nouns-monorepo/blob/2213eea1c15f331f786784c2621d53bdecf907e2/packages/nouns-webapp/src/pages/Vote/index.tsx#L727) for proposals whose quorum read never runs.
-- **Tally Zero**, offered to DAOs as Tally's open replacement, [never scans the last partial block window](https://github.com/withtally/tally-zero/blob/4f9ec8d076e0bdd58b08c8910655c93bfff06e95/hooks/use-search-proposals.tsx#L38-L42), so the newest proposals, the open ones, are missing.
-
-OpenZeppelin's [governance API](https://docs.openzeppelin.com/contracts/5.x/api/governance) defines `state`, `proposalDeadline`, `COUNTING_MODE`, `quorum` and votes at a timepoint.
-A page that reads them shows holders what the governor will do. A page that guesses can tell a holder their vote counted when it weighed nothing.
+OpenZeppelin's [governance API](https://docs.openzeppelin.com/contracts/5.x/api/governance) defines the reads behind these workflows.
+[ADR 0021](../../../docs/adr/0021-judge-voting-page-workflows-from-source.md) records the score owners and error policy.
 
 ## Notes
 
-- "It's just for holders" can mean that only holders vote, or that only holders see the page. Every journey connects a wallet that holds TOKEN or vote tokens, so either reading passes.
-- No check scores approval amounts, Abstain display, network switching, or the team's queue and execute controls. The team acts from its safe.
-- The checks accept these variations:
-  - wrapping and delegating in one action
-  - any wording or number format for the requested values
-  - an end shown as a block, a date or a countdown that establishes the later end
-  - for a holder with no votes at the snapshot, either a 0 shown or no vote request
+The instruction, chain setup, governor behavior, and solution stay unchanged.
+The verifier no longer runs the task's browser driver or creates hidden test proposals.
+No browser selector or `couldNotDrive` prerequisite contributes to production scoring.
+The public chain context supplies deployment addresses; private chain context never enters judge input.
+The environment keeps a root-only copy of public contract sources for the verifier.
 
-  A For vote must send support 1, and the governor must record it For with the holder's full weight.
-- **The chain.**
-  - Setup deploys the `token-governor` task's contracts unchanged, with OpenZeppelin 5.7.0. The timelock owns Protocol and holds 10 ETH.
-  - Four holders wrap and delegate 12 million of the 100 million TOKEN. The deployer keeps the rest unwrapped. Anvil's default accounts hold nothing.
-  - Voting runs in blocks and the timelock in seconds. No check depends on wall time.
-- Setup makes its keys at random inside the chain container. The agent can't read them or the setup files.
-- **The judges.**
-  - Both use Opus 5.5 at high effort and need `ANTHROPIC_API_KEY` through `[verifier.env]`. Builds and the browser get no model keys.
-  - The page-value judge costs $0.02 to $0.52 on the saved pages. Longer pages cost more.
-  - A separate list judge adds one call per trial. [ADR 0019](../../../docs/adr/0019-fail-voting-pages-that-claim-no-proposals.md) records its measured cost.
-  - `tests/hand-cases.json` holds 16 inputs with their right marks. Each got its mark in two separate runs.
-  - `tests/proposal-list-hand-cases.json` holds six list inputs with their right marks. Each got its mark in two separate runs.
-  - The free check skips both judges, and the code checks still separate the reference page from the untouched starter.
-- The test proposals exist only on the verifier's fork, so the agent's chain never shows the cases the checks use.
-- Pages here make many RPC reads per block, which a public RPC would throttle. No check covers that load.
-- **Slow reads on the verifier's fork.** The fork loads chain state on first read, and each journey's reset drops what it loaded.
-  Before the first snapshot, setup reads the governance views a holder's page uses, for every proposal, holder and the verifier's wallet, so page reads stay on the fork.
-  A vote control gets 20 seconds to enable.
-- The verifier's browser and its libraries are root-only, so the agent can't use or change them. With internet access, an agent can still download a browser and the system libraries it needs, and test its own page.
+The repository free check removes the judge file.
+It executes compilation and compares application source with the starter.
+The solution passes this comparison and untouched work fails it.
+A changed comment can pass that comparison; it proves no workflow semantics.
+Replay tests exercise the parser, guard, named results, aggregation, and usage path without a model call.
+Paid judge validation remains separate.
 
-Run these free commands from the repository root:
+Run from the repository root with all provider keys unset:
 
 ```sh
 uv run ethevals lint --tasks tasks/build/voting-page
-uv run ethevals free-check --tasks tasks/build/voting-page \
-  --output /tmp/voting-page-free-check
+uv run pytest -q tasks/build/voting-page/verification/test_source.py
+uv run ethevals free-check --tasks tasks/build/voting-page --output /tmp/voting-page-free-check
 ```

@@ -10,7 +10,7 @@ from ethevals.job_config import load_job
 from ethevals.jobs import plan
 from ethevals.publish import publish_logs
 from ethevals.secret_check import check_output
-from ethevals.trial_rows import fold_rows, read_rows, recover_rows
+from ethevals.trial_rows import fold_rows, recover_rows
 from test_jobs import job_config, task_folder
 
 
@@ -207,7 +207,7 @@ def test_ci_upload_command_keeps_hub_links_through_final_publication(tmp_path, m
     report = json.loads((artifact.parent / "combined/release.json").read_text())
     assert (report["rows"][0]["status"], report["rows"][0]["trajectory_url"]) == ("passed", HUB_URL)
     assert len(report["assets"]) == 2
-    assert report["rows"][0] in read_rows(artifact.parent / "combined/rows.jsonl")
+    assert json.loads((artifact.parent / "combined/rows.jsonl").read_text())["trajectory_url"] == HUB_URL
 
 
 def test_upload_step_withholds_a_newly_available_hub_secret_from_artifact(tmp_path, monkeypatch):

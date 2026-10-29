@@ -1,39 +1,50 @@
 [judge]
 judge = "anthropic/claude-opus-5-5"
 reasoning_effort = "high"
+timeout = 900
 guard = "flag"
-files = ["/logs/verifier/page-evidence.txt"]
+files = ["/logs/verifier/source-evidence.txt"]
+prompt_template = "source-prompt.txt"
 
 [scoring]
 aggregation = "all-pass"
 
 [[criterion]]
-name = "shown_status_and_tallies"
+name = "lists_every_proposal"
 type = "binary"
-description = """Read page-evidence.txt. Its texts map holds visible page or dialog text, and each observation's view names its text. Governor truth appears under chain. Token amounts use whole tokens. Governor states are 0 Pending, 1 Active, 2 Canceled, 3 Defeated, 4 Succeeded, 5 Queued, 6 Expired, 7 Executed.
-For status_and_tallies_match, does every observed proposal show its current status and For and Against tallies matching chain at each stage? Any wording, decoration, number format or abbreviation passes. Distinguish current status from a timeline of past states. Use all captured views for the same proposal and moment together. A missing requested value or a contradictory value fails. If this check has captured=false, answer yes because code records the unfinished flow separately. Apply that captured=false rule to every criterion in this file."""
+description = "Does the holder reach every governor proposal through the rendered page? Trace complete event scans through the latest partial range, IDs, pagination, filtering, and rendered views. A successful scan must show all proposals. Distinguish a complete successful scan from retained cached data after a failed refresh. Explicit loading or refresh errors must not claim a fresh empty or complete list. A stale cached view with an error notice is not itself proof of an incomplete successful scan."
 
 [[criterion]]
-name = "shown_for_only_quorum"
+name = "status_and_tallies_match"
 type = "binary"
-description = """For quorum_counts_for_only, does each observed proposal show whether quorum is reached, consistent with chain.for >= chain.quorum? Only For votes count. Any wording or format passes, including '3M / 4M', 'Quorum: No', percentages or a reached/unreached label. A shown progress or threshold must match chain too. For 3M plus Abstain 2M against quorum 4M is NOT reached. A missing quorum indication or a contradiction fails. If captured=false, answer yes."""
+description = "Does each proposal show current governor state and For and Against tallies? Trace state and proposalVotes reads, proposal IDs, tuple positions, formatting, rendering and refresh after changes. Current status must handle all governor states, including canceled, queued and executed. Do not confuse a timeline with current status."
 
 [[criterion]]
-name = "shown_extended_end"
+name = "quorum_counts_for_only"
 type = "binary"
-description = """For end_moves_with_late_quorum, does the extended proposal show a later voting end than its twin before their original end? The descriptions and chain.end identify the twins. Any unit passes, including a block, date or countdown such as 'Ends in 20 hrs'. After the original end, the extended proposal must show Active/open while the twin shows closed/Defeated. Use each stage's captured views together. A missing end, ends that do not establish the later end, or contradictory status fails. If captured=false, answer yes."""
+description = "Does each proposal show quorum reached and any shown progress using only For votes and the governor quorum at its snapshot? Follow counting mode, threshold, units and display. Abstain cannot contribute to this governor's quorum."
 
 [[criterion]]
-name = "shown_holder_votes"
+name = "end_moves_with_late_quorum"
 type = "binary"
-description = """For wrap_then_delegate, does the holder see their current votes match holderVotes after wrapping and after delegation? Without combined wrapping and delegation, wrapping must show zero votes and delegation must show 1,000. A combined action can show 1,000 immediately. Any wording passes, including 'Your voting weight: 1,000' and 'You have 1,000 votes'. Distinguish token balance from votes. A missing current vote value or a contradiction fails. If captured=false, answer yes."""
+description = "Does the page read and show the effective proposalDeadline after late quorum extends voting? Trace refresh, deadline units, status, and the vote control and handler. After the original end, the extended proposal must remain open while an unextended twin closes. A snapshot-eligible holder must be able to send For with full snapshot weight even after their recent delegated power falls to zero. Do not assume snapshot-eligible holders retain recent votes. Check governor target, proposal ID, support 1, optional reason and receipt refresh."
 
 [[criterion]]
-name = "shown_snapshot_votes"
+name = "wrap_then_delegate"
 type = "binary"
-description = """For votes_at_snapshot, does the holder see the correct proposal voting weight? On the old proposal their snapshot weight is zero despite current votes of 1,000. Pass the old case if the page tells them they have zero votes for that proposal, OR voteRequestSent=false. Fail if a vote request is sent and the page offers only current votes of 1,000 or omits the zero snapshot weight. A transaction recorded with weight zero, or a 'Confirmed' message, cannot excuse that failure. On the new proposal the page must show the holder's weight of 1,000. Any wording or number format passes. Missing new-proposal weight or contradictory weight fails. Use all views around each vote. If captured=false, answer yes."""
+description = "Can a connected TOKEN holder approve, wrap into the deployed vote token, self-delegate, and see their current delegated votes? Trace amount input and units, allowance or approval spender, deposit recipient, delegate address, wallet and chain configuration, receipts, errors and refreshed reads into display. Wrapping alone gives no delegated votes; self-delegation activates them. A combined action is valid."
 
 [[criterion]]
-name = "shown_canceled_status"
+name = "votes_at_snapshot"
 type = "binary"
-description = """For canceled_status, does the canceled proposal show Canceled or Cancelled, in any wording or format? Its chain state is 2. A missing canceled status or a contradictory current status such as Active fails. A historical Active stage in a timeline is fine if the current status is canceled. If captured=false, answer yes."""
+description = "Does proposal voting use the connected holder's votes at that proposal's snapshot, both for displayed weight and eligibility? A holder who delegates after an old snapshot has zero weight there; show zero or prevent the request. A later proposal after delegation must show the full snapshot weight and allow For. Eligibility must remain valid if recent delegated votes later fall to zero. Trace reads, UI state, handlers, governor address, proposal ID, support 1, optional reason, receipts and refresh. A successful zero-weight receipt cannot establish correct UI behavior."
+
+[[criterion]]
+name = "canceled_status"
+type = "binary"
+description = "Does the current governor Canceled state reach the displayed proposal status and prevent a vote request? Trace the status read, ID, UI state and transaction handler. Accept either spelling and any control wording."
+
+[[criterion]]
+name = "already_voted"
+type = "binary"
+description = "Does governor hasVoted for the connected holder and selected proposal prevent a duplicate vote request? Trace reads into controls and handlers, account and proposal changes, and receipt refresh."

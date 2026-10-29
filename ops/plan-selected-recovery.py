@@ -19,7 +19,7 @@ SELECTION = [
     ("concepts/wallet-batch-status-600", "opencode-grok-4.7", 2),
 ]
 BUDGET = 188.0
-SOURCE_COMMIT = "a976a77ae8c3943c1611359d1e169ce1101a8971"
+SOURCE_COMMIT = "f63b92cea1b9459f5a35ac7d65fddf326ad8c42e"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output", type=Path, required=True)

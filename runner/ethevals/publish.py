@@ -7,8 +7,6 @@ import shutil
 import subprocess
 import tarfile
 
-from harbor.models.trial.result import TrialResult
-
 from .trial_rows import read_rows, trial_identity, write_rows
 from .secret_check import require_checked
 
@@ -55,15 +53,6 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
             links.update(trajectory_file=str(destination), trajectory_url=row["trajectory_url"] if hub_url else f"{base}/{name}")
             assets.append({"name": name, "source": str(destination), "url": f"{base}/{name}"})
         verifier = Path(row["verifier_files"])
-        if not verifier.exists() and not verifier.is_symlink():
-            result = TrialResult.model_validate_json((verifier.parent / "result.json").read_text())
-            if (row.get("status") == "error" and result.exception_info is not None
-                    and result.finished_at is not None
-                    and result.verifier is None and result.verifier_result is None
-                    and all(step.verifier is None and step.verifier_result is None
-                            for step in result.step_results or [])):
-                linked.append({**row, **links})
-                continue
         if not verifier.is_dir() or verifier.is_symlink():
             raise ValueError(f"Missing verifier output: {verifier}")
         name = f"verifier-{key}.tar.gz"

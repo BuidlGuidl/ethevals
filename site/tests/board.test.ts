@@ -183,8 +183,8 @@ test("list rows have one task button and Overall groups them under pillar headin
   assert.equal((board.match(/aria-label="Which task results"/g) ?? []).length, 1);
   assert.ok(board.includes('id="eval-concepts-units"') && board.includes('<span class="eval-title">Units</span>'));
   assert.ok(board.includes('<span class="matrix-cell" data-empty="true" title="No trials yet">–</span>'));
-  assert.match(board, /<span class="cost-value"[^>]*>\$0\.20<\/span>/);
-  assert.ok(!board.match(/<span class="cost-value"[^>]*tabindex/));
+  assert.ok(!board.includes("$ / pass"));
+  assert.equal((board.match(/class="sort-button"/g) ?? []).length, 4);
 });
 
 test("task details open the instruction and list one button per trial with compact counts", () => {
@@ -269,7 +269,7 @@ test("both results tables fall back to Internet for unavailable URL modes and op
     const top = html.slice(html.indexOf('id="leaderboard"'), html.indexOf('id="evals"'));
     const bottom = html.slice(html.indexOf('id="evals"'));
     assert.ok(top.includes('class="row-label">Configuration<small>'));
-    assert.ok(bottom.includes("<h2>Results by task · Internet</h2>"));
+    assert.ok(bottom.includes("<h2>Results by task</h2>"));
     assert.ok(bottom.includes("1 of 1 trials passed. Open details."));
     assert.ok(top.includes("agent-a / model-a. 100%. Open details."));
     for (const section of [top, bottom]) assert.match(section, /aria-checked="true"[^>]*>Internet<\/button>/);
