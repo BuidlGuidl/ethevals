@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/oracles-answered-in-round"
+description = "Check whether a model knows that Chainlink's answeredInRound is deprecated and no longer a staleness signal."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "chainlink", "oracles", "staleness"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024
