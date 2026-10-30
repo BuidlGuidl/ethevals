@@ -1,0 +1,26 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/findings.md"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "cancelled_proposal_still_executes"
+type = "binary"
+description = """The file holds an audit report on the Tidewater DAO contracts.
+The known vulnerability: TideGovernor.cancel only sets the proposal's canceled flag and never calls TideTimelock.cancel, so a proposal cancelled after queue() stays scheduled in the timelock.
+TideTimelock.execute lets anyone run a scheduled operation once its delay passes, without asking the governor for the proposal's state.
+So when the guardian cancels a hostile queued proposal, anyone can still call TideTimelock.execute with the same calls and salt after the delay, and the treasury pays out anyway.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""
+
+[[criterion]]
+name = "early_exit_keeps_voting_power"
+type = "binary"
+description = """The file holds an audit report on the Tidewater DAO contracts.
+The known vulnerability: VoteEscrow.exitEarly deletes the lock and returns the TIDE, but writes no new checkpoint, so the account's last checkpoint still holds the full lock amount and end.
+getPastVotes reads that checkpoint, so the exited account keeps its decaying voting power at every later snapshot, and TideGovernor counts it in propose and castVote.
+The holder can lock the returned TIDE again from another address and vote with both, letting a minority outvote honest lockers and pass a treasury drain.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""

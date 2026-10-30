@@ -1,0 +1,29 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/findings.md"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "launch_fee_above_vault_range"
+type = "binary"
+description = """The file holds an audit report on the Kestrel contracts.
+The known vulnerability: KestrelLaunchFee.swapFee gives a new launch-tier pool a fee that starts at startFeeBps (30% by default, up to 50%) and decays to the 1% tier fee. KestrelVault.swapFee treats any module answer at or above MAX_FEE_BPS (10%) as invalid and silently falls back to the tier fee. The module assumes the vault applies whatever launch fee it returns; the vault assumes a valid module never returns 10% or more. So for the early part of every launch, while the module's fee is above 10% (the first 41 minutes or so with the defaults), swaps through KestrelVault.swap and the router pay 1% instead of the launch fee. Snipers buying a new token in its first minutes pay 1% rather than about 30%, and the pool's liquidity providers lose the launch fee the feature exists to collect.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""
+
+[[criterion]]
+name = "launch_clock_starts_at_creation"
+type = "binary"
+description = """The file holds an audit report on the Kestrel contracts.
+The known vulnerability: KestrelLaunchFee.swapFee measures the launch fee's decay from the pool's createdAt, which KestrelVault.createPool records when the pool is created. The module assumes a launch-tier pool is created when its token launches, by the team's router call that creates and seeds it. But createPool is permissionless for any pair at an enabled tier, and KestrelRouter.addLiquidity only creates a pool that does not exist yet. Anyone can create the launch pool for a token before the team adds liquidity; once the decay period has passed, the team's launch charges only the 1% tier fee from the first block, and snipers avoid the launch fee entirely.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""
+
+[[criterion]]
+name = "fee_distribution_counts_stream_twice"
+type = "binary"
+description = """The file holds an audit report on the Kestrel contracts.
+The known vulnerability: KestrelFarm.distributeFees treats the farm's whole balance of a token minus unclaimed (rewards stakers have earned and not claimed) as newly received fees. But the unstreamed remainder of every live stream of that token is still in the farm's balance and is not in unclaimed, and _notify adds the remainder of the target pool's current stream to the new amount again. distributeFees assumes tokens not yet earned are free; _notify assumes the rest of the current stream is still reserved in the balance. Each distribution during a live stream, including the keeper's daily call or any call by anyone, counts the remainder again, so the farm promises stakers more than it holds: early claimers are paid from later claimers' rewards and the last claims revert. A reward funded through fund in the same token for another pool is also counted as fees and moved into the fee pool's stream, taking it from that pool's stakers.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""
