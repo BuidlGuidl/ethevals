@@ -1,0 +1,175 @@
+/* ETH Evals · the "geek" look. Loaded last. Apart from the look switch, every rule is scoped to
+   :root[data-ui="geek"], so the clean look (report-lab, site, site-simple) is untouched.
+   Direction: closer to a terminal than to a lab report, without going retro. Near-black with a blue cast,
+   a monospace face for text and a terminal face (VT323) for section titles, periwinkle for Ethereum and
+   "with skills", phosphor green for prompts and passes. Colour carries meaning only (scores, skills,
+   selection), so the pillars stay in ink, as in clean. Scores keep the red → green scale as dark tints;
+   selected controls are in reverse video, as in a TUI. */
+
+/* ---------- look switch (both looks) ---------- */
+.uisw { display: inline-flex; align-self: center; margin-left: 14px; border: 1px solid var(--border-2); }
+.uisw button { font: 500 10.5px var(--mono); letter-spacing: .04em; padding: 4px 9px; color: var(--dim); border-radius: 0; }
+.uisw button + button { border-left: 1px solid var(--border-2); }
+.uisw button:hover { color: var(--ink); background: var(--tint); }
+.uisw button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); }
+/* phones: one square icon button, outside the links, so it never scrolls out of the bar */
+.uitg { display: none; flex: none; align-self: center; width: 34px; height: 30px; margin-left: 6px; border: 1px solid var(--border-2); border-radius: 0; font: 600 11.5px var(--mono); letter-spacing: -.02em; color: var(--ink); }
+.uitg:hover { background: var(--tint); }
+/* the icon shows the look it switches to, in that look's style: geek's violet invader, clean's line briefcase */
+.uitg svg { display: block; }
+.ic-invader { width: 18px; height: auto; fill: #5b5fd6; shape-rendering: crispEdges; }
+.ic-case { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
+@media (max-width: 760px) { .uisw { display: none; } .uitg { display: inline-grid; place-items: center; } }
+
+/* ---------- tokens ---------- */
+:root[data-ui="geek"] {
+  color-scheme: dark;
+  --page: #080a10;
+  --sheet: #0b0e15;
+  --tint: #11151f;
+  --ink: #e4e7f2;
+  --muted: #a3a9bf;
+  --dim: #6c728a;
+  --grid: #1b2030;
+  --border: #1b2030;
+  --border-2: #2a3145;
+  --accent: #8fa0ff;
+  --green: #5ee69a;
+  --amber: #f2bf4f;
+  --red: #ff7b7b;
+  --s: #8fa0ff;
+  --i: #6c728a;
+  --v: #3b4258;
+  --heat-lo: oklch(0.29 0.06 22);
+  --heat-hi: oklch(0.36 0.075 155);
+  --mx-lo: oklch(0.27 0.055 22);
+  --mx-hi: oklch(0.42 0.095 155);
+  --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+  --sans: var(--mono);
+  --on-accent: #0b0e15;
+  --faint: rgb(228 231 242 / 8%);
+}
+:root[data-ui="geek"] body { font-size: 13px; background: var(--page) radial-gradient(1100px 520px at 18% -8%, rgb(143 160 255 / 9%), transparent 62%) no-repeat; }
+:root[data-ui="geek"] ::selection { background: rgb(143 160 255 / 30%); }
+:root[data-ui="geek"] * { scrollbar-color: var(--border-2) transparent; }
+:root[data-ui="geek"] button:hover { background: var(--faint); }
+
+/* ---------- frame: no sheet, the page runs edge to edge ---------- */
+:root[data-ui="geek"] main { background: transparent; border-inline: 0; }
+:root[data-ui="geek"] .sitefoot { background: transparent; border-inline: 0; }
+:root[data-ui="geek"] .sitefoot b { font: 700 13px var(--mono); }
+:root[data-ui="geek"] .canary { color: var(--dim); }
+
+/* ---------- nav ---------- */
+:root[data-ui="geek"] .topnav { background: rgb(8 10 16 / 82%); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+/* the brand is the block-letter logo, small; the tagline sits beside it where the bar has room, as in clean */
+.brand-logo { display: none; }
+:root[data-ui="geek"] .topnav .brand::before { content: none; }
+:root[data-ui="geek"] .brand-txt { display: none; }
+:root[data-ui="geek"] .brand-logo { display: block; }
+:root[data-ui="geek"] .brand-logo svg { display: block; height: 18px; width: auto; transform-origin: 0 0; }
+:root[data-ui="geek"] .sitenav .navtag { font: 12.5px var(--mono); color: var(--muted); letter-spacing: .01em; border-left-color: var(--border-2); }
+:root[data-ui="geek"] .sitenav .navlinks a { font: 500 12.5px var(--mono); }
+:root[data-ui="geek"] .sitenav .navlinks a[aria-current] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+:root[data-ui="geek"] .uisw button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+
+/* ---------- Results header (layout and the flight are shared, in site-simple.css) ---------- */
+/* block letters as on ethevals.com: box-drawing glyphs with a left-to-right gradient, narrower on phones */
+:root[data-ui="geek"] .lh-word { display: none; }
+:root[data-ui="geek"] .lh-ascii { display: block; width: 660px; max-width: 100%; }
+:root[data-ui="geek"] .lh-plate { border-top-style: dashed; border-top-color: var(--border-2); font-size: 12px; }
+:root[data-ui="geek"] .lh-ver { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+/* the claim in bold mono: a solid line under the pixel logo, and above the section titles in size and weight */
+:root[data-ui="geek"] .lh-tag { font: 700 clamp(24px, 2.6vw, 36px)/1.25 var(--mono); letter-spacing: -.02em; }
+:root[data-ui="geek"] .lh-tag::after { content: ""; display: inline-block; width: .5em; height: 1em; margin-left: .3em; vertical-align: -.12em; background: var(--accent); animation: gblink 1.1s steps(1) infinite; }
+@keyframes gblink { 50% { opacity: 0; } }
+:root[data-ui="geek"] :is(.lh-desc, .lh-pillars) { font: 14.5px/1.7 var(--mono); }
+@media (max-width: 760px) { :root[data-ui="geek"] :is(.lh-desc, .lh-pillars) { font-size: 13.5px; } }
+@media (prefers-reduced-motion: reduce) { :root[data-ui="geek"] .lh-tag::after { animation: none; } }
+
+/* ---------- headings and text ---------- */
+/* section titles in VT323, a real terminal face (the DEC VT320's): pixel enough to echo the block-letter logo,
+   monospaced like the rest of the UI, and narrow enough for long titles. Only here, at display size. */
+:root[data-ui="geek"] :is(.rsec-h h2, .hw-head h2, .hsec-h h2, .mhead h2, .board-section > h2) { font: 400 40px/1 "VT323", var(--mono); letter-spacing: .01em; }
+@media (max-width: 760px) { :root[data-ui="geek"] :is(.rsec-h h2, .hw-head h2, .hsec-h h2, .mhead h2, .board-section > h2) { font-size: 32px; } }
+:root[data-ui="geek"] :is(.rsec-h h2, .hw-head h2)::before { content: "## "; color: var(--accent); font-weight: 500; }
+:root[data-ui="geek"] :is(.page h1, .pagehead h1, .runhead h1, .hw-hero h1) { font: 700 clamp(24px, 3vw, 34px)/1.15 var(--mono); letter-spacing: -.02em; }
+:root[data-ui="geek"] :is(.page h3, .dsec h3, .dsec summary h3, .hw-notes h3, .hw-fs b, .hw-run-h b, .hw-ex-col .hw-quote) { font-family: var(--mono); letter-spacing: -.01em; }
+:root[data-ui="geek"] .hw-run-h b { font-size: 18px; }
+:root[data-ui="geek"] .hw-ex-col .hw-quote { font-size: 18px; line-height: 1.35; }
+:root[data-ui="geek"] .lead { font: 15px/1.65 var(--mono); }
+:root[data-ui="geek"] :is(.rsub, .readnote, .hw-sub, .hw-list li, .hw-notes p, .hw-ex-col p, .hw-run-d, .hw-pillars p) { font-family: var(--mono); font-size: 13px; }
+:root[data-ui="geek"] .readnote b, :root[data-ui="geek"] .tvnote b { color: var(--ink); }
+:root[data-ui="geek"] .tvnote { border-left-color: var(--accent); }
+:root[data-ui="geek"] .why { border-left-color: var(--accent); }
+:root[data-ui="geek"] .hw code { background: var(--tint); }
+:root[data-ui="geek"] pre { background: #07090e; border-color: var(--grid); color: #cfd3e3; }
+
+/* ---------- controls: reverse video for what is selected ---------- */
+:root[data-ui="geek"] .segmented { background: transparent; }
+:root[data-ui="geek"] .segmented button:hover { background: var(--tint); }
+:root[data-ui="geek"] .segmented button[aria-pressed="true"],
+:root[data-ui="geek"] .pick[aria-pressed="true"],
+:root[data-ui="geek"] .rstrip > [aria-pressed="true"],
+:root[data-ui="geek"] .rstrip > [aria-current="true"],
+:root[data-ui="geek"] .rstrip > [aria-pressed="true"]:hover,
+:root[data-ui="geek"] .rstrip > [aria-current="true"]:hover { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+:root[data-ui="geek"] .pick, :root[data-ui="geek"] .rstrip > * { background: transparent; }
+:root[data-ui="geek"] :is(.backbtn, .close-button, .btn) { background: transparent; border-color: var(--border-2); color: var(--ink); }
+:root[data-ui="geek"] :is(.backbtn, .close-button, .btn):hover { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+:root[data-ui="geek"] .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+:root[data-ui="geek"] .board.lean th[aria-sort="ascending"], :root[data-ui="geek"] .board.lean th[aria-sort="descending"] { box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* ---------- tables ---------- */
+:root[data-ui="geek"] .table-shell { background: var(--sheet); }
+:root[data-ui="geek"] .cfg-name { font: 600 13.5px var(--mono); }
+:root[data-ui="geek"] .board tbody tr:hover > .row-label { background: var(--tint); }
+:root[data-ui="geek"] :is(.pr .v small, .pr .n, .dscore small) { color: rgb(228 231 242 / 55%); }
+:root[data-ui="geek"] .pr:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+/* the score scale is mixed in sRGB on dark: the middle passes through a muted grey-brown, not orange and olive */
+:root[data-ui="geek"] .pr[style*="--p"] { background: color-mix(in srgb, var(--heat-hi) calc(var(--t) * 100%), var(--heat-lo)) !important; }
+:root[data-ui="geek"] .dscore[style*="--p"] { background: color-mix(in srgb, var(--heat-hi) calc(var(--t) * 100%), var(--heat-lo)); }
+:root[data-ui="geek"] .mxc[style*="--p"] { background: color-mix(in srgb, var(--mx-hi) calc(var(--p) * 100%), var(--mx-lo)) !important; }
+:root[data-ui="geek"] :is(.wbar, .ltrack) { background: var(--faint); }
+:root[data-ui="geek"] .ltrack u { border-color: rgb(228 231 242 / 55%); }
+:root[data-ui="geek"] .dtrack::before, :root[data-ui="geek"] .dticks i { background: var(--faint); }
+/* matrix: a prompt-like title bar instead of the ink band, pillar bands on the tint */
+:root[data-ui="geek"] .mx-title { background: var(--tint); color: var(--green); border-bottom: 1px solid var(--grid); letter-spacing: .04em; }
+:root[data-ui="geek"] .mx-title::before { content: "$ "; color: var(--dim); }
+:root[data-ui="geek"] table.matrix.t2 tr.mxgrp th.mxp, :root[data-ui="geek"] table.matrix.grouped th.mxp { background: var(--tint); color: var(--ink); }
+:root[data-ui="geek"] table.matrix.t2 th.evl a { font: 600 13px var(--mono); }
+:root[data-ui="geek"] .mxc:hover { outline-color: var(--accent); }
+:root[data-ui="geek"] table.cat .cat-p th { background: var(--tint); color: var(--ink); font-family: var(--mono); }
+:root[data-ui="geek"] table.cat .cat-p th span { color: var(--dim); }
+:root[data-ui="geek"] table.cmp td.best { color: var(--ink); }
+
+/* ---------- states ---------- */
+:root[data-ui="geek"] .status.invalid, :root[data-ui="geek"] .step .kind.tool { background: oklch(0.33 0.07 85); color: var(--amber); }
+:root[data-ui="geek"] .step .kind.web { background: rgb(143 160 255 / 14%); }
+:root[data-ui="geek"] .step.hl, :root[data-ui="geek"] .drawer-content .step.hl { background: rgb(94 230 154 / 8%); }
+:root[data-ui="geek"] .banner { background: rgb(242 191 79 / 8%); }
+:root[data-ui="geek"] .src.ours { background: rgb(242 191 79 / 8%); }
+:root[data-ui="geek"] .filled > div { background: var(--tint); }
+
+/* ---------- panel ---------- */
+:root[data-ui="geek"] dialog { box-shadow: -24px 0 60px rgb(0 0 0 / 55%); }
+:root[data-ui="geek"] dialog::backdrop { background: rgb(4 5 9 / 65%); }
+:root[data-ui="geek"] .dsum b { font: 700 20px var(--mono); }
+
+/* ---------- How it works ---------- */
+:root[data-ui="geek"] .hw-bp { background-color: var(--sheet); }
+:root[data-ui="geek"] .bp-box { filter: none; }
+/* the diagram's boxes are sized for the condensed sans: a monospace label would overflow them */
+:root[data-ui="geek"] .bp text { font-family: "Archivo", ui-sans-serif, system-ui, sans-serif; }
+:root[data-ui="geek"] .bp-zone text { font-family: var(--mono); }
+:root[data-ui="geek"] .bp-node.dest .bp-ic { stroke: var(--on-accent); }
+:root[data-ui="geek"] .bp-node.dest .bp-t { fill: var(--on-accent); }
+:root[data-ui="geek"] .bp-node.dest .bp-sub { fill: rgb(11 14 21 / 72%); }
+:root[data-ui="geek"] .hw-notes li.dest .hw-ni { color: var(--on-accent); }
+:root[data-ui="geek"] .hw-list { border-top-color: var(--border-2); }
+:root[data-ui="geek"] main > section.table-shell { background: var(--tint); color: var(--ink); border: 1px solid var(--grid); }
+:root[data-ui="geek"] .runit .fine { color: var(--dim); }
+:root[data-ui="geek"] .runit .fine a { color: var(--muted); }
+
+/* very narrow phones: the mono links and the logo a step smaller, so the whole bar fits without scrolling */
+@media (max-width: 380px) { :root[data-ui="geek"] .sitenav .navlinks a { font-size: 11.5px; } :root[data-ui="geek"] .brand-logo svg { height: 15px; } }
