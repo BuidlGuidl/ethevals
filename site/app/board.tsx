@@ -4,7 +4,9 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle } from "lucide-react";
 import { agentLabel, modelLabel, modeHints, names, modeNames, unwrapPrompt } from "../src/labels";
-import { pillars, agentKey, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Trial, type Agent } from "../src/board";
+import { pillars, agentKey, scoreSummary, emptyTrialLabel, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Trial, type Agent } from "../src/board";
+import { domains, domainNames, type Domain } from "../src/areas";
+import { DomainFilter, selectDomain } from "../components/domain-filter";
 import { decodeSelection, encodeSelection, type Selection } from "../src/selection";
 import { Configuration } from "../components/configuration";
 import { Logo } from "../components/logo";
@@ -29,23 +31,27 @@ const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFr
 const tokens = (value: number) => tokenFormat.format(value).toLowerCase();
 const duration = (trial: Trial) => trial.total_seconds === null ? "–" : `${trial.total_seconds.toFixed(1)}s`;
 
-function EvalList({ table, evaluations, agent, pillar, onEval }: {
-  table: Table; evaluations: BoardData["evaluations"]; agent: Agent; pillar?: Pillar; onEval: (evaluation: Eval) => void;
+function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
+  table: Table; evaluations: BoardData["evaluations"]; agent: Agent; pillar?: Pillar; domain?: Domain; onEval: (evaluation: Eval) => void;
 }) {
   const key = agentKey(agent);
-  return <div className="eval-list">{pillars.filter((value) => !pillar || pillar === value).map((value) =>
+  const groups = pillars.filter((value) => !pillar || pillar === value).map((value) => ({
+    value, entries: table.pillars[value].evals.filter((entry) => entry.cells[key].state !== "na"
+      && (!domain || evaluations[entry.id].domain === domain)),
+  }));
+  return <div className="eval-list">{groups.filter(({ entries }) => !domain || entries.length).map(({ value, entries }) =>
     <section key={value} className={`pillar-${value}`}>{!pillar && <h3>{names[value]}</h3>}
-      {table.pillars[value].evals.filter((entry) => entry.cells[key].state !== "na").map((entry) => {
+      {entries.map((entry) => {
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
           <span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${trial.status}`).join(", ")}>
             {cell.trials.map((trial) => <span key={trial.trial} className={`run-dot ${trial.status}`} />)}</span>
-          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)}>{cell.passed}/{cell.total}</span>
+          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cell.score === null ? "–" : `${cell.passed}/${cell.total}`}</span>
         </button>;
       })}
       {table.pillars[value].cells[key].state === "empty" && <p className="muted">No tasks yet for this mode.</p>}
-    </section>)}</div>;
+    </section>)}{domain && !groups.some(({ entries }) => entries.length) && <p className="muted">No tasks yet for this domain and mode.</p>}</div>;
 }
 
 function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Trial[]; onRun: (run: number) => void }) {
@@ -92,8 +98,8 @@ function RunView({ trial, trials, onRun }: { trial: Trial; trials: Trial[]; onRu
   </>;
 }
 
-export function Detail({ selection, data, onSelect }: {
-  selection: Selection; data: BoardData; onSelect: (selection: Selection) => void;
+export function Detail({ selection, data, domain, onSelect }: {
+  selection: Selection; data: BoardData; domain?: Domain; onSelect: (selection: Selection) => void;
 }) {
   const { evaluation, pillar, agent, mode, fromList } = selection;
   const table = data.tables[mode], key = agentKey(agent), summary = table.summaries[key];
@@ -112,13 +118,24 @@ export function Detail({ selection, data, onSelect }: {
       <Configuration agent={agent} /><p className="muted">{modeNames[mode]}</p>
       {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scope.passed}/{scope.total} scored · {scope.errors} errors excluded</p>}
       {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No tasks yet" : "No trials yet"}</p>}
+      {!evaluation && <div className="domain-scores" role="group" aria-label="Filter by domain">
+        {domains.map((option) => {
+          const cells = pillars.filter((value) => !pillar || value === pillar).map((value) => table.pillars[value].evals
+            .filter((entry) => data.evaluations[entry.id].domain === option && entry.cells[key].state !== "na").map((entry) => entry.cells[key]));
+          const tasks = cells.flat().length, score = scoreSummary(cells.map(scoreSummary));
+          return <button type="button" key={option} aria-pressed={domain === option} disabled={!tasks && domain !== option} onClick={() => selectDomain(domain, option)}>
+            <span>{domainNames[option]}</span>
+            {!tasks ? <small>No tasks yet</small> : score.score === null ? <small>No trials yet</small> : <><b>{percent(score.score)}</b><small>{score.passed}/{score.total} scored</small></>}
+          </button>;
+        })}
+      </div>}
     </header>
     {trial ? <button className="back-button" onClick={() => onSelect({ ...selection, run: undefined })}><ArrowLeft size={14} />All trials</button>
       : evaluation && fromList && <button className="back-button" onClick={() => onSelect({ agent, mode, pillar })}>
         <ArrowLeft size={14} />{pillar ? names[pillar] : "All pillars"}</button>}
     {trial ? <RunView trial={trial} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
       evaluation ? <EvalView evaluation={evaluation} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
-      <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar}
+      <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar} domain={domain}
         onEval={(value) => onSelect({ ...selection, evaluation: value, fromList: true })} />}
   </div>;
 }
@@ -131,6 +148,7 @@ export default function Board({ data }: { data: BoardData }) {
 export function Results({ data, query }: { data: BoardData; query: URLSearchParams }) {
   const mode = readMode(query.get("mode"));
   const evalsMode = readMode(query.get("evals"));
+  const domain = domains.find((value) => value === query.get("domain"));
   const [sort, setSort] = useState<{ key: Sort; ascending: boolean }>({ key: "overall", ascending: false });
   const pushed = useRef(false);
   const opener = useRef<HTMLElement | null>(null);
@@ -138,6 +156,8 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
   useEffect(() => { if (!selection) opener.current?.focus({ preventScroll: true }); }, [selection]);
   const table = data.tables[mode];
   const matrixTable = data.tables[evalsMode];
+  const matrixRows = pillars.map((pillar) => ({ pillar, entries: matrixTable.pillars[pillar].evals
+    .filter((entry) => !domain || data.evaluations[entry.id].domain === domain) }));
   const changeMode = (value: Mode) => updateQuery({ mode: value });
   const select = (value: Selection) => {
     if (!selection) { pushed.current = true; opener.current = document.activeElement as HTMLElement | null; }
@@ -187,21 +207,23 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
     <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task</h2><p>A detailed view of the Leaderboard. See how many trials each agent passed on every task, grouped by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />
       <a className="button" href={`${repo}/blob/main/docs/add-a-task.md`} target="_blank" rel="noreferrer">How to add a task ↗</a></div>
-      <p className="eyebrow">{pillars.reduce((sum, pillar) => sum + matrixTable.pillars[pillar].evals.length, 0)} tasks · {modeNames[evalsMode]}</p>
+      <div className="matrix-filters"><p className="eyebrow">{matrixRows.reduce((sum, { entries }) => sum + entries.length, 0)} tasks · {modeNames[evalsMode]}</p>
+        <DomainFilter taskDomains={pillars.flatMap((pillar) => matrixTable.pillars[pillar].evals.map((entry) => data.evaluations[entry.id].domain))} domain={domain} />
+      </div>
       <div className="table-shell"><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Task matrix. Scroll for more tasks and configurations.">
         <table className="matrix"><caption className="sr-only">Passed trials / scored trials for each task and configuration</caption><thead><tr><th className="row-label" scope="col">Task</th>
           {matrixAgents.map((agent) => <th key={agentKey(agent)} scope="col"><Configuration agent={agent} /></th>)}</tr></thead>
-          <tbody>{pillars.map((pillar) => <Fragment key={pillar}><tr className="pillar-band"><th scope="colgroup" colSpan={matrixAgents.length + 1}><span className="band-label">{names[pillar]}<small>{matrixTable.pillars[pillar].evals.length} tasks</small></span></th></tr>
-            {matrixTable.pillars[pillar].evals.length ? matrixTable.pillars[pillar].evals.map((entry) => <tr key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
+          <tbody>{matrixRows.filter(({ entries }) => entries.length).map(({ pillar, entries }) => <Fragment key={pillar}><tr className="pillar-band"><th scope="colgroup" colSpan={matrixAgents.length + 1}><span className="band-label">{names[pillar]}<small>{entries.length} tasks</small></span></th></tr>
+            {entries.map((entry) => <tr key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
               <th scope="row" className="row-label"><span className="eval-title">{data.evaluations[entry.id].title}</span><small>{entry.id}</small></th>
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
                 return <td key={agentKey(agent)}>{cell.state === "na" || cell.score === null ?
-                  <span className="matrix-cell" data-empty title={cell.state === "na" ? "Not applicable" : cell.errors ? `${cell.errors} errors; no scored trials` : "No trials yet"}>–</span> :
+                  <span className="matrix-cell" data-empty title={emptyTrialLabel(cell)}>–</span> :
                   <Hint text={formulas.eval}><button className="matrix-cell" style={heat(cell.score)}
                     aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} trials passed. Open details.`}
                     onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{cell.passed}/{cell.total}</button></Hint>}</td>;
               })}
-            </tr>) : <tr><td colSpan={matrixAgents.length + 1} className="no-evals"><span className="band-label">No tasks yet</span></td></tr>}
+            </tr>)}
           </Fragment>)}</tbody></table></div><div className="table-note">Trials passed per task. Click a scored cell for its instruction and trials. Errors are excluded from counts.</div></div>
     </section>
     <noscript>Enable JavaScript to change modes and open trial details.</noscript>
@@ -209,7 +231,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
     <Sheet open={selection !== null} onOpenChange={(open) => { if (!open) close(); }}>
       {selection && <SheetContent>
         <SheetTitle className="sr-only">Task and trial details</SheetTitle><SheetDescription className="sr-only">Scores, instructions, checks, costs and trajectories.</SheetDescription>
-        <Detail selection={selection} data={data} onSelect={select} /></SheetContent>}
+        <Detail selection={selection} data={data} domain={domain} onSelect={select} /></SheetContent>}
     </Sheet>
   </TooltipProvider>;
 }

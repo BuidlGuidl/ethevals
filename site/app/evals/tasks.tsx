@@ -1,25 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { updateQuery, useQuery } from "../../components/url-state";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../components/ui/tooltip";
-import { domains, domainNames, taskDomain, type Domain } from "../../src/areas";
+import { TooltipProvider } from "../../components/ui/tooltip";
+import { DomainFilter } from "../../components/domain-filter";
+import { domains, domainNames, taskDomain } from "../../src/areas";
 import { layers, pillars, type Eval } from "../../src/board";
 import { layerNames, names, unwrapPrompt } from "../../src/labels";
 import { repo } from "../../src/repo";
 
 export function Tasks({ tasks }: { tasks: Eval[] }) {
   return <TaskList tasks={tasks} query={useQuery()} />;
-}
-
-function UpcomingDomain({ domain }: { domain: Domain }) {
-  const [open, setOpen] = useState(false);
-  return <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent><TooltipTrigger asChild>
-    <span className="inline-flex" tabIndex={0} onClick={(event) => { event.preventDefault(); setOpen(true); }}>
-      <button type="button" className="badge border-dashed pointer-events-none" disabled>{domainNames[domain]}</button>
-    </span></TooltipTrigger>
-    <TooltipContent>{domainNames[domain]} tasks are coming soon.</TooltipContent>
-  </Tooltip>;
 }
 
 export function TaskList({ tasks, query }: { tasks: Eval[]; query: URLSearchParams }) {
@@ -38,14 +28,7 @@ export function TaskList({ tasks, query }: { tasks: Eval[]; query: URLSearchPara
   return <TooltipProvider delayDuration={200}><main id="main" className="page tasks-page">
     <h1>Tasks</h1>
     <section aria-label="Task counts" className="task-counts">
-      <div className="task-areas" role="group" aria-label="Filter by domain">
-        {domains.map((value) => {
-          const count = tasks.filter((task) => taskDomain(task) === value).length;
-          return count === 0 ? <UpcomingDomain key={value} domain={value} /> :
-            <button type="button" className="badge" key={value} aria-pressed={domain === value}
-              onClick={() => updateQuery({ domain: domain === value ? null : value })}>{domainNames[value]} <span>{count}</span></button>;
-        })}
-      </div>
+      <DomainFilter taskDomains={tasks.map(taskDomain)} domain={domain} />
       <div className="task-totals" role="group" aria-label="Filter by pillar">
         <button type="button" aria-pressed={!pillar} onClick={() => updateQuery({ pillar: null, layer: null })}>
           <span className="eyebrow">Total tasks</span><span className="task-number">{inArea.length}</span>

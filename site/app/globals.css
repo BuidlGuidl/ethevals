@@ -129,7 +129,6 @@
   .pillar-band small { @apply ml-3 text-dim text-[10px] normal-case; }
   .band-label { @apply sticky left-0 inline-block px-4; }
   .eval-title { @apply text-left text-[13px] font-semibold; }
-  .matrix .no-evals { @apply py-4 text-xs text-muted; }
   .empty { @apply border border-border bg-sheet p-6; }
   .empty p { @apply mt-2 text-muted; }
   .banner { @apply mb-8 border border-amber/30 bg-amber/5 p-3 text-xs text-amber; }
@@ -139,6 +138,7 @@
   .caution { @apply text-amber; }
   .lift { @apply text-accent; }
   .eyebrow { @apply text-[10px] uppercase tracking-[.08em] text-dim; }
+  .matrix-filters { @apply flex flex-wrap items-center gap-x-5 gap-y-3; }
   .tasks-page { @apply grid max-w-[880px] gap-8; }
   .task-counts { @apply grid gap-6; }
   .task-totals { @apply grid grid-cols-4 gap-3; }
@@ -178,12 +178,20 @@
   .detail-body { @apply grid gap-5; overflow-wrap: anywhere; }
   .drawer-header { @apply grid gap-2 border-b border-border pb-5 pr-8; }
   .drawer-header h1 { @apply text-[24px]; }
+  .domain-scores { @apply mt-2 grid grid-cols-2 gap-2; }
+  .domain-scores button { @apply grid content-start gap-2 border border-border-strong p-3 text-left text-xs transition-colors; }
+  .domain-scores button:not(:disabled):hover { @apply border-accent; }
+  .domain-scores button:disabled { @apply border-dashed text-dim; }
+  .domain-scores button[aria-pressed="true"] { @apply border-accent bg-accent/10; }
+  .domain-scores b { @apply text-xl; }
+  .domain-scores small { @apply text-muted; }
   .back-button { @apply flex w-fit items-center gap-2 text-xs text-muted; }
   .detail-section { @apply grid gap-3; }
   .eval-list section + section { @apply mt-8; }
   .eval-list section > h3 { @apply mb-2 border-l-2 px-3 py-2 text-[18px]; color: var(--pillar); border-color: var(--pillar); background: color-mix(in srgb, var(--pillar) 8%, transparent); }
   .eval-list-row { @apply flex min-h-11 w-full items-center gap-3 border-b border-border py-3 text-left; }
   .eval-list-row:hover { @apply bg-tint; }
+  .eval-list-row .heat-chip { @apply ml-auto; }
   .eval-list-title { @apply mr-auto grid gap-1 text-left; }
   .eval-list-title, .checks li > div { min-width: 0; }
   .eval-list-title small { @apply text-[10px] text-muted; }
