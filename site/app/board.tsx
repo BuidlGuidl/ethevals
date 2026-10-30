@@ -45,9 +45,9 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
-          <span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${trial.status}`).join(", ")}>
+          <span className="eval-list-result"><span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${trial.status}`).join(", ")}>
             {cell.trials.map((trial) => <span key={trial.trial} className={`run-dot ${trial.status}`} />)}</span>
-          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cell.score === null ? "–" : `${cell.passed}/${cell.total}`}</span>
+          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cell.score === null ? "–" : `${cell.passed}/${cell.total}`}</span></span>
         </button>;
       })}
       {table.pillars[value].cells[key].state === "empty" && <p className="muted">No tasks yet for this mode.</p>}
