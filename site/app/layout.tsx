@@ -1,4 +1,5 @@
 import { JetBrains_Mono, VT323, Archivo } from "next/font/google";
+import PlausibleProvider from "next-plausible";
 import { Shell } from "../components/shell";
 import { pageMetadata } from "../src/metadata";
 import "./globals.css";
@@ -10,5 +11,10 @@ const diagram = Archivo({ subsets: ["latin"], variable: "--font-archivo" });
 export const metadata = pageMetadata("ETH Evals", "/");
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" className={`${mono.variable} ${terminal.variable} ${diagram.variable}`}><body><Shell>{children}</Shell></body></html>;
+  return (
+    <html lang="en" className={`${mono.variable} ${terminal.variable} ${diagram.variable}`}>
+      <head><PlausibleProvider src="https://plausible.io/js/pa-eNCEQYDtrvxw1dXrIz2f5.js" /></head>
+      <body><Shell>{children}</Shell></body>
+    </html>
+  );
 }

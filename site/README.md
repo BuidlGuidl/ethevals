@@ -24,6 +24,9 @@ Expand a task to read its instruction and open its README on GitHub.
 
 The share card is `public/og-image.png`, a 1200x630 screenshot of `scripts/share-card.html`. Render it again when the hero text changes.
 
+The root layout loads Plausible for page analytics, with the `ethevals.com` script from the BuidlGuidl team.
+It stays off in `pnpm dev` and on Vercel previews, and ignores visits from localhost.
+
 Run `ETHEVALS_DEMO=1 pnpm build` for an invented board.
 The banner labels its results, and its trajectory links are examples.
 Demo mode and an explicit rows path cannot be combined.
