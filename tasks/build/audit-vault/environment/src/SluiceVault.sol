@@ -4,17 +4,17 @@ pragma solidity 0.8.30;
 import {ERC20} from "./tokens/ERC20.sol";
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IStrategy} from "./interfaces/IStrategy.sol";
+import {SluiceConfig} from "./SluiceConfig.sol";
 
 /// @title SluiceVault
 /// @notice An ERC-4626 vault that spreads deposits across lending strategies. Depositors hold
-///         shares; the keeper moves idle assets into strategies and harvests them; the treasury
-///         earns a performance fee on strategy profit.
+///         shares; allocators move idle assets into strategies and harvest them; the treasury
+///         earns a performance fee on strategy profit and a yearly management fee.
 /// @dev Shares use a virtual offset of 10**DECIMALS_OFFSET against the first-depositor
 ///      inflation attack. Strategies are valued live through `IStrategy.totalAssets`.
-contract SluiceVault is ERC20 {
-    uint256 public constant MAX_BPS = 10_000;
-    uint256 public constant MAX_PERFORMANCE_FEE = 3_000;
+contract SluiceVault is ERC20, SluiceConfig {
     uint256 public constant MAX_STRATEGIES = 10;
+    uint256 private constant SECONDS_PER_YEAR = 365 days;
     uint8 private constant DECIMALS_OFFSET = 6;
 
     struct StrategyParams {
@@ -22,22 +22,21 @@ contract SluiceVault is ERC20 {
         uint256 cap;
     }
 
+    /// @notice One step of a reallocation: move `strategy` to `targetAssets`.
+    /// @dev A target of type(uint256).max supplies all free idle assets, up to the strategy's cap.
+    struct Allocation {
+        IStrategy strategy;
+        uint256 targetAssets;
+    }
+
     /// @notice The token depositors put in and take out.
     address public immutable asset;
     IERC20 private immutable _token;
 
-    address public owner;
-    address public pendingOwner;
-    address public keeper;
-    address public treasury;
-
-    /// @notice The treasury's share of strategy profit, in basis points.
-    uint256 public performanceFee;
-    /// @notice The most the vault will hold, in assets.
-    uint256 public depositLimit;
-    /// @notice Performance fees booked at harvest and not yet paid to the treasury.
+    /// @notice Performance and management fees booked and not yet paid to the treasury.
     uint256 public accruedFees;
-    bool public depositsPaused;
+    /// @notice When the management fee was last charged.
+    uint256 public lastFeeAccrual;
 
     mapping(IStrategy => StrategyParams) public strategies;
     /// @notice Active strategies, in the order withdrawals pull from them.
@@ -52,58 +51,41 @@ contract SluiceVault is ERC20 {
     event StrategyCapSet(IStrategy indexed strategy, uint256 cap);
     event Allocated(IStrategy indexed strategy, uint256 assets);
     event Deallocated(IStrategy indexed strategy, uint256 assets);
+    event Reallocated(address indexed allocator, uint256 withdrawn, uint256 supplied);
     event Harvested(IStrategy indexed strategy, uint256 profit, uint256 loss, uint256 fee);
+    event ManagementFeeAccrued(uint256 fee);
     event FeesClaimed(address indexed treasury, uint256 assets);
-    event PerformanceFeeSet(uint256 fee);
-    event DepositLimitSet(uint256 limit);
-    event DepositsPausedSet(bool paused);
-    event KeeperSet(address keeper);
-    event TreasurySet(address treasury);
-    event OwnershipTransferStarted(address indexed owner, address indexed pendingOwner);
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event WithdrawQueueSet(address indexed caller, IStrategy[] queue);
 
-    error Unauthorized();
     error ZeroAmount();
     error ExceedsMaxDeposit();
     error ExceedsMaxWithdraw();
     error InsufficientLiquidity();
     error InsufficientIdle();
     error ExceedsCap();
-    error FeeTooHigh();
     error TooManyStrategies();
     error StrategyActive();
     error StrategyInactive();
     error StrategyMismatch();
     error TransferFailed();
 
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert Unauthorized();
-        _;
-    }
-
-    modifier onlyKeeper() {
-        if (msg.sender != keeper && msg.sender != owner) revert Unauthorized();
-        _;
-    }
-
     constructor(
         IERC20 asset_,
         string memory name_,
         string memory symbol_,
         address owner_,
-        address keeper_,
         address treasury_,
-        uint256 performanceFee_
-    ) ERC20(name_, symbol_, asset_.decimals() + DECIMALS_OFFSET) {
+        uint256 timelock_,
+        uint256 performanceFee_,
+        uint256 managementFee_
+    )
+        ERC20(name_, symbol_, asset_.decimals() + DECIMALS_OFFSET)
+        SluiceConfig(owner_, treasury_, timelock_, performanceFee_, managementFee_)
+    {
         if (owner_ == address(0) || treasury_ == address(0)) revert ZeroAddress();
-        if (performanceFee_ > MAX_PERFORMANCE_FEE) revert FeeTooHigh();
         asset = address(asset_);
         _token = asset_;
-        owner = owner_;
-        keeper = keeper_;
-        treasury = treasury_;
-        performanceFee = performanceFee_;
-        depositLimit = type(uint256).max;
+        lastFeeAccrual = block.timestamp;
     }
 
     // ---------------------------------------------------------------------
@@ -128,13 +110,13 @@ contract SluiceVault is ERC20 {
     }
 
     function maxDeposit(address) public view returns (uint256) {
-        if (depositsPaused) return 0;
+        if (paused) return 0;
         uint256 total = totalAssets();
         return total >= depositLimit ? 0 : depositLimit - total;
     }
 
     function maxMint(address receiver) public view returns (uint256) {
-        if (!depositsPaused && depositLimit == type(uint256).max) return type(uint256).max;
+        if (!paused && depositLimit == type(uint256).max) return type(uint256).max;
         return _toShares(maxDeposit(receiver), false);
     }
 
@@ -184,6 +166,7 @@ contract SluiceVault is ERC20 {
     // ---------------------------------------------------------------------
 
     function deposit(uint256 assets, address receiver) external returns (uint256 shares) {
+        _accrueManagementFee();
         if (assets > maxDeposit(receiver)) revert ExceedsMaxDeposit();
         shares = previewDeposit(assets);
         if (shares == 0) revert ZeroAmount();
@@ -192,6 +175,7 @@ contract SluiceVault is ERC20 {
 
     function mint(uint256 shares, address receiver) external returns (uint256 assets) {
         if (shares == 0) revert ZeroAmount();
+        _accrueManagementFee();
         assets = previewMint(shares);
         if (assets > maxDeposit(receiver)) revert ExceedsMaxDeposit();
         _deposit(receiver, assets, shares);
@@ -199,12 +183,14 @@ contract SluiceVault is ERC20 {
 
     function withdraw(uint256 assets, address receiver, address account) external returns (uint256 shares) {
         if (assets == 0) revert ZeroAmount();
+        _accrueManagementFee();
         if (assets > maxWithdraw(account)) revert ExceedsMaxWithdraw();
         shares = previewWithdraw(assets);
         _withdraw(receiver, account, assets, shares);
     }
 
     function redeem(uint256 shares, address receiver, address account) external returns (uint256 assets) {
+        _accrueManagementFee();
         if (shares > maxRedeem(account)) revert ExceedsMaxWithdraw();
         assets = previewRedeem(shares);
         if (assets == 0) revert ZeroAmount();
@@ -212,37 +198,63 @@ contract SluiceVault is ERC20 {
     }
 
     // ---------------------------------------------------------------------
-    // Keeper
+    // Allocator
     // ---------------------------------------------------------------------
 
     /// @notice Moves idle assets into a strategy, up to its cap. Fees owed to the treasury stay idle.
-    function allocate(IStrategy strategy, uint256 assets) external onlyKeeper {
+    function allocate(IStrategy strategy, uint256 assets) external onlyAllocator whenNotPaused {
         if (!strategies[strategy].active) revert StrategyInactive();
-        if (assets == 0) revert ZeroAmount();
-        uint256 idle = _token.balanceOf(address(this));
-        if (idle < accruedFees || assets > idle - accruedFees) revert InsufficientIdle();
-        if (strategy.totalAssets() + assets > strategies[strategy].cap) revert ExceedsCap();
-        if (!_token.approve(address(strategy), assets)) revert TransferFailed();
-        strategy.deploy(assets);
-        emit Allocated(strategy, assets);
+        _allocate(strategy, assets);
     }
 
     /// @notice Pulls assets back from a strategy into the vault's idle balance.
-    function deallocate(IStrategy strategy, uint256 assets) external onlyKeeper {
+    function deallocate(IStrategy strategy, uint256 assets) external onlyAllocator {
         if (!strategies[strategy].active) revert StrategyInactive();
-        uint256 returned = strategy.undeploy(assets);
-        emit Deallocated(strategy, returned);
+        _deallocate(strategy, assets);
+    }
+
+    /// @notice Moves each listed strategy toward its target, in order. List the strategies to take
+    ///         from first so their assets are idle when the later ones are supplied.
+    function reallocate(Allocation[] calldata allocations) external onlyAllocator whenNotPaused {
+        uint256 withdrawn;
+        uint256 supplied;
+        for (uint256 i; i < allocations.length; ++i) {
+            IStrategy strategy = allocations[i].strategy;
+            if (!strategies[strategy].active) revert StrategyInactive();
+            uint256 current = strategy.totalAssets();
+            uint256 target = allocations[i].targetAssets;
+            if (target < current) {
+                withdrawn += _deallocate(strategy, current - target);
+            } else if (target > current) {
+                uint256 assets = target == type(uint256).max ? _fillAmount(strategy, current) : target - current;
+                if (assets == 0) continue;
+                _allocate(strategy, assets);
+                supplied += assets;
+            }
+        }
+        emit Reallocated(msg.sender, withdrawn, supplied);
     }
 
     /// @notice Books a strategy's profit or loss since its last harvest and charges the
     ///         performance fee on profit.
-    function harvest(IStrategy strategy) external onlyKeeper {
+    function harvest(IStrategy strategy) external onlyAllocator {
         if (!strategies[strategy].active) revert StrategyInactive();
+        _accrueManagementFee();
         _harvest(strategy);
     }
 
-    /// @notice Pays booked performance fees to the treasury. Anyone may call.
+    /// @notice Harvests every active strategy in withdrawal-queue order.
+    function harvestAll() external onlyAllocator {
+        _accrueManagementFee();
+        uint256 length = withdrawQueue.length;
+        for (uint256 i; i < length; ++i) {
+            _harvest(withdrawQueue[i]);
+        }
+    }
+
+    /// @notice Pays booked fees to the treasury. Anyone may call.
     function claimFees() external {
+        _accrueManagementFee();
         uint256 fees = accruedFees;
         if (fees == 0) revert ZeroAmount();
         _ensureIdle(fees);
@@ -252,30 +264,19 @@ contract SluiceVault is ERC20 {
     }
 
     // ---------------------------------------------------------------------
-    // Owner
+    // Curator
     // ---------------------------------------------------------------------
 
-    function addStrategy(IStrategy strategy, uint256 cap) external onlyOwner {
-        if (strategies[strategy].active) revert StrategyActive();
-        if (strategy.vault() != address(this) || strategy.asset() != asset) revert StrategyMismatch();
-        if (withdrawQueue.length >= MAX_STRATEGIES) revert TooManyStrategies();
-        strategies[strategy] = StrategyParams({active: true, cap: cap});
-        withdrawQueue.push(strategy);
-        emit StrategyAdded(strategy, cap);
-    }
-
-    function setStrategyCap(IStrategy strategy, uint256 cap) external onlyOwner {
-        if (!strategies[strategy].active) revert StrategyInactive();
-        strategies[strategy].cap = cap;
-        emit StrategyCapSet(strategy, cap);
-    }
-
     /// @notice Harvests a strategy one last time, pulls everything out of it, and drops it from the queue.
-    function removeStrategy(IStrategy strategy) external onlyOwner {
+    /// @dev Reverts while the strategy's market cannot return everything; lower its cap and
+    ///      deallocate first.
+    function removeStrategy(IStrategy strategy) external onlyCurator {
         if (!strategies[strategy].active) revert StrategyInactive();
+        _accrueManagementFee();
         _harvest(strategy);
         uint256 returned = strategy.undeployAll();
         delete strategies[strategy];
+        delete pendingCap[strategy];
         uint256 length = withdrawQueue.length;
         for (uint256 i; i < length; ++i) {
             if (withdrawQueue[i] == strategy) {
@@ -288,7 +289,7 @@ contract SluiceVault is ERC20 {
     }
 
     /// @notice Replaces the withdrawal order. `queue` must list every active strategy exactly once.
-    function setWithdrawQueue(IStrategy[] calldata queue) external onlyOwner {
+    function setWithdrawQueue(IStrategy[] calldata queue) external onlyCurator {
         uint256 length = withdrawQueue.length;
         if (queue.length != length) revert StrategyMismatch();
         for (uint256 i; i < length; ++i) {
@@ -298,45 +299,7 @@ contract SluiceVault is ERC20 {
             }
         }
         withdrawQueue = queue;
-    }
-
-    function setPerformanceFee(uint256 fee) external onlyOwner {
-        if (fee > MAX_PERFORMANCE_FEE) revert FeeTooHigh();
-        performanceFee = fee;
-        emit PerformanceFeeSet(fee);
-    }
-
-    function setDepositLimit(uint256 limit) external onlyOwner {
-        depositLimit = limit;
-        emit DepositLimitSet(limit);
-    }
-
-    function setDepositsPaused(bool paused) external onlyOwner {
-        depositsPaused = paused;
-        emit DepositsPausedSet(paused);
-    }
-
-    function setKeeper(address keeper_) external onlyOwner {
-        keeper = keeper_;
-        emit KeeperSet(keeper_);
-    }
-
-    function setTreasury(address treasury_) external onlyOwner {
-        if (treasury_ == address(0)) revert ZeroAddress();
-        treasury = treasury_;
-        emit TreasurySet(treasury_);
-    }
-
-    function transferOwnership(address newOwner) external onlyOwner {
-        pendingOwner = newOwner;
-        emit OwnershipTransferStarted(owner, newOwner);
-    }
-
-    function acceptOwnership() external {
-        if (msg.sender != pendingOwner) revert Unauthorized();
-        emit OwnershipTransferred(owner, msg.sender);
-        owner = msg.sender;
-        pendingOwner = address(0);
+        emit WithdrawQueueSet(msg.sender, queue);
     }
 
     // ---------------------------------------------------------------------
@@ -357,6 +320,31 @@ contract SluiceVault is ERC20 {
         emit Withdraw(msg.sender, receiver, account, assets, shares);
     }
 
+    function _allocate(IStrategy strategy, uint256 assets) private {
+        if (assets == 0) revert ZeroAmount();
+        uint256 idle = _token.balanceOf(address(this));
+        if (idle < accruedFees || assets > idle - accruedFees) revert InsufficientIdle();
+        if (strategy.totalAssets() + assets > strategies[strategy].cap) revert ExceedsCap();
+        if (!_token.approve(address(strategy), assets)) revert TransferFailed();
+        strategy.deploy(assets);
+        emit Allocated(strategy, assets);
+    }
+
+    function _deallocate(IStrategy strategy, uint256 assets) private returns (uint256 returned) {
+        returned = strategy.undeploy(assets);
+        emit Deallocated(strategy, returned);
+    }
+
+    /// @dev Free idle assets (idle minus fees owed), limited by the room left under the strategy's cap.
+    function _fillAmount(IStrategy strategy, uint256 current) private view returns (uint256) {
+        uint256 cap = strategies[strategy].cap;
+        if (current >= cap) return 0;
+        uint256 idle = _token.balanceOf(address(this));
+        uint256 free = idle > accruedFees ? idle - accruedFees : 0;
+        uint256 room = cap - current;
+        return free < room ? free : room;
+    }
+
     function _harvest(IStrategy strategy) private {
         int256 delta = strategy.harvest();
         uint256 profit;
@@ -372,6 +360,18 @@ contract SluiceVault is ERC20 {
         emit Harvested(strategy, profit, loss, fee);
     }
 
+    /// @dev Charges `managementFee` per year on total assets for the time since the last accrual.
+    function _accrueManagementFee() internal override {
+        uint256 elapsed = block.timestamp - lastFeeAccrual;
+        if (elapsed == 0) return;
+        lastFeeAccrual = block.timestamp;
+        if (managementFee == 0) return;
+        uint256 fee = totalAssets() * managementFee * elapsed / (MAX_BPS * SECONDS_PER_YEAR);
+        if (fee == 0) return;
+        accruedFees += fee;
+        emit ManagementFeeAccrued(fee);
+    }
+
     /// @dev Pulls from strategies in queue order until the vault holds at least `assets` idle.
     function _ensureIdle(uint256 assets) private {
         uint256 idle = _token.balanceOf(address(this));
@@ -385,6 +385,35 @@ contract SluiceVault is ERC20 {
             idle += strategy.undeploy(needed < available ? needed : available);
         }
         if (idle < assets) revert InsufficientLiquidity();
+    }
+
+    function _isActive(IStrategy strategy) internal view override returns (bool) {
+        return strategies[strategy].active;
+    }
+
+    function _activeCap(IStrategy strategy) internal view override returns (uint256) {
+        if (!strategies[strategy].active) revert StrategyInactive();
+        return strategies[strategy].cap;
+    }
+
+    function _checkStrategy(IStrategy strategy) internal view override {
+        if (strategy.vault() != address(this) || strategy.asset() != asset) revert StrategyMismatch();
+    }
+
+    function _addStrategy(IStrategy strategy, uint256 cap) internal override {
+        if (strategies[strategy].active) revert StrategyActive();
+        _checkStrategy(strategy);
+        if (withdrawQueue.length >= MAX_STRATEGIES) revert TooManyStrategies();
+        strategies[strategy] = StrategyParams({active: true, cap: cap});
+        withdrawQueue.push(strategy);
+        emit StrategyAdded(strategy, cap);
+    }
+
+    function _setCap(IStrategy strategy, uint256 cap) internal override {
+        if (!strategies[strategy].active) revert StrategyInactive();
+        strategies[strategy].cap = cap;
+        delete pendingCap[strategy];
+        emit StrategyCapSet(strategy, cap);
     }
 
     function _toShares(uint256 assets, bool roundUp) private view returns (uint256) {

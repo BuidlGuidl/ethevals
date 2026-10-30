@@ -11,7 +11,7 @@ import {MockLendingMarket} from "./mocks/MockLendingMarket.sol";
 /// Copy into the audited project's test/ folder and run: forge test --match-contract ProofTest
 contract ProofTest is Test {
     address internal owner = makeAddr("owner");
-    address internal keeper = makeAddr("keeper");
+    address internal allocator = makeAddr("allocator");
     address internal treasury = makeAddr("treasury");
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
@@ -24,10 +24,13 @@ contract ProofTest is Test {
     function setUp() public {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         market = new MockLendingMarket(usdc);
-        vault = new SluiceVault(usdc, "Sluice USDC", "slUSDC", owner, keeper, treasury, 1_500);
+        vault = new SluiceVault(usdc, "Sluice USDC", "slUSDC", owner, treasury, 0, 1_500, 0);
         strategy = new LendingMarketStrategy(address(vault), IERC4626(address(market)));
-        vm.prank(owner);
-        vault.addStrategy(strategy, type(uint256).max);
+        vm.startPrank(owner);
+        vault.setIsAllocator(allocator, true);
+        vault.submitStrategy(strategy, type(uint256).max);
+        vault.acceptStrategy(strategy);
+        vm.stopPrank();
         for (uint256 i; i < 2; ++i) {
             address account = i == 0 ? alice : bob;
             usdc.mint(account, 1_000_000e6);
@@ -41,7 +44,7 @@ contract ProofTest is Test {
     function test_withdrawalErasesPerformanceFee() public {
         vm.prank(alice);
         vault.deposit(1_000_000e6, alice);
-        vm.prank(keeper);
+        vm.prank(allocator);
         vault.allocate(strategy, 1_000_000e6);
 
         market.accrueInterest(50_000e6); // 50,000 USDC of real profit, 7,500 owed to the treasury
@@ -50,7 +53,7 @@ contract ProofTest is Test {
         vault.withdraw(200_000e6, alice, alice); // idle is empty, so this undeploys from the strategy
         assertEq(strategy.deployedAssets(), 1_000_000e6, "baseline still counts the withdrawn 200,000");
 
-        vm.prank(keeper);
+        vm.prank(allocator);
         vault.harvest(strategy);
 
         assertEq(vault.accruedFees(), 0, "no fee booked on 50,000 of profit");
@@ -65,11 +68,11 @@ contract ProofTest is Test {
         uint256 aliceShares = vault.deposit(500_000e6, alice);
         vm.prank(bob);
         uint256 bobShares = vault.deposit(500_000e6, bob);
-        vm.prank(keeper);
+        vm.prank(allocator);
         vault.allocate(strategy, 1_000_000e6);
 
         market.accrueInterest(100_000e6);
-        vm.prank(keeper);
+        vm.prank(allocator);
         vault.harvest(strategy);
         uint256 fee = vault.accruedFees();
         assertApproxEqAbs(fee, 15_000e6, 1);

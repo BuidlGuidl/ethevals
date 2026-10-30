@@ -1,52 +1,54 @@
 # Sluice
 
-Sluice is a USDC yield vault. Users deposit USDC and receive slUSDC, an ERC-4626 share token. The vault keeps some USDC idle for withdrawals and supplies the rest to lending markets through strategies. The treasury earns a performance fee on the interest the strategies make.
+Sluice is a USDC yield vault. Users deposit USDC and receive slUSDC, an ERC-4626 share token with EIP-2612 permit. The vault keeps some USDC idle for withdrawals and supplies the rest to lending markets through strategies. The treasury earns a performance fee on what the strategies make and a small yearly management fee.
 
 ## How it works
 
-- **Deposits and withdrawals.** `SluiceVault` is a standard ERC-4626 vault. `totalAssets()` is the vault's idle USDC plus the live value of every active strategy. A withdrawal is paid from idle USDC first; if that isn't enough, the vault pulls the rest from strategies in `withdrawQueue` order.
-- **Strategies.** Each strategy holds funds for one vault and supplies them to one ERC-4626 lending market (`LendingMarketStrategy`). Only the vault can move a strategy's funds.
-- **Allocation.** The keeper moves idle USDC into a strategy with `allocate`, up to the strategy's cap, and back with `deallocate`.
-- **Harvest and fees.** The keeper calls `harvest(strategy)` on a schedule, about once a day per strategy. Harvest books the profit or loss the strategy made since its last harvest. On profit, the vault books `performanceFee` (in basis points, at most 30%) of the profit as `accruedFees`. The fee stays in the vault as USDC until anyone calls `claimFees()`, which pays it to the treasury.
-
-## Promises
-
-1. The treasury earns `performanceFee` of the interest the strategies earn.
-2. The share price never falls except when a strategy loses money.
-3. A depositor can always withdraw up to the liquidity the vault and its strategies have free.
-4. Only the vault can move funds held by a strategy.
+- **Deposits and withdrawals.** `SluiceVault` is a standard ERC-4626 vault. `totalAssets()` is the vault's idle USDC plus the live value of every active strategy. A withdrawal is paid from idle USDC first; if that isn't enough, the vault pulls the rest from strategies in `withdrawQueue` order. `maxWithdraw` and `maxRedeem` are limited by what the strategies can return right now. `maxDeposit` and `maxMint` respect the deposit limit and return zero while the vault is paused.
+- **Strategies.** Each strategy holds funds for one vault and supplies them to one market. `LendingMarketStrategy` supplies an ERC-4626 lending market. `AaveV3Strategy` supplies an Aave v3 reserve and holds its aToken. Only the vault can move a strategy's funds. `BaseStrategy` holds the bookkeeping both share.
+- **Allocation.** Allocators move idle USDC into a strategy with `allocate`, up to the strategy's cap, and back with `deallocate`. `reallocate` takes a list of strategies and target sizes and moves each one in order, so allocators can shift funds between markets in one transaction. A target of `type(uint256).max` fills a strategy with all free idle USDC, up to its cap. USDC owed to the treasury is never allocated.
+- **Harvest and fees.** Allocators call `harvest(strategy)` or `harvestAll()` about once a day. Harvest books what a strategy earned or lost and charges `performanceFee` (in basis points, at most 30%) on any gain. The management fee (at most 2% a year) is charged on total assets for the time since it was last charged, on every deposit, withdrawal, harvest and claim. Both fees are booked in USDC as `accruedFees` and stay in the vault until anyone calls `claimFees()`, which pays them to the treasury.
+- **Timelock.** Changes that could hurt depositors wait for `timelock` (1 to 14 days): adding a strategy, raising a cap, raising a fee, shortening the timelock, and replacing the guardian. The role submits the change, and anyone can accept it once the wait is over. Changes that only lower risk apply at once: lowering a cap or a fee, lengthening the timelock, removing a strategy.
+- **Guardian.** The guardian can pause the vault and revoke any pending change. Pausing stops deposits, `allocate` and `reallocate`. Withdrawals, `deallocate` and harvests keep working. Only the owner can unpause.
 
 ## Roles
 
 | Role | Who | Trusted to |
 | --- | --- | --- |
-| Owner | Sluice multisig (4 of 7) | add and remove strategies, set caps, the fee, the deposit limit, the keeper and the treasury; pause deposits |
-| Keeper | Sluice bot | allocate, deallocate and harvest. Trusted to act on time, not to protect the vault from itself |
+| Owner | Sluice multisig (4 of 7) | set the curator, allocators, guardian, treasury, fees and timelock; unpause. Also holds every curator and allocator power |
+| Curator | Sluice risk team multisig (3 of 5) | submit strategies and caps, remove strategies, set the withdrawal order and the deposit limit. Also holds allocator powers |
+| Allocators | Sluice bot and the risk team | allocate, deallocate, reallocate and harvest. Trusted to act on time and pick sensible targets, not to protect the vault from itself |
+| Guardian | Security council (3 of 5, independent signers) | pause and revoke pending changes |
 | Treasury | Sluice treasury multisig | receive fees |
 | Depositors | anyone | nothing |
 
-The lending markets are vetted by the owner before a strategy is added. Assume they are honest ERC-4626 vaults that can be short of liquidity when their borrowers use most of it.
+Markets are vetted by the curator before a strategy is submitted, and depositors can leave during the timelock if they disagree. Assume the markets are honest and can be short of liquidity when their borrowers use most of it. An Aave reserve can also be frozen or paused by Aave governance.
 
 ## Scope
 
 | File | What it is |
 | --- | --- |
 | `src/SluiceVault.sol` | the vault: shares, withdrawals, allocation, harvest, fees |
+| `src/SluiceConfig.sol` | roles, timelocked settings, pause |
 | `src/strategies/BaseStrategy.sol` | the bookkeeping every strategy shares |
-| `src/strategies/LendingMarketStrategy.sol` | the strategy that supplies one ERC-4626 lending market |
-| `src/tokens/ERC20.sol` | the share token |
+| `src/strategies/LendingMarketStrategy.sol` | the strategy for an ERC-4626 lending market |
+| `src/strategies/AaveV3Strategy.sol` | the strategy for an Aave v3 reserve |
+| `src/tokens/ERC20.sol` | the share token, with permit |
 | `src/interfaces/*.sol` | interfaces |
 
-Out of scope: `test/`, including the mock lending market.
+Out of scope: `test/`, including the mock markets.
 
 Deployment: Ethereum mainnet and Base. The asset is USDC only. Fee-on-transfer and rebasing tokens will never be used.
 
 ## Known issues
 
-- If a lending market has lent out most of its cash, withdrawals that need that strategy revert with `InsufficientLiquidity` until borrowers repay. Users can withdraw up to `maxWithdraw`.
-- A loss in a lending market is shared by all depositors as soon as `totalAssets()` sees it. We do not protect early leavers or late leavers against it.
+- If a market has lent out most of its cash, withdrawals that need that strategy revert with `InsufficientLiquidity` until borrowers repay. Users can withdraw up to `maxWithdraw`. The same holds while an Aave reserve is paused.
+- A loss in a market is shared by all depositors as soon as `totalAssets()` sees it. We do not protect early leavers or late leavers against it.
 - `withdrawQueue` is iterated on every deposit and withdrawal. We cap it at 10 strategies, so gas use is bounded.
 - ERC-4626 conversions round in the vault's favour, so a depositor can lose up to 1 wei of USDC per deposit or withdrawal.
+- The vault is deployed with a timelock of zero so we can add the first strategies in one go. The owner sets the real timelock before deposits open.
+- `removeStrategy` pulls everything out of the market and reverts if the market can't return it all. The curator lowers the cap to zero and deallocates first.
+- `reallocate` runs the steps in the order given. A plan that supplies a strategy before freeing the USDC for it reverts with `InsufficientIdle`.
 
 ## Build
 
