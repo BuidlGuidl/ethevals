@@ -1,0 +1,87 @@
+[
+  {
+    "label": "explanation after comma",
+    "reply": "Yes, no persistent pending-owner clear occurs because the compiler emits TSTORE for that clear.",
+    "passed": true
+  },
+  {
+    "label": "comma alternatives",
+    "reply": "Yes, no.",
+    "passed": false
+  },
+  {
+    "label": "target",
+    "reply": "yes",
+    "passed": true
+  },
+  {
+    "label": "solution",
+    "reply": "Yes. The via-IR clearing-helper collision leaves Bob in persistent pending-owner storage, so he can accept ownership again.",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**yes.**",
+    "passed": true
+  },
+  {
+    "label": "wrong target",
+    "reply": "no",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "alternative answers",
+    "reply": "yes or no",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "yes. Final answer: no.",
+    "passed": false
+  },
+  {
+    "label": "word prefix",
+    "reply": "yesthing",
+    "passed": false
+  },
+  {
+    "label": "slash alternatives",
+    "reply": "yes/no",
+    "passed": false
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "Yes, or no; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "Yes (or no), depending on the setup.",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "Yes. No.",
+    "passed": false
+  },
+  {
+    "label": "sentence-start answer-is revision",
+    "reply": "Yes. The answer is no.",
+    "passed": false
+  },
+  {
+    "label": "explanation after a comma",
+    "reply": "Yes, because the mechanism the question describes applies here.",
+    "passed": true
+  }
+]

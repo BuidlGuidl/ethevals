@@ -1,0 +1,102 @@
+[
+  {
+    "label": "real accepting reply, GPT-6.1-sol, round 1, JSONL line 81",
+    "reply": "**The zero address.** Solidity 0.8.30’s legacy code generator clears 32 bytes for this memory-byte deletion instead of just one, so `delete payload[0]` also zeroes recipient bytes 1–20.",
+    "passed": true
+  },
+  {
+    "label": "real rejecting reply, Kimi K3.1 Pro, round 1, JSONL line 82",
+    "reply": "Alice’s address — `delete payload[0]` only zeroes the flag byte without shifting the array, so bytes 1–20 still contain `recipient`.",
+    "passed": false
+  },
+  {
+    "label": "solution",
+    "reply": "The zero address. Solidity 0.8.30's legacy code generator clears a full 32-byte word when deleting this memory byte.",
+    "passed": true
+  },
+  {
+    "label": "target",
+    "reply": "zero address",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**zero address.**",
+    "passed": true
+  },
+  {
+    "label": "hedge",
+    "reply": "zero address or Alice's address.",
+    "passed": false
+  },
+  {
+    "label": "near miss",
+    "reply": "0x01",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "zero address. Final answer: Alice's address.",
+    "passed": false
+  },
+  {
+    "label": "wrong target",
+    "reply": "Alice's address",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "address notation",
+    "reply": "address(0)",
+    "passed": true
+  },
+  {
+    "label": "hex notation",
+    "reply": "0x0000000000000000000000000000000000000000",
+    "passed": true
+  },
+  {
+    "label": "invalid hexadecimal suffix",
+    "reply": "0x0g",
+    "passed": false
+  },
+  {
+    "label": "nonzero address cast",
+    "reply": "address(0x1234)",
+    "passed": false
+  },
+  {
+    "label": "Alice's address as a sentence subject (reviewer case)",
+    "reply": "The zero address. Alice's address, which sat in bytes 1 to 20, is overwritten by the full-word store.",
+    "passed": true
+  },
+  {
+    "label": "control pipeline named in the explanation (reviewer case)",
+    "reply": "The zero address. On the via-IR control the answer is Alice's address.",
+    "passed": true
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "The zero address, or Alice's address; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "The zero address (or Alice's address).",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "The zero address. Alice's address.",
+    "passed": false
+  }
+]

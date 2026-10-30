@@ -1,0 +1,82 @@
+[
+  {
+    "label": "real accepting reply, GPT-6.1-sol, round 1, JSONL line 5",
+    "reply": "Yes. Permit2’s PermitSingle signature does not bind the account address, so with matching initial nonces and identical owner-key validation, the same signature can establish a Permit2 allowance for account B.",
+    "passed": true
+  },
+  {
+    "label": "real rejecting reply, GLM 5.3, round 1, JSONL line 7",
+    "reply": "**No.** Although Permit2 uses a single universal domain separator (identical for all accounts and even chains), it binds the permit to a specific owner by hashing the owner address into the message — `keccak256(abi.encode(PERMIT2_DOMAIN_SEPARATOR, owner, hashStruct(PermitSingle)))` — so the signature signed for account A fails `ECDSA.recover` when submitted with account B as the owner.",
+    "passed": false
+  },
+  {
+    "label": "solution",
+    "reply": "Yes. PermitSingle omits the account address, and both accounts accept the same owner signature with matching unused nonces.",
+    "passed": true
+  },
+  {
+    "label": "target",
+    "reply": "yes",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**yes.**",
+    "passed": true
+  },
+  {
+    "label": "hedge",
+    "reply": "yes or no.",
+    "passed": false
+  },
+  {
+    "label": "near miss",
+    "reply": "yesterday",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "yes. Final answer: no.",
+    "passed": false
+  },
+  {
+    "label": "wrong target",
+    "reply": "no",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "Yes, or no; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "Yes (or no), depending on the setup.",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "Yes. No.",
+    "passed": false
+  },
+  {
+    "label": "sentence-start answer-is revision",
+    "reply": "Yes. The answer is no.",
+    "passed": false
+  },
+  {
+    "label": "explanation after a comma",
+    "reply": "Yes, because the mechanism the question describes applies here.",
+    "passed": true
+  }
+]

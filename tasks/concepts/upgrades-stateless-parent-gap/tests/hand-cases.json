@@ -1,0 +1,67 @@
+[
+  {
+    "label": "target",
+    "reply": "0",
+    "passed": true
+  },
+  {
+    "label": "solution",
+    "reply": "0",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**0.**",
+    "passed": true
+  },
+  {
+    "label": "wrong target",
+    "reply": "100",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "alternative answers",
+    "reply": "0 or 100",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "0. Final answer: 100.",
+    "passed": false
+  },
+  {
+    "label": "two numeric answers",
+    "reply": "0. 100.",
+    "passed": false
+  },
+  {
+    "label": "two numeric lines",
+    "reply": "0\n100",
+    "passed": false
+  },
+  {
+    "label": "number prefix",
+    "reply": "00",
+    "passed": false
+  },
+  {
+    "label": "decimal prefix",
+    "reply": "0.5",
+    "passed": false
+  },
+  {
+    "label": "numeric explanation",
+    "reply": "0. The final write determines the stored value.",
+    "passed": true
+  }
+]

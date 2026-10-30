@@ -1,0 +1,82 @@
+[
+  {
+    "label": "real accepting reply, Opus 5.5, round 1, JSONL line 1",
+    "reply": "**No.** EntryPoint v0.7 also charges a 10% penalty on unused execution gas (callGasLimit plus paymasterPostOpGasLimit): each 5,000,000-limit operation that uses only about 150,000 gas costs the paymaster an extra ~485,000 gas, which is over four times the actual cost and goes to the bundler's beneficiary address, so the bundler profits by draining the deposit.",
+    "passed": true
+  },
+  {
+    "label": "real rejecting reply, GLM 5.3, round 1, JSONL line 3",
+    "reply": "**Yes.**\n\nThe EntryPoint pre-charges the paymaster for the full `callGasLimit`, but after execution it measures the gas actually consumed and refunds the unused portion (plus a fixed `postOp` overhead), so inflating `callGasLimit` to 5,000,000 on a ~150,000-gas operation does not increase what the paymaster ultimately pays — the real griefing risk here is instead that the paymaster signs *any* op, so a malicious user could submit an operation whose execution genuinely burns up to 5M gas (or reverts mid-execution, forcing the paymaster to cover the consumed gas plus `postOp` costs), but that is a function of gas actually used, not of the declared `callGasLimit`.",
+    "passed": false
+  },
+  {
+    "label": "solution",
+    "reply": "No. EntryPoint v0.7 also charges the paymaster a 10% penalty on unused execution and postOp gas limits.",
+    "passed": true
+  },
+  {
+    "label": "target",
+    "reply": "no",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**no.**",
+    "passed": true
+  },
+  {
+    "label": "hedge",
+    "reply": "no or yes.",
+    "passed": false
+  },
+  {
+    "label": "near miss",
+    "reply": "nothing",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "no. Final answer: yes.",
+    "passed": false
+  },
+  {
+    "label": "wrong target",
+    "reply": "yes",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "No, or yes; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "No (or yes), depending on the setup.",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "No. Yes.",
+    "passed": false
+  },
+  {
+    "label": "sentence-start answer-is revision",
+    "reply": "No. The answer is yes.",
+    "passed": false
+  },
+  {
+    "label": "concession after the answer, explanation after a comma (reviewer case)",
+    "reply": "No. Yes, unused gas is refunded, but a 10% penalty on the unused limit is charged to the paymaster.",
+    "passed": true
+  }
+]

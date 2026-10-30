@@ -1,0 +1,82 @@
+[
+  {
+    "label": "real accepting reply, Opus 5.5, round 1, JSONL line 17",
+    "reply": "**No.** OpenZeppelin 5.x `ECDSA.recover` accepts only 65-byte signatures with low-`s` values (64-byte EIP-2098 compact signatures are rejected), and `v` values other than 27/28 fail to recover, so a user cannot turn a valid voucher into a second valid signature for the same digest.\n\nKeying replay protection on the signature bytes is still fragile, though: if the signer ever signs the same `(msg.sender, amount)` twice, those vouchers can be redeemed again. A safer design puts a nonce or voucher ID in the signed struct and marks the digest or nonce as used.",
+    "passed": true
+  },
+  {
+    "label": "real rejecting reply, Kimi K3.1 Pro, round 1, JSONL line 19",
+    "reply": "Yes—OpenZeppelin’s `recover` accepts both 65-byte and EIP-2098 64-byte encodings of the same signature, so switching encodings changes `keccak256(sig)` and bypasses the `used` replay check.",
+    "passed": false
+  },
+  {
+    "label": "solution",
+    "reply": "No. OpenZeppelin 5.x's bytes overload rejects both compact signatures and high-s twins of the supplied signature.",
+    "passed": true
+  },
+  {
+    "label": "target",
+    "reply": "no",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**no.**",
+    "passed": true
+  },
+  {
+    "label": "hedge",
+    "reply": "no or yes.",
+    "passed": false
+  },
+  {
+    "label": "near miss",
+    "reply": "nothing",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "no. Final answer: yes.",
+    "passed": false
+  },
+  {
+    "label": "wrong target",
+    "reply": "yes",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "No, or yes; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "No (or yes), depending on the setup.",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "No. Yes.",
+    "passed": false
+  },
+  {
+    "label": "sentence-start answer-is revision",
+    "reply": "No. The answer is yes.",
+    "passed": false
+  },
+  {
+    "label": "concession after the answer, explanation after a comma (reviewer case)",
+    "reply": "No. Yes, ECDSA signatures are malleable in general, but OpenZeppelin 5.x rejects the high-s twin and the 64-byte form.",
+    "passed": true
+  }
+]

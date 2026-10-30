@@ -1,0 +1,102 @@
+[
+  {
+    "label": "explanation after comma",
+    "reply": "The zero address, Alice's address is assigned to the owner only after the feeRecipient initializer runs.",
+    "passed": true
+  },
+  {
+    "label": "comma alternatives",
+    "reply": "The zero address, Alice's address.",
+    "passed": false
+  },
+  {
+    "label": "target",
+    "reply": "zero address",
+    "passed": true
+  },
+  {
+    "label": "solution",
+    "reply": "The zero address. The legacy pipeline evaluates feeRecipient before Ownable runs its constructor and sets the owner.",
+    "passed": true
+  },
+  {
+    "label": "markdown",
+    "reply": "**zero address.**",
+    "passed": true
+  },
+  {
+    "label": "wrong target",
+    "reply": "Alice's address",
+    "passed": false
+  },
+  {
+    "label": "empty",
+    "reply": "",
+    "passed": false
+  },
+  {
+    "label": "whitespace",
+    "reply": " \n ",
+    "passed": false
+  },
+  {
+    "label": "alternative answers",
+    "reply": "zero address or Alice's address",
+    "passed": false
+  },
+  {
+    "label": "revised answer",
+    "reply": "zero address. Final answer: Alice's address.",
+    "passed": false
+  },
+  {
+    "label": "address notation",
+    "reply": "address(0)",
+    "passed": true
+  },
+  {
+    "label": "hex notation",
+    "reply": "0x0000000000000000000000000000000000000000",
+    "passed": true
+  },
+  {
+    "label": "invalid hexadecimal suffix",
+    "reply": "0x0g",
+    "passed": false
+  },
+  {
+    "label": "nonzero hex prefix",
+    "reply": "0x01",
+    "passed": false
+  },
+  {
+    "label": "nonzero address cast",
+    "reply": "address(0x1234)",
+    "passed": false
+  },
+  {
+    "label": "Alice's address as a sentence subject (reviewer case)",
+    "reply": "The zero address. Alice's address, set by Ownable's constructor afterwards, never reaches feeRecipient.",
+    "passed": true
+  },
+  {
+    "label": "control pipeline named in the explanation (reviewer case)",
+    "reply": "The zero address. On the via-IR control the answer is Alice's address.",
+    "passed": true
+  },
+  {
+    "label": "hedge with a comma before the conjunction (reviewer case)",
+    "reply": "The zero address, or Alice's address; it depends.",
+    "passed": false
+  },
+  {
+    "label": "parenthesised alternative (reviewer case)",
+    "reply": "The zero address (or Alice's address).",
+    "passed": false
+  },
+  {
+    "label": "bare alternative as its own sentence",
+    "reply": "The zero address. Alice's address.",
+    "passed": false
+  }
+]
