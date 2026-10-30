@@ -1,4 +1,5 @@
 import type { Row } from "./rows";
+import { taskDomain, type Domain } from "./areas";
 export type { Row } from "./rows";
 
 export const pillars = ["concepts", "build", "act"] as const;
@@ -18,7 +19,7 @@ export interface Eval {
   instruction: string;
   modes: Mode[];
 }
-export type DisplayEval = Omit<Eval, "hash">;
+export type DisplayEval = Omit<Eval, "hash"> & { domain: Domain };
 
 export interface Agent {
   model: string;
@@ -79,6 +80,19 @@ export function overallScore(scores: (number | null)[]): number | null {
   return scored.length ? scored.reduce((sum, score) => sum + score, 0) / scored.length : null;
 }
 
+export function scoreSummary(cells: Counts[]): Counts {
+  return {
+    score: overallScore(cells.map((cell) => cell.score)),
+    passed: cells.reduce((sum, cell) => sum + cell.passed, 0),
+    total: cells.reduce((sum, cell) => sum + cell.total, 0),
+    errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
+  };
+}
+
+export function emptyTrialLabel(cell: EvalCell): string {
+  return cell.state === "na" ? "Not applicable" : cell.errors ? `${cell.errors} errors; no scored trials` : "No trials yet";
+}
+
 export function costPerPass(trials: Pick<Trial, "status" | "model_cost_usd">[]): number | null {
   const scored = trials.filter((trial) => trial.status !== "error");
   const passed = scored.filter((trial) => trial.status === "passed").length;
@@ -126,10 +140,7 @@ function pillarCell(cells: EvalCell[]): PillarCell {
   const scored = cells.filter((cell) => cell.score !== null);
   return {
     state: !cells.some((cell) => cell.state !== "na") ? "empty" : scored.length ? "score" : "pending",
-    score: scored.length ? scored.reduce((sum, cell) => sum + cell.score!, 0) / scored.length : null,
-    passed: cells.reduce((sum, cell) => sum + cell.passed, 0),
-    total: cells.reduce((sum, cell) => sum + cell.total, 0),
-    errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
+    ...scoreSummary(cells),
     scoredEvals: scored.length,
   };
 }
@@ -172,17 +183,16 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
     for (const agent of columns) {
       const key = agentKey(agent);
       const cells = pillars.map((pillar) => table.pillars[pillar].cells[key]);
+      const summary = scoreSummary(cells);
       const trials = pillars.flatMap((pillar) => table.pillars[pillar].evals.flatMap((entry) => entry.cells[key].trials));
       const scored = trials.filter((trial) => trial.status !== "error");
       const scores: ConfigurationSummary["scores"] = { overall: null, concepts: null, build: null, act: null };
       for (const pillar of pillars) scores[pillar] = table.pillars[pillar].cells[key].score;
-      scores.overall = overallScore(pillars.map((pillar) => scores[pillar]));
+      scores.overall = summary.score;
       table.summaries[key] = {
         scores, costPerPass: costPerPass(trials),
         medianTokens: median(scored.map((trial) => trial.total_tokens)),
-        passed: cells.reduce((sum, cell) => sum + cell.passed, 0),
-        total: cells.reduce((sum, cell) => sum + cell.total, 0),
-        errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
+        passed: summary.passed, total: summary.total, errors: summary.errors,
       };
     }
     tables[mode] = table;
@@ -202,7 +212,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
   return {
     demo, tables, lifts, counts: { evals: evaluations.length, agents: configurations.size, runs: rows.length },
     evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {
-      id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar,
+      id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar, domain: taskDomain(evaluation),
       description: evaluation.description, instruction: evaluation.instruction, modes: evaluation.modes,
     }])),
   };

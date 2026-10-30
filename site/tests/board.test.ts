@@ -3,13 +3,14 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Board, { Detail, Results } from "../app/board";
-import { buildBoard, trialCost, agentKey, type Eval, type Row, type Agent } from "../src/board";
+import { buildBoard, trialCost, agentKey, type Eval, type DisplayEval, type Row, type Agent } from "../src/board";
 import { currentRows, loadBoard, parseRows } from "../src/load";
 import { decodeSelection, encodeSelection } from "../src/selection";
 import { Configuration } from "../components/configuration";
 
-const evaluation: Eval = {
+const evaluation: Eval & Pick<DisplayEval, "domain"> = {
   id: "concepts/units", hash: "current", title: "Units", pillar: "concepts",
+  domain: "dapp-development",
   description: "Check units.", instruction: "How many wei equal one ether?", modes: ["internet", "vanilla"],
 };
 const agent = { model: "model-a", agent: "agent-a", effort: "high" };
@@ -175,7 +176,7 @@ test("selection decoding accepts known ids and closes unknown or prototype-named
 test("list rows have one task button and Overall groups them under pillar headings", () => {
   const data = buildBoard([evaluation, { ...evaluation, id: "build/token", pillar: "build" }], [row()]);
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, onSelect: () => {} }));
-  assert.equal((panel.match(/<button/g) ?? []).length, 2);
+  assert.equal((panel.match(/class="eval-list-row"/g) ?? []).length, 2);
   assert.ok(panel.includes('<h3>Concepts</h3>') && panel.includes('<h3>Build</h3>'));
   assert.ok(panel.includes('class="run-dot passed"') && panel.includes('class="heat-chip"'));
   const board = renderToStaticMarkup(createElement(Board, { data }));
@@ -185,6 +186,69 @@ test("list rows have one task button and Overall groups them under pillar headin
   assert.ok(board.includes('<span class="matrix-cell" data-empty="true" title="No trials yet">–</span>'));
   assert.ok(!board.includes("$ / pass"));
   assert.equal((board.match(/class="sort-button"/g) ?? []).length, 4);
+});
+
+test("the matrix shares the domain URL, counts matching tasks, and hides empty pillar bands", () => {
+  const security: Eval = { ...evaluation, id: "concepts/reentrancy", title: "Reentrancy", area: "Audits", modes: ["internet"] };
+  const data = buildBoard([evaluation, security, { ...evaluation, id: "build/token", title: "Token", pillar: "build" }], [row()]);
+  for (const [query, titles, count] of [
+    ["domain=security", ["Reentrancy"], 1],
+    ["domain=dapp-development", ["Units", "Token"], 2],
+    ["domain=unknown", ["Units", "Reentrancy", "Token"], 3],
+  ] as const) {
+    const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams(query) }));
+    const matrix = html.slice(html.indexOf('id="evals"'));
+    assert.deepEqual([...matrix.matchAll(/class="eval-title">([^<]+)/g)].map((match) => match[1]), titles);
+    assert.ok(matrix.includes(`<p class="eyebrow">${count} tasks · Internet</p>`));
+    assert.ok(html.includes('agent-a / model-a. 100%. Open details.'));
+    if (query === "domain=security") {
+      assert.match(matrix, /aria-pressed="true">Security <span>1<\/span>/);
+      assert.equal((matrix.match(/class="pillar-band"/g) ?? []).length, 1);
+    }
+  }
+  const vanilla = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams("evals=vanilla") }));
+  assert.match(vanilla, /class="badge border-dashed pointer-events-none"[^>]*disabled=""[^>]*>Security<\/button>/);
+  assert.ok(vanilla.includes('<p class="eyebrow">2 tasks · Model only</p>'));
+});
+
+test("drawer domain scores average tasks then scored pillars and respect the selected pillar and mode", () => {
+  const tasks: Eval[] = [evaluation, { ...evaluation, id: "concepts/fees", title: "Fees" },
+    { ...evaluation, id: "build/token", title: "Token", pillar: "build" },
+    { ...evaluation, id: "concepts/reentrancy", title: "Reentrancy", area: "Audits" },
+    { ...evaluation, id: "concepts/overflow", title: "Overflow", area: "Audits" }];
+  const data = buildBoard(tasks, [row(), row({ task_id: "concepts/fees" }), row({ task_id: "concepts/fees", trial: 2, ...failure }),
+    row({ task_id: "build/token", ...failure }), row({ task_id: "concepts/reentrancy", ...failure }),
+    row({ task_id: "concepts/overflow" }), row({ task_id: "concepts/overflow", trial: 2, ...failure }),
+    row({ task_id: "concepts/overflow", trial: 3, ...error }), row({ mode: "vanilla", agent: null, ...failure })]);
+  const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, domain: "security", onSelect: () => {} }));
+  assert.match(panel, /aria-pressed="false"><span>Dapp development<\/span><b>38%<\/b><small>2\/4 scored<\/small>/);
+  assert.match(panel, /aria-pressed="true"><span>Security<\/span><b>25%<\/b><small>1\/3 scored<\/small>/);
+  assert.ok(panel.includes('<p>25% · 3/7 scored · 1 errors excluded</p>'));
+  assert.deepEqual([...panel.matchAll(/class="eval-list-title"><b>([^<]+)/g)].map((match) => match[1]), ["Reentrancy", "Overflow"]);
+  assert.ok(panel.includes('<h3>Concepts</h3>'));
+  assert.ok(!panel.includes('<h3>Build</h3>'));
+  const concepts = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet", pillar: "concepts" }, onSelect: () => {} }));
+  assert.match(concepts, /<span>Dapp development<\/span><b>75%<\/b><small>2\/3 scored<\/small>/);
+  const build = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet", pillar: "build" }, onSelect: () => {} }));
+  assert.match(build, /disabled=""><span>Security<\/span><small>No tasks yet<\/small>/);
+  const vanilla = renderToStaticMarkup(createElement(Detail, { data, selection: { agent: { ...agent, agent: null }, mode: "vanilla" }, onSelect: () => {} }));
+  assert.match(vanilla, /<span>Dapp development<\/span><b>0%<\/b><small>0\/1 scored<\/small>/);
+  assert.match(vanilla, /<span>Security<\/span><small>No trials yet<\/small>/);
+});
+
+test("unrun drawer domains and task rows show No trials yet and a dash, including errors without scored trials", () => {
+  const data = buildBoard([evaluation,
+    { ...evaluation, id: "concepts/reentrancy", title: "Reentrancy", area: "Audits" },
+    { ...evaluation, id: "concepts/overflow", title: "Overflow", area: "Audits" },
+  ], [row(), row({ task_id: "concepts/overflow", ...error })]);
+  const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, domain: "security", onSelect: () => {} }));
+  assert.match(panel, /aria-pressed="true"><span>Security<\/span><small>No trials yet<\/small>/);
+  assert.ok(panel.includes('title="No trials yet">–</span>'));
+  assert.ok(panel.includes('title="1 errors; no scored trials">–</span>'));
+  assert.ok(!panel.includes("0/0"));
+  const matrix = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams("domain=security") }));
+  assert.ok(matrix.includes('title="No trials yet">–</span>'));
+  assert.ok(matrix.includes('title="1 errors; no scored trials">–</span>'));
 });
 
 test("task details open the instruction and list one button per trial with compact counts", () => {

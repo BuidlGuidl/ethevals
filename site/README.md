@@ -16,6 +16,9 @@ The catalog lists tasks and the current skills hash.
 The Tasks page at `/evals/` shows catalog counts by domain, pillar, and area without results data.
 Select a domain, pillar, and area to filter tasks. With Build selected, a layer filter appears too.
 Share the URL to keep those filters. Domains without tasks have dashed borders and a coming soon tooltip.
+The board's task matrix and trial drawer share the same `?domain=` filter as the Tasks page.
+Use `dapp-development` or `security`; omit the parameter to show all tasks.
+Click the selected domain again to clear it.
 `src/areas.ts` maps areas to domains. Tasks without a mapped area belong to Dapp development, including demo tasks.
 Expand a task to read its instruction and open its README on GitHub.
 
@@ -60,6 +63,9 @@ The browser never receives host paths.
 No Inspect viewer or log download runs during the build.
 
 The drawer's `d` query parameter keeps its task, mode, configuration, and trial selection.
+The separate `domain` parameter keeps the task filter when a drawer opens from the matrix.
+The drawer's domain boxes show scores for its mode and pillar, and filter its task list.
+Its main score stays across all domains. Tasks without scored trials show "–" with their trial status.
 Browser Back closes a drawer opened from the board.
 The loader computes cells and summaries once for all pages.
 
