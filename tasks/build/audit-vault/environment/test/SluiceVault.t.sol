@@ -6,6 +6,7 @@ import {SluiceVault} from "../src/SluiceVault.sol";
 import {SluiceConfig} from "../src/SluiceConfig.sol";
 import {AaveV3Strategy} from "../src/strategies/AaveV3Strategy.sol";
 import {IStrategy} from "../src/interfaces/IStrategy.sol";
+import {BaseStrategy} from "../src/strategies/BaseStrategy.sol";
 
 contract SluiceVaultTest is SluiceFixture {
     function test_metadata() public view {
@@ -336,5 +337,100 @@ contract SluiceVaultTest is SluiceFixture {
         vm.prank(curator);
         vm.expectRevert(SluiceVault.StrategyMismatch.selector);
         vault.setWithdrawQueue(queue);
+    }
+
+    function test_interestReachesSharePriceAtHarvest() public {
+        _deposit(alice, 1_000_000e6);
+        vm.prank(allocator);
+        vault.allocate(strategyA, 1_000_000e6);
+
+        marketA.accrueInterest(40_000e6);
+        assertEq(vault.totalAssets(), 1_000_000e6, "valued at the last harvest");
+        vm.prank(allocator);
+        vault.harvest(strategyA);
+        assertApproxEqAbs(vault.totalAssets(), 1_000_000e6, 1, "profit starts locked");
+    }
+
+    function test_harvestedProfitUnlocksOverTime() public {
+        _deposit(alice, 1_000_000e6);
+        vm.prank(allocator);
+        vault.allocate(strategyA, 1_000_000e6);
+        marketA.accrueInterest(40_000e6);
+        vm.prank(allocator);
+        vault.harvest(strategyA);
+        assertApproxEqAbs(vault.unlockingProfit(), 34_000e6, 1);
+
+        skip(1 days);
+        assertApproxEqAbs(vault.totalAssets(), 1_017_000e6, 1);
+        skip(1 days);
+        assertEq(vault.unlockingProfit(), 0);
+        assertApproxEqAbs(vault.totalAssets(), 1_034_000e6, 1);
+    }
+
+    function test_lossTakenFromUnlockingProfitFirst() public {
+        _deposit(alice, 1_000_000e6);
+        vm.prank(allocator);
+        vault.allocate(strategyA, 1_000_000e6);
+        marketA.accrueInterest(40_000e6);
+        vm.prank(allocator);
+        vault.harvest(strategyA);
+
+        vm.prank(address(marketA));
+        usdc.transfer(address(0xdead), 10_000e6);
+        vm.prank(allocator);
+        vault.harvest(strategyA);
+
+        assertApproxEqAbs(vault.unlockingProfit(), 24_000e6, 2);
+        assertApproxEqAbs(vault.totalAssets(), 1_000_000e6, 2);
+    }
+
+    function test_withdrawalLowersHarvestBaseline() public {
+        _deposit(alice, 500_000e6);
+        vm.prank(allocator);
+        vault.allocate(strategyA, 500_000e6);
+
+        vm.prank(alice);
+        vault.withdraw(200_000e6, alice, alice);
+        assertEq(strategyA.deployedAssets(), 300_000e6);
+    }
+
+    function test_unclaimedFeesLeaveSharePrice() public {
+        _deposit(alice, 1_000_000e6);
+        vm.prank(allocator);
+        vault.allocate(strategyA, 1_000_000e6);
+        marketA.accrueInterest(40_000e6);
+        vm.prank(allocator);
+        vault.harvest(strategyA);
+        skip(2 days);
+
+        uint256 before = vault.totalAssets();
+        vault.claimFees();
+        assertEq(vault.totalAssets(), before);
+    }
+
+    function test_sellRewardsRejectsPositionAndAsset() public {
+        address aToken = address(aave.aToken());
+        vm.startPrank(allocator);
+        vm.expectRevert(BaseStrategy.InvalidReward.selector);
+        vault.sellRewards(strategyB, aToken, 0);
+        vm.expectRevert(BaseStrategy.InvalidReward.selector);
+        vault.sellRewards(strategyB, address(usdc), 0);
+        vm.expectRevert(BaseStrategy.InvalidReward.selector);
+        vault.sellRewards(strategyA, address(marketA), 0);
+        vm.stopPrank();
+    }
+
+    function test_onlyAllocatorsSellRewards() public {
+        vm.prank(alice);
+        vm.expectRevert(SluiceConfig.Unauthorized.selector);
+        vault.sellRewards(strategyB, address(rewardToken), 0);
+    }
+
+    function test_sellRewardsNeedsSwapper() public {
+        vm.prank(owner);
+        vault.setRewardSwapper(address(0));
+        vm.prank(allocator);
+        vm.expectRevert(SluiceVault.NoSwapper.selector);
+        vault.sellRewards(strategyB, address(rewardToken), 0);
     }
 }

@@ -3,27 +3,27 @@ set -eu
 cat > /workspace/findings.md <<'MD'
 # Sluice audit findings
 
-## H-1: Withdrawals from a strategy erase the treasury's performance fee
+## H-1: The first holders out after a market loss leave the whole loss to the rest
 
-**Where:** `BaseStrategy.undeploy`, used by `SluiceVault._ensureIdle` (withdraw, redeem, claimFees) and `SluiceVault._deallocate` (deallocate, reallocate); read by `BaseStrategy.harvest` and `SluiceVault._harvest`.
+**Where:** `SluiceVault.totalAssets`, `SluiceVault._ensureIdle` (withdraw, redeem, claimFees), `SluiceVault._deallocate` (deallocate, reallocate), `BaseStrategy.undeploy`, `BaseStrategy.harvest`.
 
-**Cause:** `deployedAssets` is the baseline `harvest` measures profit against. `deploy` raises it and `undeployAll` zeroes it, but `undeploy` sends assets to the vault without lowering it. After any partial undeploy the baseline still counts assets that have left the strategy.
+**Cause:** `totalAssets` values each strategy at `deployedAssets`, the value booked at its last harvest. A withdrawal pays out of the live market and `undeploy` lowers `deployedAssets` by exactly the amount returned. When a market writes off bad debt between harvests, the share price still shows the booked value, and each withdrawal removes booked value one for one with live assets, so the gap between booked and live value stays behind in full.
 
-**Impact:** The next harvest computes `totalAssets() - deployedAssets` against the stale baseline. Interest earned before the withdrawal reads as a smaller profit or a loss, the baseline resets to the current value, and the fee on that interest is never booked. With 1,000,000 USDC deployed, 50,000 of interest and a 200,000 user withdrawal, harvest books a 150,000 loss and no fee instead of 7,500. Ordinary withdrawals do this with no attacker, and any depositor can time a withdrawal before each harvest to keep the fee from ever being charged. The treasury loses most of its performance-fee revenue.
-
-**Severity:** High.
-
-**Fix:** Lower `deployedAssets` by the amount returned in `undeploy` (floored at zero), or harvest before every undeploy.
-
-## H-2: Unclaimed fees are counted in totalAssets, so depositors take the treasury's fee
-
-**Where:** `SluiceVault.totalAssets`, `SluiceVault._harvest`, `SluiceVault._accrueManagementFee`, `SluiceVault.claimFees`.
-
-**Cause:** `_harvest` books the performance fee (and `_accrueManagementFee` the management fee) as `accruedFees` and leaves the USDC in the vault until `claimFees`. `totalAssets` adds the vault's whole USDC balance and does not subtract `accruedFees`, while `allocate` treats that USDC as reserved.
-
-**Impact:** Between harvest and claim, the share price includes USDC owed to the treasury. With two 500,000 deposits, 100,000 of interest and a 15% fee, a holder who redeems before `claimFees` receives 550,000 instead of 542,500. When `claimFees` pays 15,000, the share price drops and the holder who stayed is left with 535,000. `claimFees` is public, so the drop can be triggered right after a redemption, and new deposits before the claim are overcharged.
+**Impact:** After a market loss and before the next harvest, holders who redeem are paid at the pre-loss price out of the impaired market. The next harvest books the whole loss against those who stayed. With two 500,000 holders, a 1,000,000 position and a 100,000 write-off, the first to redeem gets 500,000 and the other is left with 400,000 instead of 450,000. A market's bad debt is public on-chain, so holders who watch can always exit first, and `claimFees` pays the treasury out of the impaired market the same way.
 
 **Severity:** High.
 
-**Fix:** Subtract `accruedFees` in `totalAssets`, or take the fee by minting shares to the treasury at harvest.
+**Fix:** Book losses before paying out: harvest a strategy (or compare its live value with `deployedAssets`) before undeploying from it, and charge the withdrawer their share of any unrealised loss.
+
+## H-2: Sold rewards skip the performance fee and the profit unlock
+
+**Where:** `SluiceVault.sellRewards`, `BaseStrategy.claimRewards`, `AaveV3Strategy._claimRewards`, `SluiceVault.totalAssets`, `SluiceVault._harvest`.
+
+**Cause:** Income is charged the performance fee and locked to unlock over `PROFIT_UNLOCK_TIME` only in `_harvest`. `sellRewards` swaps a strategy's rewards and leaves the USDC in the vault's idle balance, which `totalAssets` counts at once.
+
+**Impact:** The treasury earns no fee on reward income, and the income reaches the share price in one step. Anyone who sees an allocator's `sellRewards` transaction can deposit before it and redeem after it, taking a share of rewards the existing holders earned. With 1,000,000 held and 20,000 of rewards sold, a 1,000,000 deposit placed just before the sale leaves with about 10,000 in one block, and the treasury misses 3,000 of fee.
+
+**Severity:** High.
+
+**Fix:** Send the proceeds through harvest: supply them to the strategy before the next harvest, or book them in `sellRewards` as profit, charging the fee and adding the rest to `lockedProfit`.
 MD

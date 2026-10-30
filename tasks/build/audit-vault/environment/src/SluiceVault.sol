@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {ERC20} from "./tokens/ERC20.sol";
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IStrategy} from "./interfaces/IStrategy.sol";
+import {ISwapper} from "./interfaces/ISwapper.sol";
 import {SluiceConfig} from "./SluiceConfig.sol";
 
 /// @title SluiceVault
@@ -11,11 +12,15 @@ import {SluiceConfig} from "./SluiceConfig.sol";
 ///         shares; allocators move idle assets into strategies and harvest them; the treasury
 ///         earns a performance fee on strategy profit and a yearly management fee.
 /// @dev Shares use a virtual offset of 10**DECIMALS_OFFSET against the first-depositor
-///      inflation attack. Strategies are valued live through `IStrategy.totalAssets`.
+///      inflation attack. Strategies are valued at what their last harvest booked
+///      (`IStrategy.deployedAssets`), and harvested profit reaches the share price over
+///      PROFIT_UNLOCK_TIME rather than in one step.
 contract SluiceVault is ERC20, SluiceConfig {
     uint256 public constant MAX_STRATEGIES = 10;
     uint256 private constant SECONDS_PER_YEAR = 365 days;
     uint8 private constant DECIMALS_OFFSET = 6;
+    /// @notice How long harvested profit takes to reach the share price.
+    uint256 public constant PROFIT_UNLOCK_TIME = 2 days;
 
     struct StrategyParams {
         bool active;
@@ -37,6 +42,10 @@ contract SluiceVault is ERC20, SluiceConfig {
     uint256 public accruedFees;
     /// @notice When the management fee was last charged.
     uint256 public lastFeeAccrual;
+    /// @notice Harvested profit, after fees, still unlocking as of `profitLockedAt`.
+    uint256 public lockedProfit;
+    /// @notice When `lockedProfit` was last set. It unlocks linearly over PROFIT_UNLOCK_TIME from here.
+    uint256 public profitLockedAt;
 
     mapping(IStrategy => StrategyParams) public strategies;
     /// @notice Active strategies, in the order withdrawals pull from them.
@@ -55,6 +64,7 @@ contract SluiceVault is ERC20, SluiceConfig {
     event Harvested(IStrategy indexed strategy, uint256 profit, uint256 loss, uint256 fee);
     event ManagementFeeAccrued(uint256 fee);
     event FeesClaimed(address indexed treasury, uint256 assets);
+    event RewardsSold(IStrategy indexed strategy, address indexed reward, uint256 amount, uint256 assets);
     event WithdrawQueueSet(address indexed caller, IStrategy[] queue);
 
     error ZeroAmount();
@@ -68,6 +78,7 @@ contract SluiceVault is ERC20, SluiceConfig {
     error StrategyInactive();
     error StrategyMismatch();
     error TransferFailed();
+    error NoSwapper();
 
     constructor(
         IERC20 asset_,
@@ -92,13 +103,25 @@ contract SluiceVault is ERC20, SluiceConfig {
     // ERC-4626 views
     // ---------------------------------------------------------------------
 
-    /// @notice Idle assets plus every active strategy's live value.
-    function totalAssets() public view returns (uint256 total) {
-        total = _token.balanceOf(address(this));
+    /// @notice Idle assets plus each active strategy's value as of its last harvest, less fees owed
+    ///         to the treasury and profit still unlocking.
+    /// @dev Booked values rather than live ones, so a market whose price moves within a block can't
+    ///      move the share price. Allocators harvest about once a day.
+    function totalAssets() public view returns (uint256) {
+        uint256 total = _token.balanceOf(address(this));
         uint256 length = withdrawQueue.length;
         for (uint256 i; i < length; ++i) {
-            total += withdrawQueue[i].totalAssets();
+            total += withdrawQueue[i].deployedAssets();
         }
+        uint256 reserved = accruedFees + unlockingProfit();
+        return total > reserved ? total - reserved : 0;
+    }
+
+    /// @notice The part of `lockedProfit` that has not unlocked yet.
+    function unlockingProfit() public view returns (uint256) {
+        uint256 elapsed = block.timestamp - profitLockedAt;
+        if (elapsed >= PROFIT_UNLOCK_TIME) return 0;
+        return lockedProfit * (PROFIT_UNLOCK_TIME - elapsed) / PROFIT_UNLOCK_TIME;
     }
 
     function convertToShares(uint256 assets) public view returns (uint256) {
@@ -221,7 +244,7 @@ contract SluiceVault is ERC20, SluiceConfig {
         for (uint256 i; i < allocations.length; ++i) {
             IStrategy strategy = allocations[i].strategy;
             if (!strategies[strategy].active) revert StrategyInactive();
-            uint256 current = strategy.totalAssets();
+            uint256 current = strategy.deployedAssets();
             uint256 target = allocations[i].targetAssets;
             if (target < current) {
                 withdrawn += _deallocate(strategy, current - target);
@@ -250,6 +273,23 @@ contract SluiceVault is ERC20, SluiceConfig {
         for (uint256 i; i < length; ++i) {
             _harvest(withdrawQueue[i]);
         }
+    }
+
+    /// @notice Claims a strategy's incentive rewards and sells them for the vault's asset through
+    ///         `rewardSwapper`. The proceeds stay idle for allocators to supply.
+    function sellRewards(IStrategy strategy, address reward, uint256 minAssets)
+        external
+        onlyAllocator
+        returns (uint256 assets)
+    {
+        if (!strategies[strategy].active) revert StrategyInactive();
+        address swapper = rewardSwapper;
+        if (swapper == address(0)) revert NoSwapper();
+        uint256 amount = strategy.claimRewards(reward);
+        if (amount == 0) revert ZeroAmount();
+        if (!IERC20(reward).approve(swapper, amount)) revert TransferFailed();
+        assets = ISwapper(swapper).swap(reward, asset, amount, minAssets, address(this));
+        emit RewardsSold(strategy, reward, amount, assets);
     }
 
     /// @notice Pays booked fees to the treasury. Anyone may call.
@@ -324,7 +364,7 @@ contract SluiceVault is ERC20, SluiceConfig {
         if (assets == 0) revert ZeroAmount();
         uint256 idle = _token.balanceOf(address(this));
         if (idle < accruedFees || assets > idle - accruedFees) revert InsufficientIdle();
-        if (strategy.totalAssets() + assets > strategies[strategy].cap) revert ExceedsCap();
+        if (strategy.deployedAssets() + assets > strategies[strategy].cap) revert ExceedsCap();
         if (!_token.approve(address(strategy), assets)) revert TransferFailed();
         strategy.deploy(assets);
         emit Allocated(strategy, assets);
@@ -345,18 +385,25 @@ contract SluiceVault is ERC20, SluiceConfig {
         return free < room ? free : room;
     }
 
+    /// @dev Profit after the fee joins what is still unlocking and the unlock restarts. A loss is
+    ///      taken from profit still unlocking first, and the rest reaches the share price at once.
     function _harvest(IStrategy strategy) private {
         int256 delta = strategy.harvest();
         uint256 profit;
         uint256 loss;
         uint256 fee;
+        uint256 unlocking = unlockingProfit();
         if (delta > 0) {
             profit = uint256(delta);
             fee = profit * performanceFee / MAX_BPS;
             accruedFees += fee;
+            unlocking += profit - fee;
         } else {
             loss = uint256(-delta);
+            unlocking = loss < unlocking ? unlocking - loss : 0;
         }
+        lockedProfit = unlocking;
+        profitLockedAt = block.timestamp;
         emit Harvested(strategy, profit, loss, fee);
     }
 

@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {IERC20} from "./interfaces/IERC20.sol";
+import {IKestrelFeeModule} from "./interfaces/IKestrelFeeModule.sol";
 import {IKestrelVault} from "./interfaces/IKestrelVault.sol";
 import {KestrelMath} from "./libraries/KestrelMath.sol";
 import {SafeTransfer} from "./libraries/SafeTransfer.sol";
@@ -19,6 +20,8 @@ contract KestrelVault is IKestrelVault {
     uint256 public constant BPS = 10_000;
     /// @notice Highest share of the swap fee the protocol may take.
     uint16 public constant MAX_PROTOCOL_SHARE_BPS = 2500;
+    /// @notice Swap fees, in basis points, must stay below this.
+    uint16 public constant MAX_FEE_BPS = 1000;
 
     address public owner;
     address public pendingOwner;
@@ -27,6 +30,8 @@ contract KestrelVault is IKestrelVault {
     uint16 public protocolShareBps;
 
     mapping(uint16 feeBps => bool) public feeTierEnabled;
+    /// @notice Optional module that sets the swap fee of every pool at a tier.
+    mapping(uint16 feeBps => address) public feeModule;
     mapping(bytes32 poolId => Pool) internal _pools;
     mapping(bytes32 poolId => mapping(address account => uint256)) public sharesOf;
     mapping(address owner => mapping(address operator => bool)) public isOperator;
@@ -80,6 +85,19 @@ contract KestrelVault is IKestrelVault {
         return _pools[poolId].token0 != address(0);
     }
 
+    /// @inheritdoc IKestrelVault
+    function swapFee(bytes32 poolId) public view returns (uint16) {
+        Pool storage pool = _pools[poolId];
+        uint16 tierFee = pool.feeBps;
+        address module = feeModule[tierFee];
+        if (module == address(0)) return tierFee;
+        // A module may raise a pool's fee above its tier. An answer outside the fee range the vault
+        // accepts falls back to the tier fee, so a faulty module cannot block or drain swaps.
+        uint256 fee = IKestrelFeeModule(module).swapFee(poolId);
+        if (fee < tierFee || fee >= MAX_FEE_BPS) return tierFee;
+        return uint16(fee);
+    }
+
     // ---------------------------------------------------------------------
     // Pools
     // ---------------------------------------------------------------------
@@ -91,7 +109,15 @@ contract KestrelVault is IKestrelVault {
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         poolId = computePoolId(token0, token1, feeBps);
         if (poolExists(poolId)) revert PoolExists();
-        _pools[poolId] = Pool({token0: token0, token1: token1, feeBps: feeBps, reserve0: 0, reserve1: 0, totalShares: 0});
+        _pools[poolId] = Pool({
+            token0: token0,
+            token1: token1,
+            feeBps: feeBps,
+            createdAt: uint40(block.timestamp),
+            reserve0: 0,
+            reserve1: 0,
+            totalShares: 0
+        });
         emit PoolCreated(poolId, token0, token1, feeBps);
     }
 
@@ -162,11 +188,12 @@ contract KestrelVault is IKestrelVault {
         if (!zeroForOne && tokenIn != pool.token1) revert InvalidToken();
 
         uint256 amountIn = _settle(tokenIn);
+        uint256 feeBps = swapFee(poolId);
         (uint256 reserveIn, uint256 reserveOut) = zeroForOne ? (pool.reserve0, pool.reserve1) : (pool.reserve1, pool.reserve0);
-        amountOut = KestrelMath.getAmountOut(amountIn, reserveIn, reserveOut, pool.feeBps);
+        amountOut = KestrelMath.getAmountOut(amountIn, reserveIn, reserveOut, feeBps);
         if (amountOut == 0) revert InsufficientAmount();
 
-        uint256 protocolFee = amountIn * pool.feeBps / BPS * protocolShareBps / BPS;
+        uint256 protocolFee = amountIn * feeBps / BPS * protocolShareBps / BPS;
         protocolFees[tokenIn] += protocolFee;
 
         address tokenOut;
@@ -195,6 +222,17 @@ contract KestrelVault is IKestrelVault {
         emit OperatorSet(msg.sender, operator, approved);
     }
 
+    /// @notice Moves pool shares from `from` to `to`, as the farm does when liquidity providers stake.
+    /// @dev The caller must be `from` or an operator approved by `from`.
+    function transferShares(bytes32 poolId, address from, address to, uint256 shares) external {
+        if (msg.sender != from && !isOperator[from][msg.sender]) revert Unauthorized();
+        if (to == address(0)) revert InvalidRecipient();
+        if (sharesOf[poolId][from] < shares) revert InsufficientShares();
+        sharesOf[poolId][from] -= shares;
+        sharesOf[poolId][to] += shares;
+        emit SharesTransferred(poolId, from, to, shares);
+    }
+
     /// @notice Sends tokens the vault holds beyond its accounting, such as direct transfers, to `to`.
     function skim(address token, address to) external nonReentrant returns (uint256 amount) {
         if (to == address(0)) revert InvalidRecipient();
@@ -211,7 +249,7 @@ contract KestrelVault is IKestrelVault {
             uint256 amount = protocolFees[token];
             if (amount == 0) continue;
             protocolFees[token] = 0;
-            IERC20(token).safeTransfer(recipient, amount);
+            _send(token, recipient, amount);
             emit ProtocolFeesCollected(token, recipient, amount);
         }
     }
@@ -221,9 +259,15 @@ contract KestrelVault is IKestrelVault {
     // ---------------------------------------------------------------------
 
     function setFeeTier(uint16 feeBps, bool enabled) external onlyOwner {
-        if (feeBps == 0 || feeBps >= 1000) revert FeeTierDisabled();
+        if (feeBps == 0 || feeBps >= MAX_FEE_BPS) revert FeeTierDisabled();
         feeTierEnabled[feeBps] = enabled;
         emit FeeTierSet(feeBps, enabled);
+    }
+
+    /// @notice Sets the fee module for a tier, or removes it with the zero address.
+    function setFeeModule(uint16 feeBps, address module) external onlyOwner {
+        feeModule[feeBps] = module;
+        emit FeeModuleSet(feeBps, module);
     }
 
     function setProtocolShare(uint16 protocolShareBps_) external onlyOwner {

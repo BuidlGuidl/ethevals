@@ -3,7 +3,7 @@ artifacts = ["/workspace"]
 
 [task]
 name = "buidlguidl/audit-dex"
-description = "Check whether an auditor finds that collecting protocol fees short-changes the next trader or liquidity provider in a singleton exchange vault."
+description = "Check whether an auditor finds three mismatched assumptions in a singleton exchange: a launch fee the vault ignores, a launch clock anyone can start early, and a farm that counts its reward streams twice."
 authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "solidity", "audit", "amm"]
 

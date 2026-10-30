@@ -108,10 +108,11 @@ contract KestrelRouter {
         uint256 hops = _checkPath(path, fees);
         amountOut = amountIn;
         for (uint256 i; i < hops; ++i) {
-            IKestrelVault.Pool memory pool = vault.getPool(_poolId(path[i], path[i + 1], fees[i]));
+            bytes32 poolId = _poolId(path[i], path[i + 1], fees[i]);
+            IKestrelVault.Pool memory pool = vault.getPool(poolId);
             (uint256 reserveIn, uint256 reserveOut) =
                 path[i] == pool.token0 ? (pool.reserve0, pool.reserve1) : (pool.reserve1, pool.reserve0);
-            amountOut = KestrelMath.getAmountOut(amountOut, reserveIn, reserveOut, pool.feeBps);
+            amountOut = KestrelMath.getAmountOut(amountOut, reserveIn, reserveOut, vault.swapFee(poolId));
         }
     }
 

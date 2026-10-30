@@ -26,6 +26,8 @@ abstract contract SluiceConfig {
     address public curator;
     address public guardian;
     address public treasury;
+    /// @notice The swap router incentive rewards are sold through.
+    address public rewardSwapper;
     mapping(address => bool) public isAllocator;
 
     /// @notice The treasury's share of strategy profit, in basis points.
@@ -53,6 +55,7 @@ abstract contract SluiceConfig {
     event CuratorSet(address indexed curator);
     event AllocatorSet(address indexed allocator, bool isAllocator);
     event TreasurySet(address indexed treasury);
+    event RewardSwapperSet(address indexed swapper);
     event DepositLimitSet(uint256 limit);
     event PausedSet(address indexed caller, bool paused);
     event PerformanceFeeSubmitted(uint256 fee, uint64 validAt);
@@ -141,6 +144,12 @@ abstract contract SluiceConfig {
         if (treasury_ == address(0)) revert ZeroTreasury();
         treasury = treasury_;
         emit TreasurySet(treasury_);
+    }
+
+    function setRewardSwapper(address swapper) external onlyOwner {
+        if (swapper == rewardSwapper) revert AlreadySet();
+        rewardSwapper = swapper;
+        emit RewardSwapperSet(swapper);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {

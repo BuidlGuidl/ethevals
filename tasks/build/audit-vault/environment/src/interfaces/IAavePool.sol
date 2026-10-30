@@ -18,3 +18,10 @@ interface IAToken {
     function UNDERLYING_ASSET_ADDRESS() external view returns (address);
     function POOL() external view returns (address);
 }
+
+/// @notice The subset of the Aave v3 RewardsController that Sluice strategies call.
+interface IRewardsController {
+    function claimRewards(address[] calldata assets, uint256 amount, address to, address reward)
+        external
+        returns (uint256);
+}

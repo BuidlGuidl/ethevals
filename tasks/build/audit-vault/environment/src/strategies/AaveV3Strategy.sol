@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {IERC20} from "../interfaces/IERC20.sol";
-import {IAavePool, IAToken} from "../interfaces/IAavePool.sol";
+import {IAavePool, IAToken, IRewardsController} from "../interfaces/IAavePool.sol";
 import {BaseStrategy} from "./BaseStrategy.sol";
 
 /// @title AaveV3Strategy
@@ -19,11 +19,16 @@ contract AaveV3Strategy is BaseStrategy {
     IAavePool public immutable pool;
     /// @notice The aToken the pool mints for `asset`.
     IAToken public immutable aToken;
+    /// @notice The Aave incentives controller that pays rewards on the aToken.
+    IRewardsController public immutable rewardsController;
 
     error ReserveUnavailable();
 
-    constructor(address vault_, IAToken aToken_) BaseStrategy(vault_, aToken_.UNDERLYING_ASSET_ADDRESS()) {
+    constructor(address vault_, IAToken aToken_, IRewardsController rewardsController_)
+        BaseStrategy(vault_, aToken_.UNDERLYING_ASSET_ADDRESS())
+    {
         aToken = aToken_;
+        rewardsController = rewardsController_;
         pool = IAavePool(aToken_.POOL());
         if (!IERC20(asset).approve(address(pool), type(uint256).max)) revert TransferFailed();
     }
@@ -33,14 +38,24 @@ contract AaveV3Strategy is BaseStrategy {
         return aToken.balanceOf(address(this));
     }
 
-    /// @notice Limited by the reserve's free cash as well as the strategy's position. Zero while the
-    ///         reserve is paused.
-    function maxUndeploy() public view override returns (uint256) {
+    /// @dev Limited by the reserve's free cash as well as the strategy's position. Zero while the
+    ///      reserve is paused.
+    function _withdrawable() internal view override returns (uint256) {
         uint256 config = pool.getConfiguration(asset).data;
         if (!_flag(config, ACTIVE_BIT) || _flag(config, PAUSED_BIT)) return 0;
         uint256 position = aToken.balanceOf(address(this));
         uint256 cash = IERC20(asset).balanceOf(address(aToken));
         return position < cash ? position : cash;
+    }
+
+    function _isPositionToken(address token) internal view override returns (bool) {
+        return token == address(aToken);
+    }
+
+    function _claimRewards(address reward) internal override {
+        address[] memory assets = new address[](1);
+        assets[0] = address(aToken);
+        rewardsController.claimRewards(assets, type(uint256).max, address(this), reward);
     }
 
     function _deploy(uint256 assets) internal override {
@@ -52,7 +67,7 @@ contract AaveV3Strategy is BaseStrategy {
     }
 
     function _undeploy(uint256 assets) internal override returns (uint256) {
-        uint256 available = maxUndeploy();
+        uint256 available = _withdrawable();
         if (assets > available) assets = available;
         if (assets == 0) return 0;
         return pool.withdraw(asset, assets, address(this));

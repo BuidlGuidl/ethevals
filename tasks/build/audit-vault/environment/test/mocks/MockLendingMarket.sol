@@ -74,6 +74,11 @@ contract MockLendingMarket is ERC20 {
         underlying.transfer(msg.sender, assets);
     }
 
+    /// @notice A borrower defaults and `assets` of lent principal is written off as bad debt.
+    function writeOff(uint256 assets) external {
+        lent -= assets;
+    }
+
     /// @notice Borrowers pay back `assets` of principal.
     function repay(uint256 assets) external {
         lent -= assets;

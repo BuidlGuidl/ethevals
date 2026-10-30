@@ -21,9 +21,13 @@ contract LendingMarketStrategy is BaseStrategy {
         return market.previewRedeem(market.balanceOf(address(this)));
     }
 
-    /// @notice Limited by the market's free liquidity as well as the strategy's position.
-    function maxUndeploy() public view override returns (uint256) {
+    /// @dev Limited by the market's free liquidity as well as the strategy's position.
+    function _withdrawable() internal view override returns (uint256) {
         return market.maxWithdraw(address(this));
+    }
+
+    function _isPositionToken(address token) internal view override returns (bool) {
+        return token == address(market);
     }
 
     function _deploy(uint256 assets) internal override {

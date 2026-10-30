@@ -6,6 +6,7 @@ interface IKestrelVault {
         address token0;
         address token1;
         uint16 feeBps;
+        uint40 createdAt;
         uint256 reserve0;
         uint256 reserve1;
         uint256 totalShares;
@@ -19,10 +20,12 @@ interface IKestrelVault {
     event Swap(
         bytes32 indexed poolId, address indexed tokenIn, uint256 amountIn, uint256 amountOut, uint256 protocolFee, address to
     );
+    event SharesTransferred(bytes32 indexed poolId, address indexed from, address indexed to, uint256 shares);
     event OperatorSet(address indexed owner, address indexed operator, bool approved);
     event ProtocolFeesCollected(address indexed token, address indexed recipient, uint256 amount);
     event Skimmed(address indexed token, address indexed to, uint256 amount);
     event FeeTierSet(uint16 feeBps, bool enabled);
+    event FeeModuleSet(uint16 feeBps, address module);
     event ProtocolShareSet(uint16 protocolShareBps);
     event FeeRecipientSet(address feeRecipient);
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
@@ -42,6 +45,8 @@ interface IKestrelVault {
     function computePoolId(address token0, address token1, uint16 feeBps) external pure returns (bytes32);
     function getPool(bytes32 poolId) external view returns (Pool memory);
     function poolExists(bytes32 poolId) external view returns (bool);
+    /// @notice Fee the pool charges on a swap right now, in basis points of the input.
+    function swapFee(bytes32 poolId) external view returns (uint16);
     function sharesOf(bytes32 poolId, address account) external view returns (uint256);
     function isOperator(address owner, address operator) external view returns (bool);
 
@@ -52,6 +57,7 @@ interface IKestrelVault {
         returns (uint256 amount0, uint256 amount1);
     function swap(bytes32 poolId, address tokenIn, address to) external returns (uint256 amountOut);
     function setOperator(address operator, bool approved) external;
+    function transferShares(bytes32 poolId, address from, address to, uint256 shares) external;
     function skim(address token, address to) external returns (uint256 amount);
     function collectProtocolFees(address[] calldata tokens) external;
 }

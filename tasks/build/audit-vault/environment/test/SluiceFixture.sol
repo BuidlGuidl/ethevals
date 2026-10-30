@@ -10,6 +10,8 @@ import {IAToken} from "../src/interfaces/IAavePool.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockLendingMarket} from "./mocks/MockLendingMarket.sol";
 import {MockAavePool} from "./mocks/MockAavePool.sol";
+import {MockRewardsController, MockSwapper} from "./mocks/MockRewards.sol";
+import {IRewardsController} from "../src/interfaces/IAavePool.sol";
 
 /// @notice Shared deployment: one lending-market strategy and one Aave strategy, both live.
 abstract contract SluiceFixture is Test {
@@ -24,6 +26,9 @@ abstract contract SluiceFixture is Test {
     MockERC20 internal usdc;
     MockLendingMarket internal marketA;
     MockAavePool internal aave;
+    MockRewardsController internal rewards;
+    MockSwapper internal swapper;
+    MockERC20 internal rewardToken;
     SluiceVault internal vault;
     LendingMarketStrategy internal strategyA;
     AaveV3Strategy internal strategyB;
@@ -32,14 +37,20 @@ abstract contract SluiceFixture is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         marketA = new MockLendingMarket(usdc);
         aave = new MockAavePool(usdc);
+        rewards = new MockRewardsController();
+        rewardToken = new MockERC20("Reward", "RWD", 18);
+        swapper = new MockSwapper(2e6); // 2 USDC per reward token
         vault = new SluiceVault(usdc, "Sluice USDC", "slUSDC", owner, treasury, 0, 1_500, 0);
         strategyA = new LendingMarketStrategy(address(vault), IERC4626(address(marketA)));
-        strategyB = new AaveV3Strategy(address(vault), IAToken(address(aave.aToken())));
+        strategyB = new AaveV3Strategy(
+            address(vault), IAToken(address(aave.aToken())), IRewardsController(address(rewards))
+        );
 
         vm.startPrank(owner);
         vault.setCurator(curator);
         vault.setIsAllocator(allocator, true);
         vault.submitGuardian(guardian);
+        vault.setRewardSwapper(address(swapper));
         vm.stopPrank();
 
         vm.startPrank(curator);

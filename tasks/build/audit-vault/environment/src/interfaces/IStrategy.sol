@@ -13,6 +13,9 @@ interface IStrategy {
     /// @notice Assets the strategy holds right now, valued in `asset`.
     function totalAssets() external view returns (uint256);
 
+    /// @notice Assets the vault has placed in the strategy, plus profit and less loss booked at harvests.
+    function deployedAssets() external view returns (uint256);
+
     /// @notice Assets the strategy can return to the vault in one call.
     function maxUndeploy() external view returns (uint256);
 
@@ -30,4 +33,8 @@ interface IStrategy {
     /// @notice Books what the strategy earned or lost since the last harvest.
     /// @return delta Profit when positive, loss when negative.
     function harvest() external returns (int256 delta);
+
+    /// @notice Claims incentive rewards paid in `reward` and sends them to the vault.
+    /// @return claimed The amount of `reward` sent to the vault.
+    function claimRewards(address reward) external returns (uint256 claimed);
 }

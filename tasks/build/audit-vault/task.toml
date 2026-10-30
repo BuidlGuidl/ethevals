@@ -3,7 +3,7 @@ artifacts = ["/workspace"]
 
 [task]
 name = "buidlguidl/audit-vault"
-description = "Check whether an auditor finds that withdrawals erase the performance fee and that unclaimed fees inflate the share price in a multi-strategy ERC-4626 vault."
+description = "Check whether an auditor finds that withdrawals after a market loss leave the loss to the holders who stay and that sold rewards skip the performance fee and the profit unlock in a multi-strategy ERC-4626 vault."
 authors = [{ name = "BuidlGuidl" }]
 keywords = ["ethereum", "solidity", "audit", "erc4626", "vault"]
 

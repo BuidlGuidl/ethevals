@@ -3,25 +3,39 @@ set -eu
 cat > /workspace/findings.md <<'MD'
 # Kestrel audit findings
 
-## H-01: Collecting protocol fees leaves them in `trackedBalance`, so the next trader or liquidity provider pays for them
+## H-01: Distributing fees during a live stream counts the stream's remainder twice, so the farm promises more than it holds
 
-**Where:** `KestrelVault.collectProtocolFees`, with `KestrelVault._settle`.
+**Where:** `KestrelFarm.distributeFees`, with `KestrelFarm._notify`.
 
-**Cause:** `_settle` credits a swap or deposit with `balanceOf(vault) - trackedBalance[token]`. `trackedBalance` counts pool reserves plus uncollected protocol fees, and every outflow goes through `_send`, which lowers it. `collectProtocolFees` sends the fees out with a direct `safeTransfer` and zeroes `protocolFees[token]`, but never lowers `trackedBalance[token]`. After a collection, the vault's balance sits below `trackedBalance` by the collected amount.
+**Cause:** `distributeFees` brings every stream of the token up to date and then treats `balanceOf(farm) - unclaimed[token]` as new fees. `unclaimed` only counts rewards stakers have already earned. The part of each live stream that has not streamed yet is still in the farm's balance, so it is counted as new fees. `_notify` then adds the remainder of the target pool's current stream (`rate * (periodFinish - now)`) on top, so that remainder is promised twice.
 
-**Impact:** The next `swap` or `addLiquidity` that delivers that token is credited with what it sent minus the collected fees. A trader gets the output for a smaller input, and a liquidity provider gets fewer shares; the shortfall stays in the vault unaccounted. With the default 0.5% slippage, a trade of more than about 200 times the collected amount goes through silently. Smaller swaps and deposits of that token revert on underflow until someone covers the gap, and `skim` reverts too. `collectProtocolFees` is permissionless, so anyone can trigger the loss right before a chosen user's transaction, and it repeats after every collection. This breaks the README's promises that a trader is credited for exactly what they delivered and that the protocol takes only its fee share.
+**Impact:** Every distribution while a stream is running, including the keeper's daily one, grows promised rewards beyond the farm's balance. Stakers who claim first are paid from other stakers' rewards and the last claims revert. A reward someone funded with `fund` for another pool in the same token is counted as fees and streamed to the fee pool's stakers, so that pool's stakers lose it. Anyone can call `distributeFees` to make it worse.
 
 **Severity:** High.
 
-**Fix:** Lower `trackedBalance[token]` by the collected amount, for example by sending the fees with `_send`.
+**Fix:** Track every token committed to a stream (funded or distributed and not yet claimed), and treat only the balance above that as new fees.
 
-## M-01: Router `addLiquidity` has no minimum on shares minted
+## M-01: The vault ignores the launch fee while it is 10% or more and charges the 1% tier fee
 
-**Where:** `KestrelRouter.addLiquidity`.
+**Where:** `KestrelVault.swapFee`, with `KestrelLaunchFee.swapFee`.
 
-**Cause:** The router checks the token amounts it pulls, not the shares the vault mints.
+**Cause:** The launch fee module starts a new launch-tier pool at `startFeeBps` (30% by default, up to 50%) and decays it to 1%. `KestrelVault.swapFee` treats any module answer `>= MAX_FEE_BPS` (10%) as invalid and falls back to the tier fee.
 
-**Impact:** A provider has no protection if the vault credits less than the router delivered.
+**Impact:** For the early part of every launch, about the first 41 minutes with the defaults, swaps pay 1% instead of the launch fee. Snipers in the first minutes, the users the feature targets, pay 1% instead of about 30%, and liquidity providers lose the launch fee.
 
 **Severity:** Medium.
+
+**Fix:** Give module fees their own upper bound that matches the module's, or clamp instead of falling back.
+
+## M-02: Anyone can create a launch pool early, so the launch fee has decayed before the token launches
+
+**Where:** `KestrelLaunchFee.swapFee`, with `KestrelVault.createPool` and `KestrelRouter.addLiquidity`.
+
+**Cause:** The launch fee decays from the pool's `createdAt`. `createPool` is permissionless for any pair at an enabled tier, and the router only creates a pool that doesn't exist yet.
+
+**Impact:** Anyone can create a token's launch-tier pool as soon as the token is deployed. When the team adds the first liquidity later, the decay period has already run, and the launch charges the 1% tier fee from the first block.
+
+**Severity:** Medium.
+
+**Fix:** Start the launch clock at the pool's first liquidity.
 MD

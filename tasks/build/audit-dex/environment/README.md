@@ -8,7 +8,10 @@ Kestrel is a constant-product exchange. Every pool lives in one contract, `Kestr
 - **Paying the vault.** The vault does not pull tokens. A caller delivers tokens to the vault and then calls `addLiquidity` or `swap` in the same transaction. The vault credits the caller with the tokens it received since its last accounting. The router does both steps for users.
 - **Multi-hop swaps.** The router sends each hop's output back into the vault, which credits it as the input of the next hop. Tokens never leave the vault between hops.
 - **Liquidity.** Liquidity providers get pool shares, held inside the vault per pool. The first deposit locks 1,000 shares forever. Deposits beyond the pool's ratio stay in the pool. To remove liquidity through the router, a provider first approves the router as an operator with `setOperator`.
-- **Fees.** The whole swap fee stays in the pool for liquidity providers, except a protocol share (20% of the fee at launch, at most 25%). The protocol share accrues per token in the vault. Anyone can call `collectProtocolFees` to send accrued fees to the fee recipient; we run a keeper that calls it daily.
+- **Fees.** The whole swap fee stays in the pool for liquidity providers, except a protocol share (20% of the fee at launch, at most 25%). The protocol share accrues per token in the vault. Anyone can call `collectProtocolFees` to send accrued fees to the fee recipient, which is the farm.
+- **Launch tier.** The 1.00% tier is for new tokens. Its fee module, `KestrelLaunchFee`, gives each new pool at this tier a launch fee that starts at 30% and falls in a straight line to 1% over the pool's first hour, so bots that buy in the first minutes pay most of their gain to the pool's liquidity providers. A token team launches by adding the first liquidity through the router, which creates the pool. The owner can change the starting fee (up to 50%) and the decay period. Other tiers have no module and charge their tier fee.
+- **Farm.** Liquidity providers can stake their pool shares in `KestrelFarm` after approving it as a vault operator. Each pool has up to four reward tokens, and every reward streams to the pool's stakers over seven days. Anyone can fund a reward the owner has added, for example a token team paying for liquidity in its own pool. Protocol fees go to staked liquidity providers: for each fee token the owner picks a pool, and `distributeFees` streams the fees the farm has received to that pool's stakers.
+- **Keeper.** We run a keeper that calls `collectProtocolFees` and then `distributeFees` for each fee token once a day. Anyone may call both.
 - **Skim.** Tokens sent to the vault outside a swap or deposit can be taken out by anyone with `skim`.
 
 ## What we promise
@@ -22,20 +25,23 @@ Kestrel is a constant-product exchange. Every pool lives in one contract, `Kestr
 
 | Role | Trust | Powers |
 | --- | --- | --- |
-| Owner (team multisig) | Trusted | Enable or disable fee tiers, set the protocol share up to 25% of the fee, set the fee recipient, transfer ownership |
-| Fee recipient (treasury) | Trusted | Receives protocol fees |
-| Keeper | Untrusted | Calls `collectProtocolFees`, which anyone may call |
-| Users, liquidity providers, pool creators | Untrusted | Everything else |
+| Owner (team multisig) | Trusted | Enable or disable fee tiers, attach fee modules, set the protocol share up to 25% of the fee, set the fee recipient, set the launch fee, add farm rewards and pick fee pools, transfer ownership |
+| Fee recipient (the farm) | Trusted | Receives protocol fees |
+| Keeper | Untrusted | Calls `collectProtocolFees` and `distributeFees`, which anyone may call |
+| Users, liquidity providers, stakers, reward funders, pool creators | Untrusted | Everything else |
 
 ## Scope
 
 | File | Lines |
 | --- | --- |
-| `src/KestrelVault.sol` | 270 |
-| `src/KestrelRouter.sol` | 174 |
+| `src/KestrelVault.sol` | 314 |
+| `src/KestrelRouter.sol` | 175 |
+| `src/KestrelFarm.sol` | 232 |
+| `src/KestrelLaunchFee.sol` | 61 |
 | `src/libraries/KestrelMath.sol` | 51 |
 | `src/libraries/SafeTransfer.sol` | 24 |
-| `src/interfaces/IKestrelVault.sol` | 57 |
+| `src/interfaces/IKestrelVault.sol` | 63 |
+| `src/interfaces/IKestrelFeeModule.sol` | 8 |
 | `src/interfaces/IERC20.sol` | 14 |
 
 Out of scope: `test/`.
@@ -49,6 +55,7 @@ These are known and accepted, and will not be rewarded:
 1. Tokens sent directly to the vault, outside a router call or a contract that delivers and calls in one transaction, can be taken by anyone through `skim`, or credited to the next caller's swap or deposit. Integrators must deliver and call in one transaction.
 2. Pool reserves move within a block and can be manipulated with a flash loan. Kestrel pools must not be used as price oracles.
 3. Swaps through the router are open to sandwich attacks when users set loose `amountOutMin` values. The frontend sets 0.5% by default.
+4. Funding a reward or distributing fees starts a new seven-day stream that includes what was left of the current one, so anyone can stretch a stream's remaining rewards over seven more days.
 
 ## Build and test
 
