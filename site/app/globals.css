@@ -191,8 +191,8 @@
   .eval-list section > h3 { @apply mb-2 border-l-2 px-3 py-2 text-[18px]; color: var(--pillar); border-color: var(--pillar); background: color-mix(in srgb, var(--pillar) 8%, transparent); }
   .eval-list-row { @apply flex min-h-11 w-full items-center gap-3 border-b border-border py-3 text-left; }
   .eval-list-row:hover { @apply bg-tint; }
-  .eval-list-row .heat-chip { @apply ml-auto; }
-  .eval-list-title { @apply mr-auto grid gap-1 text-left; }
+  .eval-list-result { @apply ml-auto flex items-center gap-3; }
+  .eval-list-title { @apply grid grow gap-1 text-left; }
   .eval-list-title, .checks li > div { min-width: 0; }
   .eval-list-title small { @apply text-[10px] text-muted; }
   .run-dots { @apply inline-flex flex-wrap gap-1; max-width: 110px; }
