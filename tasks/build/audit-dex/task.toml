@@ -1,0 +1,23 @@
+schema_version = "1.3"
+artifacts = ["/workspace"]
+
+[task]
+name = "buidlguidl/audit-dex"
+description = "Check whether an auditor finds that collecting protocol fees short-changes the next trader or liquidity provider in a singleton exchange vault."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "solidity", "audit", "amm"]
+
+[metadata]
+pillar = "build"
+area = "Audits"
+modes = ["internet"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[environment]
+cpus = 1
+memory_mb = 2048

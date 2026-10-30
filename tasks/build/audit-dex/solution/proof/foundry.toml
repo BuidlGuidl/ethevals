@@ -1,0 +1,8 @@
+[profile.default]
+src = "test"
+test = "test"
+libs = ["lib"]
+solc = "0.8.30"
+remappings = ["forge-std/=/opt/solidity/lib/forge-std/src/", "kestrel/=../../environment/"]
+allow_paths = ["../../environment"]
+ffi = false

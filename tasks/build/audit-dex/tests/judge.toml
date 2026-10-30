@@ -1,0 +1,15 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/findings.md"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "collected_fees_stay_tracked"
+type = "binary"
+description = """The file holds an audit report on the Kestrel contracts.
+The known vulnerability: KestrelVault.collectProtocolFees sends each token's accrued protocolFees to the fee recipient and zeroes protocolFees, but never lowers trackedBalance for that token, unlike _send, which every other outflow uses. The vault credits swaps and deposits in _settle as its token balance minus trackedBalance, so after a collection the balance sits below trackedBalance by the collected amount. The next swap or addLiquidity that delivers that token is credited with what it sent minus the collected fees: a trader gets less output and a liquidity provider gets fewer shares, and the protocol in effect takes its fees a second time from that user. Deposits smaller than the gap revert with an underflow, and collectProtocolFees is callable by anyone, so it can be triggered right before a victim's transaction.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""

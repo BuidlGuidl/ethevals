@@ -1,0 +1,23 @@
+schema_version = "1.3"
+artifacts = ["/workspace"]
+
+[task]
+name = "buidlguidl/audit-vault"
+description = "Check whether an auditor finds that withdrawals erase the performance fee and that unclaimed fees inflate the share price in a multi-strategy ERC-4626 vault."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "solidity", "audit", "erc4626", "vault"]
+
+[metadata]
+pillar = "build"
+area = "Audits"
+modes = ["internet"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[environment]
+cpus = 1
+memory_mb = 2048
