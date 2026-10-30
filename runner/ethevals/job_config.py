@@ -100,19 +100,26 @@ def load_job(path: Path | None = None) -> JobSettings:
     return config
 
 
+def credential_file(agent: AgentSettings, credential: FileCredential, key: str) -> tuple[str | None, Path]:
+    """Resolve a declared credential file and the host variable Harbor reads it through, if any."""
+    environment = {**os.environ, **resolve_env_vars(agent.env)}
+    filename, variable = credential.path, None
+    for variable, default in get_required_host_vars({"path": filename}):
+        filename = environment.get(variable) or default
+        if filename is None:
+            raise ValueError(f"{key}: missing {variable}")
+    # Match Harbor's default credential directory without changing HOME.
+    path = Path.home() / filename[2:] if filename.startswith("~/") else Path(filename)
+    return variable, path
+
+
 def check_credentials(agent: AgentSettings, key: str) -> None:
     environment = {**os.environ, **resolve_env_vars(agent.env)}
     for variable in agent.required_env:
         if not environment.get(variable, "").strip():
             raise ValueError(f"{key}: missing {variable}")
     for credential in agent.required_files:
-        filename = credential.path
-        for variable, default in get_required_host_vars({"path": filename}):
-            filename = environment.get(variable) or default
-            if filename is None:
-                raise ValueError(f"{key}: missing {variable}")
-        # Match Harbor's default credential directory without changing HOME.
-        path = Path.home() / filename[2:] if filename.startswith("~/") else Path(filename)
+        _, path = credential_file(agent, credential, key)
         if not path.is_file():
             raise ValueError(f"{key}: missing credential file {path}")
         try:

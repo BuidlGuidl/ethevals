@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import math
 import os
 import subprocess
 from pathlib import Path
@@ -10,6 +11,13 @@ def positive(value: str) -> int:
     number = int(value)
     if number < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
+    return number
+
+
+def positive_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number) or number <= 0:
+        raise argparse.ArgumentTypeError("must be a positive number")
     return number
 
 
@@ -36,6 +44,8 @@ def parse_args(argv=None):
     parsers["upload-hub"].add_argument("--output", type=Path, required=True, help="Checked output directory to publish publicly to Harbor Hub.")
     parsers["upload-hub"].add_argument("--config", type=Path, help="Job settings with the Hub org and key variable.")
     parsers["run"].add_argument("--upload-hub", action="store_true", help="Publish checked job folders publicly to Harbor Hub.")
+    parsers["run"].add_argument("--agent-setup-timeout-multiplier", type=positive_float,
+                                help="Scale Harbor's agent install limit for a slow network. CI leaves it unset.")
     for name in ("run", "plan"):
         command = parsers[name]
         command.description = "Job n_attempts sets scored repeats; retry.max_retries caps reruns after eligible errors."
@@ -97,7 +107,8 @@ def main(argv=None) -> int:
             hub_key = os.environ.pop(config.hub.key_env, None) if config.hub else None
             try:
                 success = asyncio.run(jobs.run(report, config, args.output, previous, skills_pack=skills_pack,
-                                               publication_secrets=secrets))
+                                               publication_secrets=secrets,
+                                               agent_setup_timeout_multiplier=args.agent_setup_timeout_multiplier))
             finally:
                 if hub_key is not None:
                     os.environ[config.hub.key_env] = hub_key
