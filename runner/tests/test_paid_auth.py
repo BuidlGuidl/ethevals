@@ -1,6 +1,7 @@
 """Exercise pinned Harbor auth against a stand-in container, without a CLI call."""
 import asyncio
 import json
+import stat
 from pathlib import Path
 
 import pytest
@@ -49,7 +50,8 @@ def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, 
             captured.append((agent_config.env, agent._resolve_auth_env(), agent.options.max_budget_usd,
                              agent.build_cli_flags()))
         else:
-            captured.append((agent_config.env, agent._resolve_auth_json_path()))
+            uploaded = agent._resolve_auth_json_path()
+            captured.append((agent_config.env, uploaded != auth, uploaded.read_text(), stat.S_IMODE(uploaded.stat().st_mode)))
         raise Captured
 
     monkeypatch.setattr(Job, "create", capture)
@@ -77,7 +79,8 @@ def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, 
             assert budget is None
             assert "--max-budget-usd" not in flags
     else:
-        assert captured == [({"CODEX_FORCE_AUTH_JSON": "YES", "CODEX_AUTH_JSON": ""}, auth)]
+        # run uploads a readable copy, since Harbor keeps the file's mode and the task runs as `agent`.
+        assert captured == [({"CODEX_FORCE_AUTH_JSON": "YES", "CODEX_AUTH_JSON": ""}, True, auth.read_text(), 0o644)]
 
 
 @pytest.mark.parametrize("key,empty", [
