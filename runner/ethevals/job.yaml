@@ -16,6 +16,9 @@ models:
   opus-5.5:
     name: anthropic/claude-opus-5-5
     effort: high
+  fable-5.2:
+    name: anthropic/claude-fable-5-2
+    effort: high
   gpt-6.1-sol:
     name: openai/gpt-6.1-sol
     effort: high
@@ -42,6 +45,15 @@ agents:
     name: ethevals.vanilla:VanillaAgent
     version: 0.1.0
     model: opus-5.5
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 2.0
+    env:
+      ANTHROPIC_API_KEY: '${ANTHROPIC_API_KEY:-}'
+  vanilla-fable-5.2:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: fable-5.2
     modes: [vanilla]
     paid_by: api_key
     cost_limit_usd: 2.0
@@ -114,6 +126,17 @@ agents:
     name: claude-code
     version: 2.1.284
     model: opus-5.5
+    modes: [internet, skills]
+    paid_by: plan
+    cost_limit_usd: 20.0
+    env:
+      # Harbor 0.24.0 redacts AUTH values; uppercase preserves JSON numbers and booleans.
+      CLAUDE_FORCE_OAUTH: "YES"
+    required_env: [CLAUDE_CODE_OAUTH_TOKEN]
+  claude-code-fable-5.2:
+    name: claude-code
+    version: 2.1.290
+    model: fable-5.2
     modes: [internet, skills]
     paid_by: plan
     cost_limit_usd: 20.0
