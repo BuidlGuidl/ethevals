@@ -135,7 +135,7 @@ agents:
     required_env: [CLAUDE_CODE_OAUTH_TOKEN]
   claude-code-fable-5.2:
     name: claude-code
-    version: 2.1.284
+    version: 2.1.290
     model: fable-5.2
     modes: [internet, skills]
     paid_by: plan
