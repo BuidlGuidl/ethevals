@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import tarfile
+from urllib.error import HTTPError
 
 from harbor.models.task.task import Task
 from harbor.models.task.config import VerifierEnvironmentMode
@@ -12,7 +14,7 @@ from harbor.models.task.verifier_mode import resolve_task_verifier_mode, resolve
 
 from .checks import read_details, read_reward
 from .harbor_tasks import task_judges
-from .saved_work import fetch_work
+from .saved_work import SavedWorkGone, fetch_work, trajectory_url
 from .secret_check import check_output, remember_secrets
 from .task_hashes import digest
 from .trial_rows import fold_rows, write_rows
@@ -40,7 +42,7 @@ def regrade_kind(path: Path, old: dict, current: dict) -> tuple[str | None, bool
     return None, False
 
 
-def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], list[dict]]:
+def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], list[dict], list[dict]]:
     def prepare(item):
         try:
             work = fetch_work(item["source_row"], item["kind"], cache)
@@ -51,13 +53,15 @@ def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], l
                     if not any((settings.get("files") or []) == (judge.judge.files or [])
                                and settings.get("atif_trajectory") == judge.judge.atif_trajectory
                                for settings in saved):
-                        raise ValueError("The judge's input selection changed")
-            return {**item, "saved_work": work}, None
-        except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
-            return None, {**item, "rerun_reason": f"Saved work cannot be regraded: {error}"}
+                        return None, {**item, "rerun_reason": "The judge's input selection changed."}, None
+            return {**item, "saved_work": work}, None, None
+        except (OSError, ValueError, KeyError, tarfile.TarError, subprocess.SubprocessError) as error:
+            if isinstance(error, SavedWorkGone) or isinstance(error, HTTPError) and error.code in {404, 410}:
+                return None, {**item, "rerun_reason": f"Saved work is gone: {error}"}, None
+            return None, None, {**item, "defer_reason": f"Saved work fetch deferred: {error}"}
     with ThreadPoolExecutor(max_workers=8) as pool:
         prepared = list(pool.map(prepare, candidates))
-    return ([item for item, _ in prepared if item], [item for _, item in prepared if item])
+    return tuple([entry[index] for entry in prepared if entry[index]] for index in range(3))
 
 
 def run_regrades(items: list[dict], config, output: Path, previous: list[dict], secrets: dict) -> list[dict]:
@@ -145,6 +149,7 @@ def recover_regrades(output: Path) -> list[dict]:
                    "status": "error" if error else "passed" if rewards["reward"] == 1 else "failed", "error_kind": None, "error_reason": None,
                    "verifier_files": str((folder / "verifier").resolve()), "verifier_url": None,
                    "trajectory_file": str((folder / "agent/trajectory.json").resolve()),
+                   "trajectory_download_url": trajectory_url(old),
                    "regraded_at": checked_at,
                    "judge": item["judge"], "judge_paid_by": item["judge_paid_by"]}
             if error:

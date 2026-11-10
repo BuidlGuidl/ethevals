@@ -40,7 +40,7 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
         asset_dir = root / "assets"
         asset_dir.mkdir(parents=True, exist_ok=True)
         links = {}
-        if row.get("trajectory_file") and not row.get("regraded_at"):
+        if row.get("trajectory_file") and (not row.get("regraded_at") or not row.get("trajectory_download_url")):
             source = Path(row["trajectory_file"])
             if not source.resolve().is_relative_to(checked_job.resolve()):
                 raise ValueError("The trajectory must stay inside its checked job")

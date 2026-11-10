@@ -88,7 +88,9 @@ A criteria change, judge model or effort change, or changed judge input asks the
 Judge-only regrades reuse saved inputs and keep the other checks.
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
 Checks that need a live browser or chain plan reruns.
-Unavailable saved work also plans a rerun, with the reason in the plan.
+Saved work with no address, an HTTP 404 or 410, or expired CI artifacts plans a rerun.
+The plan lists each rerun and its reason.
+Other fetch errors defer the regrade until the next CI run and reserve nothing.
 
 To inspect a check fix locally, run:
 
@@ -136,7 +138,8 @@ CI schedules at most 256 jobs, with at most 100 per plan group to fit GitHub's p
 Regrade jobs group rows by task and receive no agent credentials.
 Only a regrade that needs a judge receives the judge key.
 The plan also limits each release to 1,000 assets and defers work beyond that limit.
-Later runs pick up deferred trials.
+The plan lists regrade batches deferred by job or asset limits.
+Later runs pick up deferred trials and regrades.
 Plan groups use the configured agent name, so models and modes using the same plan share five lanes and run five trials at once.
 Key-paid trials share 10 lanes. GitHub Free runs 20 jobs at once, so 10 runners stay free for the plan lanes and plan trials never wait behind key-paid ones.
 One job runs all of a model's vanilla trials, since each is one API call and shorter than the job's setup.

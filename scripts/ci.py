@@ -72,6 +72,12 @@ def plan_trials(args, run_args):
         status = ethevals([*argv, "--rows", str(rows)])
     print(captured.getvalue(), end="")
     report = json.loads(captured.getvalue())
+    for row in report["missing"]:
+        if row.get("rerun_reason"):
+            print(f"Rerun {row['task_id']}, {row['model']}, {row['mode']}, trial {row['trial']}: {row['rerun_reason']}", file=sys.stderr)
+    for row in report.get("deferred", []):
+        if row.get("defer_reason"):
+            print(f"Deferred regrade {row['task_id']}, {row['model']}, trial {row['trial']}: {row['defer_reason']}", file=sys.stderr)
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     # A zero CI budget disables even plan-paid trials whose API reserve is zero.
     scheduled, matrix, plan_counts, key_count, vanilla_jobs = [], [], {}, 0, {}
@@ -83,6 +89,8 @@ def plan_trials(args, run_args):
         for (task_id, kind, judge_required), batch in batches.items():
             assets = len(batch) * (2 if kind == "contract" else 1)
             if len(regrades) == 256 or asset_count + assets > 1000:
+                limit = "jobs" if len(regrades) == 256 else "assets"
+                print(f"Deferred regrade batch {task_id}: {len(batch)} rows; {limit} limit.", file=sys.stderr)
                 continue
             items = []
             for row in batch:

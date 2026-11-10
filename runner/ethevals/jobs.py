@@ -166,7 +166,9 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
     if trial is not None and combinations != 1:
         raise ValueError("--trial requires exactly one task, agent, and mode")
     deferred_ids = {trial_identity(row) for row in deferred}
-    regrades, unavailable = prepare_regrades(candidates, saved_work or Path("results/saved-work"))
+    regrades, unavailable, pending = prepare_regrades(candidates, saved_work or Path("results/saved-work"))
+    deferred.extend(pending)
+    deferred_ids.update(trial_identity(item) for item in pending)
     for item in unavailable:
         path = Path(item["task_path"])
         absent = [name for name in task_host_variables(path) if not os.environ.get(name)]

@@ -25,6 +25,161 @@ def saved_trial(tmp_path):
     return task, config, row
 
 
+def saved_regrade(tmp_path):
+    task, config, row = saved_trial(tmp_path)
+    (task / "tests/test.sh").write_text("Changed checks.\n")
+    report = plan([task], config, [row], n_attempts=1, saved_work=tmp_path / "cache")
+    item, = report["regrades"]
+    output = tmp_path / "output"
+    job = output / "jobs/regrade"
+    folder = job / "0"
+    shutil.copytree(tmp_path / "saved", folder)
+    (job / "board.json").write_text(json.dumps(item))
+    (job / "regrade.json").write_text(json.dumps([item]))
+    (folder / "regrade-finished.json").write_text(json.dumps("2026-11-10T12:00:00Z"))
+    return task, config, row, report, output, folder
+
+@pytest.mark.parametrize("published_source", [True, False])
+def test_published_regrade_can_fetch_the_original_reply_for_a_second_checks_change(tmp_path, monkeypatch, published_source):
+    import io
+    from ethevals import saved_work
+    from ethevals.publish import publish_logs
+    from ethevals.secret_check import check_output
+    from ethevals.trial_rows import recover_rows
+
+    task, config, _, _, output, folder = saved_regrade(tmp_path)
+    metadata = output / "jobs/regrade/regrade.json"
+    items = json.loads(metadata.read_text())
+    original_url = "https://github.com/owner/repo/releases/download/results-1/trajectory-old.json"
+    items[0]["source_row"].update(trajectory_url="https://hub.harborframework.com/jobs/job/trials/trial",
+                                  verifier_url=original_url.replace("/trajectory-", "/verifier-").replace(".json", ".tar.gz"))
+    if not published_source:
+        items[0]["source_row"].update(trajectory_url="/trajectories/local.json", verifier_url=None)
+    metadata.write_text(json.dumps(items))
+    check_output(output, {})
+    row, = recover_rows(output)
+    release = publish_logs(tmp_path / "release", "owner/repo", "2", "a" * 40, rows=[row])
+    published = release["rows"][0]
+    published.update(trajectory_file=None, verifier_files=None)
+    downloads = []
+    assets = {asset["url"]: Path(asset["source"]).read_bytes() for asset in release["assets"] if asset["name"].startswith("trajectory-")}
+    if published_source:
+        assets[original_url] = (folder / "agent/trajectory.json").read_bytes()
+
+    def download(url, **kwargs):
+        downloads.append(url)
+        if url not in assets:
+            raise OSError("This asset was never published.")
+        return io.BytesIO(assets[url])
+
+    monkeypatch.setattr(saved_work, "urlopen", download)
+    (task / "tests/test.sh").write_text("Second checks change.\n")
+    report = plan([task], config, [published], n_attempts=1, saved_work=tmp_path / "fresh-cache")
+    regrade, = report["regrades"]
+    assert (report["missing_trials"], downloads, Path(regrade["saved_work"]["trajectory"]).read_bytes()) == (
+        0, [next(iter(assets))], (folder / "agent/trajectory.json").read_bytes())
+
+@pytest.mark.parametrize("failure,gone", [(404, True), (410, True), (403, False), (429, False),
+                                         ("timeout", False), ("network", False), ("corrupt", False), ("archive", False)])
+def test_only_confirmed_missing_saved_work_plans_a_paid_rerun(tmp_path, monkeypatch, failure, gone):
+    import io
+    from urllib.error import HTTPError
+    from ethevals import saved_work
+
+    task, config, row = saved_trial(tmp_path)
+    config.agents["local"].paid_by = "api_key"
+    row.update(trajectory_file=None, trajectory_url="https://example.org/reply.json")
+    reply = Path(tmp_path / "saved/agent/trajectory.json").read_bytes()
+    if failure == "archive":
+        row.update(judge={"model": "saved-judge"}, verifier_files=None, verifier_url="https://example.org/verifier.tar.gz")
+    (task / "tests/test.sh").write_text("Changed checks.\n")
+
+    def download(url, **kwargs):
+        if failure == "archive":
+            return io.BytesIO(b"broken archive" if url.endswith(".tar.gz") else reply)
+        if isinstance(failure, int):
+            raise HTTPError(url, failure, "Download failed.", {}, None)
+        if failure == "corrupt":
+            return io.BytesIO(b"broken cache")
+        raise TimeoutError("Timed out.") if failure == "timeout" else OSError("Network failed.")
+
+    monkeypatch.setattr(saved_work, "urlopen", download)
+    report = plan([task], config, [row], n_attempts=1, saved_work=tmp_path / "cache")
+    if gone:
+        item, = report["missing"]
+        assert (report["regrade_trials"], item["retry"], item["worst_case_usd"]) == (0, 0, 6)
+        assert str(failure) in item["rerun_reason"]
+    else:
+        item, = report["deferred"]
+        assert (report["missing_trials"], report["regrade_trials"], report["worst_case_usd"]) == (0, 0, 0)
+        assert item["defer_reason"].startswith("Saved work fetch deferred:")
+
+def test_contract_fetch_searches_indices_from_every_plan_attempt(tmp_path):
+    from ethevals.saved_work import ci_trial
+    row = {"task_id": "build/contract", "task_hash": "digest", "agent": "nop", "model": "local/model",
+           "effort": None, "mode": "internet", "trial": 1, "retry": 0,
+           "verifier_url": "https://github.com/owner/repo/releases/download/results-42/verifier-abc.tar.gz"}
+    root = tmp_path / "ci-42"
+    for attempt, batches in [(1, [{"missing": []}, {"missing": [row]}]), (2, [{"missing": [row]}])]:
+        plan_dir = root / f"plan/trial-plan-42-{attempt}"
+        plan_dir.mkdir(parents=True)
+        (plan_dir / "trials.json").write_text(json.dumps(batches))
+    (root / "1").mkdir()
+    job = root / "0/trial-run-42-2-0/jobs/job"
+    (job / "trial/artifacts").mkdir(parents=True)
+    (job / "board.json").write_text(json.dumps(row))
+    (job / "trial/result.json").write_text(json.dumps({"id": "saved", "finished_at": "2026-11-10T10:00:00Z"}))
+    (job / "trial/artifacts/manifest.json").write_text("[]")
+    assert ci_trial(row, tmp_path) == job / "trial"
+
+def test_expired_ci_artifacts_confirm_that_contract_work_is_gone(tmp_path, monkeypatch):
+    import subprocess
+    from ethevals import saved_work
+
+    task, config, row = saved_trial(tmp_path)
+    (task / "tests/test.sh").write_text("Changed checks.\n")
+    report = plan([task], config, [row], n_attempts=1, saved_work=tmp_path / "cache")
+    item, = report["regrades"]
+    item.update(kind="contract", source_row={**row, "verifier_files": None,
+                 "verifier_url": "https://github.com/owner/repo/releases/download/results-42/verifier-old.tar.gz"})
+    calls = []
+
+    def external(command, **kwargs):
+        calls.append(command)
+        raise subprocess.CalledProcessError(1, command, stderr=b"Download failed.")
+
+    monkeypatch.setattr(saved_work.subprocess, "run", external)
+    monkeypatch.setattr(saved_work.subprocess, "check_output", lambda *args, **kwargs: "trial-plan-42-1\ttrue\n")
+    ready, gone, deferred = __import__("ethevals.regrade", fromlist=["prepare_regrades"]).prepare_regrades([item], tmp_path / "expired")
+    assert (len(ready), len(gone), len(deferred), gone[0]["rerun_reason"]) == (
+        0, 1, 0, "Saved work is gone: CI artifacts matching trial-plan-42-* expired")
+    assert calls[0][:4] == ["gh", "run", "download", "42"]
+
+@pytest.mark.parametrize("limit,count,batch_size,expected", [("jobs", 257, 1, 256), ("assets", 2, 501, 1)])
+def test_ci_lists_regrade_batches_deferred_by_limits(tmp_path, monkeypatch, capsys, limit, count, batch_size, expected):
+    import argparse
+    from test_ci import ci
+    task, config, old = saved_trial(tmp_path)
+    config_file = tmp_path / "config.json"
+    config_file.write_text(config.model_dump_json())
+    items = [{**old, "task_id": f"concepts/task-{number}", "task_path": str(task), "kind": "concepts",
+              "judge_required": False, "saved_work": {"trajectory": old["trajectory_file"]}, "worst_case_usd": 0}
+             for number in range(count) for _ in range(batch_size)]
+    report = {"missing": [], "missing_trials": 0, "regrades": items, "regrade_trials": len(items),
+              "within_budget": True, "worst_case_usd": 0}
+
+    def planner(argv):
+        print(json.dumps(report))
+        return 0
+
+    monkeypatch.setattr(ci, "ethevals", planner)
+    output = tmp_path / "ci-plan"
+    assert ci.plan_trials(argparse.Namespace(output=output, restore_results=False, github_output=None),
+                          ["--config", str(config_file), "--tasks", str(task), "--budget", "1"]) == 0
+    scheduled = json.loads((output / "regrades.json").read_text())
+    assert (len(scheduled), scheduled[0]["regrades"][0]["task_id"]) == (expected, "concepts/task-0")
+    assert f"Deferred regrade batch concepts/task-{count - 1}: {batch_size} rows; {limit} limit." in capsys.readouterr().err
+
 def test_changed_concepts_checks_plan_regrades_and_missing_work_plans_a_rerun(tmp_path):
     task, config, row = saved_trial(tmp_path)
     (task / "tests/test.sh").write_text("Changed checks.\n")
