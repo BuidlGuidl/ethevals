@@ -11,7 +11,7 @@ You write the instruction, what the agent starts with, the checks, and a solutio
 
 Every task belongs to one of three pillars: Concepts, Build, and Act.
 
-- `concepts` holds quizzes.
+- `concepts` holds Concepts tasks.
 - `build` holds builds.
 - `act` holds tasks where the agent acts on a chain.
 
@@ -107,7 +107,7 @@ If the agent needs something setup made, like a wallet or a contract address, po
 
 **Dockerfile.** Start from one of our shared images, pinned by tag:
 
-- `ghcr.io/buidlguidl/ethevals-quiz` for a quiz.
+- `ghcr.io/buidlguidl/ethevals-quiz` for a Concepts task.
 - `ghcr.io/buidlguidl/ethevals-chain` for everything else. It has Foundry, Solidity 0.8.30, and forge-std.
 
 Both have RewardKit and the helpers the tests use. Copy the pin from one of the recipes. Lint fails if a pin doesn't match the image's build inputs.
@@ -178,7 +178,7 @@ You pick the checks that fit your task, and you can use more than one kind:
 | `tests/*.t.sol`                                     | the chain, the agent's code, or both, with Forge |
 | a RewardKit judge file, like `tests/judge.toml`     | the trajectory, with criteria a judge answers    |
 
-**Target.** For a quiz, you write a rule that accepts the right reply, and the check runs it on the agent's final reply.
+**Target.** For a Concepts task, you write a rule that accepts the right reply, and the check runs it on the agent's final reply.
 A rule fits a fixed-form answer: yes or no, a number, an address, an exact string, or a name.
 When the model explains the answer in its own words, a rule fails right replies, so a judge grades the final reply instead ([ADR 0016](adr/0016-quizzes-with-explained-answers-use-a-judge.md)). [`wallet-atomic-ready`](../tasks/concepts/wallet-atomic-ready) is the example, with its hand cases in `tests/hand-cases.json`.
 
@@ -199,7 +199,7 @@ rk.final_answer(
 )
 ```
 
-1. The quiz image keeps `target_checks.py` in `/opt`. Importing it adds `rk.final_answer`.
+1. The Concepts task image keeps `target_checks.py` in `/opt`. Importing it adds `rk.final_answer`.
 2. The rule gets the final reply and returns true or false. This one trims spaces and punctuation, then wants `8004` at the end, so `8004`, `ERC-8004`, and `It's ERC-8004.` all pass.
 3. The check's name.
 
@@ -279,7 +279,7 @@ description = "Before reporting success, did the agent confirm on-chain that the
 Lint checks every judge file against the board's rules:
 
 - Every criterion is yes-or-no, with its own name.
-- The judge reads `/logs/agent/trajectory.json`, or only plain-text files under `/logs/verifier/` without a trajectory, such as a quiz's final reply, `/logs/verifier/final-reply.txt`.
+- The judge reads `/logs/agent/trajectory.json`, or only plain-text files under `/logs/verifier/` without a trajectory, such as a Concepts task's final reply, `/logs/verifier/final-reply.txt`.
 - Its guard is `flag` or `penalize`.
 - Every criterion counts toward `all-pass`.
 
@@ -303,7 +303,7 @@ name = "reward"  # (2)
 aggregation = "all-pass"
 ```
 
-1. The checks from `check_records.py`. A quiz names its own file instead, like `[scoring.answer]` for `answer.py`.
+1. The checks from `check_records.py`. A Concepts task names its own file instead, like `[scoring.answer]` for `answer.py`.
 2. The trial's reward. A trial passes when it's 1.
 
 RewardKit writes `reward.json` and `reward-details.json` to `/logs/verifier/`. The board reads each check and its reason from `reward-details.json`.
@@ -314,7 +314,7 @@ RewardKit writes `reward.json` and `reward-details.json` to `/logs/verifier/`. T
 It runs in the agent's container, so it uses only what the agent gets: the instruction, the starting files, and `chain_context.json`.
 Put any files it needs next to it. Harbor copies `solution/` to `/solution`.
 
-A quiz or a task with criteria also needs a trajectory, which the oracle agent doesn't write.
+A Concepts task or a task with criteria also needs a trajectory, which the oracle agent doesn't write.
 So its solution writes a stand-in to `/logs/agent/trajectory.json`, in Harbor's ATIF format.
 
 We publish every task's files, solutions included, in our [Hugging Face dataset](https://huggingface.co/datasets/buidlguidl/ethevals-test).
@@ -355,7 +355,7 @@ In the `vanilla` mode, our one-call agent sends the instruction to the bare mode
 
 Start from the recipe closest to your task. Each one is a real task, and the free check keeps it working.
 
-### Simple quiz
+### Simple Concepts task
 
 This recipe checks the reply against a target.
 It's [`tasks/concepts/agent-registries`](../tasks/concepts/agent-registries).
@@ -399,7 +399,7 @@ memory_mb = 1024
 
 1. Copies the agent's trajectory to the verifier, which reads the final reply from it.
 2. The website shows it. The agent never sees it.
-3. A quiz needs no tools, so it can run in `vanilla`.
+3. A Concepts task needs no tools, so it can run in `vanilla`.
 4. There's no chain to read, so the verifier checks the reply in a fresh container.
 
 `instruction.md` asks the way a person would:
@@ -415,7 +415,7 @@ Which ERC defines onchain identity, reputation and validation registries for AI 
 FROM ghcr.io/buidlguidl/ethevals-quiz:inputs-477f6b3f35664858
 ```
 
-The quiz image has RewardKit and the target helper. A quiz needs nothing else.
+The Concepts task image has RewardKit and the target helper. A Concepts task needs nothing else.
 
 </details>
 
@@ -430,7 +430,7 @@ set -eu
 rewardkit /tests
 ```
 
-A quiz has no test tool, so `test.sh` only runs RewardKit.
+A Concepts task has no test tool, so `test.sh` only runs RewardKit.
 
 ```toml
 [scoring.answer]  # (1)

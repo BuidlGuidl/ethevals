@@ -5,7 +5,7 @@ import { PipelineDiagram, RunDiagram } from "../../components/diagrams";
 
 export const metadata = pageMetadata("How it works · ETH Evals", "/how-it-works/");
 const scope = {
-  concepts: "Quizzes on Ethereum concepts. A bare model or an agent answers, and the verifier checks the reply.",
+  concepts: "Concepts tasks ask questions about Ethereum. A bare model or an agent answers, and the verifier checks the reply.",
   build: "The agent writes contracts, pages, or apps, and the tests run what it wrote.",
   act: "The agent acts on a chain. It sends transactions, or writes a script that sends them, and the tests check what changed.",
 };
@@ -25,7 +25,7 @@ export default function Page() {
   return <main id="main" className="page how-page">
     <header className="how-hero"><h1>Automated, open tasks for AI on Ethereum</h1><p className="lead">Experts add tasks by pull request. After review, an automated pipeline runs them on every agent and model, checks each trial, and publishes the results with their full trajectories.</p></header>
     <section id="hw-pipe" className="how-section"><div className="how-head"><p className="eyebrow">The pipeline</p><h2>One pull request starts everything</h2>
-      <p>A new model is one line of config, so it can be tested the day it launches. A new or changed task runs on every agent and model as soon as it merges.</p></div>
+      <p>A new model is one line of config, so it can be tested the day it launches. New tasks run after merge. Instruction or environment changes rerun trials; check changes regrade saved work when possible.</p></div>
       <figure className="diagram-figure"><PipelineDiagram /></figure>
     </section>
     <section id="hw-pillars" className="how-section"><div className="how-head"><p className="eyebrow">What we measure</p><h2>Three pillars</h2>
@@ -58,7 +58,7 @@ export default function Page() {
         <li><b>Tests arrive after the agent stops.</b> Harbor starts a separate verifier, or checks a live sidecar in the agent&apos;s container.</li>
         <li><b>No shortcuts on the chain.</b> Chain controls, like setting a balance by hand, are blocked by the RPC filter.</li>
         <li><b>Judging starts after the agent stops.</b> The verifier and the LLM judge only look once the agent is done.</li>
-        <li><b>Results stay tied to what made them.</b> Change the task, the model or the agent, and it runs again.</li>
+        <li><b>Results stay tied to what made them.</b> Instruction or environment changes rerun trials. Check changes regrade saved work when possible.</li>
       </ul></div>
     </section>
     <section id="hw-add" className="how-add"><p>Have an Ethereum task AI should handle? Add it as a task.</p><a className="button" href="https://github.com/BuidlGuidl/ethevals/blob/main/docs/add-a-task.md">Read the guide →</a></section>

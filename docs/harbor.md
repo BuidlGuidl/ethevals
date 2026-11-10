@@ -52,14 +52,16 @@ Claude Code exposes this flag; other agents have no runtime spending cap.
 Planning needs no provider keys or Docker.
 Use `--tasks`, `--agents`, and `--models` to select entries.
 Use `--trial N` with one task, agent, and mode to run one numbered trial.
-Completed passes and failures never repeat for the same task hash, agent, model, effort, mode, and trial number.
+Completed passes and failures keep their instruction and environment hashes, agent, model, effort, mode, and trial number.
+Instruction or environment changes rerun trials; checks changes regrade saved work when possible.
 Skills trials also include the skills hash in their identity.
 Internet and vanilla trials record `skills_hash: null`, so a skill edit repeats only skills trials.
 `n_attempts` counts scored trials per task, agent, and mode; `--n-attempts N` overrides it.
 Retries add no scored trials.
-`retry.max_retries` caps reruns after errors, with a default of 1.
+`retry.max_retries` caps retries after errors, with a default of 1.
 Harbor's `RetryConfig` supplies the exception exclusions and optional inclusion filter.
-Excluded errors never start another agent execution.
+No answer gets one immediate retry outside that limit; two no-answer tries count as a fail.
+Other excluded errors never start another agent execution.
 The board schedules retries across jobs and admits their spend before execution.
 Rows count retries from zero for the initial execution.
 The plan lists agent trials under `missing` and holds judge errors under `exhausted_errors`.
@@ -70,7 +72,7 @@ Run the same command and output directory after an interruption.
 The runner reads saved Harbor trial folders before planning and rebuilds missing rows.
 Each numbered trial has its own Harbor job under `OUTPUT/jobs/`.
 `board.json` records that trial's board identity and payment source beside Harbor's files.
-Rows use schema version 8 and link a trajectory JSON file when one exists.
+Rows use schema version 9 and link a trajectory JSON file when one exists.
 They retain all reward dimensions; `reward == 1` supplies the test pass bit.
 Cost comes from Harbor's API-price usage record, regardless of the payment source.
 Unknown cost stays null; free stand-ins cost $0.
@@ -126,11 +128,11 @@ The free check requires every oracle check to pass and at least one nop check to
 Both runs must report the same check names.
 Missing records, execution errors, or rewards that disagree with checks fail the command.
 
-Quiz verifiers read the last assistant message in `/logs/agent/trajectory.json`, using Harbor's ATIF format.
+Concepts task verifiers read the last assistant message in `/logs/agent/trajectory.json`, using Harbor's ATIF format.
 The task declares that path in `artifacts` so the separate verifier receives it.
 The solution writes a stand-in trajectory for Harbor's oracle agent.
 The nop agent leaves no reply.
-The shared quiz image ships `/opt/target_checks.py`.
+The shared Concepts task image ships `/opt/target_checks.py`.
 Import it from a Python criterion file under `/tests/`, with `/opt` on `sys.path`.
 Call `rk.final_answer(accepts, name="check_name")` with the task's answer rule.
 The rule accepts the final reply and returns a boolean.
@@ -175,7 +177,7 @@ The helper keeps Forge stdout and stderr beside `checks.json`.
 
 Criteria live in RewardKit judge TOML files under `tests/` and run through `test.sh`.
 Lint requires named binary criteria, `atif-trajectory = "/logs/agent/trajectory.json"`, and `guard = "flag"` or `"penalize"`.
-A quiz's judge may instead read only `files = ["/logs/verifier/final-reply.txt"]`, which its `test.sh` writes from the trajectory, so the judge never sees the model's reasoning.
+A Concepts task's judge may instead read only `files = ["/logs/verifier/final-reply.txt"]`, which its `test.sh` writes from the trajectory, so the judge never sees the model's reasoning.
 Each judge and its enclosing rewards use `all-pass`, so every test and criterion counts toward the same reward.
 The task's judge model and effort provide the defaults for plain Harbor runs.
 The board overrides them through `REWARDKIT_JUDGE` and `REWARDKIT_REASONING_EFFORT` from the job config.
@@ -200,7 +202,8 @@ For saved tasks whose verifier needs only copied artifacts, use `harbor trial re
 Harbor regrade uses a separate verifier and leaves the source trial untouched.
 It cannot restore a sidecar's live state, so it cannot repeat a chain task's Forge tests.
 For those tasks, use the [explicit recovery command](../runner/README.md#ci-and-publication) after reviewing its budget.
-The board performs no automatic regrade and no automatic agent retry for judge errors.
+The board plans regrades when checks change, and keeps judge errors out of automatic agent retries.
+The [runner reference](../runner/README.md#regrade-saved-work) covers saved inputs, local regrade, and CI publication.
 
 The free check stages task copies under `OUTPUT/tasks/`, removes judge TOMLs, and overrides the judge key with an empty value.
 The copies drop aggregation weights and empty judge groups; `all-pass` still requires every remaining test.
@@ -233,7 +236,7 @@ The folder needs Docker and Harbor, with no ETH Evals install.
 Plain Harbor runs execute the task's verifier; the board also runs declared paid criteria through RewardKit.
 
 On `main`, the release workflow pushes the shared images before uploading the dataset with `HF_TOKEN`.
-The upload removes obsolete files under `tasks/` and the old quiz `data/` folder in the same commit.
+The upload removes obsolete files under `tasks/` and the old Concepts task `data/` folder in the same commit.
 Files outside those managed folders remain unless the staged output replaces them.
 It checks image access with an empty Docker credential directory before the dataset upload.
 GHCR creates new packages as private, even for public repositories.
