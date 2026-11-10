@@ -23,6 +23,9 @@ def regrade_kind(path: Path, old: dict, current: dict) -> tuple[str | None, bool
     judge_files = {file.relative_to(path).as_posix() for file in judges}
     before, after = old.get("checks_inputs", {}), current["checks_inputs"]
     changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
+    if "@artifacts" in changed:
+        # The saved work holds only the artifacts the old setting named.
+        return None, False
     judge_changed = bool(changed & (judge_files | {"@judge"}))
     if judges and changed <= judge_files | {"@judge"}:
         return "judge", True

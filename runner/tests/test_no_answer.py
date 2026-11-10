@@ -42,7 +42,7 @@ def test_no_answer_gets_one_immediate_retry(tmp_path, monkeypatch, bare, first, 
         result_path.write_text(json.dumps(result))
         trajectory_path = folder / "agent/trajectory.json"
         trajectory = json.loads(trajectory_path.read_text())
-        trajectory["steps"][-1]["message"] = "metre" if state == "answer" else ""
+        trajectory["steps"][-1]["message"] = {"answer": "metre", "refused": "I can't help with that."}.get(state, "")
         trajectory_path.write_text(json.dumps(trajectory))
         stop = "content_filter" if state == "content_filter" else "stop"
         if state != "refused":

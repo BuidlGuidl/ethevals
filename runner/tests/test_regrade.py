@@ -40,6 +40,15 @@ def test_changed_concepts_checks_plan_regrades_and_missing_work_plans_a_rerun(tm
     assert "saved trajectory is unavailable" in rerun["rerun_reason"]
 
 
+def test_changed_artifacts_plan_a_rerun_because_saved_work_lacks_them(tmp_path):
+    task, config, row = saved_trial(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text('artifacts = ["/logs/agent/trajectory.json", "/app/notes.md"]\n' + settings.read_text())
+    report = plan([task], config, [row], n_attempts=1, saved_work=tmp_path / "cache")
+    rerun, = report["missing"]
+    assert (report["regrade_trials"], rerun["retry"], rerun["checks_generation"]) == (0, 0, 1)
+
+
 def test_changed_browser_or_chain_checks_plan_fresh_trials(tmp_path):
     task = task_folder(tmp_path)
     settings = task / "task.toml"
