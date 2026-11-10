@@ -75,8 +75,10 @@ def plan_trials(args, run_args):
     for row in report["missing"]:
         if row.get("rerun_reason"):
             print(f"Rerun {row['task_id']}, {row['model']}, {row['mode']}, trial {row['trial']}: {row['rerun_reason']}", file=sys.stderr)
+    deferred_regrades = 0
     for row in report.get("deferred", []):
         if row.get("defer_reason"):
+            deferred_regrades += 1
             print(f"Deferred regrade {row['task_id']}, {row['model']}, trial {row['trial']}: {row['defer_reason']}", file=sys.stderr)
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     # A zero CI budget disables even plan-paid trials whose API reserve is zero.
@@ -91,6 +93,7 @@ def plan_trials(args, run_args):
             if len(regrades) == 256 or asset_count + assets > 1000:
                 limit = "jobs" if len(regrades) == 256 else "assets"
                 print(f"Deferred regrade batch {task_id}: {len(batch)} rows; {limit} limit.", file=sys.stderr)
+                deferred_regrades += len(batch)
                 continue
             items = []
             for row in batch:
@@ -145,6 +148,7 @@ def plan_trials(args, run_args):
             output.write(f"scheduled_trials={len(scheduled)}\n")
             output.write(f"regrade_matrix={json.dumps({'include': regrade_matrix}, separators=(',', ':'))}\n")
             output.write(f"scheduled_regrades={len(regrades)}\n")
+            output.write(f"deferred_regrades={deferred_regrades}\n")
     return status if options.budget else 0
 
 

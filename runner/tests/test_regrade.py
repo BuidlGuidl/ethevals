@@ -304,11 +304,25 @@ def test_ci_lists_regrade_batches_deferred_by_limits(tmp_path, monkeypatch, caps
 
     monkeypatch.setattr(ci, "ethevals", planner)
     output = tmp_path / "ci-plan"
-    assert ci.plan_trials(argparse.Namespace(output=output, restore_results=False, github_output=None),
+    github_output = tmp_path / "github-output"
+    assert ci.plan_trials(argparse.Namespace(output=output, restore_results=False, github_output=github_output),
                           ["--config", str(config_file), "--tasks", str(task), "--budget", "1"]) == 0
     scheduled = json.loads((output / "regrades.json").read_text())
     assert (len(scheduled), scheduled[0]["regrades"][0]["task_id"]) == (expected, "concepts/task-0")
+    # The workflow fails a job on this count, so a deferred regrade never ends a CI run green.
+    emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
+    assert emitted["deferred_regrades"] == str((count - expected) * batch_size)
     assert f"Deferred regrade batch concepts/task-{count - 1}: {batch_size} rows; {limit} limit." in capsys.readouterr().err
+
+
+def test_an_unreadable_download_is_not_cached_so_a_later_plan_fetches_it_again(tmp_path, monkeypatch):
+    import io
+    from ethevals import saved_work
+    replies = [b'{"steps": [', b'{"steps": []}']
+    monkeypatch.setattr(saved_work, "urlopen", lambda url, timeout: io.BytesIO(replies.pop(0)))
+    with pytest.raises(ValueError, match="unreadable"):
+        saved_work.asset("https://example.test/trajectory-1.json", tmp_path)
+    assert saved_work.asset("https://example.test/trajectory-1.json", tmp_path).read_bytes() == b'{"steps": []}'
 
 
 def test_changed_concepts_checks_plan_regrades_and_missing_work_plans_a_rerun(tmp_path):

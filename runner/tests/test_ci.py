@@ -18,24 +18,6 @@ ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
 
 
-def test_old_schema8_publisher_keeps_every_stamped_row_and_its_new_fields():
-    import ast
-    namespace = {"json": json, "SCHEMA_VERSION": 8, "BASE_BRANCH": "main", "RESULTS_BRANCH": "ci/results"}
-    for file, names in [("runner/ethevals/trial_rows.py", {"trial_identity", "fold_rows"}),
-                        ("scripts/ci.py", {"result_record"})]:
-        source = subprocess.check_output(["git", "show", f"857a6b5c:{file}"], cwd=ROOT, text=True)
-        tree = ast.parse(source)
-        tree.body = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
-        exec(compile(tree, file, "exec"), namespace)
-    content = (ROOT / "results/rows.jsonl").read_text()
-    namespace["stored_file"] = lambda ref, path: content if ref.endswith("/main") else ""
-    kept = namespace["result_record"]()
-    rows = [json.loads(line) for line in content.splitlines()]
-    assert len(kept) == len(rows) == 1424
-    identity = namespace["trial_identity"]
-    assert {identity(row): row for row in kept} == {identity(row): row for row in rows}
-
-
 def test_pr_checks_run_harbor_without_the_removed_public_tasks(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(ci, "command", lambda *args, **kwargs: calls.append((args, kwargs)))

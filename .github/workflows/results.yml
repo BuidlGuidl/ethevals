@@ -29,6 +29,7 @@ jobs:
       scheduled_trials: ${{ steps.plan.outputs.scheduled_trials }}
       regrade_matrix: ${{ steps.plan.outputs.regrade_matrix }}
       scheduled_regrades: ${{ steps.plan.outputs.scheduled_regrades }}
+      deferred_regrades: ${{ steps.plan.outputs.deferred_regrades }}
       sha: ${{ steps.plan.outputs.sha }}
       artifact_name: trial-plan-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -57,6 +58,19 @@ jobs:
           path: results/ci-plan/
           retention-days: 14
           if-no-files-found: error
+  deferred:
+    name: Regrades left for a later run
+    needs: plan
+    # A deferred regrade leaves its old result on the board, so the CI run must not end green.
+    if: needs.plan.outputs.deferred_regrades != '0'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - env:
+          DEFERRED: ${{ needs.plan.outputs.deferred_regrades }}
+        run: |
+          echo "::error::$DEFERRED regrades were deferred. Their rows keep the old result until a later CI run regrades them. The plan job's log gives each reason."
+          exit 1
   matrix:
     name: ${{ matrix.task_id }} / ${{ matrix.agent_key }} / ${{ matrix.mode }} / trial ${{ matrix.trial }}
     needs: plan

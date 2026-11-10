@@ -36,7 +36,7 @@ def test_matrix_downloads_its_plan_artifact(plan_attempt, matrix_attempt, expect
         "github.run_id": "40826749924", "github.run_attempt": str(plan_attempt),
         "steps.plan.outputs.matrix": '{"include":[]}',
         "steps.plan.outputs.scheduled_trials": "1", "steps.plan.outputs.sha": "a" * 40,
-        "steps.plan.outputs.regrade_matrix": '{"include":[]}', "steps.plan.outputs.scheduled_regrades": "0",
+        "steps.plan.outputs.regrade_matrix": '{"include":[]}', "steps.plan.outputs.scheduled_regrades": "0", "steps.plan.outputs.deferred_regrades": "0",
     }
     uploaded_name = expand(upload["with"]["name"], plan_context)
     matrix_context = {"github.run_id": "40826749924", "github.run_attempt": str(matrix_attempt)}
@@ -161,7 +161,7 @@ def test_ci_plan_defers_tasks_with_missing_compose_host_variable(tmp_path, monke
     assert "deferred trials because ARCHIVE_RPC_URL is unset" in result.stderr
     emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
     assert emitted == {"matrix": '{"include":[]}', "scheduled_trials": "0",
-                       "regrade_matrix": '{"include":[]}', "scheduled_regrades": "0"}
+                       "regrade_matrix": '{"include":[]}', "scheduled_regrades": "0", "deferred_regrades": "0"}
     assert json.loads((output / "trials.json").read_text()) == []
     # The same task becomes eligible as soon as its declared input exists.
     monkeypatch.setenv("ARCHIVE_RPC_URL", "https://archive.example/offline")
@@ -196,7 +196,7 @@ def test_zero_ci_budget_saves_plan_and_emits_no_jobs_even_for_a_plan(tmp_path):
     assert (report["missing_trials"], report["worst_case_usd"]) == (2, 0)
     emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
     assert emitted == {"matrix": '{"include":[]}', "scheduled_trials": "0",
-                       "regrade_matrix": '{"include":[]}', "scheduled_regrades": "0"}
+                       "regrade_matrix": '{"include":[]}', "scheduled_regrades": "0", "deferred_regrades": "0"}
     assert not (output / "jobs").exists()
 
 

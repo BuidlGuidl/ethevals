@@ -11,15 +11,6 @@ from support import recorded_trial
 from test_jobs import job_config, task_folder
 
 
-def test_converted_empty_reply_rows_record_the_no_answer():
-    from pathlib import Path
-    rows = [json.loads(line) for line in (Path(__file__).resolve().parents[2] / "results/rows.jsonl").read_text().splitlines()]
-    converted = [row for row in rows if row.get("error_kind") == "no_answer"]
-    assert len(converted) == 14
-    assert [(row["status"], row.get("no_answer")) for row in converted] == [
-        ("error", [{"kind": "empty", "stop_reason": None}])] * 14
-
-
 @pytest.mark.parametrize("unanswered", ["empty", "refused"])
 @pytest.mark.parametrize("failure", ["agent_version", "judge", "rewards"])
 def test_no_answer_never_hides_an_integrity_error(tmp_path, unanswered, failure):

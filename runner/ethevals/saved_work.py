@@ -41,6 +41,16 @@ def asset(url: str, cache: Path) -> Path:
             data = response.read()
         temporary = target.with_suffix(".tmp")
         temporary.write_bytes(data)
+        try:
+            # A cut-off download must not stay in the cache, or every later plan defers on it.
+            if url.endswith(".json"):
+                json.loads(data)
+            else:
+                with tarfile.open(temporary) as archive:
+                    archive.getmembers()
+        except (ValueError, tarfile.TarError):
+            temporary.unlink()
+            raise ValueError(f"The download from {url} is unreadable") from None
         temporary.replace(target)
     return target
 
