@@ -22,7 +22,8 @@ A file that fits no kind counts as what the agent sees, so a mistake in sorting 
 ## Identity
 
 - **A trial's identity uses the instruction hash and the environment hash** in place of the task hash.
-- **A row records the checks hash** of the checks that decided it. The board shows a row when all three hashes match the task's files.
+- **A row records the checks hash** of the checks that decided it.
+- **The board shows a row when its instruction and environment hashes match the task's files.** A row whose checks hash is behind keeps its last result on the board until its regrade or rerun lands, so a check fix never empties the board.
 - **The task hash keeps Harbor's meaning,** the digest of the whole folder. A row still records it. Datasets, images, and the Hub keep it as the task's key.
 - **Switching over keeps every trial on the board.** Each saved row gets the hashes of the files that ran and checked it.
 
@@ -39,7 +40,9 @@ The new row replaces the old one, and a changed result shows in the "Record tria
 | Tests that need a browser or a chain | rerun |
 | The instruction or the environment | rerun |
 
-- **When the saved work can't be fetched, the trial is rerun.**
+- **When the saved work is gone, the trial is rerun.** A download that fails for a passing reason, such as a rate limit, is tried again on the next CI run and never becomes a rerun.
+- **A regrade that fails changes nothing.** The row keeps its result, the CI job fails, and the next CI run plans the regrade again.
+- **A regrade decides a row's status by the same rules as a trial.** A fail from no answer twice stays a fail.
 - **A regrade that asks a judge reserves the judge's cost under the budget.** A regrade with no judge is free.
 - **Every trial on a task gets the same treatment.** One fail is never regraded or rerun on its own. Fix the check, and every trial on that task is regraded.
 
