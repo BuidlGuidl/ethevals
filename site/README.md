@@ -33,8 +33,9 @@ It defaults to `../results/rows.jsonl`.
 A missing default file produces an empty board.
 A missing explicit file fails the build.
 Malformed rows and duplicate trials fail with their file and line.
-The loader accepts schema version 9 and skips older rows.
-It requires current instruction, environment, and checks hashes and, for skills-mode rows, the current skills hash.
+The loader accepts schema version 8 and skips older rows.
+It requires current instruction and environment hashes and, for skills-mode rows, the current skills hash.
+A row keeps its last result while its checks hash is behind.
 It also drops trials numbered past the job's `n_attempts`.
 It shows only models listed in the job settings.
 The 160 Inspect rows have been removed.

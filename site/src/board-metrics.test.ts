@@ -31,7 +31,7 @@ test("the board publishes summaries, costs and paired lifts for each configurati
     { id: "concepts/a", hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", title: "A", pillar: "concepts", description: "Check A.", instruction: "A?", modes: ["internet", "skills"] },
     { id: "build/b", hash: "b", instruction_hash: "b", environment_hash: "b", checks_hash: "b", title: "B", pillar: "build", description: "Check B.", instruction: "B?", modes: ["internet", "skills"] },
   ];
-  const base: Row = { schema_version: 9, task_id: "concepts/a", task_hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
+  const base: Row = { schema_version: 8, task_id: "concepts/a", task_hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
     mode: "internet", trial: 1, status: "passed", checks: {}, error_kind: null, error_reason: null, limit: null,
     model_cost_usd: 0.5, judge_cost_usd: 90, total_tokens: 100, total_seconds: 10, working_seconds: 8, paid_by: "api_key", judge: null, judge_paid_by: null, cost_source: "harbor", trajectory_url: null };
   const board = buildBoard(evals, [base, { ...base, task_id: "build/b", task_hash: "b", instruction_hash: "b", environment_hash: "b", checks_hash: "b", status: "failed" },
@@ -47,7 +47,7 @@ test("the board publishes summaries, costs and paired lifts for each configurati
 test("lift pairs tasks when skills covers a strict subset of Internet results", () => {
   const evaluation: Eval = { id: "concepts/a", hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", title: "A", pillar: "concepts", description: "Check A.", instruction: "A?", modes: ["internet", "skills"] };
   const evals: Eval[] = [evaluation, { ...evaluation, id: "concepts/b" }, { ...evaluation, id: "build/c", pillar: "build" }];
-  const base: Row = { schema_version: 9, task_id: "concepts/a", task_hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
+  const base: Row = { schema_version: 8, task_id: "concepts/a", task_hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
     mode: "internet", trial: 1, status: "failed", checks: {}, error_kind: null, error_reason: null, limit: null,
     model_cost_usd: 0.5, judge_cost_usd: 0, total_tokens: 100, total_seconds: 10, working_seconds: 8, paid_by: "api_key", judge: null, judge_paid_by: null, cost_source: "harbor", trajectory_url: null };
   const internet: Row[] = [base, { ...base, task_id: "concepts/b", status: "passed" }, { ...base, task_id: "build/c" }];

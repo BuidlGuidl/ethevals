@@ -123,7 +123,7 @@ def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, 
     config_path.write_text(json.dumps(data))
     item = plan([task], load_job(config_path), [], n_attempts=1)["missing"][0]
     rows = tmp_path / "previous.jsonl"
-    write_rows(rows, [{**item, "schema_version": 9, "retry": 0, "status": "error"}])
+    write_rows(rows, [{**item, "schema_version": 8, "retry": 0, "status": "error"}])
     saved = tmp_path / "plan"
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config_path,
                  "--tasks", task, "--budget", 1, "--n-attempts", 1,
@@ -289,7 +289,7 @@ def test_ci_oracle_trial_survives_artifact_download_and_publishes_locally(tmp_pa
         from ethevals.jobs import plan as plan_job
         from ethevals.trial_rows import write_rows
         item = plan_job([ROOT / "runner/tests/fixtures/harbor/concepts/question"], load_job(config), [], n_attempts=1)["missing"][0]
-        write_rows(previous, [{**item, "schema_version": 9, "retry": 0, "status": "error"}])
+        write_rows(previous, [{**item, "schema_version": 8, "retry": 0, "status": "error"}])
     result = cli(ROOT / "scripts/ci.py", "plan-trials", "--config", config,
                  "--tasks", ROOT / "runner/tests/fixtures/harbor/concepts/question",
                  "--budget", 1, "--n-attempts", 1, "--rows", previous, "--output", plan)

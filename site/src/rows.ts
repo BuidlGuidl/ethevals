@@ -4,7 +4,11 @@ const mode = z.enum(["vanilla", "internet", "skills"]);
 const count = z.number().int().nonnegative();
 const measure = z.number().nonnegative().nullable();
 export const rowSchema = z.object({
-  schema_version: z.literal(9),
+  schema_version: z.literal(8),
+  retry: count.optional(),
+  checks_generation: count.optional(),
+  completed_at: z.string().nullable().optional(),
+  regraded_at: z.string().optional(),
   task_id: z.string().min(1),
   task_hash: z.string().min(1),
   instruction_hash: z.string().min(1),

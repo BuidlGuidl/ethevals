@@ -10,7 +10,7 @@ from harbor.models.job.lock import TaskLock
 from .checks import JudgeError, read_details, read_reward
 from .no_answer import no_answer
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 8
 
 
 def trial_identity(row: dict) -> tuple:
@@ -103,7 +103,8 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
 
 def read_rows(path: Path) -> list[dict]:
     rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()] if path.exists() else []
-    return [row for row in rows if row.get("schema_version") == SCHEMA_VERSION]
+    from .stamp_rows import stamp_rows
+    return stamp_rows([row for row in rows if row.get("schema_version") == SCHEMA_VERSION], Path.cwd())
 
 
 def fold_rows(*groups: list[dict]) -> list[dict]:

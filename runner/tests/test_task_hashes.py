@@ -50,7 +50,7 @@ def test_switch_over_uses_the_historical_folder_and_can_repeat_after_check_edits
     stamped, = stamp_rows([row], tmp_path)
     assert {key: stamped[key] for key in ("instruction_hash", "environment_hash", "checks_hash")} == {
         key: entry[key] for key in ("instruction_hash", "environment_hash", "checks_hash")}
-    assert (stamped["schema_version"], stamped["status"], stamped["task_hash"]) == (9, "failed", row["task_hash"])
+    assert (stamped["schema_version"], stamped["status"], stamped["task_hash"]) == (8, "failed", row["task_hash"])
     assert stamp_rows([stamped, row], tmp_path) == [stamped, stamped]
     path = tmp_path / "rows.jsonl"
     original = json.dumps({**row, "task_hash": "sha256:missing"}) + "\n"

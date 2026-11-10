@@ -15,7 +15,7 @@ def stamp_rows(rows: list[dict], root: Path) -> list[dict]:
     cache = {}
     stamped = []
     for row in rows:
-        if row.get("schema_version") != 8:
+        if all(row.get(key) for key in ("instruction_hash", "environment_hash", "checks_hash")):
             stamped.append(row)
             continue
         key = (row["task_id"], row["task_hash"])
@@ -42,7 +42,7 @@ def stamp_rows(rows: list[dict], root: Path) -> list[dict]:
                     raise ValueError(f"Cannot find task files for {row['task_id']} at {row['task_hash']}; no rows changed")
         hashes = cache[key]
         inputs = {**hashes["checks_inputs"], "@judge": row.get("judge")}
-        stamped.append({**row, **hashes, "checks_inputs": inputs, "checks_hash": digest(inputs), "schema_version": 9})
+        stamped.append({**row, **hashes, "checks_inputs": inputs, "checks_hash": digest(inputs), "schema_version": 8})
     return stamped
 
 

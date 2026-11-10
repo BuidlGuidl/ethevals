@@ -16,7 +16,7 @@ const evaluation: Eval & Pick<DisplayEval, "domain"> = {
 const agent = { model: "model-a", agent: "agent-a", effort: "high" };
 function row(overrides: Partial<Row> = {}): Row {
   return {
-    schema_version: 9, task_id: "concepts/units", task_hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", skills_hash: null,
+    schema_version: 8, task_id: "concepts/units", task_hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", skills_hash: null,
     ...agent, mode: "internet", trial: 1, status: "passed",
     checks: { answer: { passed: true, reason: "The answer matches." } }, error_kind: null, error_reason: null,
     total_tokens: 100, model_cost_usd: 0.2, judge_cost_usd: 0.05,

@@ -52,7 +52,7 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
     if (!line.trim()) return [];
     try {
       const value = JSON.parse(line);
-      if (Number.isInteger(value.schema_version) && value.schema_version < 9) return [];
+      if (Number.isInteger(value.schema_version) && value.schema_version < 8) return [];
       const row = rowSchema.parse(value);
       if (row.mode !== "vanilla" && !row.agent) throw new Error("Agent rows require an agent.");
       if (row.mode === "vanilla" && row.agent !== null) throw new Error("Vanilla rows cannot have an agent.");
@@ -74,12 +74,21 @@ export function currentRows(rows: Row[], catalog: ReturnType<typeof loadCatalog>
   const current = new Map(catalog.evals.map((task) => [task.id, task]));
   const models = new Set(catalog.models);
   // Trials past the job's n_attempts stay in the data but leave the board.
+  const identities = new Set<string>();
   return rows.filter((row) => current.get(row.task_id)?.instruction_hash === row.instruction_hash
     && current.get(row.task_id)?.environment_hash === row.environment_hash
-    && current.get(row.task_id)?.checks_hash === row.checks_hash
     && models.has(row.model)
     && row.trial <= catalog.n_attempts
-    && (row.mode !== "skills" || row.skills_hash === catalog.skills_hash));
+    && (row.mode !== "skills" || row.skills_hash === catalog.skills_hash))
+    .sort((a, b) => (b.checks_generation ?? 0) - (a.checks_generation ?? 0)
+      || (b.retry ?? 0) - (a.retry ?? 0)
+      || (b.regraded_at ?? b.completed_at ?? "").localeCompare(a.regraded_at ?? a.completed_at ?? ""))
+    .filter((row) => {
+      const key = JSON.stringify([row.task_id, row.instruction_hash, row.environment_hash, row.skills_hash, agentKey(row), row.mode, row.trial]);
+      if (identities.has(key)) return false;
+      identities.add(key);
+      return true;
+    });
 }
 
 export function loadBoard(env: Record<string, string | undefined> = process.env, root = siteRoot): BoardData {

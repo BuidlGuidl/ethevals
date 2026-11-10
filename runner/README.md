@@ -50,7 +50,7 @@ Pass the same `--config` when the run used separate job settings.
 A trial's identity includes its task ID, instruction hash, environment hash, agent, model, effort, mode, and trial number.
 Skills-mode identities also include the skills hash.
 A row keeps Harbor's whole-folder `task_hash` and the `checks_hash` that decided its checks.
-Rows use schema version 9.
+Rows keep schema version 8. The hash fields mark stamped rows.
 
 `instruction.md` supplies the instruction hash.
 Environment files and agent settings supply the environment hash.
@@ -60,9 +60,10 @@ Known display fields and mode declarations also stay outside the hashes.
 Unknown files and settings count as environment inputs.
 A changed instruction or environment hash reruns every selected mode.
 A changed checks hash plans a regrade, or a rerun when the saved work cannot support the changed checks.
-The board requires current instruction, environment, and checks hashes, plus the skills hash in skills mode.
+The board requires current instruction and environment hashes, plus the skills hash in skills mode.
+It keeps the saved result while its checks hash is behind.
 
-`uv run ethevals stamp-rows --rows results/rows.jsonl` upgrades saved schema-8 rows.
+`uv run ethevals stamp-rows --rows results/rows.jsonl` stamps saved rows without hashes.
 It finds task files whose Harbor digest matches each row, including historical files in Git.
 It preserves each row's status and fields, and adds the hashes.
 It leaves stamped rows unchanged on repeat runs.

@@ -11,7 +11,7 @@ const evaluation = {
   instruction: "How many wei?", description: "Check units.", modes: ["internet", "vanilla", "skills"],
 };
 const paid: Row = {
-  schema_version: 9, task_id: "concepts/units", task_hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", skills_hash: null,
+  schema_version: 8, task_id: "concepts/units", task_hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", skills_hash: null,
   model: "model-a", agent: "agent-a", effort: "high", mode: "internet",
   trial: 1, status: "passed", checks: { answer: { passed: true, reason: "Matches." } },
   error_kind: null, error_reason: null, total_tokens: 100,
@@ -65,7 +65,7 @@ test("loader reports duplicate identities even among excluded rows", (t) => {
   }
 });
 
-test("loader accepts v9 rows, ignores unused metadata, and skips older rows", (t) => {
+test("loader accepts v8 rows, ignores unused metadata, and skips older rows", (t) => {
   const f = fixture(t);
   writeFileSync(f.rows, JSON.stringify({ ...paid, retry: 1,
     model_metered_usd: 9, grader_metered_usd: 8, agent_version: "1.0", images: { default: "image:1" } }));
@@ -106,13 +106,22 @@ test("loader excludes stale rows and keeps skills in a separate agent table", (t
   assert.throws(() => loadBoard({}, f.site), /Agent rows require an agent/);
 });
 
-test("the board requires current instruction, environment, and checks hashes, and ignores the Harbor task hash", (t) => {
+test("the board keeps the saved result while its checks hash is behind", (t) => {
   const f = fixture(t);
   f.write([{ task_hash: "old-description" }, { trial: 2, instruction_hash: "old" },
     { trial: 3, environment_hash: "old" }, { trial: 3, checks_hash: "old" }]);
   const board = loadBoard({}, f.site);
   const cell = board.tables.internet.pillars.concepts.evals[0].cells['["model-a","agent-a","high"]'];
-  assert.deepEqual(cell.trials.map((row) => [row.trial, row.status]), [[1, "passed"]]);
+  assert.deepEqual(cell.trials.map((row) => [row.trial, row.status]), [[1, "passed"], [3, "passed"]]);
+});
+
+test("the board folds older checks of the same trial before showing pending regrades", (t) => {
+  const f = fixture(t);
+  f.write([{ checks_hash: "old", status: "failed", completed_at: "2026-11-01T00:00:00Z" },
+    { checks_hash: "older", status: "failed", completed_at: "2026-10-01T00:00:00Z" },
+    { completed_at: "2026-11-09T00:00:00Z" }]);
+  const cell = loadBoard({}, f.site).tables.internet.pillars.concepts.evals[0].cells['["model-a","agent-a","high"]'];
+  assert.deepEqual([cell.passed, cell.total, cell.trials.map((row) => [row.trial, row.status])], [1, 1, [[1, "passed"]]]);
 });
 
 test("missing default rows give an explicit empty state, while an override is required to exist", (t) => {
