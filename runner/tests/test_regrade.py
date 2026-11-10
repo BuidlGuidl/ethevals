@@ -148,6 +148,30 @@ def test_a_regrade_replaces_an_old_retry_without_changing_the_original_model_cos
     assert fold_rows([old], [new]) == [new]
 
 
+def test_contract_fetch_selects_the_saved_trial_across_ci_workflow_attempts(tmp_path):
+    from ethevals.saved_work import ci_trial
+
+    source_id = "80ff2732-b7e9-4d92-8f37-ae29eb2cb10d"
+    row = {"task_id": "build/contract", "task_hash": "digest", "agent": "nop", "model": "local/model",
+           "effort": None, "mode": "internet", "trial": 1, "retry": 0,
+           "completed_at": "2026-11-10T10:00:00+00:00",
+           "trajectory_url": f"https://hub.harborframework.com/jobs/job/trials/{source_id}",
+           "verifier_url": "https://github.com/owner/repo/releases/download/results-42/verifier-abc.tar.gz"}
+    root = tmp_path / "ci-42"
+    (root / "plan").mkdir(parents=True)
+    (root / "plan/trials.json").write_text(json.dumps([{"missing": [row]}]))
+    for attempt, trial_id, finished in [(1, "older-trial", "2026-11-10T09:00:00Z"),
+                                        (2, source_id, "2026-11-10T10:00:00Z")]:
+        job = root / f"0/trial-run-42-{attempt}-0/jobs/job"
+        (job / "trial/artifacts").mkdir(parents=True)
+        (job / "board.json").write_text(json.dumps(row))
+        (job / "trial/result.json").write_text(json.dumps({"id": trial_id, "finished_at": finished}))
+        (job / "trial/artifacts/manifest.json").write_text("[]")
+    source = ci_trial(row, tmp_path)
+    assert source == root / "0/trial-run-42-2-0/jobs/job/trial"
+    assert json.loads((source / "result.json").read_text())["id"] == source_id
+
+
 @pytest.mark.docker
 def test_concepts_regrade_runs_real_tests_and_publishes_one_verifier_archive(tmp_path, monkeypatch):
     from harbor.job import Job

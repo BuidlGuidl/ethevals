@@ -1,5 +1,6 @@
 """Fetch published work without model credentials."""
 import json
+from datetime import datetime
 from pathlib import Path
 import re
 import shutil
@@ -77,6 +78,14 @@ def ci_trial(row: dict, cache: Path) -> Path:
                 if all(metadata.get(key) == row.get(key) for key in (
                         "task_id", "task_hash", "agent", "model", "effort", "mode", "trial", "retry")):
                     for result in board.parent.glob("*/result.json"):
+                        record = json.loads(result.read_text())
+                        url = row.get("trajectory_url") or ""
+                        source_id = url.rsplit("/trials/", 1)[-1].rstrip("/") if url.startswith("https://hub.harborframework.com/jobs/") else None
+                        if source_id and str(record["id"]) != source_id:
+                            continue
+                        if row.get("completed_at") and (not record.get("finished_at") or
+                                datetime.fromisoformat(record["finished_at"]) != datetime.fromisoformat(row["completed_at"])):
+                            continue
                         if (result.parent / "artifacts/manifest.json").is_file():
                             return result.parent
     raise ValueError("The saved contract files are unavailable")

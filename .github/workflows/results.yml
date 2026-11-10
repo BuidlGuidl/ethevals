@@ -20,6 +20,9 @@ jobs:
     name: Plan missing trials
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # Fetch saved trial files from older CI artifacts.
     timeout-minutes: 15
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -41,6 +44,7 @@ jobs:
       - name: Check the budget and emit the matrix
         id: plan
         env:
+          GH_TOKEN: ${{ github.token }}
           RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
           MAINNET_RPC_URL: &mainnet-rpc ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: &base-rpc ${{ secrets.BASE_RPC_URL }}
