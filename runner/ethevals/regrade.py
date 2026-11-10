@@ -12,34 +12,22 @@ from harbor.models.task.task import Task
 from harbor.models.task.config import VerifierEnvironmentMode
 from harbor.models.task.verifier_mode import resolve_task_verifier_mode, resolve_verifier_environment_definition
 
-from .checks import read_details, read_reward
+from .checks import read_details
 from .harbor_tasks import task_judges
-from .saved_work import SavedWorkGone, fetch_work, trajectory_url
+from .saved_work import SavedWorkGone, fetch_work
 from .secret_check import check_output, remember_secrets
 from .task_hashes import digest
-from .trial_rows import fold_rows, write_rows
+from .trial_rows import fold_rows, write_rows, recover_regrades
 
 
-def regrade_kind(path: Path, old: dict, current: dict) -> tuple[str | None, bool]:
-    judges = task_judges(path)
-    judge_files = {file.relative_to(path).as_posix() for file in judges}
-    before, after = old.get("checks_inputs", {}), current["checks_inputs"]
-    changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
-    if "@artifacts" in changed:
-        # The saved work holds only the artifacts the old setting named.
-        return None, False
-    judge_changed = bool(changed & (judge_files | {"@judge"}))
-    if judges and changed <= judge_files | {"@judge"}:
-        return "judge", True
-    if path.parent.name == "concepts":
-        producer_changed = changed - judge_files - {"@judge", "tests/answer.py", "tests/hand-cases.json", "tests/reward.toml"}
-        return "concepts", bool(judges and (judge_changed or producer_changed))
+def regrade_options(path: Path) -> dict:
     task = Task(path)
+    kind = "concepts" if path.parent.name == "concepts" else None
     if (path.parent.name == "build" and resolve_task_verifier_mode(task.config) == VerifierEnvironmentMode.SEPARATE
             and not list((path / "environment").glob("*compose.y*ml"))
             and (path / "environment/foundry.toml").is_file()):
-        return "contract", bool(judges)
-    return None, False
+        kind = "contract"
+    return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in task_judges(path)]}
 
 
 def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], list[dict], list[dict]]:
@@ -114,50 +102,4 @@ def run_regrades(items: list[dict], config, output: Path, previous: list[dict], 
             check_output(output, secrets, require_inventory=True)
             rows = fold_rows(rows, recover_regrades(output))
             write_rows(output / "rows.jsonl", rows)
-    return rows
-
-
-def recover_regrades(output: Path) -> list[dict]:
-    rows = []
-    for metadata in sorted((output / "jobs").glob("*/regrade.json")):
-        receipt = metadata.parent / "publication-check.json"
-        if receipt.is_file() and json.loads(receipt.read_text()).get("withheld"):
-            continue
-        for index, item in enumerate(json.loads(metadata.read_text())):
-            folder = metadata.parent / str(index)
-            error_file = folder / "regrade-error.json"
-            finished = folder / "regrade-finished.json"
-            result = folder / "result.json"
-            if not finished.is_file() and not (result.is_file() and json.loads(result.read_text()).get("finished_at")):
-                continue
-            old = item["source_row"]
-            checked_at = (json.loads(finished.read_text()) if finished.is_file() else
-                          json.loads((folder / "result.json").read_text()).get("finished_at"))
-            error, rewards, checks, details = None, {}, {}, []
-            try:
-                details = read_details(folder / "verifier")
-                rewards, checks = read_reward(folder / "verifier")
-                if error_file.is_file():
-                    error = json.loads(error_file.read_text())
-            except ValueError as exc:
-                error = {"error_kind": "judge" if item["judge_required"] else "verification", "error_reason": str(exc)}
-                rewards, checks = getattr(exc, "rewards", {}), getattr(exc, "checks", {})
-            judge_costs = [detail.get("usage", {}).get("cost_usd") for detail in details
-                           if detail.get("kind") in {"llm", "agent", "jev"}]
-            row = {**old, **{key: item[key] for key in ("checks_hash", "checks_inputs", "checks_generation")},
-                   "rewards": rewards, "checks": checks,
-                   "status": "error" if error else "passed" if rewards["reward"] == 1 else "failed", "error_kind": None, "error_reason": None,
-                   "verifier_files": str((folder / "verifier").resolve()), "verifier_url": None,
-                   "trajectory_file": str((folder / "agent/trajectory.json").resolve()),
-                   "trajectory_download_url": trajectory_url(old),
-                   "regraded_at": checked_at,
-                   "judge": item["judge"], "judge_paid_by": item["judge_paid_by"]}
-            if error:
-                row.update(error)
-                row["regrade_source"] = old.get("regrade_source", old)
-            row["retry"] = item["retry"]
-            if item["judge_required"]:
-                row["judge_cost_usd"] = (0.0 if item["judge_paid_by"] == "free" else
-                                         sum(judge_costs) if judge_costs and all(type(c) in (int, float) for c in judge_costs) else None)
-            rows.append(row)
     return rows

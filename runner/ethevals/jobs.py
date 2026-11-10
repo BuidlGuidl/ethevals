@@ -21,6 +21,7 @@ from .skills import SkillsPack, pack_skills
 from .task_hashes import task_hashes
 from .secret_check import check_output, remember_secrets, secret_values
 from .trial_rows import fold_rows, recover_rows, trial_identity, write_rows
+from .regrade import prepare_regrades, regrade_options, run_regrades
 
 
 def task_entry(path: Path, config: JobSettings | None = None) -> dict:
@@ -61,10 +62,39 @@ def write_catalog(paths: list[Path], output: Path) -> None:
     (output / "catalog.json").write_text(json.dumps(catalog, indent=2) + "\n")
 
 
+def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=False) -> dict:
+    if row and any(row.get(key) != current[key] for key in ("instruction_hash", "environment_hash")):
+        return {"action": "rerun", "reason": "The instruction or environment changed."}
+    if row.get("status") in {"passed", "failed"}:
+        if row.get("checks_hash") == current["checks_hash"]:
+            return {"action": "keep"}
+        before, after = row.get("checks_inputs", {}), current["checks_inputs"]
+        changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
+        if "@artifacts" in changed:
+            return {"action": "rerun", "reason": "The saved work lacks the changed artifacts."}
+        options = current["regrade"]
+        judges = set(options["judge_files"])
+        if judges and changed <= judges | {"@judge"}:
+            return {"action": "regrade", "kind": "judge", "judge_required": True}
+        if options["kind"]:
+            producer_changed = changed - judges - {"@judge", "tests/answer.py", "tests/hand-cases.json", "tests/reward.toml"}
+            return {"action": "regrade", "kind": options["kind"],
+                    "judge_required": bool(judges and (changed & (judges | {"@judge"}) or producer_changed))}
+        return {"action": "rerun", "reason": "The changed checks need a live browser or chain."}
+    exception = row.get("error_kind")
+    recovery = bool(retry_judge_error and row.get("judge") and exception in {
+        "judge", "RewardFileNotFoundError", "RewardFileEmptyError", "VerifierOutputParseError"})
+    if row and not recovery and (exception == "judge" or row.get("retry", -1) >= policy.max_retries
+                or exception in (policy.exclude_exceptions or set())
+                or policy.include_exceptions and exception not in policy.include_exceptions):
+        return {"action": "exhausted"}
+    return {"action": "retry", "recovery": recovery}
+
+
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,
          models=None, modes=None, n_attempts=None, trial=None,
-         skills_pack: SkillsPack | None = None, retry_judge_error=False, saved_work: Path | None = None) -> dict:
-    from .regrade import prepare_regrades, regrade_kind
+         skills_pack: SkillsPack | None = None, retry_judge_error=False, saved_work: Path | None = None,
+         regrades_only=False) -> dict:
     if retry_judge_error and trial is None:
         raise ValueError("--retry-judge-error requires --trial with one task, agent, and mode")
     modes = modes or config.modes
@@ -81,6 +111,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
     combinations = 0
     for path in paths:
         task = task_entry(path, config)
+        task["regrade"] = regrade_options(path)
         judges = task_judges(path)
         if task["id"] in ids:
             raise ValueError(f"Duplicate task ID: {task['id']}")
@@ -112,7 +143,11 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     row = prior.get(identity, {})
                     retry = row.get("retry", -1)
                     checks_changed = bool(row and row.get("checks_hash") != task["checks_hash"])
-                    if row.get("status") in {"passed", "failed"} and not checks_changed:
+                    decision = decide_saved_row(row, task, config.retry, retry_judge_error=retry_judge_error)
+                    if decision["action"] == "keep":
+                        continue
+                    if decision["action"] == "exhausted":
+                        exhausted.append(row)
                         continue
                     judge = {"model": config.judge.model, "effort": config.judge.effort} if judges else None
                     item = {**metadata, "task_path": str(path.resolve()), "agent_key": key,
@@ -123,41 +158,25 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     judge_calls = sum(j.judge.samples * (len(j.criterion) + 1
                                       if j.judge.mode == "individual" else 1) for j in judges.values())
                     judge_reserve = config.judge.cost_limit_usd * judge_calls * 3 if config.judge.paid_by == "api_key" else 0.0
-                    retry_regrade = row.get("regrade_source") and row.get("error_kind") != "judge" and retry < config.retry.max_retries
-                    if (checks_changed and row.get("status") in {"passed", "failed"}) or retry_regrade:
-                        source = row.get("regrade_source", row)
-                        kind, judge_required = regrade_kind(path, source, task)
-                        reserve = agent.cost_limit_usd if agent.paid_by == "api_key" else 0.0
+                    reserve = agent.cost_limit_usd if agent.paid_by == "api_key" else 0.0
+                    if decision["action"] in {"regrade", "rerun"}:
                         rerun = {**item, "retry": 0, "remaining_executions": config.retry.max_retries + 1,
                                  "agent_reserve_usd": reserve, "judge_reserve_usd": judge_reserve,
                                  "worst_case_usd": (reserve + judge_reserve) * (config.retry.max_retries + 1)}
-                        if kind:
-                            candidates.append({**item, "kind": kind, "judge_required": judge_required,
-                                               "source_row": source, "retry": row["retry"] + int(bool(retry_regrade)), "rerun": rerun,
-                                               "worst_case_usd": judge_reserve if judge_required else 0.0})
+                        if decision["action"] == "regrade":
+                            candidates.append({**item, "kind": decision["kind"], "judge_required": decision["judge_required"],
+                                               "source_row": row, "retry": row["retry"], "rerun": rerun,
+                                               "worst_case_usd": judge_reserve if decision["judge_required"] else 0.0})
                         elif missing_env:
                             deferred.append({**item, "missing_env": missing_env})
                         else:
-                            missing.append({**rerun, "rerun_reason": "The changed checks need a live browser or chain."})
+                            missing.append({**rerun, "rerun_reason": decision["reason"]})
                         continue
-                    recovery = retry_judge_error and row.get("judge") and row.get("error_kind") in {
-                        "judge", "RewardFileNotFoundError", "RewardFileEmptyError", "VerifierOutputParseError"}
-                    if row.get("error_kind") == "judge" and not recovery:
-                        exhausted.append(row)
-                        continue
-                    policy = config.retry
-                    exception = row.get("error_kind")
-                    if row and not recovery and (retry >= policy.max_retries
-                                or exception in (policy.exclude_exceptions or set())
-                                or policy.include_exceptions and exception not in policy.include_exceptions):
-                        exhausted.append(row)
-                        continue
+                    recovery = decision["recovery"]
                     if missing_env:
-                        deferred.append({**metadata, "task_path": str(path.resolve()), "agent_key": key,
-                                         "missing_env": missing_env})
+                        deferred.append({**item, "missing_env": missing_env})
                         continue
-                    reserve = agent.cost_limit_usd if agent.paid_by == "api_key" else 0.0
-                    remaining = 1 if recovery else policy.max_retries - retry
+                    remaining = 1 if recovery else config.retry.max_retries - retry
                     missing.append({**item, "retry": retry + 1, "remaining_executions": remaining,
                                     "agent_reserve_usd": reserve, "judge_reserve_usd": judge_reserve,
                                     "worst_case_usd": (reserve + judge_reserve) * remaining})
@@ -177,6 +196,8 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
             deferred_ids.add(trial_identity(item))
         else:
             missing.append({**item["rerun"], "rerun_reason": item["rerun_reason"]})
+    if regrades_only:
+        missing, selected = [], [trial_identity(item) for item in regrades]
     return {"missing": missing, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
             "regrades": regrades, "regrade_trials": len(regrades),
             "worst_case_usd": round(sum(row["worst_case_usd"] for row in [*missing, *regrades]), 8),
@@ -241,12 +262,13 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
         if item["mode"] == "skills":
             harbor.skills = [str(skills_path)]
         prepared.append((item, harbor))
-    from .regrade import run_regrades
     rows = run_regrades(report.get("regrades", []), config, output, previous, secrets)
     for item, harbor in prepared:
         for no_answer_try in range(2):
             rows = await run_trial(item, harbor, config, output, secrets, rows)
-            row = next((row for row in rows if trial_identity(row) == trial_identity(item)), None)
+            row = next((row for row in recover_rows(output) if trial_identity(row) == trial_identity(item)
+                        and row["retry"] == item["retry"]
+                        and row.get("checks_generation", 0) == item["checks_generation"]), None)
             if no_answer_try or row is None or row.get("error_kind") != "no_answer":
                 break
             item = {**item, "no_answer": row["no_answer"]}

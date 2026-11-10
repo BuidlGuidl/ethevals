@@ -91,6 +91,7 @@ Checks that need a live browser or chain plan reruns.
 Saved work with no address, an HTTP 404 or 410, or expired CI artifacts plans a rerun.
 The plan lists each rerun and its reason.
 Other fetch errors defer the regrade until the next CI run and reserve nothing.
+A failed regrade leaves the saved row unchanged and fails its CI job.
 
 To inspect a check fix locally, run:
 
@@ -98,7 +99,7 @@ To inspect a check fix locally, run:
 uv run ethevals regrade --tasks tasks/concepts/compiler-legacy-init-order --modes internet vanilla --budget 0 --output results/check-fix
 ```
 
-The command writes new rows and prints status changes.
+The command writes new rows and prints status changes after successful regrades.
 It skips missing agent trials.
 A regrade preserves the original trajectory link and model cost, and replaces the checks and verifier output.
 A regrade without a judge reserves zero.

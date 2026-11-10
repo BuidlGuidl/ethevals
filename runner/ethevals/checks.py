@@ -39,7 +39,7 @@ def read_details(verifier: Path) -> list[dict]:
         raise ValueError(f"{path}: {error}") from error
 
 
-def read_reward(verifier: Path, *, details: list[dict] | None = None) -> tuple[dict, dict]:
+def read_reward(verifier: Path, *, details: list[dict] | None = None, judge: dict | None = None) -> tuple[dict, dict]:
     rewards_path = verifier / "reward.json"
     details_path = verifier / "reward-details.json"
     try:
@@ -78,8 +78,17 @@ def read_reward(verifier: Path, *, details: list[dict] | None = None) -> tuple[d
                 (item.get("reasoning") or item.get("description") or name).split())}
 
     try:
-        for detail in details if details is not None else read_details(verifier):
+        details = details if details is not None else read_details(verifier)
+        for detail in details:
             collect(detail)
+        if judge:
+            judges = [detail for detail in details if detail.get("kind") in {"llm", "agent", "jev"}]
+            if not judges:
+                errors.append("The verifier did not record the planned judge.")
+            for detail in judges:
+                settings = detail["judge"]
+                if settings["model"] != judge["model"] or settings.get("reasoning_effort") != judge["effort"]:
+                    errors.append("The verifier judge differs from the planned judge.")
         if errors:
             raise JudgeError("; ".join(errors), rewards, checks)
         return rewards, validate_checks(checks)

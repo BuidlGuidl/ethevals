@@ -39,6 +39,89 @@ def saved_regrade(tmp_path):
     (folder / "regrade-finished.json").write_text(json.dumps("2026-11-10T12:00:00Z"))
     return task, config, row, report, output, folder
 
+
+@pytest.mark.parametrize("failure", ["worker", "reward", "secret"])
+def test_failed_regrade_preserves_the_saved_row_and_plans_again(tmp_path, failure):
+    from ethevals.trial_rows import recover_rows
+    from ethevals.secret_check import check_output
+
+    task, config, old, report, output, folder = saved_regrade(tmp_path)
+    if failure == "worker":
+        (folder / "regrade-error.json").write_text(json.dumps({"error_kind": "verification", "error_reason": "Worker failed."}))
+    elif failure == "reward":
+        (folder / "verifier/reward.json").write_text("broken")
+    else:
+        (folder / "agent/key.txt").write_text("private-credential-value")
+    check_output(output, {"KEY": {b"private-credential-value"}})
+    recovered = fold_rows([old], recover_rows(output))
+    assert recovered == [old]
+    from ethevals.secret_check import stage_artifact
+    stage_artifact(output, tmp_path / "artifact")
+    assert fold_rows([old], recover_rows(tmp_path / "artifact")) == [old]
+    again = plan([task], config, recovered, n_attempts=1, saved_work=tmp_path / "cache")
+    assert (again["missing_trials"], again["regrade_trials"], again["regrades"][0]["checks_hash"]) == (
+        0, 1, report["regrades"][0]["checks_hash"])
+
+
+@pytest.mark.parametrize("failure", ["missing", "model", "effort"])
+def test_regrade_rejects_an_unrecorded_or_different_planned_judge(tmp_path, failure):
+    from ethevals.trial_rows import recover_rows
+
+    _, _, old, _, output, folder = saved_regrade(tmp_path)
+    metadata = output / "jobs/regrade/regrade.json"
+    items = json.loads(metadata.read_text())
+    items[0]["judge"] = {"model": "openai/planned", "effort": "high"}
+    metadata.write_text(json.dumps(items))
+    if failure != "missing":
+        details = json.loads((folder / "verifier/reward-details.json").read_text())
+        detail = next(iter(details.values()))
+        detail.update(kind="llm", judge={"model": "openai/other" if failure == "model" else "openai/planned",
+                                        "reasoning_effort": "low" if failure == "effort" else "high"})
+        for criterion in detail["criteria"]:
+            criterion["raw"] = "yes"
+        (folder / "verifier/reward-details.json").write_text(json.dumps(details))
+    assert fold_rows([old], recover_rows(output)) == [old]
+
+
+def test_a_failed_regrade_fails_the_job_without_replacing_the_saved_row(tmp_path, monkeypatch):
+    import subprocess
+    from ethevals import regrade
+    from ethevals.trial_rows import read_rows
+    task, config, old = saved_trial(tmp_path)
+    (task / "tests/test.sh").write_text("Changed checks.\n")
+    report = budget_check(plan([task], config, [old], n_attempts=1, saved_work=tmp_path / "cache"), 0)
+
+    def worker(command, **kwargs):
+        if command[:2] == ["docker", "run"]:
+            mount = next(value for value in command if value.endswith(":/batch"))
+            folder = Path(mount.removesuffix(":/batch")) / "0"
+            folder.mkdir(exist_ok=True)
+            (folder / "regrade-finished.json").write_text(json.dumps("2026-11-10T12:00:00Z"))
+            (folder / "regrade-error.json").write_text(json.dumps({"error_kind": "verification", "error_reason": "Failed."}))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(regrade.subprocess, "run", worker)
+    output = tmp_path / "out"
+    assert asyncio.run(run(report, config, output, [old])) is False
+    assert read_rows(output / "rows.jsonl") == [old]
+
+
+def test_regrade_keeps_a_fail_from_no_answer_twice(tmp_path):
+    from ethevals.trial_rows import recover_rows
+
+    _, _, old, _, output, _ = saved_regrade(tmp_path)
+    metadata = output / "jobs/regrade/regrade.json"
+    items = json.loads(metadata.read_text())
+    old.update(status="failed", no_answer=[{"kind": "refused", "stop_reason": "AgentSafetyRefusalError"}] * 2,
+               rewards={"reward": 0.0}, checks={"no_answer": {"passed": False, "reason": "No answer twice."}})
+    items[0]["source_row"] = old
+    metadata.write_text(json.dumps(items))
+    row, = recover_rows(output)
+    assert (row["status"], row["rewards"], row["checks"], row["no_answer"]) == (
+        "failed", old["rewards"], old["checks"], old["no_answer"])
+    assert row["checks_hash"] == items[0]["checks_hash"]
+
+
 @pytest.mark.parametrize("published_source", [True, False])
 def test_published_regrade_can_fetch_the_original_reply_for_a_second_checks_change(tmp_path, monkeypatch, published_source):
     import io
@@ -79,6 +162,7 @@ def test_published_regrade_can_fetch_the_original_reply_for_a_second_checks_chan
     assert (report["missing_trials"], downloads, Path(regrade["saved_work"]["trajectory"]).read_bytes()) == (
         0, [next(iter(assets))], (folder / "agent/trajectory.json").read_bytes())
 
+
 @pytest.mark.parametrize("failure,gone", [(404, True), (410, True), (403, False), (429, False),
                                          ("timeout", False), ("network", False), ("corrupt", False), ("archive", False)])
 def test_only_confirmed_missing_saved_work_plans_a_paid_rerun(tmp_path, monkeypatch, failure, gone):
@@ -114,6 +198,7 @@ def test_only_confirmed_missing_saved_work_plans_a_paid_rerun(tmp_path, monkeypa
         assert (report["missing_trials"], report["regrade_trials"], report["worst_case_usd"]) == (0, 0, 0)
         assert item["defer_reason"].startswith("Saved work fetch deferred:")
 
+
 def test_contract_fetch_searches_indices_from_every_plan_attempt(tmp_path):
     from ethevals.saved_work import ci_trial
     row = {"task_id": "build/contract", "task_hash": "digest", "agent": "nop", "model": "local/model",
@@ -131,6 +216,50 @@ def test_contract_fetch_searches_indices_from_every_plan_attempt(tmp_path):
     (job / "trial/result.json").write_text(json.dumps({"id": "saved", "finished_at": "2026-11-10T10:00:00Z"}))
     (job / "trial/artifacts/manifest.json").write_text("[]")
     assert ci_trial(row, tmp_path) == job / "trial"
+
+
+@pytest.mark.parametrize("row,current,recovery,expected", [
+    ({"status": "passed"}, {}, False, {"action": "keep"}),
+    ({"status": "failed"}, {}, False, {"action": "keep"}),
+    ({"status": "passed"}, {"checks_hash": "new"}, False,
+     {"action": "regrade", "kind": "concepts", "judge_required": False}),
+    ({"status": "passed"}, {"environment_hash": "new"}, False,
+     {"action": "rerun", "reason": "The instruction or environment changed."}),
+    ({"status": "passed"}, {"instruction_hash": "new"}, False,
+     {"action": "rerun", "reason": "The instruction or environment changed."}),
+    ({"status": "passed"}, {"checks_hash": "new", "regrade": {"kind": None, "judge_files": []}}, False,
+     {"action": "rerun", "reason": "The changed checks need a live browser or chain."}),
+    ({"status": "error", "error_kind": "no_answer"}, {}, False, {"action": "retry", "recovery": False}),
+    ({"status": "error", "retry": 1}, {}, False, {"action": "exhausted"}),
+    ({"status": "error", "error_kind": "judge", "judge": {"model": "judge"}}, {}, False, {"action": "exhausted"}),
+    ({"status": "error", "error_kind": "judge", "judge": {"model": "judge"}}, {}, True,
+     {"action": "retry", "recovery": True}),
+    ({"status": "error", "error_kind": "AgentTimeoutError"}, {}, False, {"action": "exhausted"}),
+    ({"status": "passed"}, {"checks_hash": "new", "checks_inputs": {"@artifacts": ["new"]}}, False,
+     {"action": "rerun", "reason": "The saved work lacks the changed artifacts."}),
+    ({"status": "passed"}, {"checks_hash": "new", "checks_inputs": {"tests/judge.toml": "new"},
+                              "regrade": {"kind": "concepts", "judge_files": ["tests/judge.toml"]}}, False,
+     {"action": "regrade", "kind": "judge", "judge_required": True}),
+])
+def test_saved_row_decision_table(tmp_path, row, current, recovery, expected):
+    from ethevals.jobs import decide_saved_row
+    config = load_job(job_config(tmp_path, "free"))
+    task = {"instruction_hash": "old", "environment_hash": "old", "checks_hash": "old", "checks_inputs": {},
+            "regrade": {"kind": "concepts", "judge_files": []}}
+    saved = {**task, "retry": 0, **row}
+    assert decide_saved_row(saved, {**task, **current}, config.retry, retry_judge_error=recovery) == expected
+
+
+def test_regrades_only_filters_trials_before_the_budget_check(tmp_path):
+    task, config, row = saved_trial(tmp_path)
+    config.agents["local"].paid_by = "api_key"
+    (task / "tests/test.sh").write_text("Changed checks.\n")
+    report = budget_check(plan([task], config, [row], n_attempts=2, regrades_only=True,
+                               saved_work=tmp_path / "cache"), 0, required=True)
+    assert (report["missing_trials"], report["regrade_trials"], report["worst_case_usd"], report["within_budget"]) == (0, 1, 0, True)
+    assert report["selected"] == [tuple(row.get(key) for key in (
+        "task_id", "instruction_hash", "environment_hash", "skills_hash", "agent", "model", "effort", "mode", "trial"))]
+
 
 def test_expired_ci_artifacts_confirm_that_contract_work_is_gone(tmp_path, monkeypatch):
     import subprocess
@@ -154,6 +283,7 @@ def test_expired_ci_artifacts_confirm_that_contract_work_is_gone(tmp_path, monke
     assert (len(ready), len(gone), len(deferred), gone[0]["rerun_reason"]) == (
         0, 1, 0, "Saved work is gone: CI artifacts matching trial-plan-42-* expired")
     assert calls[0][:4] == ["gh", "run", "download", "42"]
+
 
 @pytest.mark.parametrize("limit,count,batch_size,expected", [("jobs", 257, 1, 256), ("assets", 2, 501, 1)])
 def test_ci_lists_regrade_batches_deferred_by_limits(tmp_path, monkeypatch, capsys, limit, count, batch_size, expected):
@@ -179,6 +309,7 @@ def test_ci_lists_regrade_batches_deferred_by_limits(tmp_path, monkeypatch, caps
     scheduled = json.loads((output / "regrades.json").read_text())
     assert (len(scheduled), scheduled[0]["regrades"][0]["task_id"]) == (expected, "concepts/task-0")
     assert f"Deferred regrade batch concepts/task-{count - 1}: {batch_size} rows; {limit} limit." in capsys.readouterr().err
+
 
 def test_changed_concepts_checks_plan_regrades_and_missing_work_plans_a_rerun(tmp_path):
     task, config, row = saved_trial(tmp_path)
@@ -406,6 +537,8 @@ def test_ci_batches_640_concepts_regrades_in_one_job_without_trials(tmp_path):
 
 RULE_TASKS = [path.parent for path in sorted((Path(__file__).resolve().parents[2] / "tasks/concepts").glob("*/tests/hand-cases.json"))
               if not list(path.parent.glob("*.toml")) or not any("[judge]" in file.read_text() for file in path.parent.glob("*.toml"))]
+
+
 
 
 @pytest.mark.docker

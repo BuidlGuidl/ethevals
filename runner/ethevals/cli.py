@@ -87,18 +87,11 @@ def main(argv=None) -> int:
                 n_attempts=args.n_attempts, trial=args.trial, skills_pack=skills_pack,
                 retry_judge_error=args.retry_judge_error,
                 saved_work=args.output / "saved-work",
+                regrades_only=args.command == "regrade",
             ), args.budget, required=args.command in {"run", "regrade"})
             if args.command == "plan":
                 print(json.dumps(report, indent=2))
                 return 0 if report["within_budget"] else 1
-            if args.command == "regrade":
-                if report["missing"]:
-                    print(f"Skipped {len(report['missing'])} trials; regrade never runs an agent.")
-                report["missing"] = []
-                report["missing_trials"] = 0
-                report["selected"] = [jobs.trial_identity(item) for item in report["regrades"]]
-                report["worst_case_usd"] = sum(item["worst_case_usd"] for item in report["regrades"])
-                jobs.budget_check(report, args.budget, required=True)
             args.output.mkdir(parents=True, exist_ok=True)
             (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
             if not report["within_budget"]:

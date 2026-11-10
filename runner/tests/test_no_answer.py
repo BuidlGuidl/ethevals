@@ -20,6 +20,52 @@ def test_converted_empty_reply_rows_record_the_no_answer():
         ("error", [{"kind": "empty", "stop_reason": None}])] * 14
 
 
+@pytest.mark.parametrize("unanswered", ["empty", "refused"])
+@pytest.mark.parametrize("failure", ["agent_version", "judge", "rewards"])
+def test_no_answer_never_hides_an_integrity_error(tmp_path, unanswered, failure):
+    from ethevals.trial_rows import results_row
+    task = task_folder(tmp_path)
+    config = load_job(job_config(tmp_path, "free"))
+    item, = plan([task], config, [], n_attempts=1)["missing"]
+    item["no_answer"] = [{"kind": unanswered, "stop_reason": None}]
+    folder = tmp_path / "saved"
+    recorded_trial(folder, task)
+    trajectory = folder / "agent/trajectory.json"
+    data = json.loads(trajectory.read_text())
+    data["steps"][-1]["message"] = ""
+    trajectory.write_text(json.dumps(data))
+    result_path = folder / "result.json"
+    result = json.loads(result_path.read_text())
+    if unanswered == "refused":
+        result["exception_info"] = {"exception_type": "AgentSafetyRefusalError", "exception_message": "Refused.",
+                                    "exception_traceback": "", "occurred_at": result["finished_at"]}
+    if failure == "agent_version":
+        item["agent_version"] = "wrong"
+    elif failure == "judge":
+        item["judge"] = {"model": "openai/planned", "effort": "high"}
+    else:
+        result["verifier_result"]["rewards"] = {"reward": 0.0}
+    result_path.write_text(json.dumps(result))
+    row = results_row(folder, item)
+    assert (row["status"], row["error_kind"]) == ("error", "verification" if failure == "rewards" else failure)
+
+
+def test_second_ask_never_uses_a_previous_ci_runs_row(tmp_path, monkeypatch):
+    task = task_folder(tmp_path)
+    config = load_job(job_config(tmp_path, "free"))
+    first, = plan([task], config, [], n_attempts=1)["missing"]
+    previous = {**first, "status": "error", "error_kind": "no_answer", "schema_version": 8,
+                "no_answer": [{"kind": "empty", "stop_reason": None}], "completed_at": "2026-11-09T00:00:00Z"}
+    report = budget_check(plan([task], config, [previous], n_attempts=1), 0)
+    calls = []
+
+    async def no_result(job):
+        calls.append(job)
+
+    monkeypatch.setattr(Job, "run", no_result)
+    assert asyncio.run(run(report, config, tmp_path / "out", [previous])) is False
+    assert len(calls) == 1
+
 
 @pytest.mark.parametrize("bare", [False, True])
 @pytest.mark.parametrize("first", ["empty", "refused", "content_filter"])
