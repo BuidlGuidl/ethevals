@@ -1,0 +1,155 @@
+"""Plan and execute checks against saved work."""
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+import json
+from pathlib import Path
+import shutil
+import subprocess
+
+from harbor.models.task.task import Task
+from harbor.models.task.config import VerifierEnvironmentMode
+from harbor.models.task.verifier_mode import resolve_task_verifier_mode, resolve_verifier_environment_definition
+
+from .checks import read_details, read_reward
+from .harbor_tasks import task_judges
+from .saved_work import fetch_work
+from .secret_check import check_output, remember_secrets
+from .task_hashes import digest
+from .trial_rows import fold_rows, write_rows
+
+
+def regrade_kind(path: Path, old: dict, current: dict) -> tuple[str | None, bool]:
+    judges = task_judges(path)
+    judge_files = {file.relative_to(path).as_posix() for file in judges}
+    before, after = old.get("checks_inputs", {}), current["checks_inputs"]
+    changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
+    judge_changed = bool(changed & (judge_files | {"@judge"}))
+    if judges and changed <= judge_files | {"@judge"}:
+        return "judge", True
+    if path.parent.name == "concepts":
+        producer_changed = changed - judge_files - {"@judge", "tests/answer.py", "tests/hand-cases.json", "tests/reward.toml"}
+        return "concepts", bool(judges and (judge_changed or producer_changed))
+    task = Task(path)
+    if (path.parent.name == "build" and resolve_task_verifier_mode(task.config) == VerifierEnvironmentMode.SEPARATE
+            and not list((path / "environment").glob("*compose.y*ml"))
+            and (path / "environment/foundry.toml").is_file()):
+        return "contract", bool(judges)
+    return None, False
+
+
+def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], list[dict]]:
+    def prepare(item):
+        try:
+            work = fetch_work(item["source_row"], item["kind"], cache)
+            if item["kind"] == "judge":
+                details = read_details(Path(work["verifier"]))
+                saved = [detail["judge"] for detail in details if detail.get("kind") in {"llm", "agent", "jev"}]
+                for judge in task_judges(Path(item["task_path"])).values():
+                    if not any((settings.get("files") or []) == (judge.judge.files or [])
+                               and settings.get("atif_trajectory") == judge.judge.atif_trajectory
+                               for settings in saved):
+                        raise ValueError("The judge's input selection changed")
+            return {**item, "saved_work": work}, None
+        except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+            return None, {**item, "rerun_reason": f"Saved work cannot be regraded: {error}"}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        prepared = list(pool.map(prepare, candidates))
+    return ([item for item, _ in prepared if item], [item for _, item in prepared if item])
+
+
+def run_regrades(items: list[dict], config, output: Path, previous: list[dict], secrets: dict) -> list[dict]:
+    groups = {}
+    for item in items:
+        groups.setdefault((item["task_path"], item["kind"]), []).append(item)
+    rows = previous
+    for (task_path, kind), batch in groups.items():
+        path = Path(task_path)
+        key = digest([(item["source_row"], item["checks_hash"], item["retry"], item["checks_generation"])
+                      for item in batch]).removeprefix("sha256:")[:24]
+        job = output / "jobs" / key
+        job.mkdir(parents=True, exist_ok=True)
+        remember_secrets(job, secrets)
+        (job / "board.json").write_text(json.dumps(batch[0]) + "\n")
+        (job / "regrade.json").write_text(json.dumps(batch, indent=2) + "\n")
+        try:
+            if kind == "contract":
+                for index, item in enumerate(batch):
+                    destination = job / str(index)
+                    if not (destination / "result.json").is_file():
+                        subprocess.run(["harbor", "trial", "regrade", item["saved_work"]["trial"], "-p", str(path),
+                                        "--trials-dir", str(job), "--trial-name", str(index)], check=True)
+            else:
+                task = Task(path)
+                definition = resolve_verifier_environment_definition(task.config, task.paths)
+                environment = definition.config if definition else task.config.environment
+                image = environment.docker_image
+                if not image:
+                    image = "ethevals-regrade-" + hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:16]
+                    subprocess.run(["docker", "build", "-t", image, str(definition.directory if definition else path / "environment")],
+                                   check=True, capture_output=True)
+                worker = Path(__file__).with_name("regrade_checks.py")
+                command = ["docker", "run", "--rm", "--user", "root", "--network", "bridge" if any(item["judge_required"] for item in batch) else "none",
+                           "--cpus", str(environment.cpus), "--memory", f"{environment.memory_mb}m",
+                           "--entrypoint", "python3", "-v", f"{worker.resolve()}:/regrade.py:ro",
+                           "-v", f"{(path / 'tests').resolve()}:/original-tests:ro", "-v", f"{job.resolve()}:/batch"]
+                if any(item["judge_required"] for item in batch):
+                    command += ["-e", config.judge.key_env, "-e", f"REWARDKIT_JUDGE={config.judge.model}",
+                                "-e", f"REWARDKIT_REASONING_EFFORT={config.judge.effort}"]
+                for index, item in enumerate(batch):
+                    destination = job / str(index)
+                    (destination / "agent").mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(item["saved_work"]["trajectory"], destination / "agent/trajectory.json")
+                    verifier = item["saved_work"].get("verifier")
+                    if verifier:
+                        shutil.copytree(verifier, destination / "saved-verifier", dirs_exist_ok=True)
+                subprocess.run([*command, image, "/regrade.py", "batch"], check=True)
+        finally:
+            check_output(output, secrets, require_inventory=True)
+            rows = fold_rows(rows, recover_regrades(output))
+            write_rows(output / "rows.jsonl", rows)
+    return rows
+
+
+def recover_regrades(output: Path) -> list[dict]:
+    rows = []
+    for metadata in sorted((output / "jobs").glob("*/regrade.json")):
+        receipt = metadata.parent / "publication-check.json"
+        if receipt.is_file() and json.loads(receipt.read_text()).get("withheld"):
+            continue
+        for index, item in enumerate(json.loads(metadata.read_text())):
+            folder = metadata.parent / str(index)
+            error_file = folder / "regrade-error.json"
+            finished = folder / "regrade-finished.json"
+            result = folder / "result.json"
+            if not finished.is_file() and not (result.is_file() and json.loads(result.read_text()).get("finished_at")):
+                continue
+            old = item["source_row"]
+            checked_at = (json.loads(finished.read_text()) if finished.is_file() else
+                          json.loads((folder / "result.json").read_text()).get("finished_at"))
+            error, rewards, checks, details = None, {}, {}, []
+            try:
+                details = read_details(folder / "verifier")
+                rewards, checks = read_reward(folder / "verifier")
+                if error_file.is_file():
+                    error = json.loads(error_file.read_text())
+            except ValueError as exc:
+                error = {"error_kind": "judge" if item["judge_required"] else "verification", "error_reason": str(exc)}
+                rewards, checks = getattr(exc, "rewards", {}), getattr(exc, "checks", {})
+            judge_costs = [detail.get("usage", {}).get("cost_usd") for detail in details
+                           if detail.get("kind") in {"llm", "agent", "jev"}]
+            row = {**old, **{key: item[key] for key in ("checks_hash", "checks_inputs", "checks_generation")},
+                   "rewards": rewards, "checks": checks,
+                   "status": "error" if error else "passed" if rewards["reward"] == 1 else "failed", "error_kind": None, "error_reason": None,
+                   "verifier_files": str((folder / "verifier").resolve()), "verifier_url": None,
+                   "trajectory_file": str((folder / "agent/trajectory.json").resolve()),
+                   "regraded_at": checked_at,
+                   "judge": item["judge"], "judge_paid_by": item["judge_paid_by"]}
+            if error:
+                row.update(error)
+                row["regrade_source"] = old.get("regrade_source", old)
+            row["retry"] = item["retry"]
+            if item["judge_required"]:
+                row["judge_cost_usd"] = (0.0 if item["judge_paid_by"] == "free" else
+                                         sum(judge_costs) if judge_costs and all(type(c) in (int, float) for c in judge_costs) else None)
+            rows.append(row)
+    return rows

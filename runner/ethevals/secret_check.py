@@ -172,6 +172,7 @@ def check_output(output: Path, secrets: dict[str, set[bytes]], *, require_invent
         record = {"digest": digest}
         if reason:
             row = {"schema_version": SCHEMA_VERSION,
+                   "checks_generation": metadata.get("checks_generation", 0),
                    **{key: metadata.get(key) for key in (
                        "task_id", "task_hash", "instruction_hash", "environment_hash", "checks_hash", "checks_inputs",
                        "skills_hash", "agent", "model", "effort", "mode", "trial", "retry",
@@ -189,6 +190,17 @@ def check_output(output: Path, secrets: dict[str, set[bytes]], *, require_invent
                 for value in values:
                     encoded = encoded.replace(json.dumps(value.decode())[1:-1], "[withheld]")
             record = {"withheld": json.loads(encoded)}
+            regrades = folder / "regrade.json"
+            if regrades.is_file():
+                record["withheld_rows"] = [{**record["withheld"], **{key: item.get(key) for key in (
+                    "task_id", "task_hash", "instruction_hash", "environment_hash", "checks_hash", "checks_generation",
+                    "skills_hash", "agent", "model", "effort", "mode", "trial", "retry")}}
+                    for item in json.loads(regrades.read_text())]
+                encoded = json.dumps(record)
+                for values in secrets.values():
+                    for value in values:
+                        encoded = encoded.replace(json.dumps(value.decode())[1:-1], "[withheld]")
+                record = json.loads(encoded)
             prefix = "::warning::" if os.environ.get("GITHUB_ACTIONS") == "true" else ""
             print(prefix + reason, file=sys.stderr)
         write_whole(receipt, json.dumps(record, sort_keys=True) + "\n", output)

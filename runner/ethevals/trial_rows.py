@@ -80,6 +80,7 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
             kind, reason = "no_answer", "No answer; the second try did not finish."
     return {
         "schema_version": SCHEMA_VERSION,
+        "checks_generation": metadata.get("checks_generation", 0),
         **{key: metadata[key] for key in ("instruction_hash", "environment_hash", "checks_hash", "checks_inputs")},
         **{key: metadata[key] for key in (
             "task_id", "task_hash", "skills_hash", "agent", "model", "effort", "mode", "trial", "retry",
@@ -112,8 +113,8 @@ def fold_rows(*groups: list[dict]) -> list[dict]:
             identity = trial_identity(row)
             old = latest.get(identity)
             url, old_url = row.get("trajectory_url") or "", (old or {}).get("trajectory_url") or ""
-            if old is None or (row["retry"], row.get("completed_at") or "", url.startswith("https://"), url.startswith("https://hub.harborframework.com/jobs/")) > (
-                old["retry"], old.get("completed_at") or "", old_url.startswith("https://"), old_url.startswith("https://hub.harborframework.com/jobs/")):
+            if old is None or (row.get("checks_generation", 0), row["retry"], row.get("regraded_at") or row.get("completed_at") or "", url.startswith("https://"), url.startswith("https://hub.harborframework.com/jobs/")) > (
+                old.get("checks_generation", 0), old["retry"], old.get("regraded_at") or old.get("completed_at") or "", old_url.startswith("https://"), old_url.startswith("https://hub.harborframework.com/jobs/")):
                 latest[identity] = row
     return sorted(latest.values(), key=lambda row: tuple(str(value or "") for value in trial_identity(row)[:-1]) + (row["trial"],))
 
@@ -125,8 +126,10 @@ def recover_rows(output: Path) -> list[dict]:
     for receipt in sorted((output / "jobs").glob(f"*/{RECEIPT}")):
         withheld = json.loads(receipt.read_text()).get("withheld")
         if withheld:
-            rows.append(withheld)
+            rows.extend(json.loads(receipt.read_text()).get("withheld_rows", [withheld]))
     for board_path in sorted((output / "jobs").glob("*/board.json")):
+        if (board_path.parent / "regrade.json").is_file():
+            continue
         receipt = board_path.parent / RECEIPT
         if receipt.is_file() and json.loads(receipt.read_text()).get("withheld"):
             continue
@@ -138,7 +141,8 @@ def recover_rows(output: Path) -> list[dict]:
                 logging.getLogger(__name__).warning("Skipping unreadable trial %s: %s", result, error)
                 continue
             rows.append(row)
-    return fold_rows(rows)
+    from .regrade import recover_regrades
+    return fold_rows(rows, recover_regrades(output))
 
 
 def previous_rows(output: Path, rows_file: Path) -> list[dict]:

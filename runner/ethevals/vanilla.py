@@ -53,10 +53,13 @@ class VanillaAgent(BaseAgent):
             (self.logs_dir / "provider.json").write_text(json.dumps({
                 "stop_reason": type(error).__name__, "refused": True}) + "\n")
             raise
-        stop_reason = response.choices[0].finish_reason
+        message = response.choices[0].message
+        provider = getattr(message, "provider_specific_fields", None) or {}
+        stop_reason = provider.get("stop_reason") or response.choices[0].finish_reason
+        refused = bool(getattr(message, "refusal", None)) or stop_reason in {"content_filter", "refusal", "safety", "blocked"}
         (self.logs_dir / "provider.json").write_text(json.dumps({
             "stop_reason": stop_reason,
-            "refused": stop_reason in {"content_filter", "refusal", "safety", "blocked"},
+            "refused": refused,
         }) + "\n")
         usage = response.usage
         context.n_input_tokens = usage.prompt_tokens
@@ -69,7 +72,6 @@ class VanillaAgent(BaseAgent):
             except Exception:
                 # Unknown model prices stay unknown in the results row.
                 pass
-        message = response.choices[0].message
         trajectory = Trajectory(
             session_id=self.session_id,
             agent=Agent(name=self.name(), version=self.version(), model_name=self.model_name, tool_definitions=[]),
