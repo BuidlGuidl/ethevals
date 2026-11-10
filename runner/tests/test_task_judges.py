@@ -505,6 +505,8 @@ def test_plain_harbor_and_board_agree_on_a_saved_judged_chain_trial(tmp_path, mo
                 "retry": 0, "paid_by": "free", "agent_version": result["agent_info"]["version"],
                 "harbor_version": "0.24.0",
                 "judge": {"model": "openai/gpt-5", "effort": "high"}, "judge_paid_by": "free"}
+            from ethevals.task_hashes import task_hashes
+            metadata.update(task_hashes(task, metadata["judge"]))
             row = results_row(result_path.parent, metadata)
             assert (row["status"], row["rewards"]["reward"], row["checks"]["verified_transfer"]) == (
                 "passed" if expected else "failed", expected, {"passed": bool(expected),

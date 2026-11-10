@@ -16,5 +16,20 @@
   "remaining_executions": 2,
   "agent_reserve_usd": 0.0,
   "judge_reserve_usd": 0.0,
-  "worst_case_usd": 0.0
+  "worst_case_usd": 0.0,
+  "instruction_hash": "sha256:33eedc0516be6f1d23aa1e624c5cda6675842dacbf9b6e5a57e54c880b12163d",
+  "environment_hash": "sha256:a91a7ab01f61144324ffaa7ed56048e446186bbb7c083d159abbd3ef842ce4f4",
+  "checks_hash": "sha256:bde2a163efbe7717f1b7cc5f6c3867e23f1d1986e9237e81431c36d831f8b03a",
+  "checks_inputs": {
+    "tests/answer.py": "sha256:3cdc5621125dd4b9e988f5dc7f697a3d2dd453d34653264f2d66de513655ea05",
+    "tests/reward.toml": "sha256:8a21f31895ff7bf449f0c26e10d848bec0f6a097dbcb9db8d85856c593ce9223",
+    "tests/test.sh": "sha256:3f84a7a9a99e090e53c665ddd14c246710f01646c6021ab64d8eeb86b80e021f",
+    "@verifier": {
+      "environment_mode": "separate"
+    },
+    "@artifacts": [
+      "/logs/agent/trajectory.json"
+    ],
+    "@judge": null
+  }
 }

@@ -40,11 +40,12 @@ def stored_file(ref, path):
 
 
 def result_record(own_rows=()):
+    from ethevals.stamp_rows import stamp_rows
     rows = []
     for ref in (f"refs/remotes/origin/{BASE_BRANCH}", f"refs/remotes/origin/{RESULTS_BRANCH}"):
         content = stored_file(ref, "results/rows.jsonl") or ""
-        rows = fold_rows(rows, [row for line in content.splitlines() if line.strip()
-                               for row in [json.loads(line)] if row.get("schema_version") == SCHEMA_VERSION])
+        stored = stamp_rows([json.loads(line) for line in content.splitlines() if line.strip()], Path.cwd())
+        rows = fold_rows(rows, [row for row in stored if row.get("schema_version") == SCHEMA_VERSION])
     return fold_rows(rows, own_rows)
 
 

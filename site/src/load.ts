@@ -13,6 +13,7 @@ const catalogSchema = z.object({
   n_attempts: z.number().int().positive(),
   tasks: z.array(z.object({
     id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
+    instruction_hash: z.string().min(1), environment_hash: z.string().min(1), checks_hash: z.string().min(1),
     area: z.string().trim().min(1).nullish(), layer: z.enum(layers).nullish(),
     description: z.string().min(1), instruction: z.string().min(1),
     modes: z.array(z.enum(["vanilla", "internet", "skills"])).min(1),
@@ -51,15 +52,15 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
     if (!line.trim()) return [];
     try {
       const value = JSON.parse(line);
-      if (Number.isInteger(value.schema_version) && value.schema_version < 8) return [];
+      if (Number.isInteger(value.schema_version) && value.schema_version < 9) return [];
       const row = rowSchema.parse(value);
       if (row.mode !== "vanilla" && !row.agent) throw new Error("Agent rows require an agent.");
       if (row.mode === "vanilla" && row.agent !== null) throw new Error("Vanilla rows cannot have an agent.");
       const evaluation = current.get(row.task_id);
-      if (evaluation?.hash === row.task_hash) {
+      if (evaluation?.instruction_hash === row.instruction_hash && evaluation.environment_hash === row.environment_hash) {
         if (!evaluation.modes.includes(row.mode)) throw new Error("The task does not declare this mode.");
       }
-      const key = JSON.stringify([row.task_id, row.task_hash, row.skills_hash, agentKey(row), row.mode, row.trial]);
+      const key = JSON.stringify([row.task_id, row.instruction_hash, row.environment_hash, row.checks_hash, row.skills_hash, agentKey(row), row.mode, row.trial]);
       if (identities.has(key)) throw new Error(`Duplicate trial for ${row.task_id}, ${row.model}, trial ${row.trial}.`);
       identities.add(key);
       return [row];
@@ -70,10 +71,12 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
 }
 
 export function currentRows(rows: Row[], catalog: ReturnType<typeof loadCatalog>): Row[] {
-  const current = new Map(catalog.evals.map((task) => [task.id, task.hash]));
+  const current = new Map(catalog.evals.map((task) => [task.id, task]));
   const models = new Set(catalog.models);
   // Trials past the job's n_attempts stay in the data but leave the board.
-  return rows.filter((row) => current.get(row.task_id) === row.task_hash
+  return rows.filter((row) => current.get(row.task_id)?.instruction_hash === row.instruction_hash
+    && current.get(row.task_id)?.environment_hash === row.environment_hash
+    && current.get(row.task_id)?.checks_hash === row.checks_hash
     && models.has(row.model)
     && row.trial <= catalog.n_attempts
     && (row.mode !== "skills" || row.skills_hash === catalog.skills_hash));

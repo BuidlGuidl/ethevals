@@ -17,7 +17,8 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(prog="ethevals")
     commands = parser.add_subparsers(dest="command", required=True)
     parsers = {name: commands.add_parser(name) for name in
-               ("run", "plan", "catalog", "export-hf", "publish-logs", "upload-hub")}
+               ("run", "plan", "catalog", "export-hf", "publish-logs", "upload-hub", "stamp-rows")}
+    parsers["stamp-rows"].add_argument("--rows", type=Path, default=Path("results/rows.jsonl"))
     for name in ("lint", "free-check"):
         parsers[name] = commands.add_parser(name, help="Check Harbor task folders.")
         parsers[name].add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
@@ -62,6 +63,10 @@ def parse_args(argv=None):
 def main(argv=None) -> int:
     parser, args = parse_args(argv)
     try:
+        if args.command == "stamp-rows":
+            from .stamp_rows import stamp_file
+            print(f"Stamped {stamp_file(args.rows, Path.cwd())} rows.")
+            return 0
         if args.command in {"plan", "run", "catalog"}:
             from . import jobs
             from .job_config import load_job

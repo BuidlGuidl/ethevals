@@ -196,7 +196,7 @@ def test_pending_results_branch_resumes_and_pr_appends_without_force(tmp_path, m
     ci.command("git", "config", "user.name", "Test")
     ci.command("git", "config", "user.email", "test@example.org")
     rows = Path("results/rows.jsonl")
-    first = {"schema_version": 8, "task_id": "concepts/a", "task_hash": "a", "trial": 1, "status": "passed", "retry": 0}
+    first = {"schema_version": 9, "task_id": "concepts/a", "task_hash": "a", "trial": 1, "status": "passed", "retry": 0}
     second = {**first, "trial": 2, "status": "error", "retry": 0}
     Path("source.txt").write_text("old source")
     write_rows(rows, [first])
@@ -265,7 +265,7 @@ def test_retry_opens_pr_after_successful_push(tmp_path, monkeypatch):
             return subprocess.CompletedProcess(args, 0, stdout="[]")
         return command(*args, **kwargs)
     monkeypatch.setattr(ci, "command", remote)
-    row = {"schema_version": 8, "task_id": "test", "trial": 1, "status": "error", "retry": 0}
+    row = {"schema_version": 9, "task_id": "test", "trial": 1, "status": "error", "retry": 0}
     with pytest.raises(subprocess.CalledProcessError):
         ci.commit_results([row], "owner/repo", True)
     ci.commit_results(ci.result_record(), "owner/repo", True)

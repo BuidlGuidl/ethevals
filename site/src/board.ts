@@ -11,6 +11,9 @@ export type Layer = (typeof layers)[number];
 export interface Eval {
   id: string;
   hash: string;
+  instruction_hash: string;
+  environment_hash: string;
+  checks_hash: string;
   title: string;
   pillar: Pillar;
   area?: string | null;
@@ -19,7 +22,7 @@ export interface Eval {
   instruction: string;
   modes: Mode[];
 }
-export type DisplayEval = Omit<Eval, "hash"> & { domain: Domain };
+export type DisplayEval = Omit<Eval, "hash" | "instruction_hash" | "environment_hash" | "checks_hash"> & { domain: Domain };
 
 export interface Agent {
   model: string;

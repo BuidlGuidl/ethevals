@@ -10,12 +10,12 @@ from harbor.models.job.lock import TaskLock
 from .checks import JudgeError, read_details, read_reward
 from .no_answer import no_answer
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def trial_identity(row: dict) -> tuple:
     return tuple(row.get(key) for key in (
-        "task_id", "task_hash", "skills_hash", "agent", "model", "effort", "mode", "trial"))
+        "task_id", "instruction_hash", "environment_hash", "skills_hash", "agent", "model", "effort", "mode", "trial"))
 
 
 def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = None) -> dict:
@@ -80,6 +80,7 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
             kind, reason = "no_answer", "No answer; the second try did not finish."
     return {
         "schema_version": SCHEMA_VERSION,
+        **{key: metadata[key] for key in ("instruction_hash", "environment_hash", "checks_hash", "checks_inputs")},
         **{key: metadata[key] for key in (
             "task_id", "task_hash", "skills_hash", "agent", "model", "effort", "mode", "trial", "retry",
             "paid_by", "agent_version", "harbor_version")},

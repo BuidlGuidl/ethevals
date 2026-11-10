@@ -61,6 +61,7 @@ if ${withCriteria ? "True" : "False"}:
     assert judge_calls == 1
 write_catalog([task], output)
 metadata["task_hash"] = task_entry(task)["hash"]
+metadata.update({key: task_entry(task)[key] for key in ("instruction_hash", "environment_hash", "checks_hash", "checks_inputs")})
 (trial / "lock.json").write_text(json.dumps({"task": {
     "name": "buidlguidl/question", "type": "local", "digest": metadata["task_hash"]}}))
 write_rows(output / "rows.jsonl", [results_row(trial, metadata,
@@ -71,7 +72,7 @@ write_rows(output / "rows.jsonl", [results_row(trial, metadata,
   const { evals } = loadCatalog(path.join(root, "catalog.json"));
   const rows = parseRows(readFileSync(path.join(root, "rows.jsonl"), "utf8"), "rows.jsonl", evals);
   assert.deepEqual(rows.map((row) => [row.task_id, row.schema_version, row.status, row.paid_by, row.model_cost_usd]),
-    [["concepts/question", 8, "passed", "free", 0]]);
+    [["concepts/question", 9, "passed", "free", 0]]);
   assert.deepEqual(rows[0].checks, {
     unit: { passed: true, reason: "The final reply matches." },
     ...(withCriteria ? { named_unit: { passed: true, reason: "The reply names the unit metre." } } : {}),

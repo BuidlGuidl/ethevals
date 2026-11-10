@@ -173,7 +173,8 @@ def check_output(output: Path, secrets: dict[str, set[bytes]], *, require_invent
         if reason:
             row = {"schema_version": SCHEMA_VERSION,
                    **{key: metadata.get(key) for key in (
-                       "task_id", "task_hash", "skills_hash", "agent", "model", "effort", "mode", "trial", "retry",
+                       "task_id", "task_hash", "instruction_hash", "environment_hash", "checks_hash", "checks_inputs",
+                       "skills_hash", "agent", "model", "effort", "mode", "trial", "retry",
                        "paid_by", "agent_version", "harbor_version")},
                    "completed_at": datetime.now(timezone.utc).isoformat(),
                    "status": "error", "error_kind": kind, "error_reason": reason,

@@ -18,6 +18,7 @@ from .files import write_whole
 from .job_config import JobSettings, check_credentials, check_judge_key, load_job
 from .harbor_tasks import lint_task, task_host_variables, task_judges
 from .skills import SkillsPack, pack_skills
+from .task_hashes import task_hashes
 from .secret_check import check_output, remember_secrets, secret_values
 from .trial_rows import fold_rows, recover_rows, trial_identity, write_rows
 
@@ -33,7 +34,10 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
     if not isinstance(modes, list) or not modes or any(not isinstance(mode, str) or mode not in {"vanilla", "internet", "skills"} for mode in modes):
         raise ValueError(f"{path}: metadata.modes must list supported modes")
     digest, _ = Packager.compute_content_hash(path)
+    config = config or load_job()
+    judge = {"model": config.judge.model, "effort": config.judge.effort} if task_judges(path) else None
     return {"id": f"{pillar}/{path.name}", "hash": "sha256:" + digest, "pillar": pillar,
+            **task_hashes(path, judge),
             "area": metadata.get("area"), "layer": metadata.get("layer"),
             "name": task.name, "description": task.config.task.description,
             "instruction": (path / "instruction.md").read_text(), "modes": modes}
@@ -41,6 +45,8 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
 
 def write_catalog(paths: list[Path], output: Path) -> None:
     entries = [task_entry(path) for path in paths]
+    for entry in entries:
+        del entry["checks_inputs"]
     if len({entry["id"] for entry in entries}) != len(entries):
         raise ValueError("Task IDs must be unique")
     names = set()
@@ -94,6 +100,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                 combinations += 1
                 for number in [trial] if trial is not None else range(1, (n_attempts or config.n_attempts) + 1):
                     metadata = {"task_id": task["id"], "task_hash": task["hash"],
+                                **{key: task[key] for key in ("instruction_hash", "environment_hash", "checks_hash", "checks_inputs")},
                                 "skills_hash": skills_pack.hash if mode == "skills" else None,
                                 "agent": None if mode == "vanilla" else agent.name, "model": model.name, "effort": model.effort,
                                 "mode": mode, "trial": number}
@@ -173,7 +180,9 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             path.write_bytes(data)
     for item in report["missing"]:
         path = Path(item["task_path"])
-        if task_entry(path, config)["hash"] != item["task_hash"]:
+        current = task_entry(path, config)
+        if (current["hash"] != item["task_hash"] or any(current[key] != item[key]
+                for key in ("instruction_hash", "environment_hash", "checks_hash"))):
             raise ValueError("The task differs from the plan; plan the trials again")
         if item["judge"]:
             check_judge_key(config.judge)
