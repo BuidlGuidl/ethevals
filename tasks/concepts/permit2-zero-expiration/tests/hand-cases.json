@@ -1,0 +1,17 @@
+[
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** No.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: Yes.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: Maybe no.",
+    "passed": false
+  }
+]

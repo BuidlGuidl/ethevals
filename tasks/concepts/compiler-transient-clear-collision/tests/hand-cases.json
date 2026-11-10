@@ -83,5 +83,20 @@
     "label": "explanation after a comma",
     "reply": "Yes, because the mechanism the question describes applies here.",
     "passed": true
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** Yes, no persistent pending-owner clear occurs because the compiler emits TSTORE for that clear.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: Yes, no.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: Yes, no.",
+    "passed": false
   }
 ]

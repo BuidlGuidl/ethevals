@@ -10,6 +10,7 @@ TARGET = "VaultDeposit witness)TokenPermissions(address token,uint256 amount)Vau
 
 
 def accepts(reply: str) -> bool:
+    reply = re.sub(r'^\s*[*_#`]*(?:(?:short|final)\s+)?answer[*_`]*\s*:[*_`]*\s*', "", reply, flags=re.I)
     text = re.sub(r"(?m)^\s*```[^\n]*\n", "", reply).strip()
     text = re.sub(r"^\*?\*?Short answer:\*?\*?\s*", "", text, flags=re.I)
     text = text.lstrip("`\"'")

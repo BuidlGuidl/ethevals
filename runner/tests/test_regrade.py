@@ -214,3 +214,33 @@ def test_ci_batches_640_concepts_regrades_in_one_job_without_trials(tmp_path):
     emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
     assert (emitted["scheduled_trials"], emitted["scheduled_regrades"], json.loads(emitted["regrade_matrix"])) == (
         "0", "1", {"include": [{"index": 0, "task_id": "concepts/question", "judge": False}]})
+
+
+RULE_TASKS = [path.parent for path in sorted((Path(__file__).resolve().parents[2] / "tasks/concepts").glob("*/tests/hand-cases.json"))
+              if not list(path.parent.glob("*.toml")) or not any("[judge]" in file.read_text() for file in path.parent.glob("*.toml"))]
+
+
+@pytest.mark.docker
+@pytest.mark.parametrize("tests", RULE_TASKS, ids=lambda path: path.parent.name)
+def test_rule_hand_cases_through_the_tasks_real_rewardkit_checks(tmp_path, tests):
+    from ethevals.jobs import task_entry
+    from ethevals.regrade import run_regrades
+    from ethevals.trial_rows import results_row
+
+    task = tests.parent
+    entry = task_entry(task)
+    fixture = Path(__file__).parent / "fixtures/harbor/recorded-trial"
+    old = results_row(fixture, json.loads((fixture / "board.json").read_text()))
+    cases = json.loads((tests / "hand-cases.json").read_text())
+    items = []
+    for number, case in enumerate(cases, 1):
+        trajectory = tmp_path / f"reply-{number}.json"
+        trajectory.write_text(json.dumps({"steps": [{"source": "agent", "message": case["reply"]}]}))
+        metadata = {**old, "task_id": entry["id"], "task_hash": entry["hash"], "trial": number,
+                    **{key: entry[key] for key in ("instruction_hash", "environment_hash", "checks_hash", "checks_inputs")}}
+        items.append({**metadata, "source_row": metadata, "task_path": str(task), "checks_generation": 1,
+                      "kind": "concepts", "judge_required": False,
+                      "saved_work": {"trajectory": str(trajectory)}, "judge": None, "judge_paid_by": None})
+    rows = run_regrades(items, load_job(), tmp_path / "out", [], {})
+    assert [(row["trial"], row["status"]) for row in rows] == [
+        (number, "passed" if case["passed"] else "failed") for number, case in enumerate(cases, 1)]

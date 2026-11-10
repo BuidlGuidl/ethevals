@@ -78,5 +78,20 @@
     "label": "concession after the answer, explanation after a comma (reviewer case)",
     "reply": "No. Yes, unused gas is refunded, but a 10% penalty on the unused limit is charged to the paymaster.",
     "passed": true
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** **No.** EntryPoint v0.7 also charges a 10% penalty on unused execution gas (callGasLimit plus paymasterPostOpGasLimit): each 5,000,000-limit operation that uses only about 150,000 gas costs the paymaster an extra ~485,000 gas, which is over four times the actual cost and goes to the bundler's beneficiary address, so the bundler profits by draining the deposit.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: **Yes.**\n\nThe EntryPoint pre-charges the paymaster for the full `callGasLimit`, but after execution it measures the gas actually consumed and refunds the unused portion (plus a fixed `postOp` overhead), so inflating `callGasLimit` to 5,000,000 on a ~150,000-gas operation does not increase what the paymaster ultimately pays — the real griefing risk here is instead that the paymaster signs *any* op, so a malicious user could submit an operation whose execution genuinely burns up to 5M gas (or reverts mid-execution, forcing the paymaster to cover the consumed gas plus `postOp` costs), but that is a function of gas actually used, not of the declared `callGasLimit`.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: no or yes.",
+    "passed": false
   }
 ]

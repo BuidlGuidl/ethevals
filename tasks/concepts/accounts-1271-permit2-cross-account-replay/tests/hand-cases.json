@@ -78,5 +78,20 @@
     "label": "explanation after a comma",
     "reply": "Yes, because the mechanism the question describes applies here.",
     "passed": true
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** Yes. Permit2’s PermitSingle signature does not bind the account address, so with matching initial nonces and identical owner-key validation, the same signature can establish a Permit2 allowance for account B.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: **No.** Although Permit2 uses a single universal domain separator (identical for all accounts and even chains), it binds the permit to a specific owner by hashing the owner address into the message — `keccak256(abi.encode(PERMIT2_DOMAIN_SEPARATOR, owner, hashStruct(PermitSingle)))` — so the signature signed for account A fails `ECDSA.recover` when submitted with account B as the owner.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: yes or no.",
+    "passed": false
   }
 ]

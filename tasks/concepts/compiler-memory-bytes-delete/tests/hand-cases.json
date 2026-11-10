@@ -98,5 +98,20 @@
     "label": "bare alternative as its own sentence",
     "reply": "The zero address. Alice's address.",
     "passed": false
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** **The zero address.** Solidity 0.8.30’s legacy code generator clears 32 bytes for this memory-byte deletion instead of just one, so `delete payload[0]` also zeroes recipient bytes 1–20.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: Alice’s address — `delete payload[0]` only zeroes the flag byte without shifting the array, so bytes 1–20 still contain `recipient`.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: zero address or Alice's address.",
+    "passed": false
   }
 ]

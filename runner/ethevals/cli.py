@@ -119,6 +119,14 @@ def main(argv=None) -> int:
             if args.command == "run" and args.upload_hub:
                 upload_hub(args.output, config)
                 write_rows(args.output / "rows.jsonl", fold_rows(read_rows(args.output / "rows.jsonl"), recover_rows(args.output)))
+            if args.command == "regrade":
+                old = {jobs.trial_identity(row): row for row in previous}
+                selected = {tuple(identity) for identity in report["selected"]}
+                for row in read_rows(args.output / "rows.jsonl"):
+                    identity = jobs.trial_identity(row)
+                    if identity in selected and old[identity]["status"] != row["status"]:
+                        print(f"{row['task_id']} | {row['model']} | {row['mode']} | trial {row['trial']}: "
+                              f"{old[identity]['status']} to {row['status']}")
             print(f"Results rows: {args.output / 'rows.jsonl'}")
             return 0 if success else 1
         if args.command == "export-hf":

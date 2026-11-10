@@ -1,0 +1,17 @@
+[
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** ERC-1271",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: ecrecover",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: ecrecover or ERC-1271",
+    "passed": false
+  }
+]
