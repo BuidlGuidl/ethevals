@@ -34,6 +34,7 @@ A missing default file produces an empty board.
 A missing explicit file fails the build.
 Malformed rows and duplicate trials fail with their file and line.
 The loader accepts schema version 8 and skips older rows.
+The loader stamps rows without hashes from task history. It leaves the results file unchanged.
 It requires current instruction and environment hashes and, for skills-mode rows, the current skills hash.
 A row keeps its last result while its checks hash is behind.
 It also drops trials numbered past the job's `n_attempts`.

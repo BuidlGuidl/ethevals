@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { z } from "zod";
 import { buildBoard, layers, pillars, agentKey, type BoardData, type Eval } from "./board";
@@ -91,6 +92,26 @@ export function currentRows(rows: Row[], catalog: ReturnType<typeof loadCatalog>
     });
 }
 
+function readRows(filename: string): string {
+  const contents = readFileSync(filename, "utf8");
+  const hashes = z.object({ schema_version: rowSchema.shape.schema_version,
+    instruction_hash: rowSchema.shape.instruction_hash.optional(),
+    environment_hash: rowSchema.shape.environment_hash.optional(), checks_hash: rowSchema.shape.checks_hash.optional() });
+  let values: unknown[];
+  try {
+    values = contents.split(/\r?\n/).filter((line) => line.trim()).map((line): unknown => JSON.parse(line));
+  } catch {
+    return contents;
+  }
+  if (!values.some((value) => {
+    const row = hashes.safeParse(value);
+    return row.success && (!row.data.instruction_hash || !row.data.environment_hash || !row.data.checks_hash);
+  })) return contents;
+  return execFileSync("uv", ["run", "--frozen", "python", "-c",
+    "import json, sys; from pathlib import Path; from ethevals.trial_rows import read_rows; print('\\n'.join(json.dumps(row) for row in read_rows(Path(sys.argv[1]))))",
+    filename], { cwd: path.resolve(siteRoot, ".."), encoding: "utf8", maxBuffer: 32 * 1024 ** 2 });
+}
+
 export function loadBoard(env: Record<string, string | undefined> = process.env, root = siteRoot): BoardData {
   const catalog = loadTaskCatalog(env, root);
   const demo = env.ETHEVALS_DEMO === "1";
@@ -103,7 +124,7 @@ export function loadBoard(env: Record<string, string | undefined> = process.env,
   const filename = path.resolve(root, demo ? "demo/rows.jsonl" : env.ETHEVALS_ROWS || "../results/rows.jsonl");
   const exists = existsSync(filename);
   if ((demo || env.ETHEVALS_ROWS) && !exists) throw new Error(`${filename}: results file does not exist.`);
-  const rows = exists ? parseRows(readFileSync(filename, "utf8"), filename, evaluations) : [];
+  const rows = exists ? parseRows(readRows(filename), filename, evaluations) : [];
   const shown = currentRows(rows, catalog);
   console.log(`${filename}${exists ? "" : " (missing; empty board)"}: ${rows.length} read, ${shown.length} current, ${rows.length - shown.length} stale.`);
   return buildBoard(evaluations, shown, demo);

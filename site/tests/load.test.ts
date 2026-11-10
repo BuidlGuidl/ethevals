@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
 import { loadBoard, parseRows } from "../src/load";
 import { siteRoot } from "../src/paths";
-import type { Row } from "../src/rows";
+import { rowSchema, type Row } from "../src/rows";
 
 const evaluation = {
   id: "concepts/units", hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", pillar: "concepts",
@@ -74,6 +74,22 @@ test("loader accepts v8 rows, ignores unused metadata, and skips older rows", (t
   assert.equal("retry" in cell.trials[0], false);
   assert.equal("model_metered_usd" in cell.trials[0], false);
   assert.deepEqual(parseRows(JSON.stringify({ ...paid, schema_version: 7 }) + "\n" + JSON.stringify(paid), "rows.jsonl", []), [paid]);
+});
+
+test("the board stamps a schema 8 row written by an old publisher", (t) => {
+  const f = fixture(t);
+  const saved = rowSchema.parse(JSON.parse(readFileSync(path.resolve(siteRoot, "../results/rows.jsonl"), "utf8").split("\n")[0]));
+  const pillar = saved.task_id.startsWith("act/") ? "act" : saved.task_id.startsWith("build/") ? "build" : "concepts";
+  const { instruction_hash, environment_hash, checks_hash, ...legacy } = saved;
+  writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", n_attempts: 3,
+    models: [saved.model], tasks: [{ ...evaluation, pillar, id: saved.task_id, instruction_hash, environment_hash,
+      checks_hash, modes: [saved.mode] }] }));
+  writeFileSync(f.rows, JSON.stringify(legacy));
+  const before = readFileSync(f.rows, "utf8");
+  const board = loadBoard({}, f.site);
+  const cell = board.tables[saved.mode].pillars[pillar].evals[0].cells[JSON.stringify([saved.model, saved.agent, saved.effort])];
+  assert.deepEqual(cell.trials.map((trial) => [trial.trial, trial.status]), [[saved.trial, saved.status]]);
+  assert.equal(readFileSync(f.rows, "utf8"), before);
 });
 
 test("v7 cost limits retain runner reasons and count as failed trials", (t) => {
