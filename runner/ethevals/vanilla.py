@@ -1,4 +1,5 @@
 """Answer an instruction with one model call and no tools."""
+import json
 from typing import Any
 
 from harbor.agents.base import BaseAgent
@@ -41,11 +42,22 @@ class VanillaAgent(BaseAgent):
 
     async def run(self, instruction, environment, context):
         options = self.options
-        response = await litellm.acompletion(
-            model=self.model_name, messages=[{"role": "user", "content": instruction}],
-            reasoning_effort=options.reasoning_effort, num_retries=0, max_retries=0,
-            **options.completion,
-        )
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            response = await litellm.acompletion(
+                model=self.model_name, messages=[{"role": "user", "content": instruction}],
+                reasoning_effort=options.reasoning_effort, num_retries=0, max_retries=0,
+                **options.completion,
+            )
+        except litellm.ContentPolicyViolationError as error:
+            (self.logs_dir / "provider.json").write_text(json.dumps({
+                "stop_reason": type(error).__name__, "refused": True}) + "\n")
+            raise
+        stop_reason = response.choices[0].finish_reason
+        (self.logs_dir / "provider.json").write_text(json.dumps({
+            "stop_reason": stop_reason,
+            "refused": stop_reason in {"content_filter", "refusal", "safety", "blocked"},
+        }) + "\n")
         usage = response.usage
         context.n_input_tokens = usage.prompt_tokens
         context.n_output_tokens = usage.completion_tokens
@@ -65,6 +77,7 @@ class VanillaAgent(BaseAgent):
                    Step(step_id=2, source="agent", message=message.content or "", model_name=self.model_name,
                         reasoning_effort=options.reasoning_effort, llm_call_count=1,
                         reasoning_content=getattr(message, "reasoning_content", None),
+                        extra={"stop_reason": stop_reason},
                         metrics=Metrics(prompt_tokens=context.n_input_tokens, cached_tokens=context.n_cache_tokens,
                                         completion_tokens=context.n_output_tokens, cost_usd=context.cost_usd))],
         )

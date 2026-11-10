@@ -207,7 +207,8 @@ def test_ci_upload_command_keeps_hub_links_through_final_publication(tmp_path, m
     report = json.loads((artifact.parent / "combined/release.json").read_text())
     assert (report["rows"][0]["status"], report["rows"][0]["trajectory_url"]) == ("passed", HUB_URL)
     assert len(report["assets"]) == 2
-    assert json.loads((artifact.parent / "combined/rows.jsonl").read_text())["trajectory_url"] == HUB_URL
+    published = [json.loads(line) for line in (artifact.parent / "combined/rows.jsonl").read_text().splitlines()]
+    assert [row["trajectory_url"] for row in published if row["task_id"] == "concepts/question"] == [HUB_URL]
 
 
 def test_upload_step_withholds_a_newly_available_hub_secret_from_artifact(tmp_path, monkeypatch):

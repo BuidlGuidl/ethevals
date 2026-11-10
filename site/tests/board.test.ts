@@ -44,6 +44,19 @@ test("the drawer labels the full Harbor Hub trial and the release fallback", () 
 });
 
 const failure = { status: "failed", checks: { answer: { passed: false, reason: "The answer differs." } } } as const;
+
+test("the drawer names a refusal or empty reply after two no-answer tries", () => {
+  for (const [kind, label] of [["refused", "Refused"], ["empty", "Empty reply"]] as const) {
+    const data = buildBoard([evaluation], [row({ ...failure, no_answer: [
+      { kind, stop_reason: "stop" }, { kind, stop_reason: "stop" },
+    ] })]);
+    const panel = renderToStaticMarkup(createElement(Detail, {
+      data, selection: { evaluation, pillar: "concepts", agent, mode: "internet", run: 1 }, onSelect: () => {},
+    }));
+    assert.ok(panel.includes(`<p class="negative">${label}</p>`));
+    assert.equal(data.tables.internet.summaries[agentKey(agent)].total, 1);
+  }
+});
 const error = { status: "error", checks: {}, error_kind: "execution", error_reason: "Sandbox stopped." } as const;
 
 test("a score counts passed trials and excludes errors, while retaining their details", () => {

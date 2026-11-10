@@ -8,6 +8,7 @@ from harbor.models.trial.result import TrialResult
 from harbor.models.job.lock import TaskLock
 
 from .checks import JudgeError, read_details, read_reward
+from .no_answer import no_answer
 
 SCHEMA_VERSION = 8
 
@@ -68,6 +69,15 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
     elapsed = (result.finished_at - result.started_at).total_seconds() if result.finished_at and result.started_at else None
     execution = result.agent_execution
     working = (execution.finished_at - execution.started_at).total_seconds() if execution and execution.finished_at and execution.started_at else None
+    history = list(metadata.get("no_answer", []))
+    unanswered = no_answer(folder, metadata["task_id"], error.exception_type if error else None)
+    if unanswered and result.finished_at is not None:
+        history.append(unanswered)
+        if len(history) == 2:
+            kind, reason, rewards = None, None, {"reward": 0.0}
+            checks = {"no_answer": {"passed": False, "reason": "No answer twice."}}
+        else:
+            kind, reason = "no_answer", "No answer; the second try did not finish."
     return {
         "schema_version": SCHEMA_VERSION,
         **{key: metadata[key] for key in (
@@ -77,6 +87,7 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
         "status": "error" if reason else "passed" if rewards.get("reward") == 1 else "failed",
         "rewards": rewards,
         "checks": checks, "error_kind": kind, "error_reason": " ".join(reason.split()) if reason else None,
+        "no_answer": history,
         "limit": {"type": "time", "limit": float(timeout[1]), "reason": error.exception_message} if timeout else None,
         "total_tokens": (n_input or 0) + (n_output or 0),
         "model_cost_usd": cost, "judge_cost_usd": judge_cost, "judge": judge, "judge_paid_by": judge_paid_by,

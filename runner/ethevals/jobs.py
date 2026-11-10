@@ -203,35 +203,45 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
         prepared.append((item, harbor))
     rows = previous
     for item, harbor in prepared:
-        try:
-            name = hashlib.sha256(json.dumps([item, harbor.model_dump(mode="json")], sort_keys=True).encode()).hexdigest()[:24]
-            destination = output / "jobs" / name
-            destination.mkdir(parents=True, exist_ok=True)
-            remember_secrets(destination, secrets)
-            write_whole(destination / "board.json", json.dumps(item, indent=2) + "\n", output)
-            config_path = destination / "config.json"
-            if config_path.exists():
-                try:
-                    JobConfig.model_validate_json(config_path.read_text())
-                except ValidationError:
-                    if (any(child.is_dir() for child in destination.iterdir())
-                            or (destination / "lock.json").exists() or (destination / "result.json").exists()):
-                        raise ValueError(f"{config_path}: unreadable config beside started trials; preserve the saved job")
-                    config_path.unlink()
-            job = await Job.create(JobConfig(
-                job_name=name, jobs_dir=output / "jobs", n_concurrent_trials=1, quiet=True,
-                agents=[harbor], tasks=[{"path": item["task_path"]}],
-                verifier={"env": {
-                    "REWARDKIT_JUDGE": config.judge.model,
-                    "REWARDKIT_REASONING_EFFORT": config.judge.effort,
-                    "CLAUDE_CODE_OAUTH_TOKEN": "", "REWARDKIT_FORCE_SUBSCRIPTION": "",
-                } if item["judge"] else {}}, environment={"type": "docker"},
-            ))
-            await job.run()
-        finally:
-            check_output(output, secrets, require_inventory=True)
-            rows = fold_rows(rows, recover_rows(output))
-            write_rows(output / "rows.jsonl", rows)
+        for no_answer_try in range(2):
+            rows = await run_trial(item, harbor, config, output, secrets, rows)
+            row = next((row for row in rows if trial_identity(row) == trial_identity(item)), None)
+            if no_answer_try or row is None or row.get("error_kind") != "no_answer":
+                break
+            item = {**item, "no_answer": row["no_answer"]}
     selected = {tuple(identity) for identity in report["selected"]}
     observed = {trial_identity(row): row for row in rows if trial_identity(row) in selected}
     return len(observed) == len(selected) and all(row["status"] != "error" for row in observed.values())
+
+
+async def run_trial(item, harbor, config, output, secrets, rows):
+    try:
+        name = hashlib.sha256(json.dumps([item, harbor.model_dump(mode="json")], sort_keys=True).encode()).hexdigest()[:24]
+        destination = output / "jobs" / name
+        destination.mkdir(parents=True, exist_ok=True)
+        remember_secrets(destination, secrets)
+        write_whole(destination / "board.json", json.dumps(item, indent=2) + "\n", output)
+        config_path = destination / "config.json"
+        if config_path.exists():
+            try:
+                JobConfig.model_validate_json(config_path.read_text())
+            except ValidationError:
+                if (any(child.is_dir() for child in destination.iterdir())
+                        or (destination / "lock.json").exists() or (destination / "result.json").exists()):
+                    raise ValueError(f"{config_path}: unreadable config beside started trials; preserve the saved job")
+                config_path.unlink()
+        job = await Job.create(JobConfig(
+            job_name=name, jobs_dir=output / "jobs", n_concurrent_trials=1, quiet=True,
+            agents=[harbor], tasks=[{"path": item["task_path"]}],
+            verifier={"env": {
+                "REWARDKIT_JUDGE": config.judge.model,
+                "REWARDKIT_REASONING_EFFORT": config.judge.effort,
+                "CLAUDE_CODE_OAUTH_TOKEN": "", "REWARDKIT_FORCE_SUBSCRIPTION": "",
+            } if item["judge"] else {}}, environment={"type": "docker"},
+        ))
+        await job.run()
+    finally:
+        check_output(output, secrets, require_inventory=True)
+        rows = fold_rows(rows, recover_rows(output))
+        write_rows(output / "rows.jsonl", rows)
+    return rows

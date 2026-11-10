@@ -14,6 +14,7 @@ export const rowSchema = z.object({
   effort: z.string().nullable(),
   trial: z.number().int().positive(),
   status: z.enum(["passed", "failed", "error"]),
+  no_answer: z.array(z.object({ kind: z.enum(["refused", "empty"]), stop_reason: z.string().nullable() })).optional(),
   checks: z.record(z.string(), z.object({ passed: z.boolean(), reason: z.string().min(1) })),
   error_kind: z.string().nullable(),
   error_reason: z.string().nullable(),

@@ -29,7 +29,7 @@ export interface Agent {
 
 export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind" | "error_reason"
   | "total_tokens" | "total_seconds" | "model_cost_usd" | "judge_cost_usd"
-  | "cost_source" | "limit" | "paid_by"> & {
+  | "cost_source" | "limit" | "paid_by" | "no_answer"> & {
   cost: number | null;
   issue: string;
   trajectoryUrl: string | null;
@@ -127,6 +127,7 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[]): EvalCell {
       model_cost_usd: row.model_cost_usd, judge_cost_usd: row.judge_cost_usd,
       cost_source: row.cost_source,
       paid_by: row.paid_by,
+      no_answer: row.no_answer,
       limit: row.limit,
       cost: trialCost(row), issue: row.error_reason ?? (row.limit
         ? [...new Set(Object.values(row.checks).filter((check) => !check.passed).map((check) => check.reason))].join(" ")
