@@ -539,6 +539,23 @@ RULE_TASKS = [path.parent for path in sorted((Path(__file__).resolve().parents[2
               if not list(path.parent.glob("*.toml")) or not any("[judge]" in file.read_text() for file in path.parent.glob("*.toml"))]
 
 
+@pytest.mark.parametrize("task,right,wrong", [("permit2-zero-expiration", "No", "yes"),
+                                            ("permit2-7702-signature", "ERC-1271", "ecrecover")])
+@pytest.mark.parametrize("label", ["", "Answer: ", "**Answer:** "])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_permit2_rules_reject_both_orders_of_opposing_answers(task, right, wrong, label, reverse):
+    import ast
+    import re
+    path = Path(__file__).resolve().parents[2] / "tasks/concepts" / task / "tests/answer.py"
+    tree = ast.parse(path.read_text())
+    tree.body = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "accepts"]
+    namespace = {"re": re}
+    exec(compile(tree, str(path), "exec"), namespace)
+    accepts = namespace["accepts"]
+    first, second = (wrong, right) if reverse else (right, wrong)
+    assert accepts(f"{label}{right}.") is True
+    assert accepts(f"{label}{first}, or perhaps {second}.") is False
+    assert accepts(f"{label}{first} or {second}; either might work.") is False
 
 
 @pytest.mark.docker
