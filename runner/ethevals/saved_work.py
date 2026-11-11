@@ -20,7 +20,7 @@ class SavedWorkGone(ValueError):
     """The saved work has no address or its source confirms its removal."""
 
 
-def download_ci(repo: str, run_id: str, pattern: str, destination: Path) -> None:
+def download_ci(repo: str, run_id: str, pattern: str, destination: Path, *, missing_is_gone=False) -> None:
     try:
         subprocess.run(["gh", "run", "download", run_id, "--repo", repo, "--pattern", pattern,
                         "--dir", str(destination)], check=True, capture_output=True)
@@ -28,6 +28,8 @@ def download_ci(repo: str, run_id: str, pattern: str, destination: Path) -> None
         listing = subprocess.check_output(["gh", "api", f"repos/{repo}/actions/runs/{run_id}/artifacts",
                                            "--paginate", "--jq", '.artifacts[] | [.name, .expired] | @tsv'], text=True)
         matches = [line.split("\t") for line in listing.splitlines() if fnmatch(line.split("\t")[0], pattern)]
+        if missing_is_gone and not matches:
+            raise SavedWorkGone(f"No CI artifacts match {pattern}") from None
         if matches and all(expired == "true" for _, expired in matches):
             raise SavedWorkGone(f"CI artifacts matching {pattern} expired") from None
         raise
@@ -75,7 +77,7 @@ def trajectory_url(row: dict) -> str | None:
     return url if url.startswith(("https://", "http://")) else None
 
 
-def ci_trial(row: dict, cache: Path) -> Path:
+def ci_trial(row: dict, cache: Path, *, missing_is_gone=False) -> Path:
     """Recover older contract trials from the CI artifact while it exists."""
     match = re.fullmatch(r"https://github.com/([^/]+/[^/]+)/releases/download/results-([0-9]+)/.*", row.get("verifier_url") or "")
     if not match:
@@ -86,7 +88,7 @@ def ci_trial(row: dict, cache: Path) -> Path:
     with _downloads:
         plan = root / "plan"
         if not list(plan.rglob("trials.json")):
-            download_ci(repo, run_id, f"trial-plan-{run_id}-*", plan)
+            download_ci(repo, run_id, f"trial-plan-{run_id}-*", plan, missing_is_gone=missing_is_gone)
         files = sorted(plan.rglob("trials.json"))
         if not files:
             raise ValueError("The saved CI plan is unavailable")
@@ -99,7 +101,7 @@ def ci_trial(row: dict, cache: Path) -> Path:
             folder = root / str(index)
             if not folder.exists():
                 try:
-                    download_ci(repo, run_id, f"trial-run-{run_id}-*-{index}", folder)
+                    download_ci(repo, run_id, f"trial-run-{run_id}-*-{index}", folder, missing_is_gone=missing_is_gone)
                 except (SavedWorkGone, subprocess.SubprocessError) as error:
                     failures.append(error)
                     continue
@@ -130,16 +132,25 @@ def fetch_work(row: dict, kind: str, cache: Path) -> dict:
                   row.get("model"), row.get("mode"), row.get("trial"), row.get("retry")]).removeprefix("sha256:")
     directory = cache / key
     directory.mkdir(parents=True, exist_ok=True)
-    if kind == "contract":
+    if kind in {"contract", "workspace"}:
         local = Path(row["verifier_files"]).parent if row.get("verifier_files") else None
         if local and (local / "artifacts/manifest.json").is_file():
             target = directory / "trial"
             if not target.exists():
                 shutil.copytree(local, target)
-            return {"trial": str(target.resolve())}
-        if row.get("artifacts_url"):
-            return {"trial": str(unpack(asset(row["artifacts_url"], cache), directory / "trial").resolve())}
-        return {"trial": str(ci_trial(row, cache).resolve())}
+        elif row.get("artifacts_url"):
+            target = unpack(asset(row["artifacts_url"], cache), directory / "trial")
+        else:
+            target = ci_trial(row, cache, missing_is_gone=kind == "workspace")
+        if kind == "workspace":
+            entries = json.loads((target / "artifacts/manifest.json").read_text())
+            entries = [entry for entry in entries if entry["source"].rstrip("/") == "/workspace"
+                       and entry.get("service") in {None, "main"}]
+            if len(entries) != 1 or entries[0]["status"] != "ok" or not (target / entries[0]["destination"]).is_dir():
+                raise SavedWorkGone("The saved workspace is unavailable")
+            if not (target / "verifier").is_dir() and row.get("verifier_url"):
+                unpack(asset(row["verifier_url"], cache), target / "verifier")
+        return {"trial": str(target.resolve())}
     local = Path(row["trajectory_file"]) if row.get("trajectory_file") else None
     if not local or not local.is_file():
         url = trajectory_url(row)

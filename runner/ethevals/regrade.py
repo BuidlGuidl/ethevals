@@ -9,6 +9,7 @@ import tarfile
 from urllib.error import HTTPError
 
 from harbor.models.task.task import Task
+from harbor.models.task.artifacts import normalize_artifact_entries
 from harbor.models.task.config import VerifierEnvironmentMode
 from harbor.models.task.verifier_mode import resolve_task_verifier_mode, resolve_verifier_environment_definition
 
@@ -27,6 +28,11 @@ def regrade_options(path: Path) -> dict:
             and not list((path / "environment").glob("*compose.y*ml"))
             and (path / "environment/foundry.toml").is_file()):
         kind = "contract"
+    if kind is None and path.parent.name == "build" and any(
+            entry.source.rstrip("/") == "/workspace" and entry.service in {None, "main"}
+            and set(entry.exclude) <= {"node_modules", "dist", ".git", "chain_context.json"}
+            for entry in normalize_artifact_entries(task.config.artifacts)):
+        kind = "workspace"
     return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in task_judges(path)]}
 
 
