@@ -68,7 +68,7 @@ def test_partial_workspaces_and_act_tasks_keep_their_reruns(tmp_path, monkeypatc
     (task / "tests/test.sh").write_text("Changed checks.\n")
     report = plan([task], config, [{**item, "status": "passed"}], n_attempts=1)
     assert (report["regrade_trials"], report["missing"][0]["rerun_reason"]) == (
-        0, "The changed checks need a live browser or chain.")
+        0, "The changed checks cannot use a saved-input regrade.")
 
 
 def test_page_judge_changes_keep_the_judge_only_regrade(tmp_path):

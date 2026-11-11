@@ -37,7 +37,7 @@ The new row replaces the old one, and a changed result shows in the "Record tria
 | A Concepts task's tests | regraded from the saved final reply |
 | Only a judge's criteria or the judge model, on any task | regraded by asking the judge again on its saved input; the other checks keep their results |
 | A contract Build task's tests | regraded on the saved work |
-| Tests that need a browser or a chain | regraded for saved Build pages under [ADR 0027](0027-regrade-pages-from-saved-work.md); otherwise rerun |
+| Tests that need a browser or a chain | regraded for saved Build pages under [ADR 0029](0029-regrade-pages-from-saved-work.md); otherwise rerun |
 | The instruction or the environment | rerun |
 
 - **When the saved work is gone, the trial is rerun.** A download that fails for a passing reason, such as a rate limit, is tried again on the next CI run and never becomes a rerun.
@@ -55,7 +55,8 @@ The new row replaces the old one, and a changed result shows in the "Record tria
 ## Known gaps
 
 - **Shared check code that is built into an image counts as environment,** so changing it still reruns the tasks that use the image. A task's own tests are the place for a fix.
-- **Act tasks still need their chain state.** [ADR 0027](0027-regrade-pages-from-saved-work.md) regrades saved Build pages in fresh trial environments.
+- **Act tasks still need their chain state.** [ADR 0029](0029-regrade-pages-from-saved-work.md) regrades saved Build pages in fresh trial environments.
+  [ADR 0030](0030-regrade-from-saved-check-output.md) permits saved code records when the task states they still stand.
 
 ## Considered options
 

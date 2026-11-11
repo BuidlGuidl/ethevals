@@ -145,6 +145,7 @@ def batch():
             wrapper.write_text("#!/bin/sh\nexec python3 /regrade.py check\n")
             wrapper.chmod(0o755)
             environment["PATH"] = str(wrapper.parent) + ":" + os.environ["PATH"]
+        if item["kind"] in {"concepts", "evidence"}:
             command = ["sh", "/tests/test.sh"]
         else:
             script = Path("/tests/test.sh").read_text()

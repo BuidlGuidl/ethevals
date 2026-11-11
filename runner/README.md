@@ -95,10 +95,20 @@ Concepts regrades run the task's real tests through RewardKit in its verifier im
 Rows for one task share a container.
 Unchanged judge criteria and inputs keep their saved results.
 A criteria change, judge program, model, or effort change, or changed file input asks the judge again.
-A judge that declares MCP servers needs a live session. A judge-only change reruns those trials.
+A judge that declares MCP servers needs a live session.
+A judge-only change uses a workspace regrade when available, and otherwise reruns those trials.
 Judge-only regrades reuse saved inputs and keep the other checks.
+`tests/saved-checks.json` can name old checks hashes whose saved code records still stand.
+It is a JSON array of `sha256:` hashes, read without running task code.
+For those hashes, a regrade runs the task's `test.sh` with saved check output and trajectory.
+It starts no chain, workspace, or agent container and asks every current judge again.
+The tests use `ETHEVALS_REGRADE_ITEM` to skip live steps and keep saved evidence.
+This takes precedence over the task's normal regrade kind.
+Instruction, environment, and artifact changes still rerun trials.
+See [ADR 0030](../docs/adr/0030-regrade-from-saved-check-output.md) for the claim's review and removal rules.
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
 Other Build tasks that save all of `/workspace` run a fresh Harbor trial with a saved-work agent.
+See [ADR 0029](../docs/adr/0029-regrade-pages-from-saved-work.md).
 The agent restores files and installs dependencies from the saved lockfile without calling a model.
 It keeps the fresh chain context link and RPC URL, and restores saved public setup values where available.
 Older check output can supply matching public context fields through `fixture.json`.

@@ -74,8 +74,12 @@ def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=Fals
             return {"action": "rerun", "reason": "The saved work lacks the changed artifacts."}
         options = current["regrade"]
         judges = set(options["judge_files"])
+        if row.get("checks_hash") in options.get("saved_checks", []):
+            return {"action": "regrade", "kind": "evidence", "judge_required": bool(judges)}
         if judges and changed <= judges | {"@judge"}:
             if options.get("live_judge"):
+                if options["kind"] == "workspace":
+                    return {"action": "regrade", "kind": "workspace", "judge_required": True}
                 return {"action": "rerun", "reason": "The judge needs a live browser or chain."}
             return {"action": "regrade", "kind": "judge", "judge_required": True}
         if options["kind"]:

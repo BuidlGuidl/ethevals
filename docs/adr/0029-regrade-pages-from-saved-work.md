@@ -27,7 +27,8 @@ A fresh address can fail those pages for a change they never saw.
   Harbor writes those values through the existing chain service, where the public volume is writable.
   For older rows, matching fields in `verifier/fixture.json` supply those values.
   Each regrade saves the public context for the next regrade.
-- Judge-only changes keep the existing regrade on saved judge input.
+- Judge-only changes use saved judge input when the judge needs no live session.
+  Browser judges use the fresh trial environment too.
   Other test or verifier changes use the fresh trial environment.
   Artifact changes, instruction changes, and environment changes keep their reruns.
 

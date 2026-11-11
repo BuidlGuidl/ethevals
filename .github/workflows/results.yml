@@ -173,7 +173,7 @@ jobs:
         if: matrix.workspace
         timeout-minutes: 60
         env:
-          ANTHROPIC_API_KEY: *judge-key
+          CLAUDE_CODE_OAUTH_TOKEN: *judge-key
           MAINNET_RPC_URL: *mainnet-rpc
           BASE_RPC_URL: *base-rpc
         run: >-

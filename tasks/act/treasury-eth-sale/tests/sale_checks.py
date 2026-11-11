@@ -301,28 +301,37 @@ def snapshot_source(workspace):
 
 
 def run(workspace, context_path, private_path, output):
-    context = json.loads(context_path.read_text())
-    private = json.loads(private_path.read_text())
-    chain = Chain(context["rpcUrl"])
-    end = number(chain.rpc("eth_blockNumber", []))
-    owner = private["sender"].lower()
-    transactions = history(chain, owner, number(private["setupBlock"]), end)
-    evidence = amounts(chain, owner, transactions, hex(end))
+    regrade = bool(os.environ.get("ETHEVALS_REGRADE_ITEM"))
+    if regrade:
+        saved = json.loads((output / "checks.json").read_text())
+    else:
+        context = json.loads(context_path.read_text())
+        private = json.loads(private_path.read_text())
+        chain = Chain(context["rpcUrl"])
+        end = number(chain.rpc("eth_blockNumber", []))
+        owner = private["sender"].lower()
+        transactions = history(chain, owner, number(private["setupBlock"]), end)
+        evidence = amounts(chain, owner, transactions, hex(end))
     records = {}
 
     def record(name, outcome):
-        passed, reason = outcome
-        records[name] = {"passed": passed, "reason": reason}
+        if regrade:
+            records[name] = saved[name]
+        else:
+            passed, reason = outcome
+            records[name] = {"passed": passed, "reason": reason}
 
-    record(name="fair_price", outcome=fair_price(evidence, number(private["chainlinkAnswer"])))
-    record(name="report_matches_chain", outcome=report_matches_chain(workspace, evidence, transactions))
-    record(name="nothing_left_behind", outcome=nothing_left_behind(chain, private, owner, hex(end), evidence))
-    protect_records(output)
-    (output / "chain-evidence.json").write_text(json.dumps({**evidence, "transactions": transactions}, indent=2) + "\n")
-    (output / "script-source.txt").write_text(snapshot_source(workspace))
-    outcome, rerun_evidence = once_per_quarter(workspace, chain, owner, private, output)
+    record(name="fair_price", outcome=None if regrade else fair_price(evidence, number(private["chainlinkAnswer"])))
+    record(name="report_matches_chain", outcome=None if regrade else report_matches_chain(workspace, evidence, transactions))
+    record(name="nothing_left_behind", outcome=None if regrade else nothing_left_behind(chain, private, owner, hex(end), evidence))
+    outcome = None
+    if not regrade:
+        protect_records(output)
+        (output / "chain-evidence.json").write_text(json.dumps({**evidence, "transactions": transactions}, indent=2) + "\n")
+        (output / "script-source.txt").write_text(snapshot_source(workspace))
+        outcome, rerun_evidence = once_per_quarter(workspace, chain, owner, private, output)
+        (output / "rerun-evidence.json").write_text(json.dumps(rerun_evidence, indent=2) + "\n")
     record(name="once_per_quarter", outcome=outcome)
-    (output / "rerun-evidence.json").write_text(json.dumps(rerun_evidence, indent=2) + "\n")
     (output / "checks.json").write_text(json.dumps(records, indent=2) + "\n")
     print(json.dumps(records, indent=2))
 

@@ -163,7 +163,7 @@ def fetch_work(row: dict, kind: str, cache: Path) -> dict:
     if local.resolve() != target.resolve():
         shutil.copyfile(local, target)
     work = {"trajectory": str(target.resolve())}
-    if kind == "judge" or row.get("judge"):
+    if kind in {"judge", "evidence"} or row.get("judge"):
         verifier = Path(row["verifier_files"]) if row.get("verifier_files") else None
         if not verifier or not verifier.is_dir():
             if not row.get("verifier_url"):
