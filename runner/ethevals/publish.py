@@ -6,14 +6,29 @@ import re
 import shutil
 import subprocess
 import tarfile
+import time
 
 from .trial_rows import read_rows, trial_identity, write_rows
 from .secret_check import require_checked
 
 
+UPLOAD_BATCH_SIZE = 10
+UPLOAD_PAUSE = 20
+UPLOAD_TRIES = 7
+RATE_LIMIT_WAIT = 60
+
+
+def _release_files(repo: str, tag: str) -> dict[str, int]:
+    release = subprocess.run(["gh", "release", "view", tag, "--repo", repo, "--json", "databaseId"],
+                             check=True, capture_output=True, text=True)
+    release_id = json.loads(release.stdout)["databaseId"]
+    assets = subprocess.run(["gh", "api", f"repos/{repo}/releases/{release_id}/assets?per_page=100",
+                             "--paginate", "--slurp"], check=True, capture_output=True, text=True)
+    return {asset["name"]: asset["size"] for page in json.loads(assets.stdout) for asset in page}
+
+
 def publish_logs(output: Path, repo: str, run_id: str, commit: str,
-                 *, publish: bool = False, rows: list[dict] | None = None,
-                 resume: bool = False) -> dict:
+                 *, publish: bool = False, rows: list[dict] | None = None) -> dict:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*", repo):
         raise ValueError("GitHub repo must have the form owner/name")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", run_id):
@@ -86,17 +101,47 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
             raise ValueError(f"Release asset must be smaller than 2 GiB: {asset['name']}")
     command = ["gh", "release", "create", tag, "--repo", repo, "--target", commit,
                "--latest=false", "--title", f"Results {run_id}", "--notes",
-               "Harbor trajectories and verifier output for these trials.",
-               *[asset["source"] for asset in assets]]
+               "Harbor trajectories and verifier output for these trials."]
     receipt = root / "published" / f"{tag}.jsonl"
     report = {"dry_run": not publish, "release": tag, "repo": repo, "commit": commit,
               "rows_file": str(receipt), "command": command if assets else [],
               "assets": assets, "rows": linked}
     if publish and assets:
-        if resume and subprocess.run(["gh", "release", "view", tag, "--repo", repo],
-                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0:
-            command = ["gh", "release", "upload", tag, "--repo", repo, "--clobber",
-                       *[asset["source"] for asset in assets]]
-        subprocess.run(command, check=True, stdout=subprocess.PIPE, text=True)
+        try:
+            existing = _release_files(repo, tag)
+        except subprocess.CalledProcessError as error:
+            if "release not found" not in (error.stderr or "").lower():
+                raise
+            subprocess.run(command, check=True, capture_output=True, text=True)
+            existing = _release_files(repo, tag)
+        sizes = {asset["name"]: Path(asset["source"]).stat().st_size for asset in assets}
+        pending = [asset for asset in assets if existing.get(asset["name"]) != sizes[asset["name"]]]
+        for offset in range(0, len(pending), UPLOAD_BATCH_SIZE):
+            if offset:
+                time.sleep(UPLOAD_PAUSE)
+            batch = pending[offset:offset + UPLOAD_BATCH_SIZE]
+            for attempt in range(UPLOAD_TRIES):
+                missing = [asset for asset in batch if existing.get(asset["name"]) != sizes[asset["name"]]]
+                if not missing:
+                    break
+                try:
+                    subprocess.run(["gh", "release", "upload", tag, "--repo", repo, "--clobber",
+                                    *[asset["source"] for asset in missing]],
+                                   check=True, capture_output=True, text=True)
+                except subprocess.CalledProcessError as error:
+                    message = (error.stderr or "").lower()
+                    if not any(marker in message for marker in ("rate limit", "http 429", "too many requests")):
+                        raise
+                    existing = _release_files(repo, tag)
+                    if all(existing.get(asset["name"]) == sizes[asset["name"]] for asset in batch):
+                        break
+                    if attempt == UPLOAD_TRIES - 1:
+                        uploaded = sum(existing.get(name) == size for name, size in sizes.items())
+                        raise RuntimeError(f"Release {tag}: {uploaded} files up, {len(assets) - uploaded} left. "
+                                           "Rerun the failed job to continue the upload.") from error
+                    time.sleep(RATE_LIMIT_WAIT * 2**attempt)
+                else:
+                    existing.update((asset["name"], sizes[asset["name"]]) for asset in missing)
+                    break
         write_rows(receipt, linked)
     return report
