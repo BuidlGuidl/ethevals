@@ -20,7 +20,7 @@ export async function until(fn, timeout = 20_000) {
 }
 
 // All callbacks and funding data come from verifier-owned task files.
-export async function createHarness({ workspace, output, sourceContext = '/chain/chain_context.json', funding, warm }) {
+export async function createHarness({ workspace, output, sourceContext = '/chain/chain_context.json', funding, warm, externalBrowser = false }) {
   const processes = [];
   let browser;
   let preview;
@@ -86,7 +86,7 @@ export async function createHarness({ workspace, output, sourceContext = '/chain
       '/root/savings-libs/lib/x86_64-linux-gnu', '/root/savings-libs/lib/aarch64-linux-gnu'];
     // The preflight cannot see libraries passed only to the browser child.
     process.env.PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = '1';
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    if (!externalBrowser) browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
       env: { ...process.env, LD_LIBRARY_PATH: libraryDirs.join(':'), FONTCONFIG_FILE: '/root/savings-fonts.conf' } });
     async function session({ atomic = false, beforeSend } = {}) {
       const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, serviceWorkers: 'block' });
@@ -121,7 +121,7 @@ export async function createHarness({ workspace, output, sourceContext = '/chain
       await page.goto(origin, { waitUntil: 'domcontentloaded' });
       return active;
     }
-    return { mainRpc, account, sourceBlock, session, reset, capture, close, get active() { return active; } };
+    return { mainRpc, origin, account, sourceBlock, session, reset, capture, close, get active() { return active; } };
   } catch (error) {
     await close();
     throw error;

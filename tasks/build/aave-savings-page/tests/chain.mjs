@@ -35,16 +35,23 @@ export async function reserve(url) {
   return { cap, total, supplied, room: cap > supplied ? cap - supplied : 0n, apy: Math.expm1(31_536_000 * Math.log1p(apr / 31_536_000)) * 100 };
 }
 
-export async function capFixture(url, owner) {
-  const market = await reserve(url);
-  const oversized = market.cap - market.total + 1_000_000_000n;
-  if (market.room < 100_000_000n || oversized >= await balance(url, USDC, owner) || oversized <= market.room) {
-    throw Object.assign(new Error('Over-cap fixture is unaffordable or outside its room bounds'), { infrastructure: true });
+// Sequential reads: overlapping past-block reads can stall Anvil on one CPU.
+export async function positions(url, owner, block = 'latest') {
+  const result = {};
+  for (const [name, token] of Object.entries({ usdc: USDC, usdt: USDT, ausdc: AUSDC, ausdt: AUSDT })) {
+    result[name] = await balance(url, token, owner, block);
   }
-  return { ...market, oversized };
+  return result;
 }
 
-export async function prepareCapFixture(url, owner) {
+export function isWithdrawal(call) {
+  if (call.to?.toLowerCase() !== POOL.toLowerCase()) return false;
+  try { return decodeFunctionData({ abi: pool, data: call.data || call.input }).functionName === 'withdraw'; }
+  catch { return false; }
+}
+
+// As Aave's ACL admin on the verifier's fork, set USDC's cap to its supply plus 5,000 USDC.
+export async function lowerSupplyCap(url) {
   const provider = '0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e';
   const providerAbi = parseAbi([
     'function getACLAdmin() view returns (address)',
@@ -52,14 +59,13 @@ export async function prepareCapFixture(url, owner) {
     'function getPoolConfigurator() view returns (address)',
   ]);
   const address = raw => `0x${raw.slice(-40)}`;
-  const [admin, manager, configurator] = await Promise.all(
-    ['getACLAdmin', 'getACLManager', 'getPoolConfigurator'].map(async method => address(await read(url, provider, providerAbi, method))),
-  );
+  const admin = address(await read(url, provider, providerAbi, 'getACLAdmin'));
+  const manager = address(await read(url, provider, providerAbi, 'getACLManager'));
+  const configurator = address(await read(url, provider, providerAbi, 'getPoolConfigurator'));
   const adminRole = await read(url, manager, parseAbi(['function isPoolAdmin(address) view returns (bool)']), 'isPoolAdmin', [admin]);
   if (BigInt(adminRole) !== 1n) throw Object.assign(new Error('ACL admin does not hold the pool admin role'), { infrastructure: true });
   const previous = await reserve(url);
   const supplyCap = (previous.total + 999_999n) / 1_000_000n + 5000n;
-  await rpc(url, 'anvil_setBlockTimestampInterval', [0]);
   await rpc(url, 'anvil_setNextBlockBaseFeePerGas', ['0x0']);
   await rpc(url, 'anvil_impersonateAccount', [admin]);
   try {
@@ -69,8 +75,11 @@ export async function prepareCapFixture(url, owner) {
   } finally {
     await rpc(url, 'anvil_stopImpersonatingAccount', [admin]);
   }
-  const market = await capFixture(url, owner);
-  if (market.cap !== supplyCap * 1_000_000n) throw Object.assign(new Error('Verifier supply cap does not match its fixture'), { infrastructure: true });
+  const market = await reserve(url);
+  // Accrued treasury tokens leave less than 5,000 USDC of room.
+  if (market.cap !== supplyCap * 1_000_000n || market.room < 100_000_000n || market.room > 5_000_000_000n) {
+    throw Object.assign(new Error('Verifier supply cap does not match its fixture'), { infrastructure: true });
+  }
   return { ...market, previousCap: previous.cap, admin, configurator };
 }
 

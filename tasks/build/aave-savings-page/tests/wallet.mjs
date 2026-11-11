@@ -4,30 +4,38 @@ const batch = parseAbi(['function execute((address to,uint256 value,bytes data)[
 import { requireRead } from './rpc-policy.mjs';
 
 export async function injectWallet(context, { account, mainRpc, atomic = false, beforeSend = async () => {} }) {
-  const state = { requests: [], transactions: [], bundles: new Map(), pending: 0, lastActivity: Date.now() };
+  // chainId is the network the wallet is on. Away from Ethereum it reads and signs, but sends nothing.
+  const state = { requests: [], transactions: [], bundles: new Map(), pending: 0, lastActivity: Date.now(), chainId: 1, otherChain: null };
+  const onEthereum = () => {
+    if (state.chainId !== 1) throw new Error(`The test wallet is on chain ${state.chainId} and sends nothing there.`);
+  };
   await context.exposeBinding('__savingsWallet', async (_source, request) => {
     const { method, params = [] } = request;
+    // The provider's own network poll is not a page request.
+    if (request.poll && method === 'eth_chainId') return '0x' + state.chainId.toString(16);
     const entry = { method, params, time: Date.now() };
     state.requests.push(entry);
     state.pending++;
     const url = mainRpc;
     try {
       if (['eth_accounts', 'eth_requestAccounts'].includes(method)) return [account.address];
-      if (method === 'eth_chainId') return '0x1';
-      if (method === 'net_version') return '1';
+      if (method === 'eth_chainId') return '0x' + state.chainId.toString(16);
+      if (method === 'net_version') return String(state.chainId);
       if (method === 'wallet_switchEthereumChain' || method === 'wallet_addEthereumChain') {
         const id = Number(params[0].chainId);
-        if (id !== 1) throw Object.assign(new Error('Unknown chain'), { code: 4902 });
+        if (id !== 1 && id !== state.otherChain) throw Object.assign(new Error('Unknown chain'), { code: 4902 });
+        if (method === 'wallet_switchEthereumChain') state.chainId = id;
         return null;
       }
       if (method === 'wallet_requestPermissions' || method === 'wallet_getPermissions') return [{ parentCapability: 'eth_accounts', caveats: [] }];
-      if (method === 'wallet_getCapabilities') return { '0x1': {
+      if (method === 'wallet_getCapabilities') return { ['0x' + state.chainId.toString(16)]: {
         atomic: { status: atomic ? 'supported' : 'unsupported' }, atomicBatch: { supported: atomic },
       } };
       if (method === 'wallet_revokePermissions') return null;
       if (method === 'eth_sendTransaction' || method === 'wallet_sendTransaction') {
         if (params[0].from && params[0].from.toLowerCase() !== account.address.toLowerCase()) throw new Error('Unknown sender');
-        await beforeSend();
+        onEthereum();
+        await beforeSend(params[0], entry);
         const result = await send(url, account, params[0]);
         state.transactions.push({ ...result, request: entry });
         entry.hash = result.hash;
@@ -36,18 +44,20 @@ export async function injectWallet(context, { account, mainRpc, atomic = false, 
       if (method === 'wallet_sendCalls') {
         const bundle = params[0];
         if (Number(bundle.chainId) !== 1) throw new Error('Unknown bundle chain');
+        onEthereum();
         if (!atomic && bundle.atomicRequired) throw Object.assign(new Error('Atomic calls unavailable'), { code: 5760 });
         if (bundle.from && bundle.from.toLowerCase() !== account.address.toLowerCase()) throw new Error('Unknown bundle sender');
         const calls = bundle.calls.map(call => ({ to: call.to, value: BigInt(call.value || 0), data: call.data || '0x' }));
         const results = [];
         if (atomic) {
-          await beforeSend();
-          const result = await send(mainRpc, account, { to: account.address, data: encodeFunctionData({ abi: batch, functionName: 'execute', args: [calls] }) });
+          const tx = { to: account.address, data: encodeFunctionData({ abi: batch, functionName: 'execute', args: [calls] }) };
+          await beforeSend(tx, entry);
+          const result = await send(mainRpc, account, tx);
           results.push(result);
           state.transactions.push({ ...result, request: entry });
         } else {
           for (const call of calls) {
-            await beforeSend();
+            await beforeSend(call, entry);
             const result = await send(mainRpc, account, call);
             results.push(result);
             state.transactions.push({ ...result, request: entry });
@@ -90,11 +100,23 @@ export async function injectWallet(context, { account, mainRpc, atomic = false, 
       on(event, listener) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(listener); return this; },
       removeListener(event, listener) { listeners.get(event)?.delete(listener); return this; },
       async request(request) {
-        const result = await window.__savingsWallet(request);
+        const result = await window.__savingsWallet({ method: request.method, params: request.params });
         if (result?.__walletError) throw Object.assign(new Error(result.message), { code: result.code, data: result.data });
+        if (request.method === 'wallet_switchEthereumChain') await checkChain();
         return result;
       },
     };
+    // Tell the page when the wallet changes network, as an extension wallet does.
+    async function checkChain() {
+      const chainId = await window.__savingsWallet({ method: 'eth_chainId', poll: true });
+      if (typeof chainId !== 'string' || chainId === provider.chainId) return;
+      provider.chainId = chainId;
+      provider.networkVersion = String(Number(chainId));
+      for (const listener of listeners.get('chainChanged') || []) {
+        try { listener(chainId); } catch { /* A page listener's error stays in the page. */ }
+      }
+    }
+    setInterval(() => { checkChain().catch(() => {}); }, 1000);
     Object.defineProperty(window, 'ethereum', { value: provider, configurable: false });
     const announce = () => window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail: Object.freeze({
       info: { uuid: 'e962621f-46e7-4a8c-a624-543c5f985230', name: 'Test Wallet', icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>', rdns: 'org.ethevals.wallet' }, provider,
