@@ -6,6 +6,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from judge_credentials import credentials
 
 
 def prepare(inputs, *, directory=Path("/judge"), home=Path("/root/judge-home")):
@@ -31,20 +33,21 @@ def prepare(inputs, *, directory=Path("/judge"), home=Path("/root/judge-home")):
 
 def environment(home):
     names = {"PATH", "LANG", "PLAYWRIGHT_BROWSERS_PATH", "LD_LIBRARY_PATH", "FONTCONFIG_FILE",
-             "CLAUDE_CODE_OAUTH_TOKEN", "REWARDKIT_JUDGE", "REWARDKIT_MODEL", "REWARDKIT_REASONING_EFFORT",
+             "REWARDKIT_JUDGE", "REWARDKIT_MODEL", "REWARDKIT_REASONING_EFFORT",
              "REWARDKIT_LOG_DIR", "REWARDKIT_FORCE_SUBSCRIPTION"}
     result = {name: value for name, value in os.environ.items()
               if name in names or name.startswith("ETHEVALS_REGRADE_")}
     result.update(HOME=str(home), PYTHON_DOTENV_DISABLED="1", DISABLE_AUTOUPDATER="1",
                   CLAUDE_CODE_DISABLE_BACKGROUND_TASKS="1")
     result["PATH"] = "/root/.local/bin:/usr/local/bin:" + result.get("PATH", "/usr/bin:/bin")
+    result.update(credentials())
     return result
 
 
-if __name__ == "__main__":
-    home = prepare([Path(name) for name in sys.argv[1:]])
+def run(inputs):
+    home = prepare(inputs)
     binary = shutil.which("rewardkit")
-    output = Path("/logs/verifier")
+    output = Path(os.environ.get("REWARDKIT_LOG_DIR", "/logs/verifier"))
     try:
         subprocess.run([binary, "/tests", "--yolo", "--max-concurrent-agent", "1"], env=environment(home), check=True)
         details = json.loads((output / "reward-details.json").read_text())
@@ -63,3 +66,7 @@ if __name__ == "__main__":
         projects = home / ".claude/projects"
         if projects.exists():
             shutil.copytree(projects, output / "judge-transcripts", dirs_exist_ok=True)
+
+
+if __name__ == "__main__":
+    run([Path(name) for name in sys.argv[1:]])

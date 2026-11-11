@@ -17,7 +17,8 @@ user = "root"
 timeout_sec = 2700
 
 [verifier.env]
-CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN}"
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
 
 [environment]
 cpus = 1

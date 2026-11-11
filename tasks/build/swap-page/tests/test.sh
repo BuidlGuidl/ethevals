@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+python3 /tests/judge_credentials.py
 started_at=$(date +%s)
 mkdir -p /logs/verifier
 chmod 700 /tests /logs/verifier

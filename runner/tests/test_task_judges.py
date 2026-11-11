@@ -36,6 +36,11 @@ description = "Did the reply explain the unit?"
     settings = task / "task.toml"
     settings.write_text(settings.read_text() +
                         f'\n[verifier.env]\n{key_env} = "${{{key_env}}}"\n')
+    if key_env == "CLAUDE_CODE_OAUTH_TOKEN":
+        settings.write_text(settings.read_text().replace(
+            'CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN}"',
+            'CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"\n'
+            'ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"'))
 
 
 @pytest.mark.parametrize("before,after,message", [

@@ -15,7 +15,8 @@ from test_jobs import job_config, task_folder
 def agent_task(tmp_path, *, live=False):
     task = task_folder(tmp_path)
     (task / "task.toml").write_text((task / "task.toml").read_text() +
-        '\n[verifier.env]\nCLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN}"\n')
+        '\n[verifier.env]\nCLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"\n'
+        'ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"\n')
     (task / "tests/judge.toml").write_text(
         '[judge]\njudge = "claude-code"\nmodel = "anthropic/claude-opus-5-5"\n'
         'cwd = "/judge"\nguard = "flag"\n'
@@ -77,7 +78,7 @@ def test_agent_judge_lint_rejects_api_keys_and_prompt_file_attachments(tmp_path)
     lint_task(task, config)
     settings = task / "task.toml"
     original = settings.read_text()
-    settings.write_text(original.replace("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"))
+    settings.write_text(original.replace('CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"\n', ''))
     with pytest.raises(ValueError, match="verifier.env"):
         lint_task(task, config)
     settings.write_text(original)

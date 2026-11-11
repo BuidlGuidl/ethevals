@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+python3 /tests/judge_credentials.py
 mkdir -p /logs/verifier
 python3 - <<'PY'
 import sys

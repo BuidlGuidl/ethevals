@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+python3 /tests/judge_credentials.py
 mkdir -p /logs/verifier
 chmod 700 /tests /logs/verifier
 rm -f /logs/verifier/reward.json /logs/verifier/reward.txt /logs/verifier/reward-details.json \

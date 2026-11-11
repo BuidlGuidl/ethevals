@@ -9,7 +9,7 @@ import { rpc } from './rpc.mjs';
 import { require, parseAbi } from './deps.mjs';
 
 test('the read policy follows the task chain and blocks unknown methods', async () => {
-  const policy = JSON.parse(await fs.readFile(new URL('../../../../runner/ethevals/images/rpc_methods.json', import.meta.url), 'utf8'));
+  const policy = JSON.parse(await fs.readFile('/opt/rpc_methods.json', 'utf8'));
   const accepted = [];
   for (const [method, decision] of Object.entries(policy)) {
     try { requireRead(method); accepted.push(method); }

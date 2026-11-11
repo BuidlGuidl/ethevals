@@ -83,8 +83,11 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         if name in credentials:
             raise ValueError(f"{path / 'task.toml'}: {name} is a job credential; tasks cannot request it")
     judges = task_judges(path)
-    if task.config.verifier.env != ({config.judge.key_env: "${" + config.judge.key_env + "}"} if judges else {}):
-        raise ValueError(f"{path / 'task.toml'}: verifier.env must declare only the required judge key when a judge exists")
+    native = any(judge.judge.judge == "claude-code" for judge in judges.values())
+    expected = ({name: "${" + name + ":-}" for name in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")}
+                if native else {config.judge.key_env: "${" + config.judge.key_env + "}"} if judges else {})
+    if task.config.verifier.env != expected:
+        raise ValueError(f"{path / 'task.toml'}: verifier.env must declare both optional judge credentials for an agent judge")
     names = set()
     for file, judge in judges.items():
         verifier_files = judge.judge.files and all(

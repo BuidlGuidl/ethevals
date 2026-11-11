@@ -183,8 +183,9 @@ Browser judges use pinned Playwright MCP tools, a funded wallet, chain reads, an
 Code keeps checks that read exact chain facts.
 Every judge and its enclosing rewards use `all-pass`.
 
-Each judged task declares only `CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN}"` in `[verifier.env]`.
-The Claude plan pays for the judge. The board records its API-price cost.
+Each agent-judged task declares optional `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` inputs in `[verifier.env]`.
+Task tests choose the plan token first, or the API key when only it is set.
+The board still requires the Claude plan and records the judge's API-price cost.
 The runner sets the judge program, model, and effort separately.
 Builds and submitted child processes receive no judge token.
 Shared verifiers retain the container isolation gap in ADR 0011.
@@ -235,7 +236,41 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test --age
 Select a task with `--include-task-name NAME` and set the host variables its compose file names first.
 Replace `oracle` with `nop` to check untouched work.
 The folder needs Docker and Harbor, with no ETH Evals install.
-Plain Harbor runs execute the task's verifier; the board also runs declared paid criteria through RewardKit.
+Plain Harbor runs every check and the task's agent judge through RewardKit.
+Judge tools install from the task's `tests/` folder and use its pinned settings.
+
+For a judged task, set either `CLAUDE_CODE_OAUTH_TOKEN` for the Claude plan or `ANTHROPIC_API_KEY` for API billing.
+If both are set, the plan token wins and the judge receives no API key.
+For example:
+
+```sh
+export CLAUDE_CODE_OAUTH_TOKEN='your-plan-token'
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
+  --include-task-name concepts--wallet-atomic-ready --agent oracle --n-concurrent 1
+```
+
+To use API billing instead, unset the plan token and set `ANTHROPIC_API_KEY` before the same command.
+For fork tasks, also set `MAINNET_RPC_URL`; the exported task guide lists each task's RPC requirement.
+An agent other than `oracle` also needs its own credentials.
+The board keeps its plan-only admission rule and overrides, regardless of these public task defaults.
+
+With a judge credential, the result includes code checks, criteria, reasons, and the judge transcript in the verifier logs.
+The Concepts proof took about one minute and $0.16 in native cost-equivalent.
+The browser proofs took about seven to ten minutes and $1.21 to $1.84 in cost-equivalent.
+Those figures include setup and use the Claude plan; they do not measure a plan-window share.
+
+Without either credential, a judged task stops at the start of verification, writes no score, and calls no model.
+Its verifier log and `judge-error.txt` contain one line:
+
+```text
+The judge needs CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY.
+```
+
+Harbor reports a trial error because no reward exists.
+Read `jobs/JOB/TRIAL/verifier/test-stdout.txt` for that reason.
+This also applies to `oracle`; the published task does not pretend that unpaid criteria passed.
+The runner's explicit free check removes judges and uses solution-only walk-throughs on browser tasks.
+Tasks without judges continue to run without a judge credential.
 
 On `main`, the release workflow pushes the shared images before uploading the dataset with `HF_TOKEN`.
 The upload removes obsolete files under `tasks/` and the old Concepts task `data/` folder in the same commit.

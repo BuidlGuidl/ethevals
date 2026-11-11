@@ -294,11 +294,14 @@ Install them after the agent finishes, within the verifier time limit.
 Keep them out of shared image inputs and the task's `environment/` folder.
 Save judge inputs, transcripts, and program versions in `/logs/verifier`, without changing `artifacts`.
 
-The Claude plan pays for the judge. A task with criteria declares exactly this in `task.toml`, and no other credential:
+The board pays through the Claude plan.
+Published tasks also accept an Anthropic API key for plain Harbor users.
+An agent judge declares both optional inputs in `task.toml`:
 
 ```toml
 [verifier.env]
-CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN}"
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
 ```
 
 The free check removes judge files and runs no model.
@@ -543,7 +546,8 @@ user = "root"  # (4)
 timeout_sec = 1800  # (5)
 
 [verifier.env]
-CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN}"  # (6)
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"  # (6)
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
 
 [environment]
 cpus = 1

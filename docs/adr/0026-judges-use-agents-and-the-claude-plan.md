@@ -14,6 +14,10 @@ A saved treasury sale put its minimum on the last sale step, which the calldata 
 - The Claude plan pays through `CLAUDE_CODE_OAUTH_TOKEN`.
   Results still record the API price of the judge's calls.
   Plan-paid judges reserve no API spend, like plan-paid agents.
+  This remains the board's admission rule.
+  Public task folders also accept `ANTHROPIC_API_KEY` without the runner.
+  If both are set, the plan token wins and the API key stays out of the judge environment.
+  With neither, verification stops with a credential error and no score before starting a judge.
 - Browser judges use pinned Playwright MCP tools and the built page.
   They also get source, a funded wallet, chain reads through `cast`, and small commands for test conditions.
   Every transaction comes from the page.
