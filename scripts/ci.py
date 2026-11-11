@@ -87,9 +87,13 @@ def plan_trials(args, run_args):
     if report["within_budget"] and options.budget and options.budget > 0:
         batches = {}
         for row in report.get("regrades", []):
-            batches.setdefault((row["task_id"], row["kind"], row["judge_required"]), []).append(row)
-        for (task_id, kind, judge_required), batch in batches.items():
-            assets = len(batch) * (2 if kind == "contract" else 1)
+            key = (row["task_id"], row["kind"], row["judge_required"])
+            if row["kind"] == "workspace":
+                key += (trial_identity(row),)
+            batches.setdefault(key, []).append(row)
+        for key, batch in batches.items():
+            task_id, kind, judge_required = key[:3]
+            assets = len(batch) * (2 if kind in {"contract", "workspace"} else 1)
             if len(regrades) == 256 or asset_count + assets > 1000:
                 limit = "jobs" if len(regrades) == 256 else "assets"
                 print(f"Deferred regrade batch {task_id}: {len(batch)} rows; {limit} limit.", file=sys.stderr)
@@ -103,7 +107,8 @@ def plan_trials(args, run_args):
             regrades.append({"missing": [], "missing_trials": 0, "regrades": items,
                              "selected": [trial_identity(row) for row in batch],
                              "worst_case_usd": sum(row["worst_case_usd"] for row in batch)})
-            regrade_matrix.append({"index": index, "task_id": task_id, "judge": judge_required})
+            regrade_matrix.append({"index": index, "task_id": task_id, "judge": judge_required,
+                                   **({"workspace": True} if kind == "workspace" else {})})
             asset_count += assets
         for row in report["missing"]:
             group = config.agents[row["agent_key"]].name if row["paid_by"] == "plan" else ""

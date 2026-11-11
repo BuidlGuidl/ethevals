@@ -98,7 +98,11 @@ A criteria change, judge program, model, or effort change, or changed file input
 A judge that declares MCP servers needs a live session. A judge-only change reruns those trials.
 Judge-only regrades reuse saved inputs and keep the other checks.
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
-Checks that need a live browser or chain plan reruns.
+Other Build tasks that save all of `/workspace` run a fresh Harbor trial with a saved-work agent.
+The agent restores files and installs dependencies from the saved lockfile without calling a model.
+It keeps the fresh chain context link and RPC URL, and restores saved public setup values where available.
+Older check output can supply matching public context fields through `fixture.json`.
+Partly saved Build tasks and Act tasks still plan reruns.
 Saved work with no address, an HTTP 404 or 410, or expired CI artifacts plans a rerun.
 The plan lists each rerun and its reason.
 Other fetch errors defer the regrade until the next CI run and reserve nothing.
@@ -147,7 +151,11 @@ This applies to workflows started after the change lands.
 Old runs keep their original workflow definition when rerun, because [GitHub retains the original commit](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs).
 `scripts/ci.py plan-trials` folds current and pending results, saves the Harbor job config, and emits the admitted matrix.
 CI schedules at most 256 jobs, with at most 100 per plan group to fit GitHub's pending-job limit.
-Regrade jobs group rows by task and receive only the judge credential when they need it.
+Regrade jobs group rows by task and receive no agent credentials.
+Regrades in fresh trial environments run one saved trial per job, with the trial jobs' chain secrets.
+Each gets 60 minutes to execute and 90 minutes for the job, including image builds and uploads.
+Eighteen saved trials therefore use eighteen jobs, with at most ten running at once.
+Only a regrade that needs a judge receives the judge credential.
 The plan also limits each release to 1,000 assets and defers work beyond that limit.
 The plan lists regrade batches deferred by job or asset limits.
 Later runs pick up deferred trials and regrades.

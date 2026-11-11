@@ -138,7 +138,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.scheduled_regrades != '0'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: ${{ matrix.workspace && 90 || 120 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.regrade_matrix) }}
@@ -158,14 +158,24 @@ jobs:
           path: results/ci-plan
       - run: uv run python scripts/ci.py images
       - name: Regrade saved trials
-        if: ${{ !matrix.judge }}
+        if: ${{ !matrix.judge && !matrix.workspace }}
         run: >-
           uv run python scripts/ci.py run-trial --regrade --plan results/ci-plan
           --index ${{ matrix.index }} --output results/ci-run
       - name: Regrade saved trials with the judge
-        if: matrix.judge
+        if: matrix.judge && !matrix.workspace
         env:
           CLAUDE_CODE_OAUTH_TOKEN: *judge-key
+        run: >-
+          uv run python scripts/ci.py run-trial --regrade --plan results/ci-plan
+          --index ${{ matrix.index }} --output results/ci-run
+      - name: Regrade saved work in a fresh trial environment
+        if: matrix.workspace
+        timeout-minutes: 60
+        env:
+          ANTHROPIC_API_KEY: *judge-key
+          MAINNET_RPC_URL: *mainnet-rpc
+          BASE_RPC_URL: *base-rpc
         run: >-
           uv run python scripts/ci.py run-trial --regrade --plan results/ci-plan
           --index ${{ matrix.index }} --output results/ci-run
