@@ -217,9 +217,10 @@ Without `--publish`, it performs no remote writes.
 With `--publish`, it records rows and release URLs on `ci/results` before uploading assets.
 It folds `origin/main`, `origin/ci/results`, and artifact rows onto current `main`, without a force push.
 The results pull request contains only the rows change.
-The release uses the source commit and the workflow run ID; retries replace assets on that release.
-If an upload fails, recorded rows keep the next plan from repeating completed trials.
-Use "Re-run all jobs" to retry publication from every workflow retry.
+The release uses the source commit and workflow run ID. Uploads send 10 files, then pause for 20 seconds.
+Rate-limit replies trigger growing waits; failed uploads keep the release and its uploaded files.
+Use "Re-run failed jobs" to continue publication. The publisher skips files with matching sizes and replaces incomplete files.
+"Re-run all jobs" replans from recorded rows and skips publication when no trials or regrades remain.
 A retry also reopens a missing results pull request without another push.
 
 `ethevals publish-logs --output DIR --repo OWNER/REPO --run-id ID --commit SHA` stages a trial release locally.
