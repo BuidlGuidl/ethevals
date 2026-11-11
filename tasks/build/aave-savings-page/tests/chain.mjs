@@ -77,8 +77,8 @@ export async function lowerSupplyCap(url) {
     await rpc(url, 'anvil_stopImpersonatingAccount', [admin]);
   }
   const market = await reserve(url);
-  if (market.cap !== supplyCap * 1_000_000n || market.room < 100_000_000n || market.room > 5_000_000_000n) {
-    throw Object.assign(new Error('Verifier supply cap does not match its fixture'), { infrastructure: true });
+  if (market.cap !== supplyCap * 1_000_000n || market.room < 4_000_000_000n || market.room > 5_001_000_000n) {
+    throw Object.assign(new Error(`Verifier supply cap does not match its fixture: cap ${market.cap}, room ${market.room}`), { infrastructure: true });
   }
   return { ...market, previousCap: previous.cap, admin, configurator };
 }
