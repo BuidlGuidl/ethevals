@@ -38,7 +38,8 @@ def main():
     shutil.copyfile("/chain/chain_context.json", output / "chain_context.json")
     with (output / "session.log").open("w") as log:
         child = subprocess.Popen(["node", "/tests/session.mjs"], stdout=log, stderr=log,
-                                 env={key: value for key, value in clean.items() if key != "CLAUDE_CODE_OAUTH_TOKEN"})
+                                 env={key: value for key, value in clean.items()
+                                      if key not in {"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"}})
         try:
             deadline = time.monotonic() + 360
             while not (output / "session.json").is_file():

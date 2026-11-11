@@ -255,7 +255,7 @@ An agent other than `oracle` also needs its own credentials.
 The board keeps its plan-only admission rule and overrides, regardless of these public task defaults.
 
 With a judge credential, the result includes code checks, criteria, reasons, and the judge transcript in the verifier logs.
-The Concepts proof took about one minute and $0.16 in native cost-equivalent.
+The plain-Harbor Concepts proof took about two minutes and $0.16 in native cost-equivalent.
 The browser proofs took about seven to ten minutes and $1.21 to $1.84 in cost-equivalent.
 Those figures include setup and use the Claude plan; they do not measure a plan-window share.
 

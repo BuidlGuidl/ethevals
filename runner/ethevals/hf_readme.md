@@ -207,7 +207,7 @@ With neither judge credential, a judged task writes no score and starts no judge
 The verifier log and `judge-error.txt` say: `The judge needs CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY.`
 Harbor reports a trial error; read `jobs/JOB/TRIAL/verifier/test-stdout.txt` for the reason.
 This applies to oracle runs too. Tasks without judges need no judge credential.
-The Concepts proof took about one minute and $0.16 in cost-equivalent.
+The plain-Harbor Concepts proof took about two minutes and $0.16 in cost-equivalent.
 Browser proofs took about seven to ten minutes and $1.21 to $1.84 in cost-equivalent.
 
 <details>

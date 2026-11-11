@@ -72,7 +72,8 @@ def main():
         else:
             log = (OUTPUT / "session.log").open("w")
             child = subprocess.Popen(["node", "/tests/session.mjs"], stdout=log, stderr=log,
-                                     env={key: value for key, value in clean.items() if key != "CLAUDE_CODE_OAUTH_TOKEN"})
+                                     env={key: value for key, value in clean.items()
+                                          if key not in {"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"}})
             deadline = time.monotonic() + 360
             while not (OUTPUT / "session.json").is_file():
                 if child.poll() is not None:
@@ -93,7 +94,8 @@ def main():
                     raise RuntimeError("The page judge failed. See judge-details.json.")
             else:
                 subprocess.run(["node", "/tests/solution-walk.mjs"], check=True,
-                               env={key: value for key, value in clean.items() if key != "CLAUDE_CODE_OAUTH_TOKEN"})
+                               env={key: value for key, value in clean.items()
+                                    if key not in {"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"}})
             request = urllib.request.Request(session["control"] + "/finish", b"[]")
             with urllib.request.urlopen(request, timeout=600) as response:
                 response.read()
