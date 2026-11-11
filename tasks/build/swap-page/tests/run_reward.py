@@ -83,6 +83,9 @@ def main():
             projects = home / ".claude/projects"
             if projects.exists():
                 shutil.copytree(projects, output / "judge-transcripts", dirs_exist_ok=True)
+            browser_evidence = Path("/judge/.playwright-mcp")
+            if browser_evidence.exists():
+                shutil.copytree(browser_evidence, output / "browser-evidence", dirs_exist_ok=True)
 
 
 if __name__ == "__main__":
