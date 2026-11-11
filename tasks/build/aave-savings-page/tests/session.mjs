@@ -7,7 +7,7 @@ import { funding, positions, isWithdrawal, lowerSupplyCap, reserve, POOL, USDT, 
 import { gradeSavings } from './checks.mjs';
 import { injectWallet } from './wallet.mjs';
 import { warmSavings } from './warm.mjs';
-import { requireRead, walletIdle } from './rpc-policy.mjs';
+import { pageRead, walletIdle } from './rpc-policy.mjs';
 import { rpc, read, send, advanceTime } from './rpc.mjs';
 
 // Serves the built page, the test wallet, and the judge's condition commands until /finish grades the session.
@@ -102,10 +102,7 @@ const server = http.createServer(async (request, response) => {
       value = await handler(null, args);
       await save('wallet-log.json', { address: account.address, chainId: wallet.chainId, requests: wallet.requests, transactions: wallet.transactions });
     } else if (name === 'rpc') {
-      const dispatch = async item => {
-        try { requireRead(item.method); return { jsonrpc: '2.0', id: item.id, result: await rpc(mainRpc, item.method, item.params || []) }; }
-        catch (error) { return { jsonrpc: '2.0', id: item.id, error: { code: error.code || -32603, message: error.message } }; }
-      };
+      const dispatch = item => pageRead(rpc, mainRpc, item);
       value = Array.isArray(args) ? await Promise.all(args.map(dispatch)) : await dispatch(args);
     } else if (name === 'typed') {
       typed.push({ value: String(args.value ?? '').slice(0, 100), time: Date.now() });
