@@ -39,6 +39,7 @@ try {
   const card = symbol => page.locator('section.savings-card').filter({ has: page.getByRole('heading', { name: symbol, exact: true }) });
   const open = async () => {
     await page.goto(session.origin + '/#savings');
+    await page.reload();
     const connect = page.getByRole('button', { name: 'Test Wallet', exact: true });
     await connect.or(card('USDC').locator('form')).first().waitFor();
     if (await connect.isVisible()) await connect.click({ timeout: 2000 }).catch(() => {});
@@ -63,10 +64,18 @@ try {
   await command('full-cap');
   await open();
   const form = card('USDC').locator('form');
+  await form.getByRole('tab', { name: 'Deposit', exact: true }).click();
   await form.getByLabel('Deposit amount in USDC').fill('6000.10');
   await form.getByText(/^Exceeds Aave's supply cap/).waitFor();
   // Our page disables Deposit here. Leave time for any wallet request the page might still send.
   await page.waitForTimeout(4000);
+} catch (error) {
+  const page = browser.contexts()[0]?.pages()[0];
+  if (page) {
+    await page.screenshot({ path: '/logs/verifier/walk-failure.png', fullPage: true }).catch(() => {});
+    await fs.writeFile('/logs/verifier/walk-failure.txt', await page.locator('body').innerText().catch(() => '')).catch(() => {});
+  }
+  throw error;
 } finally {
   await browser.close();
 }
