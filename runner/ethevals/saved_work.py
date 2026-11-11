@@ -20,7 +20,7 @@ class SavedWorkGone(ValueError):
     """The saved work has no address or its source confirms its removal."""
 
 
-def download_ci(repo: str, run_id: str, pattern: str, destination: Path, *, missing_is_gone=False) -> None:
+def download_ci(repo: str, run_id: str, pattern: str, destination: Path) -> None:
     try:
         subprocess.run(["gh", "run", "download", run_id, "--repo", repo, "--pattern", pattern,
                         "--dir", str(destination)], check=True, capture_output=True)
@@ -28,7 +28,8 @@ def download_ci(repo: str, run_id: str, pattern: str, destination: Path, *, miss
         listing = subprocess.check_output(["gh", "api", f"repos/{repo}/actions/runs/{run_id}/artifacts",
                                            "--paginate", "--jq", '.artifacts[] | [.name, .expired] | @tsv'], text=True)
         matches = [line.split("\t") for line in listing.splitlines() if fnmatch(line.split("\t")[0], pattern)]
-        if missing_is_gone and not matches:
+        # GitHub drops an old run's artifacts from the listing, so an empty listing means the same as expired.
+        if not matches:
             raise SavedWorkGone(f"No CI artifacts match {pattern}") from None
         if matches and all(expired == "true" for _, expired in matches):
             raise SavedWorkGone(f"CI artifacts matching {pattern} expired") from None
@@ -77,18 +78,18 @@ def trajectory_url(row: dict) -> str | None:
     return url if url.startswith(("https://", "http://")) else None
 
 
-def ci_trial(row: dict, cache: Path, *, missing_is_gone=False) -> Path:
+def ci_trial(row: dict, cache: Path) -> Path:
     """Recover older contract trials from the CI artifact while it exists."""
     match = re.fullmatch(r"https://github.com/([^/]+/[^/]+)/releases/download/results-([0-9]+)/.*", row.get("verifier_url") or "")
     if not match:
-        raise SavedWorkGone("No saved contract files are published")
+        raise SavedWorkGone("No saved work is published")
     repo, run_id = match.groups()
     root = cache / f"ci-{run_id}"
     # Rows from one run share its plan and artifact cache.
     with _downloads:
         plan = root / "plan"
         if not list(plan.rglob("trials.json")):
-            download_ci(repo, run_id, f"trial-plan-{run_id}-*", plan, missing_is_gone=missing_is_gone)
+            download_ci(repo, run_id, f"trial-plan-{run_id}-*", plan)
         files = sorted(plan.rglob("trials.json"))
         if not files:
             raise ValueError("The saved CI plan is unavailable")
@@ -101,7 +102,7 @@ def ci_trial(row: dict, cache: Path, *, missing_is_gone=False) -> Path:
             folder = root / str(index)
             if not folder.exists():
                 try:
-                    download_ci(repo, run_id, f"trial-run-{run_id}-*-{index}", folder, missing_is_gone=missing_is_gone)
+                    download_ci(repo, run_id, f"trial-run-{run_id}-*-{index}", folder)
                 except (SavedWorkGone, subprocess.SubprocessError) as error:
                     failures.append(error)
                     continue
@@ -141,7 +142,7 @@ def fetch_work(row: dict, kind: str, cache: Path) -> dict:
         elif row.get("artifacts_url"):
             target = unpack(asset(row["artifacts_url"], cache), directory / "trial")
         else:
-            target = ci_trial(row, cache, missing_is_gone=kind == "workspace")
+            target = ci_trial(row, cache)
         if kind == "workspace":
             entries = json.loads((target / "artifacts/manifest.json").read_text())
             entries = [entry for entry in entries if entry["source"].rstrip("/") == "/workspace"

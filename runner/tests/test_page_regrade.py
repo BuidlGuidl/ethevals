@@ -49,7 +49,7 @@ def test_page_changes_regrade_passes_and_fails_while_missing_work_reruns(tmp_pat
     assert [(item["trial"], item["kind"], item["checks_generation"]) for item in report["regrades"]] == [
         (1, "workspace", 1), (2, "workspace", 1)]
     assert [(item["trial"], item["rerun_reason"]) for item in report["missing"]] == [
-        (3, "Saved work is gone: No saved contract files are published")]
+        (3, "Saved work is gone: No saved work is published")]
 
 
 @pytest.mark.parametrize("task_name", ["build/keeper-deposits", "build/signed-votes", "act/aave-borrow"])

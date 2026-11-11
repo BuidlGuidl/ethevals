@@ -142,7 +142,7 @@ Old runs keep their original workflow definition when rerun, because [GitHub ret
 CI schedules at most 256 jobs, with at most 100 per plan group to fit GitHub's pending-job limit.
 Regrade jobs group rows by task and receive no agent credentials.
 Regrades in fresh trial environments run one saved trial per job, with the trial jobs' chain secrets.
-Each gets 45 minutes to execute and 60 minutes for the job, including image builds and uploads.
+Each gets 60 minutes to execute and 90 minutes for the job, including image builds and uploads.
 Eighteen saved trials therefore use eighteen jobs, with at most ten running at once.
 Only a regrade that needs a judge receives the judge key.
 The plan also limits each release to 1,000 assets and defers work beyond that limit.
