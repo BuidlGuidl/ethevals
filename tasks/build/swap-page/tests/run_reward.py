@@ -26,6 +26,7 @@ def main():
     clean["PATH"] = "/tests/bin:" + clean["PATH"]
     os.environ.clear()
     os.environ.update(clean)
+    os.environ["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] = "1"
     code = Path("/judge/submission")
     shutil.copytree("/workspace", code, dirs_exist_ok=True, symlinks=True,
                     ignore=shutil.ignore_patterns("node_modules", "dist", ".git"))

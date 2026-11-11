@@ -318,3 +318,7 @@ For the image:
 - In the Dockerfile, copy Node and install pnpm, then copy this task's root-only verifier installation block. It downloads library packages, extracts them under `/root/savings-libs`, and installs Chromium without `--with-deps`.
 - Keep the `COPY verifier/fonts.conf /root/savings-fonts.conf` line and the `chmod 700` paths, consistent with `deps.mjs`, `harness.mjs`, and `test.sh`.
 - No shared-image change is needed.
+
+The two file-reading judges use Claude Code on Opus 5.5 at high effort, paid by the Claude plan.
+They run one at a time and read copies of the existing evidence inside `/judge/submission`.
+Their starting folder is `/judge`. Their criteria, browser driver, and code checks keep their existing behavior.

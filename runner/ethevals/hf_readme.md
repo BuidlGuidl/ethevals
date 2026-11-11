@@ -12,7 +12,7 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and Docker
 Start Docker, then install Harbor:
 
 ```sh
-uv tool install --python 3.13 harbor==0.24.0
+uv tool install --python 3.13 harbor==0.25.0
 ```
 
 For a task with a chain, give Docker at least 7 GiB of memory.
@@ -35,25 +35,25 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
 It checks that the task works; it does not measure a real agent.
 A real agent needs a model API key or plan authentication.
 
-## Tasks that need a chain or an LLM judge
+## Tasks that need a chain or an agent judge
 
 Some tasks need an RPC URL to fork a chain.
-Tasks with an LLM judge also need an API key for judging.
+Tasks with an agent judge also need a Claude plan token for judging.
 
 For example, the [treasury ETH sale task](https://github.com/BuidlGuidl/ethevals/blob/main/tasks/act/treasury-eth-sale/README.md) asks an agent to write and run a quarterly sale script.
-It uses both a mainnet fork at block 26,260,992 and an LLM judge.
+It uses both a mainnet fork at block 26,260,992 and an agent judge.
 
 This example uses OpenCode through OpenRouter.
 Set these variables in your shell:
 
 ```sh
 export MAINNET_RPC_URL='your-mainnet-rpc-url'
-export ANTHROPIC_API_KEY='your-judge-api-key'
+export CLAUDE_CODE_OAUTH_TOKEN='your-claude-plan-token'
 export OPENROUTER_API_KEY='your-agent-api-key'
 ```
 
 The RPC provider must serve historical state at the pinned block.
-The Anthropic key pays for the judge, which checks the agent's work.
+The Claude plan pays for the judge, which checks the agent's work.
 The OpenRouter key pays for the agent's model calls.
 
 Run the task:
@@ -77,7 +77,7 @@ Choose one agent and set up its credentials.
 
 A ChatGPT or Claude plan can pay for the agent.
 For the treasury task, keep the RPC URL and judge key from the earlier example.
-A plan cannot pay for the judge, which still needs `ANTHROPIC_API_KEY`.
+The Claude plan token also pays for the judge.
 
 <details>
 <summary>Codex with a ChatGPT plan or OpenAI API key</summary>
@@ -143,7 +143,7 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
   --n-concurrent 1
 ```
 
-`CLAUDE_FORCE_OAUTH` tells Harbor to use the plan even when the judge's Anthropic key is present.
+`CLAUDE_FORCE_OAUTH` tells Harbor to use the plan for the agent.
 
 ### With an Anthropic API key
 
@@ -160,7 +160,7 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
   --n-concurrent 1
 ```
 
-For a task with an LLM judge, the Anthropic key pays for both the agent and the judge.
+For a judged task, keep `CLAUDE_CODE_OAUTH_TOKEN` set for the verifier even when an API key pays for the agent.
 
 </details>
 
@@ -180,7 +180,7 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
 ```
 
 The treasury example already uses this setup.
-Its Anthropic key pays for the judge separately.
+Its Claude plan token pays for the judge separately.
 
 </details>
 
@@ -193,7 +193,7 @@ Read the task's README for its instruction and checks.
 Then check its configuration:
 
 - `environment/docker-compose.yaml` names any required RPC variables and the fork block.
-- `[verifier.env]` in `task.toml` names the judge key, if the task needs one.
+- `[verifier.env]` in `task.toml` names the judge credential, if the task needs one.
 
 For example, the treasury task declares its [RPC requirement](https://github.com/BuidlGuidl/ethevals/blob/main/tasks/act/treasury-eth-sale/environment/docker-compose.yaml) and [judge key](https://github.com/BuidlGuidl/ethevals/blob/main/tasks/act/treasury-eth-sale/task.toml) separately.
 Agent credentials are additional to these task requirements.

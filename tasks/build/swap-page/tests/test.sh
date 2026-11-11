@@ -32,6 +32,8 @@ Path("/logs/verifier/checks.json").write_text(
 PY
 cp /opt/check_records.py /tests/check_records.py
 export PLAYWRIGHT_BROWSERS_PATH=/root/savings-browsers
+export LD_LIBRARY_PATH=/root/savings-libs/usr/lib/x86_64-linux-gnu:/root/savings-libs/usr/lib/aarch64-linux-gnu:/root/savings-libs/lib/x86_64-linux-gnu:/root/savings-libs/lib/aarch64-linux-gnu
+export FONTCONFIG_FILE=/root/savings-fonts.conf
 chmod 700 /tests/bin/*
 python3 /tests/run_reward.py
 STARTED_AT="$started_at" python3 - <<'PY'

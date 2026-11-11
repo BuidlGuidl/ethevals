@@ -68,12 +68,12 @@ def test_job_config_selects_plan_and_budget_without_shell_force_flags(tmp_path, 
         env, credentials, budget, flags = captured[0]
         if paid_by == "api_key":
             assert env == {}
-            assert credentials == {"ANTHROPIC_API_KEY": "offline-api-key"}
+            assert credentials == {"ANTHROPIC_API_KEY": "offline-api-key", "ANTHROPIC_AUTH_TOKEN": ""}
             assert budget == "7.25"
             assert "--max-budget-usd 7.25" in flags
         else:
             assert env == {"CLAUDE_FORCE_OAUTH": "YES"}
-            assert credentials == {"CLAUDE_CODE_OAUTH_TOKEN": "offline-plan-token"}
+            assert credentials == {"CLAUDE_CODE_OAUTH_TOKEN": "offline-plan-token", "ANTHROPIC_AUTH_TOKEN": ""}
             assert budget is None
             assert "--max-budget-usd" not in flags
     else:
@@ -106,7 +106,7 @@ def test_missing_plan_credential_refuses_before_harbor(tmp_path, monkeypatch, ke
     assert not (tmp_path / "out/jobs").exists()
 
 
-def test_claude_plan_uses_its_token_and_board_judge_requires_an_api_key(tmp_path, monkeypatch):
+def test_claude_agent_and_judge_accept_plan_tokens_with_an_api_key_present(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "offline-plan-token")
     monkeypatch.setenv("CLAUDE_FORCE_OAUTH", "1")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-judge-key")
@@ -148,8 +148,8 @@ def test_codex_uploads_chatgpt_auth_file_instead_of_an_api_key(tmp_path, monkeyp
         default_user = None
 
         async def exec(self, **kwargs):
-            requests.append(kwargs)
-            return ExecResult(return_code=0, stdout="", stderr="")
+            requests.append({**kwargs, "env": dict(kwargs.get("env") or {})})
+            return ExecResult(return_code=0, stdout="CODEX_RUNTIME_ID 1000 1000\n", stderr="")
 
         async def upload_file(self, source, target):
             uploads.append((Path(source).read_text(), target))
@@ -165,7 +165,7 @@ def test_codex_uploads_chatgpt_auth_file_instead_of_an_api_key(tmp_path, monkeyp
     with pytest.raises(Captured):
         asyncio.run(agent.run("Name a unit.", Container(), AgentContext()))
     assert uploads == [(auth.read_text(), "/tmp/codex-secrets/auth.json")]
-    assert requests[0]["env"] == {"CODEX_HOME": "/tmp/codex-home"}
+    assert requests[-1]["env"] == {"CODEX_HOME": "/installed-agent/codex-home"}
 
 
 @pytest.mark.parametrize("through_ci", [False, True, "json"])
@@ -221,7 +221,7 @@ def test_plan_checks_the_auth_file_harbor_uploads(tmp_path, monkeypatch, agent_h
         default_user = None
 
         async def exec(self, **kwargs):
-            return ExecResult(return_code=0, stdout="", stderr="")
+            return ExecResult(return_code=0, stdout="CODEX_RUNTIME_ID 1000 1000\n", stderr="")
 
         async def upload_file(self, source, target):
             uploads.append((Path(source).read_text(), target))

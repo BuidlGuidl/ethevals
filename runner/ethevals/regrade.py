@@ -27,7 +27,9 @@ def regrade_options(path: Path) -> dict:
             and not list((path / "environment").glob("*compose.y*ml"))
             and (path / "environment/foundry.toml").is_file()):
         kind = "contract"
-    return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in task_judges(path)]}
+    judges = task_judges(path)
+    return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in judges],
+            "live_judge": any(judge.judge.mcp_servers for judge in judges.values())}
 
 
 def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], list[dict], list[dict]]:

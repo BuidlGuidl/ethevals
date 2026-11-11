@@ -2,6 +2,8 @@
 status: accepted
 ---
 
+[ADR 0026](0026-judges-use-agents-and-the-claude-plan.md) replaces the judge program and payment rules below.
+
 # Verifiers use RewardKit, and criteria run in the task
 
 [ADR 0010](0010-run-tasks-on-harbor.md) moved the board to Harbor, but two older shapes came along.

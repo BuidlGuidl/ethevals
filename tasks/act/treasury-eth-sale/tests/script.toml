@@ -4,7 +4,6 @@ model = "anthropic/claude-opus-5-5"
 version = "2.1.321"
 cwd = "/judge"
 reasoning_effort = "high"
-atif-trajectory = "/logs/agent/trajectory.json"
 guard = "flag"
 
 [scoring]

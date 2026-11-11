@@ -1,9 +1,10 @@
 [judge]
-judge = "anthropic/claude-opus-5-5"
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
 reasoning_effort = "high"
-atif-trajectory = "/logs/agent/trajectory.json"
 guard = "flag"
-files = ["/logs/verifier/cap-page.txt", "/logs/verifier/cap-page.png"]
 
 [scoring]
 aggregation = "all-pass"

@@ -97,6 +97,7 @@ def test_ci_failure_still_exports_only_checked_files_with_tokens_available(tmp_p
     ("auth", "CODEX_AUTH_JSON.tokens.refresh_token", "offline-refresh-token-value"),
     ("auth_override", "CODEX_AUTH_JSON.tokens.refresh_token", "offline-overridden-token-value"),
     ("judge", "CUSTOM_JUDGE_KEY", "offline-judge-key-value"),
+    ("judge", "CLAUDE_CODE_OAUTH_TOKEN", "offline-plan-judge-token"),
     ("literal", "AGENT_ACCESS_TOKEN", "offline-literal-token-value"),
 ])
 def test_whole_job_check_withholds_artifact_and_release_for_declared_secrets(tmp_path, monkeypatch, source, label, value):

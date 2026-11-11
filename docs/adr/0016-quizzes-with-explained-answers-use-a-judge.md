@@ -2,6 +2,8 @@
 status: accepted
 ---
 
+[ADR 0026](0026-judges-use-agents-and-the-claude-plan.md) replaces the judge program and payment rules below.
+
 # Quizzes with explained answers use a judge
 
 A quiz's check has been a pattern rule on the final reply.

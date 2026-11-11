@@ -53,7 +53,12 @@ def replay(tests_dir, *, workspace="/app", output="/logs/verifier/reward.json", 
         name = "tests/" + reward.name + ".toml"
         changed = old_inputs.get(name) != new_inputs.get(name) or old_inputs.get("@judge") != new_inputs.get("@judge")
         judge = reward.judge
-        files = [*(judge.files or []), *([judge.atif_trajectory] if getattr(judge, "atif_trajectory", None) else [])]
+        files = [*getattr(judge, "files", []), *([judge.atif_trajectory] if getattr(judge, "atif_trajectory", None) else [])]
+        if getattr(judge, "agent", None):
+            previous_inputs = source / "saved-verifier/judge-inputs.json"
+            current_inputs = Path(os.environ.get("REWARDKIT_LOG_DIR", "/logs/verifier")) / "judge-inputs.json"
+            if not previous_inputs.is_file() or not current_inputs.is_file() or previous_inputs.read_bytes() != current_inputs.read_bytes():
+                changed = True
         for filename in files:
             previous = (source / "agent/trajectory.json" if filename == getattr(judge, "atif_trajectory", None) else
                         source / "saved-verifier" / Path(filename).relative_to("/logs/verifier"))
@@ -98,6 +103,12 @@ def check_one():
         sys.argv = ["/tests/run_reward.py"]
         runpy.run_path("/tests/run_reward.py", run_name="__main__")
     else:
+        if not Path("/judge/submission").is_dir() and Path("/logs/verifier/judge-inputs").is_dir():
+            from agent_judge import prepare, environment
+            home = prepare(list(Path("/logs/verifier/judge-inputs").iterdir()))
+            clean = environment(home)
+            os.environ.clear()
+            os.environ.update(clean)
         replay("/tests")
 
 
@@ -110,6 +121,7 @@ def batch():
         shutil.rmtree("/tests", ignore_errors=True)
         shutil.copytree("/original-tests", "/tests")
         shutil.rmtree("/logs", ignore_errors=True)
+        shutil.rmtree("/judge", ignore_errors=True)
         shutil.copytree(destination / "agent", "/logs/agent")
         if (destination / "saved-verifier").is_dir():
             shutil.copytree(destination / "saved-verifier", "/logs/verifier")

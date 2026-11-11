@@ -33,7 +33,7 @@ export const rowSchema = z.object({
   working_seconds: measure,
   cost_source: z.string(),
   paid_by: z.enum(["plan", "api_key", "free"]),
-  judge: z.object({ model: z.string(), effort: z.string().nullable() }).nullable(),
+  judge: z.object({ program: z.string().optional(), model: z.string(), effort: z.string().nullable() }).nullable(),
   judge_paid_by: z.enum(["plan", "api_key", "free"]).nullable(),
   trajectory_url: z.string().regex(/^(https?:\/\/|\/(?!\/))/).nullable(),
   trajectory_file: z.string().nullable().optional(),

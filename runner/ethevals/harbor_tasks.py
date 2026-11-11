@@ -91,6 +91,8 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
             name.startswith("/logs/verifier/") and ".." not in Path(name).parts
             and not any(char in name for char in "*?[]") for name in judge.judge.files)
         agent_judge = judge.judge.judge == "claude-code"
+        if config.judge.program == "claude-code" and not agent_judge:
+            raise ValueError(f"{file}: the judge must use claude-code")
         if agent_judge and (judge.judge.files or not judge.judge.cwd):
             raise ValueError(f"{file}: an agent judge needs cwd and reads no files through the prompt")
         if not agent_judge and judge.judge.atif_trajectory != "/logs/agent/trajectory.json" and not (
@@ -201,7 +203,7 @@ async def free_check(paths: list[Path], output: Path) -> None:
         originals[staged.resolve()] = path
         judges = task_judges(staged)
         if judges:
-            print(f"{path}: criteria skipped in the free check; the judge needs a paid API call.", flush=True)
+            print(f"{path}: criteria skipped in the free check; the judge needs a model call.", flush=True)
             for file in judges:
                 file.unlink()
             for reward in (staged / "tests").rglob("reward.toml"):

@@ -27,7 +27,8 @@ class JudgeSettings(Declaration):
         return {"REWARDKIT_JUDGE": self.program, "REWARDKIT_MODEL": self.model,
                 "REWARDKIT_REASONING_EFFORT": self.effort,
                 "REWARDKIT_FORCE_SUBSCRIPTION": "1" if self.paid_by == "plan" else "",
-                **({"ANTHROPIC_API_KEY": "", "ANTHROPIC_AUTH_TOKEN": ""} if self.paid_by == "plan" else {})}
+                **({"ANTHROPIC_API_KEY": "", "ANTHROPIC_AUTH_TOKEN": ""} if self.paid_by == "plan"
+                   else {"CLAUDE_CODE_OAUTH_TOKEN": ""})}
 
 
 def check_judge_key(settings: JudgeSettings) -> None:

@@ -76,7 +76,7 @@ Rows use schema version 9 and link a trajectory JSON file when one exists.
 They retain all reward dimensions; `reward == 1` supplies the test pass bit.
 Cost comes from Harbor's API-price usage record, regardless of the payment source.
 Unknown cost stays null; free stand-ins cost $0.
-Rows record judge model, effort, API-price cost, and payment source separately.
+Rows record judge program, model, effort, API-price cost, and payment source separately.
 The free check still skips paid criteria.
 
 To open a local job on the board, build from `site/`:
@@ -89,7 +89,7 @@ The build copies local trajectories into the static export and links published t
 
 ## Free checks
 
-Harbor is pinned to 0.24.0 in `pyproject.toml` and `uv.lock`.
+Harbor is pinned to 0.25.0 in `pyproject.toml` and `uv.lock`.
 This version copies declared trajectories into a separate verifier after the agent stops.
 The verifier can read the final reply without changing the instruction or asking for an answer file.
 The oracle and nop runs exercise this path before a version change can pass.
@@ -97,7 +97,7 @@ The oracle and nop runs exercise this path before a version change can pass.
 Run the free check from the repository root:
 
 ```sh
-unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
+unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY CLAUDE_CODE_OAUTH_TOKEN
 uv run python scripts/ci.py images
 uv run ethevals free-check --output results/free-check
 ```
@@ -120,7 +120,7 @@ Test tools can write `/logs/verifier/checks.json`:
 `test.sh` copies `/opt/check_records.py` into `/tests/`, then runs `rewardkit /tests`.
 That shared criterion turns each record into a named RewardKit check with its reason.
 Each task's `reward.toml` sets `all-pass` for the record file and the root `reward`.
-RewardKit 0.2.3 ships in both shared images and needs no network for programmatic checks.
+RewardKit 0.2.4 ships in both shared images and needs no network for programmatic checks.
 The chain image caches Solidity 0.8.30 at build time; tasks can install other compilers in their images.
 RewardKit alone writes `reward.json` and `reward-details.json` under `/logs/verifier/`.
 Rows and free checks read those files; additional reward dimensions remain available.
@@ -176,21 +176,23 @@ Compiler download failures raise errors instead of failed checks.
 The helper keeps Forge stdout and stderr beside `checks.json`.
 
 Criteria live in RewardKit judge TOML files under `tests/` and run through `test.sh`.
-Lint requires named binary criteria, `atif-trajectory = "/logs/agent/trajectory.json"`, and `guard = "flag"` or `"penalize"`.
-A Concepts task's judge may instead read only `files = ["/logs/verifier/final-reply.txt"]`, which its `test.sh` writes from the trajectory, so the judge never sees the model's reasoning.
-Each judge and its enclosing rewards use `all-pass`, so every test and criterion counts toward the same reward.
-The task's judge model and effort provide the defaults for plain Harbor runs.
-The board overrides them through `REWARDKIT_JUDGE` and `REWARDKIT_REASONING_EFFORT` from the job config.
-Each judged task declares only `ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"` in `[verifier.env]`.
-A missing key stops Harbor with the variable's name.
-Use a judge-only API key with its own spend limit.
-Harbor scopes agent credentials to agent commands; verifier commands receive no plan token.
-The board refuses a plan token in the judge key before starting Harbor.
-For shared verifiers, the judge key reaches the agent's container after the agent stops.
-Processes the agent left running can still read it, as ADR 0011 records.
-Each agent execution reserves three calls per judge batch, multiplied by samples and `cost_limit_usd`.
-In individual mode, the reserve covers each criterion and its separate guard call.
-Executions paid by a plan also reserve judge spend.
+Every judge uses `judge = "claude-code"`, model `anthropic/claude-opus-5-5`, high effort, and `guard = "flag"`.
+Agent judges read inputs copied into their working folder instead of `files` prompt attachments.
+The judge starts one folder above submitted code with fresh user settings.
+Browser judges use pinned Playwright MCP tools, a funded wallet, chain reads, and fixture commands.
+Code keeps checks that read exact chain facts.
+Every judge and its enclosing rewards use `all-pass`.
+
+Each judged task declares only `CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN}"` in `[verifier.env]`.
+The Claude plan pays for the judge. The board records its API-price cost.
+The runner sets the judge program, model, and effort separately.
+Builds and submitted child processes receive no judge token.
+Shared verifiers retain the container isolation gap in ADR 0011.
+Plan-paid judges reserve no API spend, like plan-paid agents.
+Every execution still requires an explicit budget.
+A judge that declares MCP servers needs a live session, so a judge-only change reruns its trials.
+File-reading agent judges keep saved-input regrades and compare saved input content fingerprints.
+
 `reward-details.json` supplies criterion reasons, errors, and API-price judge usage to rows.
 A missing cost stays null; local stand-ins use `judge.paid_by: free` and cost $0.
 RewardKit retries malformed replies internally up to three calls.
@@ -222,7 +224,7 @@ The board's task hash is Harbor's `sha256:` package digest.
 Saved board trials must carry the same digest in `lock.json` as their plan.
 Published folders combine the pillar and directory name under `tasks/`.
 Registry entries use `[task].name`, which Harbor also reads from the copied task.
-Harbor 0.24.0 discovers immediate children there when `--repo` has no dataset selector.
+Harbor 0.25.0 discovers immediate children there when `--repo` has no dataset selector.
 `registry.json` also supplies the explicit `ethevals@1.0` dataset entry.
 This version names the registry format; pin the repository revision to select task content.
 
@@ -244,5 +246,5 @@ After each package's first push, an owner must set its visibility to public in G
 It tags HF revisions `gh-SHORT_SHA` and supports manual reruns on `main`.
 Pull requests build the same image tags locally and publish nothing.
 
-References: [Harbor v0.24.0](https://github.com/harbor-framework/harbor/tree/v0.24.0),
+References: [Harbor v0.25.0](https://github.com/harbor-framework/harbor/tree/v0.25.0),
 [separate verifier inputs](https://docs.harborframework.com/tasks/separate-verifier).

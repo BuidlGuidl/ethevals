@@ -98,7 +98,7 @@ def test_board_job_uses_harbor_timeouts_without_overrides(tmp_path, monkeypatch)
 
     async def capture(config):
         assert [(agent.name, agent.kwargs, agent.override_timeout_sec) for agent in config.agents] == [
-            ("nop", {"version": "1.0.0", "reasoning_effort": "high"}, None)]
+            ("nop", {"version": "1.0.0"}, None)]
         assert ([item.path for item in config.tasks], config.verifier.override_timeout_sec) == ([task.resolve()], None)
         raise Planned
 

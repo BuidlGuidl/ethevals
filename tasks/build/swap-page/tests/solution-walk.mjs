@@ -28,7 +28,11 @@ try {
   page.setDefaultTimeout(120_000);
   await initPage({ page });
   await page.goto(session.origin + '/#/swap');
-  await page.getByRole('button', { name: 'Test Wallet', exact: true }).click();
+  const connect = page.getByRole('button', { name: 'Test Wallet', exact: true });
+  const amountInput = page.locator('input[inputmode="decimal"]');
+  await connect.or(amountInput).first().waitFor();
+  if (!await amountInput.isVisible()) await connect.click({ timeout: 1000 }).catch(() => {});
+  await amountInput.waitFor();
   let input = 'ETH';
   let output = 'USDC';
   for (const [nextInput, nextOutput, amount, mode] of [
@@ -60,7 +64,7 @@ try {
     await page.getByRole('button', { name: 'Review swap', exact: true }).click();
     await page.getByRole('button', { name: 'Confirm swap', exact: true }).click();
     if (mode === 'reject') await page.locator('.error').waitFor();
-    else if (mode === 'race') await page.locator('.error, .receipt').first().waitFor();
+    else if (mode === 'race') await page.locator('.error').or(page.getByRole('heading', { name: 'Swap complete', exact: true })).first().waitFor();
     else await page.getByRole('button', { name: 'New swap', exact: true }).waitFor();
   }
 } finally {

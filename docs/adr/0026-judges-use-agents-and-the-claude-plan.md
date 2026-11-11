@@ -41,9 +41,18 @@ The verifier receives the plan token only after the agent stops.
 Publication checks scan for that token, like every other declared secret.
 Shared verifiers retain the container isolation gap documented in ADR 0011.
 
-This decision changes no trial identity, hash rules, or regrade planning.
+This decision changes no trial identity or hash rules.
 The judge program joins its model and effort in results and the existing judge settings fingerprint.
 The Aave savings page's browser checks follow in a separate change.
+Its existing file-reading judges move to the agent kind and plan payment now.
+
+## Interim regrade rule
+
+A judge that declares MCP servers needs a live session.
+A judge-only change on such a task reruns its trials instead of regrading saved inputs.
+File-reading agent judges keep judge-only regrades.
+Their saved input copies and content fingerprints decide whether a judge answer can be reused.
+This rule stays separate from identity and hash rules so saved-chain replay can replace it later.
 
 ## Considered options
 

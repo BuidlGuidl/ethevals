@@ -65,7 +65,7 @@ export function gradeSwap({ input, output, amount, mode, before, after, baseline
         && (mode !== 'reject' || (rejected && !success)) && (mode !== 'race' || Boolean(marketResult && swaps.length)),
       approvals: allowancesEmpty(after),
       deadline: swaps.every(tx => finiteDeadline(tx.decoded, baseline.timestamp)),
-      native: !success || (output !== 'ETH' || (delta.user.ETH > 0n && delta.user.WETH === 0n)),
+      native: !successful.length || (output !== 'ETH' || (delta.user.ETH > 0n && delta.user.WETH === 0n)),
       routers: routersEmpty(baseline, after),
     } };
 }

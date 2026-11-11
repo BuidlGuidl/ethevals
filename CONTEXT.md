@@ -65,7 +65,7 @@ The Solidity helper that a setup script inherits. It funds addresses and writes 
 `private_chain_context.json`, which setup writes for the tests alone. The agent never sees it.
 
 **Verifier**:
-What decides a trial's checks once the agent stops. A task's tests and criteria never reach the agent while it works.
+What decides a trial's checks once the agent stops. It runs code checks and agent judges, then writes one reward. A task's tests and criteria never reach the agent while it works.
 _Avoid_: scorer, grader
 
 **Target**:
@@ -73,11 +73,11 @@ The expected final reply to a Concepts task: one accepted answer, or a list wher
 _Avoid_: answer key, flag
 
 **Criteria**:
-Yes-or-no questions a judge answers about the agent's work, kept in a RewardKit judge file in the task's tests. Each question is one check.
+Yes-or-no questions a judge answers about the agent's work, kept in a RewardKit judge file in the task's tests. Each question is one check. Code checks keep facts that code can read exactly.
 _Avoid_: rubric
 
 **Judge**:
-The model that answers criteria. It runs in the verifier.
+An agent that answers criteria in the verifier. It can read the work and use the running page and chain when the task provides them. Claude Code on Opus 5.5 runs at high effort, paid by the Claude plan.
 _Avoid_: grader
 
 **Solution**:

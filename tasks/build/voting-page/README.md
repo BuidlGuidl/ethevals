@@ -31,8 +31,9 @@ The page must follow approval, deposit, delegation, receipts, and refreshed read
 | `already_voted` | The connected holder cannot send a duplicate vote request | duplicate votes |
 | `free_submission_changed` | Free mode only: application source differs from the untouched starter | free check |
 
-RewardKit 0.2.3 owns judgment, guard, named checks, aggregation, usage records, and both reward files.
-One Opus 5.5 high-effort judge owns the eight workflows.
+RewardKit 0.2.4 owns judgment, guard, named checks, aggregation, usage records, and both reward files.
+One Claude Code agent on Opus 5.5 at high effort decides the eight workflows, paid by the Claude plan.
+It reads the source bundle inside `/judge/submission` and starts one folder above it.
 Each decision includes a causal trace and file/line citations.
 It follows reachable controls through reads, UI state, handlers, transaction targets and arguments, receipts, and refresh.
 Any control wording and component names can pass.
@@ -51,14 +52,14 @@ Submitted files remain untrusted evidence inside RewardKit's guard.
 A concrete compilation or workflow failure gives reward zero.
 Every check must pass for reward one.
 An unknown decision, incomplete response, bad citation, provider error, or timeout gives a verifier error.
-The task permits one provider request with automatic retries disabled.
+RewardKit owns the agent session and its answer form.
 The output limit is 24,576 tokens.
 Build commands receive no provider keys.
 `reward-details.json` retains structured reasons and normal usage.
 Invalid replies retain available usage and error records, with no reward file.
 Each invocation clears earlier reward files before checks begin.
 Production judges available source even after compilation fails, so the board retains its required judge record.
-`source-decisions.json`, the request, response, bundle, and manifest support inspection.
+`source-decisions.json`, the judge transcript, bundle, and manifest support inspection.
 
 ## Why it matters
 

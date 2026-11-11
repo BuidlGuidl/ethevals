@@ -1,4 +1,4 @@
-FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678
+FROM ghcr.io/buidlguidl/ethevals-chain:inputs-8761a2534c168efd
 USER root
 COPY setup/ /setup/
 RUN mkdir -p setup && cp /setup/*.sol setup/ && \

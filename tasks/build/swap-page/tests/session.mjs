@@ -49,7 +49,6 @@ async function finishTest() {
   const after = await reader.state(spenders);
   const comparison = after.routerBalances.length === baseline.routerBalances.length ? baseline : await reader.state(spenders, baseline.block);
   const result = { ...active, after, transactions, baseline: comparison };
-  Object.assign(result, gradeSwap(result));
   tests.push(result);
   active = null;
   await save('swaps.json', tests);
@@ -59,8 +58,8 @@ async function beginTest(args) {
   const [input, output, amount, mode = 'normal'] = args;
   if (!['ETH', 'USDC', 'USDT'].includes(input) || !['ETH', 'USDC', 'USDT'].includes(output)
       || input === output || !/^\d+(\.\d+)?$/.test(amount || '') || Number(amount) <= 0
-      || !['normal', 'seed', 'reject', 'race'].includes(mode)) {
-    throw new Error('Usage: wallet-test <ETH|USDC|USDT> <ETH|USDC|USDT> <amount> [normal|seed|reject|race]');
+      || !['normal', 'seed', 'reject', 'race', 'moved'].includes(mode)) {
+    throw new Error('Usage: wallet-test <ETH|USDC|USDT> <ETH|USDC|USDT> <amount> [normal|seed|reject|race|moved]');
   }
   await finishTest();
   if (mode === 'seed') {
@@ -76,6 +75,8 @@ async function beginTest(args) {
 async function finish() {
   if (fatal) throw fatal;
   await finishTest();
+  for (const result of tests) Object.assign(result, gradeSwap(result));
+  await save('swaps.json', tests);
   const checks = JSON.parse(await fs.readFile(path.join(output, 'checks.json'), 'utf8'));
   const successes = tests.filter(test => test.success);
   const normal = tests.filter(test => ['normal', 'seed'].includes(test.mode));
@@ -83,7 +84,7 @@ async function finish() {
     successes.some(test => test.input === input && test.output === output));
   const reasons = tests.map(test => `${test.amount} ${test.input}/${test.output} ${test.mode}: ${stringify({ success: test.success, entered: test.entered, flags: test.flags, delta: test.delta }).trim()}`).join('; ').replace(/\s+/g, ' ');
   const record = (name, passed) => { checks[name] = { passed, reason: reasons || 'No swaps came from the page.' }; };
-  record('swaps_assets', coverage && normal.length > 0 && normal.every(test => test.success && test.entered)
+  record('swaps_assets', coverage && normal.length > 0 && normal.every(test => test.success) && successes.every(test => test.entered)
     && tests.some(test => test.mode === 'seed' && test.success) && !wallet.requests.some(request => request.unannounced));
   record('cut_only_on_swap', coverage && tests.some(test => test.mode === 'reject' && test.rejected)
     && tests.some(test => test.mode === 'race' && test.marketResult) && tests.every(test => test.flags.fee));

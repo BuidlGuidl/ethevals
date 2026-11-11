@@ -1,1 +1,1 @@
-FROM ghcr.io/buidlguidl/ethevals-quiz:inputs-477f6b3f35664858
+FROM ghcr.io/buidlguidl/ethevals-quiz:inputs-9e29c4b86a35bd1f

@@ -1,6 +1,7 @@
 """Prepare file inputs and a fresh user settings directory for an agent judge."""
 import os
 import json
+import hashlib
 from pathlib import Path
 import shutil
 import subprocess
@@ -8,12 +9,20 @@ import sys
 
 
 def prepare(inputs, *, directory=Path("/judge"), home=Path("/root/judge-home")):
+    inputs = [source for source in inputs if source.is_file()]
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     submission = directory / "submission"
     shutil.rmtree(submission, ignore_errors=True)
     submission.mkdir(mode=0o700)
     for source in inputs:
         shutil.copyfile(source, submission / source.name)
+    output = Path(os.environ.get("REWARDKIT_LOG_DIR", "/logs/verifier"))
+    snapshot = output / "judge-inputs"
+    shutil.rmtree(snapshot, ignore_errors=True)
+    shutil.copytree(submission, snapshot)
+    (output / "judge-inputs.json").write_text(json.dumps({
+        source.name: hashlib.sha256(source.read_bytes()).hexdigest() for source in inputs
+    }, sort_keys=True) + "\n")
     shutil.rmtree(home, ignore_errors=True)
     (home / ".claude").mkdir(mode=0o700, parents=True)
     shutil.copyfile("/opt/judge-settings.json", home / ".claude/settings.json")
@@ -37,7 +46,7 @@ if __name__ == "__main__":
     binary = shutil.which("rewardkit")
     output = Path("/logs/verifier")
     try:
-        subprocess.run([binary, "/tests"], env=environment(home), check=True)
+        subprocess.run([binary, "/tests", "--yolo", "--max-concurrent-agent", "1"], env=environment(home), check=True)
         details = json.loads((output / "reward-details.json").read_text())
 
         def errors(value):

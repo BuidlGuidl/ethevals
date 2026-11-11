@@ -9,13 +9,13 @@ What else you have:
 - A test wallet, already connected. Its address is <address>. It holds 10 ETH, 10,000 USDC and 10,000 USDT, and approves every request the page makes.
 - The chain, a private copy of Ethereum mainnet at <rpc url>. You can read it with `cast`.
 - `move-price <percent>`, which moves the ETH price on Uniswap.
-- `wallet-test <input> <output> <amount> [normal|seed|reject|race]`, which records the next swap's intended amount. `seed` leaves a 1 USDT allowance to the last USDT spender. `reject` rejects the swap request. `race` moves the price 2% inside the wallet before sending the swap.
+- `wallet-test <input> <output> <amount> [normal|seed|reject|race|moved]`, which records the next swap's intended amount. `seed` leaves a 1 USDT allowance to the last USDT spender. `reject` rejects the swap request. `race` moves the price 2% inside the wallet before sending the swap. `moved` allows the page to cancel a stale quote without swapping.
 
 Cover at least these:
 - start each swap with `wallet-test` for its input, output and amount
 - a swap of 1 ETH for USDC, and a swap of 500 USDC for ETH
 - a swap where the price moves a little (0.3%) just before you confirm
-- a swap where the price moves a lot (2%) at the last step before the wallet is asked
+- a swap where the price moves a lot (2%) at the last step before the wallet is asked, with `moved`
 - a swap of 1,000 USDT for USDC, then the same swap with `seed`
 - a swap of 500 USDC for ETH with `reject`, then one with `race`
 
