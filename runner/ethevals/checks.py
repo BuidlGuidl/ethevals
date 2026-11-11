@@ -87,7 +87,9 @@ def read_reward(verifier: Path, *, details: list[dict] | None = None, judge: dic
                 errors.append("The verifier did not record the planned judge.")
             for detail in judges:
                 settings = detail["judge"]
-                if settings["model"] != judge["model"] or settings.get("reasoning_effort") != judge["effort"]:
+                program = settings.get("agent") if detail["kind"] == "agent" else settings.get("model")
+                if (settings["model"] != judge["model"] or settings.get("reasoning_effort") != judge["effort"]
+                        or judge.get("program", program) != program):
                     errors.append("The verifier judge differs from the planned judge.")
         if errors:
             raise JudgeError("; ".join(errors), rewards, checks)

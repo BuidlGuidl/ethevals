@@ -8,21 +8,15 @@ import sys
 
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 
-import litellm
-import rewardkit.judges as judges
-from rewardkit.models import JudgeResult, Score
+import shutil
+sys.path.insert(0, "/opt")
+from agent_judge import prepare, environment
 from rewardkit.runner import run
 
 WORKFLOWS = ('lists_every_proposal', 'status_and_tallies_match', 'quorum_counts_for_only',
     'end_moves_with_late_quorum', 'wrap_then_delegate', 'votes_at_snapshot', 'canceled_status', 'already_voted')
 MAX_OUTPUT_TOKENS = 24576
 MAX_REQUEST_BYTES = 970_000
-
-
-class InvalidJudgeResponse(ValueError):
-    def __init__(self, reason, response):
-        super().__init__(reason)
-        self.response = response
 
 
 def unique_object(pairs):
@@ -73,62 +67,6 @@ def validate_reply(text, manifest):
     return decisions
 
 
-def install_completion_boundary(output, manifest, completion=None):
-    previous = litellm.acompletion
-    original = completion or previous
-    original_call = judges._arun_llm_call
-    called = False
-
-    async def bounded(**kwargs):
-        nonlocal called
-        if called:
-            raise RuntimeError('This verifier permits one judge request; automatic retries are disabled.')
-        called = True
-        kwargs.update(max_tokens=MAX_OUTPUT_TOKENS, num_retries=0, max_retries=0)
-        if kwargs['model'] != 'anthropic/claude-opus-5-5' or kwargs['reasoning_effort'] != 'high':
-            raise ValueError('Voting-page requires Opus 5.5 at high effort.')
-        if 'api_key' in kwargs:
-            raise ValueError('Judge credentials must use ANTHROPIC_API_KEY, not inline or subscription credentials.')
-        if len(json.dumps(kwargs, ensure_ascii=False).encode()) > MAX_REQUEST_BYTES:
-            raise ValueError('RewardKit request exceeds the input limit.')
-        (output / 'rewardkit-request.json').write_text(json.dumps(kwargs, indent=2) + '\n')
-        response = await original(**kwargs)
-        (output / 'judge-response.json').write_text(response.model_dump_json(indent=2) + '\n')
-        try:
-            if response.choices[0].finish_reason != 'stop':
-                raise ValueError('Judge response did not finish normally.')
-            decisions = validate_reply(response.choices[0].message.content, manifest)
-            (output / 'source-decisions.json').write_text(json.dumps(decisions, indent=2) + '\n')
-            if any(item['decision'] == 'unknown' for item in decisions.values()):
-                raise ValueError('Judge could not determine every workflow; see source-decisions.json.')
-        except (ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
-            raise InvalidJudgeResponse(str(error), response) from error
-        return response
-
-    async def recorded_call(judge, criteria, weights, *args, **kwargs):
-        try:
-            return await original_call(judge, criteria, weights, *args, **kwargs)
-        except Exception as error:
-            response = error.response if isinstance(error, InvalidJudgeResponse) else None
-            return JudgeResult(
-                scores=[Score(name=criterion.name, value=0.0, raw=None,
-                    weight=weights[index] if weights else 1.0, error=str(error),
-                    description=criterion.description, id=criterion.id)
-                    for index, criterion in enumerate(criteria)],
-                output=response.model_dump_json() if response is not None else '',
-                warnings=[],
-                usage=judges._llm_usage(response, judge.model) if response is not None else {},
-            )
-
-    litellm.acompletion = bounded
-    judges._arun_llm_call = recorded_call
-
-    def restore():
-        litellm.acompletion = previous
-        judges._arun_llm_call = original_call
-    return restore
-
-
 def main():
     tests = Path(sys.argv[1] if len(sys.argv) > 1 else '/tests')
     output = Path(os.environ.get('REWARD_OUTPUT', '/logs/verifier/reward.json'))
@@ -138,10 +76,11 @@ def main():
     if not (tests / 'judge.toml').exists():
         run(tests, workspace=workspace, output=output)
         return
-    if not os.environ.get('ANTHROPIC_API_KEY'):
-        raise RuntimeError('The source judge needs ANTHROPIC_API_KEY. Use the repository free check for free validation.')
+    home = prepare([output.parent / 'source-evidence.txt'])
+    clean = environment(home)
+    os.environ.clear()
+    os.environ.update(clean)
     manifest = json.loads((output.parent / 'source-manifest.json').read_text())
-    restore = install_completion_boundary(output.parent, manifest)
     try:
         run(tests, workspace=workspace, output=output)
         details = json.loads(output.with_name('reward-details.json').read_text())
@@ -151,11 +90,18 @@ def main():
             return isinstance(value, list) and any(errors(child) for child in value)
         if errors(details):
             raise RuntimeError('RewardKit reported a verifier error; see reward-details.json.')
+        judge_detail = next(detail for detail in details.values() if detail.get('kind') == 'agent')
+        decisions = validate_reply(judge_detail['judge_output'], manifest)
+        (output.parent / 'source-decisions.json').write_text(json.dumps(decisions, indent=2) + '\n')
+        if any(item['decision'] == 'unknown' for item in decisions.values()):
+            raise RuntimeError('The judge could not decide every workflow. See source-decisions.json.')
     except BaseException:
         output.unlink(missing_ok=True)
         raise
     finally:
-        restore()
+        projects = home / '.claude/projects'
+        if projects.exists():
+            shutil.copytree(projects, output.parent / 'judge-transcripts', dirs_exist_ok=True)
 
 
 if __name__ == '__main__':

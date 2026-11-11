@@ -90,7 +90,10 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         verifier_files = judge.judge.files and all(
             name.startswith("/logs/verifier/") and ".." not in Path(name).parts
             and not any(char in name for char in "*?[]") for name in judge.judge.files)
-        if judge.judge.atif_trajectory != "/logs/agent/trajectory.json" and not (
+        agent_judge = judge.judge.judge == "claude-code"
+        if agent_judge and (judge.judge.files or not judge.judge.cwd):
+            raise ValueError(f"{file}: an agent judge needs cwd and reads no files through the prompt")
+        if not agent_judge and judge.judge.atif_trajectory != "/logs/agent/trajectory.json" and not (
                 judge.judge.atif_trajectory is None and verifier_files):
             raise ValueError(f"{file}: the judge must read the ATIF trajectory or only files under /logs/verifier/")
         if judge.judge.guard not in {"flag", "penalize"}:

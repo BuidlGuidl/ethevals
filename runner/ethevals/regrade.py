@@ -88,8 +88,9 @@ def run_regrades(items: list[dict], config, output: Path, previous: list[dict], 
                            "--entrypoint", "python3", "-v", f"{worker.resolve()}:/regrade.py:ro",
                            "-v", f"{(path / 'tests').resolve()}:/original-tests:ro", "-v", f"{job.resolve()}:/batch"]
                 if any(item["judge_required"] for item in batch):
-                    command += ["-e", config.judge.key_env, "-e", f"REWARDKIT_JUDGE={config.judge.model}",
-                                "-e", f"REWARDKIT_REASONING_EFFORT={config.judge.effort}"]
+                    command += ["-e", config.judge.key_env]
+                    for name, value in config.judge.environment().items():
+                        command += ["-e", f"{name}={value}"]
                 for index, item in enumerate(batch):
                     destination = job / str(index)
                     (destination / "agent").mkdir(parents=True, exist_ok=True)

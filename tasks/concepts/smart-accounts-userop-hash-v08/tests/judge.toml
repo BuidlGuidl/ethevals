@@ -1,8 +1,10 @@
 [judge]
-judge = "anthropic/claude-opus-5-5"
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
 reasoning_effort = "high"
 guard = "flag"
-files = ["/logs/verifier/final-reply.txt"]
 
 [scoring]
 aggregation = "all-pass"

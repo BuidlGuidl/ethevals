@@ -36,7 +36,7 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
         raise ValueError(f"{path}: metadata.modes must list supported modes")
     digest, _ = Packager.compute_content_hash(path)
     config = config or load_job()
-    judge = {"model": config.judge.model, "effort": config.judge.effort} if task_judges(path) else None
+    judge = config.judge.identity() if task_judges(path) else None
     return {"id": f"{pillar}/{path.name}", "hash": "sha256:" + digest, "pillar": pillar,
             **task_hashes(path, judge),
             "area": metadata.get("area"), "layer": metadata.get("layer"),
@@ -149,7 +149,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     if decision["action"] == "exhausted":
                         exhausted.append(row)
                         continue
-                    judge = {"model": config.judge.model, "effort": config.judge.effort} if judges else None
+                    judge = config.judge.identity() if judges else None
                     item = {**metadata, "task_path": str(path.resolve()), "agent_key": key,
                             "agent_version": agent.version, "harbor_version": config.harbor_version,
                             "paid_by": agent.paid_by,
@@ -253,7 +253,7 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
                              model_name=model.name, kwargs=kwargs, env=agent.env)
         options = AgentFactory.get_agent_class_from_config(harbor).options_model
         fields = options.model_fields if options is not None else {}
-        if model.effort is not None:
+        if model.effort is not None and ("variant" in fields or "reasoning_effort" in fields):
             # OpenCode has no effort option; its model variant sets the provider's effort.
             effort = "variant" if "variant" in fields and "reasoning_effort" not in fields else "reasoning_effort"
             harbor.kwargs[effort] = model.effort
@@ -297,11 +297,7 @@ async def run_trial(item, harbor, config, output, secrets, rows):
         job = await Job.create(JobConfig(
             job_name=name, jobs_dir=output / "jobs", n_concurrent_trials=1, quiet=True,
             agents=[harbor], tasks=[{"path": item["task_path"]}],
-            verifier={"env": {
-                "REWARDKIT_JUDGE": config.judge.model,
-                "REWARDKIT_REASONING_EFFORT": config.judge.effort,
-                "CLAUDE_CODE_OAUTH_TOKEN": "", "REWARDKIT_FORCE_SUBSCRIPTION": "",
-            } if item["judge"] else {}}, environment={"type": "docker"},
+            verifier={"env": config.judge.environment() if item["judge"] else {}}, environment={"type": "docker"},
         ))
         await job.run()
     finally:

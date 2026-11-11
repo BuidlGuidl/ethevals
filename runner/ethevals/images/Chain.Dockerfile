@@ -1,7 +1,9 @@
 FROM ghcr.io/foundry-rs/foundry:v1.5.1@sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e AS foundry
 FROM python:3.13.7-slim-bookworm@sha256:adafcc17694d715c905b4c7bebd96907a1fd5cf183395f0ebc4d3428bd22d92d AS tools
-RUN pip install --no-cache-dir harbor-rewardkit==0.2.3
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir harbor-rewardkit==0.2.4
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://claude.ai/install.sh | bash -s -- 2.1.321
+COPY judge-settings.json agent_judge.py /opt/
 COPY --from=foundry /usr/local/bin/anvil /usr/local/bin/cast /usr/local/bin/forge /usr/local/bin/
 RUN mkdir -p /tmp/compiler/src && \
     printf 'pragma solidity =0.8.30; contract Compiler {}\n' > /tmp/compiler/src/Compiler.sol && \
