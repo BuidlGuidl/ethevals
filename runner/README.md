@@ -146,8 +146,7 @@ This applies to workflows started after the change lands.
 Old runs keep their original workflow definition when rerun, because [GitHub retains the original commit](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs).
 `scripts/ci.py plan-trials` folds current and pending results, saves the Harbor job config, and emits the admitted matrix.
 CI schedules at most 256 jobs, with at most 100 per plan group to fit GitHub's pending-job limit.
-Regrade jobs group rows by task and receive no agent credentials.
-Only a regrade that needs a judge receives the judge key.
+Regrade jobs group rows by task and receive only the judge credential when they need it.
 The plan also limits each release to 1,000 assets and defers work beyond that limit.
 The plan lists regrade batches deferred by job or asset limits.
 Later runs pick up deferred trials and regrades.

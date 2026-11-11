@@ -104,10 +104,10 @@ jobs:
       - name: Run one planned trial
         timeout-minutes: 190
         env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: &judge-key ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          ANTHROPIC_API_KEY: &judge-key ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
           MAINNET_RPC_URL: *mainnet-rpc
@@ -165,7 +165,7 @@ jobs:
       - name: Regrade saved trials with the judge
         if: matrix.judge
         env:
-          ANTHROPIC_API_KEY: *judge-key
+          CLAUDE_CODE_OAUTH_TOKEN: *judge-key
         run: >-
           uv run python scripts/ci.py run-trial --regrade --plan results/ci-plan
           --index ${{ matrix.index }} --output results/ci-run

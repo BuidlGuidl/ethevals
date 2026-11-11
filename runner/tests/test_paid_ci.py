@@ -66,7 +66,7 @@ def test_paid_workflow_limits_secrets_to_the_steps_that_use_them():
         ("plan", "Check the budget and emit the matrix"): {name: "${{ secrets." + name + " }}" for name in rpc_names},
         ("matrix", "Run one planned trial"): {name: "${{ secrets." + name + " }}" for name in trial_names},
         ("matrix", "Upload checked trials to Harbor Hub"): {"HARBOR_API_KEY": "${{ secrets.HARBOR_API_KEY }}"},
-        ("regrade", "Regrade saved trials with the judge"): {"ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}"},
+        ("regrade", "Regrade saved trials with the judge"): {"CLAUDE_CODE_OAUTH_TOKEN": "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"},
     }
     for name in [*trial_names, "HARBOR_API_KEY"]:
         assert source.count("${{ secrets." + name + " }}") == 1
