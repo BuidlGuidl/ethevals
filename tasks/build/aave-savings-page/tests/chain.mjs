@@ -97,3 +97,18 @@ export function requestedSupplies(requests) {
   }
   return results;
 }
+
+export function requestedPoolApprovals(requests) {
+  const results = [];
+  for (const request of requests) {
+    const calls = ['eth_sendTransaction', 'wallet_sendTransaction'].includes(request.method) ? [request.params[0]] : request.method === 'wallet_sendCalls' ? request.params[0].calls : [];
+    for (const call of calls) {
+      if (call.to?.toLowerCase() !== USDC.toLowerCase()) continue;
+      try {
+        const decoded = decodeFunctionData({ abi: erc20, data: call.data || call.input });
+        if (decoded.functionName === 'approve' && decoded.args[0].toLowerCase() === POOL.toLowerCase()) results.push(decoded);
+      } catch { /* Other token calls do not approve the Pool. */ }
+    }
+  }
+  return results;
+}

@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 
-// Playwright MCP's page setup: page reads go to the verifier's fork, the wallet and typing records to the session.
+// Page reads go to the verifier's fork, and wallet requests go to the session.
 export default async ({ page }) => {
   const { origin, control } = JSON.parse(await fs.readFile('/logs/verifier/session.json', 'utf8'));
   const context = page.context();
@@ -9,7 +9,7 @@ export default async ({ page }) => {
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*',
       'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-private-network': 'true' };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
-    if (request.url() === control + '/wallet' || request.url() === control + '/typed') return route.continue();
+    if (request.url() === control + '/wallet') return route.continue();
     let body;
     try { body = request.postDataJSON(); } catch { /* Static request. */ }
     if (body && (Array.isArray(body) ? body.every(item => typeof item.method === 'string') : typeof body.method === 'string')) {

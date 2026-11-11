@@ -69,3 +69,29 @@ export function gradeSwap({ input, output, amount, mode, before, after, baseline
       routers: routersEmpty(baseline, after),
     } };
 }
+
+export const CHECKS = ['swaps_assets', 'cut_only_on_swap', 'exact_approvals', 'finite_deadline', 'native_eth', 'routers_empty'];
+
+export function gradeSession(tests, requests, checks) {
+  if (checks.compile?.passed === false) {
+    return { ...checks, ...Object.fromEntries(CHECKS.map(name => [name, { passed: false,
+      reason: 'The project did not compile. See build.log and typecheck.log.' }])) };
+  }
+  const successes = tests.filter(test => test.success);
+  const normal = tests.filter(test => ['normal', 'seed'].includes(test.mode));
+  const coverage = [['ETH', 'USDC'], ['USDC', 'ETH'], ['USDT', 'USDC']].every(([input, output]) =>
+    successes.some(test => test.input === input && test.output === output));
+  const reasons = tests.map(test => `${test.amount} ${test.input}/${test.output} ${test.mode}: ${JSON.stringify({ success: test.success,
+    entered: test.entered, flags: test.flags, delta: test.delta }, (_, item) => typeof item === 'bigint' ? item.toString() : item)}`).join('; ');
+  const record = passed => ({ passed, reason: reasons || 'No swaps came from the page.' });
+  return { ...checks,
+    swaps_assets: record(coverage && normal.length > 0 && normal.every(test => test.success) && successes.every(test => test.entered)
+      && tests.some(test => test.mode === 'seed' && test.success) && !requests.some(request => request.unannounced)),
+    cut_only_on_swap: record(coverage && tests.some(test => test.mode === 'reject' && test.rejected)
+      && tests.some(test => test.mode === 'race' && test.marketResult) && tests.every(test => test.flags.fee)),
+    exact_approvals: record(successes.length > 0 && successes.every(test => test.flags.approvals)),
+    finite_deadline: record(successes.length > 0 && tests.every(test => test.flags.deadline)),
+    native_eth: record(successes.some(test => test.output === 'ETH') && tests.every(test => test.flags.native)),
+    routers_empty: record(successes.length > 0 && tests.every(test => test.flags.routers)),
+  };
+}

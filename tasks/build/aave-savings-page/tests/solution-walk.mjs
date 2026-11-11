@@ -1,26 +1,16 @@
 import fs from 'node:fs/promises';
-import path from 'node:path';
-import crypto from 'node:crypto';
+import { requireSolutionSource } from './solution-source.mjs';
 import { chromium } from './deps.mjs';
 import initPage from './mcp-page.mjs';
 
 // The free check has no judge. This walk-through knows our solution's controls and runs on that exact source only.
-async function sourceFiles(directory) {
-  const result = [];
-  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
-    const file = path.join(directory, entry.name);
-    if (entry.isDirectory()) result.push(...await sourceFiles(file));
-    else if (entry.isFile()) result.push(file);
-  }
-  return result;
+try {
+  await requireSolutionSource('/workspace', 'de66292c054e382961d0e422308d9037d6bdd8c3e6f1e023eeb0b029574929ff');
+} catch (error) {
+  if (error.code !== 'SOLUTION_HASH') throw error;
+  console.error(error.message);
+  process.exit(2);
 }
-const digest = crypto.createHash('sha256');
-for (const file of (await sourceFiles('/workspace/src').catch(() => [])).sort()) {
-  digest.update(path.relative('/workspace', file) + '\0');
-  digest.update(await fs.readFile(file));
-  digest.update('\0');
-}
-if (digest.digest('hex') !== 'de66292c054e382961d0e422308d9037d6bdd8c3e6f1e023eeb0b029574929ff') process.exit(0);
 
 const session = JSON.parse(await fs.readFile('/logs/verifier/session.json', 'utf8'));
 async function command(name, args = []) {

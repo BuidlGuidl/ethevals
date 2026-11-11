@@ -1,7 +1,7 @@
 import { encodeFunctionData, parseAbi } from './deps.mjs';
 import { rpc, send } from './rpc.mjs';
 const batch = parseAbi(['function execute((address to,uint256 value,bytes data)[] calls) payable']);
-import { requireRead } from './rpc-policy.mjs';
+import { requireRead, walletWrites } from './rpc-policy.mjs';
 
 export async function injectWallet(context, { account, mainRpc, atomic = false, beforeSend = async () => {} }) {
   const state = { requests: [], transactions: [], bundles: new Map(), pending: 0, lastActivity: Date.now() };
@@ -9,7 +9,8 @@ export async function injectWallet(context, { account, mainRpc, atomic = false, 
     const { method, params = [] } = request;
     const entry = { method, params, time: Date.now() };
     state.requests.push(entry);
-    state.pending++;
+    const writing = walletWrites([request]).length > 0;
+    if (writing) state.pending++;
     const url = mainRpc;
     try {
       if (['eth_accounts', 'eth_requestAccounts'].includes(method)) return [account.address];
@@ -78,8 +79,10 @@ export async function injectWallet(context, { account, mainRpc, atomic = false, 
       entry.error = error.shortMessage || error.message;
       return { __walletError: true, message: entry.error, code: error.code || -32603, data: error.data };
     } finally {
-      state.pending--;
-      state.lastActivity = Date.now();
+      if (writing) {
+        state.pending--;
+        state.lastActivity = Date.now();
+      }
     }
   });
   await context.addInitScript(({ address }) => {

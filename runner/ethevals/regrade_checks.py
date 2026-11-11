@@ -98,7 +98,8 @@ def replay(tests_dir, *, workspace="/app", output="/logs/verifier/reward.json", 
 
 def check_one():
     sys.path.insert(0, "/tests")
-    if Path("/tests/install_judge.py").is_file():
+    item = json.loads(Path(os.environ["ETHEVALS_REGRADE_ITEM"]).read_text())
+    if item["judge_required"] and Path("/tests/install_judge.py").is_file():
         from install_judge import install
         install()
     import rewardkit.runner

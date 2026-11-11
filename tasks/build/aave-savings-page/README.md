@@ -12,7 +12,7 @@ A savings page looks like a few buttons and two numbers, but each part has a det
 - the APY has to be compounded;
 - Max has to empty the position;
 - USDT needs its allowance reset;
-- a full supply cap has to stop the page before it asks the wallet for anything.
+- a deposit above Aave's supply-cap room must stop before the page asks the wallet to approve or supply it.
 
 ## The instruction
 
@@ -134,7 +134,7 @@ The reward is 1 only when every check passes.
 | `withdraw_partial` | A page transaction returns exactly 40 USDC and removes 40 aUSDC within 0.01 USDC | Aave withdrawal | [checks.mjs](tests/checks.mjs) |
 | `withdraw_all` | A page withdrawal, mined a day later, returns a position of at least 1 USDC whole and leaves exactly zero aUSDC | closing a position | [checks.mjs](tests/checks.mjs) |
 | `deposit_usdt_leftover_allowance` | After the 1 USDT Pool approval, a page transaction adds 100 aUSDT within 0.01 USDT | token approvals | [checks.mjs](tests/checks.mjs) |
-| `refuses_over_cap` | Once an amount above the room is entered, the page asks the wallet for nothing | Aave supply cap | [checks.mjs](tests/checks.mjs) |
+| `refuses_over_cap` | After `full-cap`, the wallet receives no USDC supply or Pool approval above the recorded room | Aave supply cap | [checks.mjs](tests/checks.mjs) |
 | `shows_deposit` | After a deposit, the page shows how much the user has deposited, including interest | interest-inclusive balance, judge | [page.toml](tests/page.toml) |
 | `shows_apy` | The page shows the current APY, matching Aave's rate on the chain | Aave rates, judge | [page.toml](tests/page.toml) |
 | `explains_supply_cap` | When a deposit is more than Aave will accept, the page says Aave's limit is the reason | user feedback, judge | [page.toml](tests/page.toml) |
@@ -156,14 +156,14 @@ Each check rests on words in the instruction and on reference code:
 The chain checks read every page transaction the wallet mined, with the wallet's balances just before and after it.
 The judge may make extra deposits and withdrawals; each check needs one transaction that meets it.
 
-The cap check is strict:
+The cap check uses the verifier's condition records and wallet log:
 
-- It starts when an amount above the room is entered after `full-cap`, and lasts until the next entry or the end of the session.
-- The page records what is entered in its inputs, so a page whose amount field the judge never reaches fails.
-- Any wallet write in that time counts as asking: a transaction, an approval alone, a signature, or a bundle, even one the wallet refused.
-- A page may simulate the supply before its first wallet prompt, so it needs no explicit cap read.
-- A page that cuts the entered amount down to the room and then asks the wallet still fails.
-- A Deposit control that is disabled or missing after the amount is entered counts as no request.
+- The verifier must run `full-cap` and record the room that Aave reports on the chain.
+- Each later USDC supply request or USDC approval to the Pool must fit within the latest recorded room.
+- Transactions and bundles count even when the wallet refuses them or the chain reverts them.
+- Withdrawals and requests within the room do not count against this check.
+- The check uses no typing events or page-reported attempt boundaries.
+- The page judge checks the cap explanation while entering an amount above the room.
 - The same page must also pass `deposit_usdc`, so a page that can't deposit at all doesn't pass.
 - The room counts the treasury's accrued tokens, as Aave does. `lowerSupplyCap()` in [chain.mjs](tests/chain.mjs) sets and checks it.
 
@@ -248,7 +248,8 @@ Time, snapshots, and the cap:
 Outputs:
 
 - The verifier writes `build.log`, `typecheck.log`, and `checks.json` under `/logs/verifier/`.
-- The session saves the wallet's log, the commands the judge ran, what was entered on the page, and each page transaction's balances. The judge's transcript, answers and browser files, and the chain context, are saved there too.
+- The session saves the wallet's log, condition commands, and each page transaction's balances.
+  It also saves the judge's trajectory, answers, browser files, and chain context.
 - It copies `/opt/check_records.py` into `/tests/check_records.py`, and RewardKit uses that shared adapter to turn `checks.json` into named checks and the reward.
 - Fork startup, funding, warm-up, command setup, and judge failures are trial errors. Broken pages and builds fail their checks.
 - Harbor saves `/workspace` as an artifact, without `node_modules`, `dist`, `.git`, and `chain_context.json`. Leaving out the chain context symlink lets the publication secret check scan the saved project, since it rejects symlinks.

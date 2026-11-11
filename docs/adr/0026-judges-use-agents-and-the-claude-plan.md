@@ -22,7 +22,8 @@ A saved treasury sale put its minimum on the last sale step, which the calldata 
   They also get source, a funded wallet, chain reads through `cast`, and small commands for test conditions.
   Every transaction comes from the page.
 - The judge starts one folder above the submitted code.
-  Its starting folder contains no submitted instructions, settings, or MCP configuration.
+  Its starting folder holds no file from the agent.
+  Claude Code can still load a nested `CLAUDE.md` when it reads the copied code.
 - Criteria remain short yes-or-no questions.
   A page the judge cannot use gets no.
   A judge crash or timeout produces an error and no reward.
@@ -35,7 +36,8 @@ A saved treasury sale put its minimum on the last sale step, which the calldata 
 - The free check uses no judge.
   The swap solution gets a small walk-through that knows its controls and never runs on submitted pages.
 
-The judge gets user-level settings for read-only `cast` commands and the task's helper commands.
+Page judges get user-level settings for read-only `cast` commands and the task's helper commands.
+File judges deny shell and web tools.
 Background tasks are disabled so a hung shell command cannot keep a finished judge alive.
 The Playwright allow list excludes the tool that runs code in the MCP process.
 Tests install pinned Claude Code and Playwright MCP after the agent finishes.
@@ -52,8 +54,6 @@ Shared verifiers retain the container isolation gap documented in ADR 0011.
 
 This decision changes no trial identity or hash rules.
 The judge program joins its model and effort in results and the existing judge settings fingerprint.
-The Aave savings page's browser checks follow in a separate change.
-Another change owns its existing file-reading judges and plan payment.
 
 The treasury judge reads saved script source, transaction calldata, and receipt logs.
 It receives no live chain endpoint or shell permission for chain reads.

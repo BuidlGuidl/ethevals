@@ -34,7 +34,7 @@ def prepare(inputs, *, directory=Path("/judge"), home=Path("/root/judge-home")):
 def environment(home):
     names = {"PATH", "LANG", "PLAYWRIGHT_BROWSERS_PATH", "LD_LIBRARY_PATH", "FONTCONFIG_FILE",
              "REWARDKIT_JUDGE", "REWARDKIT_MODEL", "REWARDKIT_REASONING_EFFORT",
-             "REWARDKIT_LOG_DIR", "REWARDKIT_FORCE_SUBSCRIPTION", "CAST_RPC_URL", "ETH_RPC_URL"}
+             "REWARDKIT_LOG_DIR", "REWARDKIT_FORCE_SUBSCRIPTION"}
     result = {name: value for name, value in os.environ.items()
               if name in names or name.startswith("ETHEVALS_REGRADE_")}
     result.update(HOME=str(home), PYTHON_DOTENV_DISABLED="1", DISABLE_AUTOUPDATER="1",

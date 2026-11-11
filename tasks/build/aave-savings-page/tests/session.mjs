@@ -7,7 +7,7 @@ import { funding, positions, isWithdrawal, lowerSupplyCap, reserve, POOL, USDT, 
 import { gradeSavings } from './checks.mjs';
 import { injectWallet } from './wallet.mjs';
 import { warmSavings } from './warm.mjs';
-import { pageRead, walletIdle } from './rpc-policy.mjs';
+import { pageRead, withIdleWallet } from './rpc-policy.mjs';
 import { rpc, read, send, advanceTime } from './rpc.mjs';
 
 // Serves the built page, the test wallet, and the judge's condition commands until /finish grades the session.
@@ -17,7 +17,6 @@ const save = (name, value) => fs.writeFile(path.join(output, name), stringify(va
 const harness = await createHarness({ workspace: '/workspace', output, funding, warm: warmSavings, externalBrowser: true });
 const { mainRpc, account } = harness;
 const conditions = [];
-const typed = [];
 let handler;
 let init;
 let fatal;
@@ -68,24 +67,22 @@ const commands = {
 };
 
 async function finish() {
-  if (fatal) throw fatal;
-  await walletIdle(wallet);
-  const end = Date.now();
-  const moves = [];
-  for (const transaction of wallet.transactions) {
-    const mined = Number(transaction.receipt.blockNumber);
-    moves.push({ hash: transaction.hash, status: transaction.receipt.status, block: mined, method: transaction.request.method,
-      before: await positions(mainRpc, account.address, '0x' + (mined - 1).toString(16)),
-      after: await positions(mainRpc, account.address, '0x' + mined.toString(16)) });
-  }
-  await save('moves.json', moves);
-  await save('conditions.json', conditions);
-  await save('typed.json', typed);
-  const checks = JSON.parse(await fs.readFile(path.join(output, 'checks.json'), 'utf8'));
-  Object.assign(checks, gradeSavings({ compile: checks.compile.passed, moves, requests: wallet.requests, conditions, typed, end }));
-  for (const record of Object.values(checks)) record.reason = record.reason.replace(/\s+/g, ' ').slice(0, 1200);
-  await save('checks.json', checks);
-  return 'Chain checks finished.';
+  return withIdleWallet(wallet, () => fatal, async () => {
+    const moves = [];
+    for (const transaction of wallet.transactions) {
+      const mined = Number(transaction.receipt.blockNumber);
+      moves.push({ hash: transaction.hash, status: transaction.receipt.status, block: mined, method: transaction.request.method,
+        before: await positions(mainRpc, account.address, '0x' + (mined - 1).toString(16)),
+        after: await positions(mainRpc, account.address, '0x' + mined.toString(16)) });
+    }
+    await save('moves.json', moves);
+    await save('conditions.json', conditions);
+    const checks = JSON.parse(await fs.readFile(path.join(output, 'checks.json'), 'utf8'));
+    Object.assign(checks, gradeSavings({ compile: checks.compile.passed, moves, requests: wallet.requests, conditions }));
+    for (const record of Object.values(checks)) record.reason = record.reason.replace(/\s+/g, ' ').slice(0, 1200);
+    await save('checks.json', checks);
+    return 'Chain checks finished.';
+  });
 }
 
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*',
@@ -104,9 +101,6 @@ const server = http.createServer(async (request, response) => {
     } else if (name === 'rpc') {
       const dispatch = item => pageRead(rpc, mainRpc, item);
       value = Array.isArray(args) ? await Promise.all(args.map(dispatch)) : await dispatch(args);
-    } else if (name === 'typed') {
-      typed.push({ value: String(args.value ?? '').slice(0, 100), time: Date.now() });
-      value = null;
     } else if (Object.hasOwn(commands, name)) {
       value = await commands[name](args);
     } else if (name === 'finish') value = await finish();
@@ -121,9 +115,7 @@ const server = http.createServer(async (request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const control = 'http://127.0.0.1:' + server.address().port;
 const shim = `window.__savingsWallet = async request => (await (await fetch(${JSON.stringify(control + '/wallet')}, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request) })).json()).value;`;
-// Records what is typed into the page, so the cap check knows when an amount above the room was entered.
-const typing = `document.addEventListener('input', event => { const value = event.target && event.target.value; if (typeof value === 'string') fetch(${JSON.stringify(control + '/typed')}, { method: 'POST', body: JSON.stringify({ value }) }).catch(() => {}); }, true);`;
-await fs.writeFile(path.join(output, 'wallet-init.js'), `${shim}\n${typing}\n(${init.fn})(${JSON.stringify(init.arg)});\n`);
+await fs.writeFile(path.join(output, 'wallet-init.js'), `${shim}\n(${init.fn})(${JSON.stringify(init.arg)});\n`);
 await save('fixture.json', { address: account.address, sourceBlock: harness.sourceBlock, ...await reserve(mainRpc) });
 await save('session.json', { origin: harness.origin, control, rpc: mainRpc, wallet: account.address });
 process.on('SIGTERM', async () => {

@@ -82,7 +82,7 @@ def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=Fals
             producer_changed = changed - judges - {"@judge", "tests/answer.py", "tests/hand-cases.json", "tests/reward.toml"}
             return {"action": "regrade", "kind": options["kind"],
                     "judge_required": bool(judges and (changed & (judges | {"@judge"}) or producer_changed))}
-        return {"action": "rerun", "reason": "The changed checks need a live browser or chain."}
+        return {"action": "rerun", "reason": "The changed checks cannot use a saved-input regrade."}
     exception = row.get("error_kind")
     recovery = bool(retry_judge_error and row.get("judge") and exception in {
         "judge", "RewardFileNotFoundError", "RewardFileEmptyError", "VerifierOutputParseError"})

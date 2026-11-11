@@ -1,26 +1,17 @@
 import fs from 'node:fs/promises';
-import path from 'node:path';
-import crypto from 'node:crypto';
+import { requireSolutionSource } from './solution-source.mjs';
 import { chromium } from './deps.mjs';
 import initPage from './mcp-page.mjs';
 
 // The free check can use these controls only on the exact solution source.
-async function sourceFiles(directory) {
-  const result = [];
-  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
-    const file = path.join(directory, entry.name);
-    if (entry.isDirectory()) result.push(...await sourceFiles(file));
-    else if (entry.isFile()) result.push(file);
-  }
-  return result;
+try {
+  await requireSolutionSource('/workspace', 'b9f647d28573f71f602c4a9f77deea55907fcb26842aa205a7d31d888ce708f2');
+} catch (error) {
+  if (error.code !== 'SOLUTION_HASH') throw error;
+  console.error(error.message);
+  process.exit(2);
 }
-const digest = crypto.createHash('sha256');
-for (const file of (await sourceFiles('/workspace/src')).sort()) {
-  digest.update(path.relative('/workspace', file) + '\0');
-  digest.update(await fs.readFile(file));
-  digest.update('\0');
-}
-if (digest.digest('hex') !== 'b9f647d28573f71f602c4a9f77deea55907fcb26842aa205a7d31d888ce708f2') process.exit(0);
+
 const session = JSON.parse(await fs.readFile('/logs/verifier/session.json', 'utf8'));
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 try {

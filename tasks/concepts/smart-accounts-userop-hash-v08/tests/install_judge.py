@@ -16,6 +16,9 @@ CHECKSUMS = {
 
 
 def install(tests=Path('/tests')):
+    cached = os.environ.get('ETHEVALS_REGRADE_ITEM')
+    if cached and json.loads(Path(cached).read_text()).get('judge_required') is False:
+        return
     if not any(tomllib.loads(path.read_text()).get('judge', {}).get('judge') == 'claude-code'
                for path in tests.glob('*.toml')):
         return

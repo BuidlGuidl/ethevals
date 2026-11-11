@@ -14,6 +14,7 @@
       "Bash(cast to-hex:*)", "Bash(cast to-uint256:*)", "Bash(cast max-uint:*)",
       "Bash(cast keccak:*)", "Bash(cast decode-event:*)", "Bash(cast decode-error:*)",
       "Bash(cast help:*)", "Bash(cast --help:*)", "Bash(cast --version)",
+      "Bash(move-price:*)", "Bash(wallet-test:*)",
       "Bash(move-time:*)", "Bash(old-usdt-approval:*)", "Bash(old-usdt-approval)",
       "Bash(full-cap:*)", "Bash(full-cap)", "Bash(wallet-network:*)"
     ]

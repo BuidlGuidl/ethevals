@@ -20,7 +20,7 @@ JUDGE = Path("/judge")
 
 
 def copy_submission():
-    """The judge starts one folder above the code, so files the agent wrote do not configure it."""
+    """Keep agent files out of the judge's start folder; nested instructions remain in the copy."""
     JUDGE.mkdir(mode=0o700, parents=True, exist_ok=True)
     code = JUDGE / "submission"
     shutil.rmtree(code, ignore_errors=True)
@@ -32,14 +32,18 @@ def copy_submission():
     return code
 
 
-def did_not_compile(page):
+def fail_checks(reason):
     subprocess.run(["node", "--input-type=module", "-e", """
 import fs from 'node:fs';
-import { gradeSavings } from '/tests/checks.mjs';
-const checks = JSON.parse(fs.readFileSync('/logs/verifier/checks.json', 'utf8'));
-Object.assign(checks, gradeSavings({ compile: false }));
-fs.writeFileSync('/logs/verifier/checks.json', JSON.stringify(checks) + '\\n');
-"""], check=True)
+const { CHECKS } = await import(process.argv[1]);
+const checks = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+for (const name of CHECKS) checks[name] = { passed: false, reason: process.argv[3] };
+fs.writeFileSync(process.argv[2], JSON.stringify(checks) + '\\n');
+""", str(TESTS / "checks.mjs"), str(OUTPUT / "checks.json"), reason], check=True)
+
+
+def did_not_compile(page):
+    fail_checks("The project did not compile. See build.log and typecheck.log.")
     if page is not None:
         page.scores = [Score(name=criterion.name, value=0.0, raw=False, description=criterion.description,
                              reasoning="The project did not compile, so the judge did not open the page.")
@@ -83,6 +87,7 @@ def main():
                 time.sleep(0.1)
             session = json.loads((OUTPUT / "session.json").read_text())
             os.environ["ETH_RPC_URL"] = session["rpc"]
+            os.environ["CAST_RPC_URL"] = session["rpc"]
             if page is not None:
                 text = (TESTS / "prompt.md").read_text().replace("<url>", session["origin"])
                 text = text.replace("<address>", session["wallet"]).replace("<rpc url>", session["rpc"])
@@ -92,13 +97,20 @@ def main():
                 (OUTPUT / "judge-details.json").write_text(json.dumps(page.to_detail_dict(page.score), indent=2) + "\n")
                 if any(score.error for score in page.scores) or (page.guard_score and page.guard_score.error):
                     raise RuntimeError("The page judge failed. See judge-details.json.")
-            else:
-                subprocess.run(["node", "/tests/solution-walk.mjs"], check=True,
-                               env={key: value for key, value in clean.items()
-                                    if key not in {"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"}})
-            request = urllib.request.Request(session["control"] + "/finish", b"[]")
-            with urllib.request.urlopen(request, timeout=600) as response:
-                response.read()
+            finished = True
+            if page is None:
+                walk = subprocess.run(["node", "/tests/solution-walk.mjs"],
+                                      env={key: value for key, value in clean.items()
+                                           if key not in {"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"}})
+                if walk.returncode == 2:
+                    fail_checks("The solution walk-through's source hash is out of date.")
+                    finished = False
+                else:
+                    walk.check_returncode()
+            if finished:
+                request = urllib.request.Request(session["control"] + "/finish", b"[]")
+                with urllib.request.urlopen(request, timeout=600) as response:
+                    response.read()
         layout = _discover_layout(TESTS, code)
         for reward in _flatten_layout(layout):
             if reward.judge is None:

@@ -4,12 +4,68 @@ import fs from 'node:fs/promises';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { requireRead, walletWrites, walletIdle, pageRead } from './rpc-policy.mjs';
+import { requireRead, walletWrites, walletIdle, pageRead, withIdleWallet } from './rpc-policy.mjs';
+import { injectWallet } from './wallet.mjs';
 import { rpc } from './rpc.mjs';
+
+test('page wallet reads do not keep the session busy', async () => {
+  let request;
+  const wallet = await injectWallet({
+    exposeBinding: async (_name, handler) => { request = handler; },
+    addInitScript: async () => {},
+  }, { account: { address: '0x0000000000000000000000000000000000000001' }, mainRpc: 'unused' });
+  const reads = setInterval(() => { request(null, { method: 'eth_chainId' }); }, 2);
+  try {
+    assert.equal(await withIdleWallet(wallet, () => null, () => 'Chain checks finished.',
+      { idleMs: 30, timeoutMs: 300 }), 'Chain checks finished.');
+    assert.equal(await request(null, { method: 'eth_chainId' }), '0x1');
+    assert.equal(wallet.pending, 0);
+  } finally { clearInterval(reads); }
+});
+
+test('a pending write prevents finish from producing records', async () => {
+  const wallet = { pending: 0, lastActivity: 0 };
+  const records = [];
+  const finish = () => { records.push('reward'); return 'Chain checks finished.'; };
+  assert.equal(await withIdleWallet(wallet, () => null, finish, { idleMs: 0, timeoutMs: 200 }), 'Chain checks finished.');
+  wallet.pending = 1;
+  await assert.rejects(withIdleWallet(wallet, () => null, finish, { idleMs: 0, timeoutMs: 20 }),
+    { message: 'The wallet did not finish its pending requests.', infrastructure: true });
+  assert.deepEqual(records, ['reward']);
+});
+
+test('an injected wallet write stays pending until the wallet resolves it', async () => {
+  let request, release;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const wallet = await injectWallet({
+    exposeBinding: async (_name, handler) => { request = handler; },
+    addInitScript: async () => {},
+  }, { account: { address: '0x0000000000000000000000000000000000000001' }, mainRpc: 'unused',
+    beforeSend: async () => { await blocked; throw Object.assign(new Error('User rejected'), { code: 4001 }); } });
+  const result = request(null, { method: 'eth_sendTransaction', params: [{ to: '0x0000000000000000000000000000000000000002' }] });
+  try {
+    assert.equal(await walletIdle(wallet, { idleMs: 0, timeoutMs: 20 }), false);
+    release();
+    assert.deepEqual(await result, { __walletError: true, message: 'User rejected', code: 4001, data: undefined });
+    assert.equal(await walletIdle(wallet, { idleMs: 0, timeoutMs: 200 }), true);
+  } finally { release(); }
+});
+
+test('an error recorded during the wallet wait prevents finish', async () => {
+  const wallet = { pending: 0, lastActivity: 0 };
+  let fatal;
+  let result = 'unfinished';
+  const timer = setTimeout(() => { fatal = new Error('The withdrawal clock failed.'); }, 10);
+  try {
+    await assert.rejects(withIdleWallet(wallet, () => fatal, () => { result = 'reward'; },
+      { idleMs: 30, timeoutMs: 300 }), { message: 'The withdrawal clock failed.' });
+    assert.equal(result, 'unfinished');
+  } finally { clearTimeout(timer); }
+});
 import { require, parseAbi } from './deps.mjs';
 
 test('the read policy follows the task chain and blocks unknown methods', async () => {
-  const policy = JSON.parse(await fs.readFile('/opt/rpc_methods.json', 'utf8'));
+  const policy = JSON.parse(await fs.readFile(process.env.RPC_METHODS_FILE || '/opt/rpc_methods.json', 'utf8'));
   const accepted = [];
   for (const [method, decision] of Object.entries(policy)) {
     try { requireRead(method); accepted.push(method); }

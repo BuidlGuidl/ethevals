@@ -54,7 +54,7 @@ Let's look at each piece:
 | `[metadata].modes`            | yes               | any of `vanilla`, `internet`, and `skills`                                |
 | `[verifier].environment_mode` | no                | `shared` for a task with a chain, `separate` for one without              |
 | `[verifier].user`             | no                | `root` for Forge tests                                                    |
-| `[verifier.env]`              | if it has criteria | the judge's plan token, and nothing else                                        |
+| `[verifier.env]`              | if it has criteria | the two optional judge credentials, `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` |
 | `artifacts`                   | if it's `separate` | the paths Harbor copies from the agent's container to the verifier       |
 | `[environment]`               | no                | `cpus` and `memory_mb` for the agent's container                          |
 
@@ -294,6 +294,14 @@ Install them after the agent finishes, within the verifier time limit.
 Keep them out of shared image inputs and the task's `environment/` folder.
 Save judge inputs, transcripts, and program versions in `/logs/verifier`, without changing `artifacts`.
 
+File judges copy the file judge variant from [treasury sale's tests](../tasks/act/treasury-eth-sale/tests).
+Page judges copy the page judge variant from [swap page's tests](../tasks/build/swap-page/tests).
+Each variant has `judge-settings.json`, `agent_judge.py`, and `install_judge.py`.
+A runner test keeps every task's copies equal to its variant.
+The page variant allows both pages' condition commands.
+Copy the MCP package manifests outside `tests/` before installing browser packages.
+RewardKit imports Python files and parses TOML files throughout `tests/`, including dependency folders.
+
 The board pays through the Claude plan.
 Published tasks also accept an Anthropic API key for plain Harbor users.
 An agent judge declares both optional inputs in `task.toml`:
@@ -429,7 +437,7 @@ Which ERC defines onchain identity, reputation and validation registries for AI 
 <summary><code>environment/Dockerfile</code></summary>
 
 ```dockerfile
-FROM ghcr.io/buidlguidl/ethevals-quiz:inputs-9e29c4b86a35bd1f
+FROM ghcr.io/buidlguidl/ethevals-quiz:inputs-477f6b3f35664858
 ```
 
 The Concepts task image has RewardKit and the target helper. A Concepts task needs nothing else.
@@ -573,7 +581,7 @@ memory_mb = 4096
 The chain sidecar:
 
 ```dockerfile
-FROM ghcr.io/buidlguidl/ethevals-chain:inputs-8761a2534c168efd AS contracts
+FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678 AS contracts
 USER root
 WORKDIR /opt/governance
 COPY contracts/ ./
@@ -856,7 +864,7 @@ memory_mb = 4096
 The agent's container:
 
 ```dockerfile
-FROM ghcr.io/buidlguidl/ethevals-chain:inputs-8761a2534c168efd
+FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678
 WORKDIR /workspace
 RUN ln -s /chain/chain_context.json /workspace/chain_context.json
 ENTRYPOINT []
@@ -868,7 +876,7 @@ The link puts `chain_context.json` in the agent's folder. The image makes the li
 The chain sidecar:
 
 ```dockerfile
-FROM ghcr.io/buidlguidl/ethevals-chain:inputs-8761a2534c168efd
+FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678
 USER root
 COPY setup/ /setup/
 RUN mkdir -p setup && cp /setup/*.sol setup/ && \
@@ -1244,7 +1252,7 @@ we should move the protocol's ownership and the treasury to. we're on foundry wi
 <summary><code>environment/Dockerfile</code> and <code>environment/foundry.toml</code></summary>
 
 ```dockerfile
-FROM ghcr.io/buidlguidl/ethevals-chain:inputs-8761a2534c168efd
+FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678
 WORKDIR /workspace
 COPY --chown=agent:agent foundry.toml /workspace/foundry.toml
 COPY --chown=agent:agent src /workspace/src

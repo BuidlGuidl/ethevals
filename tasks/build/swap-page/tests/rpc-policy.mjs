@@ -45,3 +45,12 @@ export async function walletIdle(wallet, { idleMs = 3000, timeoutMs = 20_000 } =
   } while (Date.now() - started < timeoutMs);
   return false;
 }
+
+export async function withIdleWallet(wallet, fatal, operation, options) {
+  if (fatal()) throw fatal();
+  if (!await walletIdle(wallet, options)) {
+    throw Object.assign(new Error('The wallet did not finish its pending requests.'), { infrastructure: true });
+  }
+  if (fatal()) throw fatal();
+  return operation();
+}

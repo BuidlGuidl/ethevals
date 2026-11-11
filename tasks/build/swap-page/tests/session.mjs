@@ -4,10 +4,10 @@ import http from 'node:http';
 import { createHarness } from './harness.mjs';
 import { chainReader, funding, classify, observedSpenders, TOKENS } from './chain.mjs';
 import { createMarket } from './market.mjs';
-import { gradeSwap } from './checks.mjs';
+import { gradeSwap, gradeSession } from './checks.mjs';
 import { injectWallet } from './wallet.mjs';
 import { warmQuotes } from './warm.mjs';
-import { pageRead, walletIdle, mutationQueue } from './rpc-policy.mjs';
+import { pageRead, withIdleWallet, mutationQueue } from './rpc-policy.mjs';
 import { rpc } from './rpc.mjs';
 
 const output = '/logs/verifier';
@@ -78,21 +78,7 @@ async function finish() {
   for (const result of tests) Object.assign(result, gradeSwap(result));
   await save('swaps.json', tests);
   const checks = JSON.parse(await fs.readFile(path.join(output, 'checks.json'), 'utf8'));
-  const successes = tests.filter(test => test.success);
-  const normal = tests.filter(test => ['normal', 'seed'].includes(test.mode));
-  const coverage = [['ETH', 'USDC'], ['USDC', 'ETH'], ['USDT', 'USDC']].every(([input, output]) =>
-    successes.some(test => test.input === input && test.output === output));
-  const reasons = tests.map(test => `${test.amount} ${test.input}/${test.output} ${test.mode}: ${stringify({ success: test.success, entered: test.entered, flags: test.flags, delta: test.delta }).trim()}`).join('; ').replace(/\s+/g, ' ');
-  const record = (name, passed) => { checks[name] = { passed, reason: reasons || 'No swaps came from the page.' }; };
-  record('swaps_assets', coverage && normal.length > 0 && normal.every(test => test.success) && successes.every(test => test.entered)
-    && tests.some(test => test.mode === 'seed' && test.success) && !wallet.requests.some(request => request.unannounced));
-  record('cut_only_on_swap', coverage && tests.some(test => test.mode === 'reject' && test.rejected)
-    && tests.some(test => test.mode === 'race' && test.marketResult) && tests.every(test => test.flags.fee));
-  record('exact_approvals', successes.length > 0 && successes.every(test => test.flags.approvals));
-  record('finite_deadline', successes.length > 0 && tests.every(test => test.flags.deadline));
-  record('native_eth', successes.some(test => test.output === 'ETH') && tests.every(test => test.flags.native));
-  record('routers_empty', successes.length > 0 && tests.every(test => test.flags.routers));
-  await save('checks.json', checks);
+  await save('checks.json', gradeSession(tests, wallet.requests, checks));
   return 'Chain checks finished.';
 }
 
@@ -119,8 +105,8 @@ const server = http.createServer(async (request, response) => {
       if (args.length !== 1 || !(percent > 0 && percent < 25)) throw new Error('Usage: move-price <percent>, above 0 and below 25.');
       value = await mutate(() => market.moveMarket(percent, 'eth-buyers'));
     } else if (request.url === '/wallet-test' || request.url === '/finish') {
-      if (!await walletIdle(wallet)) throw Object.assign(new Error('The wallet did not finish its pending requests.'), { infrastructure: true });
-      value = await mutate(() => request.url === '/wallet-test' ? beginTest(args) : finish());
+      value = await withIdleWallet(wallet, () => fatal,
+        () => mutate(() => request.url === '/wallet-test' ? beginTest(args) : finish()));
     }
     else throw new Error('Unknown verifier command.');
     response.writeHead(200, { ...cors, 'content-type': 'application/json' });

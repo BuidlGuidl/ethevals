@@ -1,4 +1,4 @@
-import { walletWrites } from './rpc-policy.mjs';
+import { requestedSupplies, requestedPoolApprovals, USDC } from './chain.mjs';
 
 export const CHECKS = ['deposit_usdc', 'withdraw_partial', 'withdraw_all', 'deposit_usdt_leftover_allowance', 'refuses_over_cap'];
 const USDC_UNIT = 1_000_000n;
@@ -9,30 +9,8 @@ const usdc = value => {
   return `${sign}${size / USDC_UNIT}.${(size % USDC_UNIT).toString().padStart(6, '0')}`;
 };
 
-// A typed amount, as the judge entered it, in token units. Anything that is not a plain number is ignored.
-export function typedUnits(value) {
-  const text = String(value).replace(/[,\s_]/g, '');
-  const match = /^(\d*)(?:\.(\d*))?$/.exec(text);
-  if (!match || !(match[1] || match[2])) return null;
-  return BigInt(match[1] || '0') * USDC_UNIT + BigInt((match[2] || '').slice(0, 6).padEnd(6, '0'));
-}
-
-// Each over-cap attempt lasts from typing an amount above the room until the next typing, or the session's end.
-export function overCapAttempts({ conditions, typed, end }) {
-  const caps = conditions.filter(condition => condition.kind === 'full-cap').sort((a, b) => a.time - b.time);
-  const entries = [...typed].sort((a, b) => a.time - b.time);
-  const attempts = [];
-  entries.forEach((entry, index) => {
-    const cap = caps.findLast(item => item.time <= entry.time);
-    const units = typedUnits(entry.value);
-    if (!cap || units === null || units <= BigInt(cap.room)) return;
-    attempts.push({ value: entry.value, room: BigInt(cap.room), start: entry.time, end: entries[index + 1]?.time ?? end });
-  });
-  return attempts;
-}
-
 // moves: every transaction the page sent, mined, with the wallet's balances just before and after it.
-export function gradeSavings({ compile, moves, requests, conditions, typed, end }) {
+export function gradeSavings({ compile, moves, requests, conditions }) {
   if (!compile) {
     return Object.fromEntries(CHECKS.map(name => [name, { passed: false, reason: 'The project did not compile. See build.log and typecheck.log.' }]));
   }
@@ -70,11 +48,17 @@ export function gradeSavings({ compile, moves, requests, conditions, typed, end 
     : usdt ? `After a 1 USDT Pool approval at block ${seed.block}, transaction ${usdt.hash} added ${usdc(usdt.delta.ausdt)} aUSDT.`
       : `After a 1 USDT Pool approval, no page transaction added 100 aUSDT within 0.01 USDT. ${changes}` };
 
-  const attempts = overCapAttempts({ conditions, typed, end });
-  const asked = walletWrites(requests).filter(request => attempts.some(attempt => request.time >= attempt.start && request.time < attempt.end));
-  const tried = attempts.map(attempt => `${attempt.value} USDC with ${usdc(attempt.room)} room`).join(', ');
-  checks.refuses_over_cap = { passed: Boolean(deposit) && attempts.length > 0 && asked.length === 0, reason: !attempts.length
-    ? 'No amount above the room left under the lowered supply cap was entered on the page.'
-    : `Entered ${tried}; in-room deposit ${Boolean(deposit)}; wallet writes after entering it: ${asked.map(request => request.method).join(', ') || 'none'}.` };
+  const caps = conditions.filter(condition => condition.kind === 'full-cap').sort((a, b) => a.time - b.time);
+  const aboveRoom = requests.flatMap(request => {
+    const cap = caps.findLast(item => item.time <= request.time);
+    if (!cap) return [];
+    const supplies = requestedSupplies([request]).filter(call => call.args[0].toLowerCase() === USDC.toLowerCase());
+    return [...supplies, ...requestedPoolApprovals([request])]
+      .filter(call => call.args[1] > BigInt(cap.room))
+      .map(call => `${call.functionName} ${usdc(call.args[1])} USDC with ${usdc(BigInt(cap.room))} room`);
+  });
+  checks.refuses_over_cap = { passed: Boolean(deposit) && caps.length > 0 && aboveRoom.length === 0, reason: !caps.length
+    ? 'The session never lowered the USDC supply cap.'
+    : `In-room deposit ${Boolean(deposit)}; wallet requests above the lowered USDC cap: ${aboveRoom.join('; ') || 'none'}.` };
   return checks;
 }
