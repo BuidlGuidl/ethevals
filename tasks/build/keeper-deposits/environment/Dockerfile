@@ -1,5 +1,5 @@
 FROM node:22.22.0-bookworm-slim AS node
-FROM ghcr.io/buidlguidl/ethevals-chain:inputs-8761a2534c168efd
+FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678
 USER root
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules

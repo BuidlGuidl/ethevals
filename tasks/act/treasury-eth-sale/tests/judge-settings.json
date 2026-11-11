@@ -1,0 +1,1 @@
+{"permissions":{"deny":["Bash(*)"]},"env":{"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS":"1"}}

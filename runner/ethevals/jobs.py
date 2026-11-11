@@ -253,12 +253,11 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
         # Harbor prefers a known name over import_path, so pass only one.
         harbor = AgentConfig(name=None if agent.import_path else agent.name, import_path=agent.import_path,
                              model_name=model.name, kwargs=kwargs, env=agent.env)
-        agent_class = AgentFactory.get_agent_class_from_config(harbor)
-        options = agent_class.options_model
+        options = AgentFactory.get_agent_class_from_config(harbor).options_model
         fields = options.model_fields if options is not None else {}
-        if model.effort is not None and ("variant" in fields or agent_class.capabilities.reasoning_effort):
+        if model.effort is not None:
             # OpenCode has no effort option; its model variant sets the provider's effort.
-            effort = "variant" if "variant" in fields else "reasoning_effort"
+            effort = "variant" if "variant" in fields and "reasoning_effort" not in fields else "reasoning_effort"
             harbor.kwargs[effort] = model.effort
         if agent.paid_by == "api_key" and "max_budget_usd" in fields:
             harbor.kwargs["max_budget_usd"] = str(agent.cost_limit_usd)

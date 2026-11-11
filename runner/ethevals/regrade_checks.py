@@ -97,6 +97,10 @@ def replay(tests_dir, *, workspace="/app", output="/logs/verifier/reward.json", 
 
 
 def check_one():
+    sys.path.insert(0, "/tests")
+    if Path("/tests/install_judge.py").is_file():
+        from install_judge import install
+        install()
     import rewardkit.runner
     rewardkit.runner.run = replay
     if Path("/tests/run_reward.py").is_file():

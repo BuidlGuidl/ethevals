@@ -8,7 +8,7 @@ import pytest
 def job_config(tmp_path, paid_by="plan"):
     path = tmp_path / "job.json"
     path.write_text(json.dumps({
-        "harbor_version": "0.25.0", "n_attempts": 2, "retry": {"max_retries": 1},
+        "harbor_version": "0.24.0", "n_attempts": 2, "retry": {"max_retries": 1},
         "judge": {"program": "anthropic/claude-opus-5-5", "paid_by": "api_key", "key_env": "ANTHROPIC_API_KEY"},
         "modes": ["internet"],
         "models": {"local": {"name": "local/model", "effort": "high"}},
@@ -98,7 +98,7 @@ def test_board_job_uses_harbor_timeouts_without_overrides(tmp_path, monkeypatch)
 
     async def capture(config):
         assert [(agent.name, agent.kwargs, agent.override_timeout_sec) for agent in config.agents] == [
-            ("nop", {"version": "1.0.0"}, None)]
+            ("nop", {"version": "1.0.0", "reasoning_effort": "high"}, None)]
         assert ([item.path for item in config.tasks], config.verifier.override_timeout_sec) == ([task.resolve()], None)
         raise Planned
 

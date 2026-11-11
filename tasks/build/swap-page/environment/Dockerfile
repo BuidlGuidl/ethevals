@@ -1,5 +1,5 @@
 FROM node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d AS node
-FROM ghcr.io/buidlguidl/ethevals-chain:inputs-8761a2534c168efd
+FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678
 USER root
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -24,10 +24,6 @@ RUN cd /root/savings-verifier && npm ci --ignore-scripts && \
     rm -f /var/cache/apt/archives/*.deb && \
     npm cache clean --force && rm -rf /var/lib/apt/lists/*
 COPY verifier/fonts.conf /root/savings-fonts.conf
-COPY mcp/package.json mcp/package-lock.json /root/playwright-mcp/
-RUN cd /root/playwright-mcp && npm ci --ignore-scripts && \
-    PLAYWRIGHT_BROWSERS_PATH=/root/savings-browsers node node_modules/playwright/cli.js install chromium && \
-    chmod 700 /root/playwright-mcp
 USER agent
 COPY --chown=agent:agent starter/package.json starter/pnpm-lock.yaml starter/.npmrc ./
 RUN pnpm install --frozen-lockfile && rm -rf /home/agent/.local/share/pnpm/store

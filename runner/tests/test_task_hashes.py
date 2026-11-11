@@ -10,6 +10,26 @@ from ethevals.stamp_rows import stamp_file, stamp_rows
 from test_jobs import job_config, task_folder
 
 
+def test_judge_tools_in_checks_leave_agent_hashes_and_shared_pins_unchanged(tmp_path):
+    from ethevals.images.tag import BUILD_INPUTS, image_tag
+    from ethevals.task_hashes import task_hashes
+
+    task = task_folder(tmp_path)
+    before = task_hashes(task)
+    pins = {name: image_tag(image=name) for name in BUILD_INPUTS}
+    for name in ('install_judge.py', 'agent_judge.py', 'judge-settings.json', 'mcp/package-lock.json'):
+        file = task / 'tests' / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text('A pinned judge tool.\n')
+    after = task_hashes(task)
+    assert {key: after[key] for key in ('instruction_hash', 'environment_hash')} == {
+        key: before[key] for key in ('instruction_hash', 'environment_hash')}
+    assert after['checks_hash'] != before['checks_hash']
+    assert {name: image_tag(image=name) for name in BUILD_INPUTS} == pins
+    image_files = {name for files in BUILD_INPUTS.values() for name in files}
+    assert not image_files & {'install_judge.py', 'agent_judge.py', 'judge-settings.json'}
+
+
 @pytest.mark.parametrize("filename", ["README.md", "solution/solve.sh", "task.toml"])
 def test_changes_outside_the_agent_and_checks_keep_finished_trials(tmp_path, filename):
     config, task = load_job(job_config(tmp_path, "free")), task_folder(tmp_path)

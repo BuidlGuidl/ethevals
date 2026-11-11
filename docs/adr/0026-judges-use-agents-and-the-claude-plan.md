@@ -34,7 +34,12 @@ A saved treasury sale put its minimum on the last sale step, which the calldata 
 The judge gets user-level settings for read-only `cast` commands and the task's helper commands.
 Background tasks are disabled so a hung shell command cannot keep a finished judge alive.
 The Playwright allow list excludes the tool that runs code in the MCP process.
-Images include pinned Claude Code, Playwright MCP, and its browser.
+Tests install pinned Claude Code and Playwright MCP after the agent finishes.
+The browser judge uses Chromium already present in the page image.
+Judge tools never enter shared image inputs or a task's environment folder.
+Instructions, environment hashes, image pins, and artifact settings stay unchanged.
+Harbor 0.24.0 and RewardKit 0.2.3 remain pinned.
+The version upgrade waits for a separate change because it would change shared image pins.
 
 Build commands and submitted processes receive no judge credentials.
 The verifier receives the plan token only after the agent stops.
@@ -44,7 +49,11 @@ Shared verifiers retain the container isolation gap documented in ADR 0011.
 This decision changes no trial identity or hash rules.
 The judge program joins its model and effort in results and the existing judge settings fingerprint.
 The Aave savings page's browser checks follow in a separate change.
-Its existing file-reading judges move to the agent kind and plan payment now.
+Another change owns its existing file-reading judges and plan payment.
+
+The treasury judge reads saved script source, transaction calldata, and receipt logs.
+It receives no live chain endpoint or shell permission for chain reads.
+New trials and regrades use the same saved evidence.
 
 ## Interim regrade rule
 

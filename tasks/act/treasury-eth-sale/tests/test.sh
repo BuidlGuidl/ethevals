@@ -2,4 +2,5 @@
 set -eu
 python3 /tests/sale_checks.py
 cp /opt/check_records.py /tests/check_records.py
-python3 /opt/agent_judge.py /logs/verifier/script-source.txt /logs/verifier/chain-evidence.json /chain/chain_context.json /logs/agent/trajectory.json
+python3 /tests/install_judge.py
+python3 /tests/agent_judge.py /logs/verifier/script-source.txt /logs/verifier/chain-evidence.json /logs/agent/trajectory.json

@@ -27,7 +27,7 @@ class VanillaOptions(AgentOptions):
 
 
 class VanillaAgent(BaseAgent):
-    capabilities = AgentCapabilities(atif=True, reasoning_effort=True)
+    capabilities = AgentCapabilities(atif=True)
     options_model = VanillaOptions
 
     @staticmethod

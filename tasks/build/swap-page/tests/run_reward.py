@@ -11,6 +11,7 @@ import urllib.request
 
 sys.path.insert(0, "/opt")
 from agent_judge import environment, prepare
+from install_judge import install
 from rewardkit.models import JudgeTomlConfig
 from rewardkit.runner import (_build_judge_reward, _discover_layout, _evaluate_layout,
                               _flatten_layout, _write_outputs)
@@ -21,6 +22,7 @@ def main():
     output = Path("/logs/verifier")
     for name in ("reward.json", "reward.txt", "reward-details.json", "session.json"):
         (output / name).unlink(missing_ok=True)
+    install()
     home = prepare([])
     clean = environment(home)
     clean["PATH"] = "/tests/bin:" + clean["PATH"]
@@ -33,6 +35,7 @@ def main():
     chain_context = code / "chain_context.json"
     chain_context.unlink(missing_ok=True)
     shutil.copyfile("/chain/chain_context.json", chain_context)
+    shutil.copyfile("/chain/chain_context.json", output / "chain_context.json")
     with (output / "session.log").open("w") as log:
         child = subprocess.Popen(["node", "/tests/session.mjs"], stdout=log, stderr=log,
                                  env={key: value for key, value in clean.items() if key != "CLAUDE_CODE_OAUTH_TOKEN"})

@@ -152,7 +152,7 @@ def test_voting_source_decisions_read_the_real_rewardkit_group_output(tmp_path, 
     from rewardkit.runner import run as rewardkit_run
 
     root = Path(__file__).resolve().parents[2]
-    monkeypatch.syspath_prepend(str(root / 'runner/ethevals/images'))
+    monkeypatch.syspath_prepend(str(root / 'tasks/build/voting-page/tests'))
     spec = importlib.util.spec_from_file_location('voting_reward', root / 'tasks/build/voting-page/tests/run_reward.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

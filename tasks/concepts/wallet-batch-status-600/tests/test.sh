@@ -10,4 +10,5 @@ from target_checks import final_reply
 
 Path("/logs/verifier/final-reply.txt").write_text(final_reply(Path("/logs/agent/trajectory.json")))
 PY
-python3 /opt/agent_judge.py /logs/verifier/final-reply.txt
+python3 /tests/install_judge.py
+python3 /tests/agent_judge.py /logs/verifier/final-reply.txt

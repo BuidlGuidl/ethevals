@@ -8,8 +8,8 @@ version = "0.1.0"
 description = "Ethereum tasks on Harbor"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-  "harbor==0.25.0",
-  "harbor-rewardkit==0.2.4",
+  "harbor==0.24.0",
+  "harbor-rewardkit==0.2.3",
   "anthropic==1.8.0",
   "openai==3.19.2",
   "pydantic==2.13.5",

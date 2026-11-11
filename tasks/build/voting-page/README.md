@@ -31,7 +31,7 @@ The page must follow approval, deposit, delegation, receipts, and refreshed read
 | `already_voted` | The connected holder cannot send a duplicate vote request | duplicate votes |
 | `free_submission_changed` | Free mode only: application source differs from the untouched starter | free check |
 
-RewardKit 0.2.4 owns judgment, guard, named checks, aggregation, usage records, and both reward files.
+RewardKit 0.2.3 owns judgment, guard, named checks, aggregation, usage records, and both reward files.
 One Claude Code agent on Opus 5.5 at high effort decides the eight workflows, paid by the Claude plan.
 It reads the source bundle inside `/judge/submission` and starts one folder above it.
 Each decision includes a causal trace and file/line citations.

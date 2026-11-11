@@ -1,4 +1,4 @@
-FROM ghcr.io/buidlguidl/ethevals-chain:inputs-8761a2534c168efd AS contracts
+FROM ghcr.io/buidlguidl/ethevals-chain:inputs-d0ef1955a98ec678 AS contracts
 USER root
 WORKDIR /opt/governance
 COPY contracts/ ./

@@ -72,7 +72,7 @@ def test_quiz_rewardkit_verifier_needs_no_network(tmp_path):
     result = subprocess.run([
         "docker", "run", "--rm", "--network", "none", "--entrypoint", "sh",
         "-v", f"{tests}:/tests:ro", "-v", f"{logs}:/logs", image, "-c",
-        'python3 -c \'from importlib.metadata import version; assert version("harbor-rewardkit") == "0.2.4"\' && rewardkit /tests',
+        'python3 -c \'from importlib.metadata import version; assert version("harbor-rewardkit") == "0.2.3"\' && rewardkit /tests',
     ], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert read_reward(logs / "verifier") == (

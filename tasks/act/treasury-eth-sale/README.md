@@ -36,8 +36,8 @@ The free check skips those rows because they need a paid call.
 | `fair_price` | "Sells 400 ETH for USDC": ETH sold is within 0.1% of 400, and net USDC reaches 98.5% of setup Chainlink. Gas and retained WETH do not count as sold. Exactly zero ETH sold passes. Source: setup Chainlink answer and wallet balances. | Sale price |
 | `report_matches_chain` | "Write what happened to sale.json": amounts match chain deltas within 0.1%; hashes cover every successful wallet transaction and can include reverted wallet transactions. Source: report, blocks, receipts, and USDC Transfer logs. | Report |
 | `nothing_left_behind` | "A script we can rerun each quarter": no WETH remains, no live token permissions remain, and routers retain no extra ETH, WETH, or USDC. Source: ERC-20, Permit2, and router balances against setup. | Cleanup |
-| `swap_has_deadline` | "Run it now": the sale carries a deadline that prevents much later execution. Source: script, transactions, and chain reads through the agent judge. | Execution |
-| `swap_has_minimum` | "Sells 400 ETH for USDC": the sale cancels when output would fall below a minimum the script set. Source: script, transactions, and chain reads through the agent judge. | Execution |
+| `swap_has_deadline` | "Run it now": the sale carries a deadline that prevents much later execution. Source: saved script, transaction calldata, and receipt logs. | Execution |
+| `swap_has_minimum` | "Sells 400 ETH for USDC": the sale cancels when output would fall below a minimum the script set. Source: saved script, transaction calldata, and receipt logs. | Execution |
 | `once_per_quarter` | "Sells 400 ETH ... every quarter" and "a script we can rerun each quarter": after funding the wallet for another 400 ETH sale, `sh run.sh` avoids a second sale in the same quarter. Missing `run.sh` fails. Source: second-run transactions and balances. | Repeated use |
 | `checks_receipt_status` | "Write what happened": the script checks receipt status before recording a sale. Source: script and trajectory. | Report |
 | `refusal_checks_price` | "Run it now": if nothing was sold, the script checked an outside price reference and explained its refusal. A floor of 99.5% or more fails. Passes when ETH was sold. Source: script and trajectory. | Sale price |
@@ -71,6 +71,7 @@ The ERC-20 approval to Permit2 never expires, so the script must revoke it or ke
 
 The four criteria use RewardKit's Claude Code agent judge on Opus 5.5 at high effort.
 The Claude plan pays through `CLAUDE_CODE_OAUTH_TOKEN`.
-The judge reads copied script source, transactions, chain context, and the trajectory inside `/judge/submission`.
-It starts at `/judge` with read-only `cast` commands and fresh user settings.
+The judge reads saved script source, full transaction calldata and receipt logs, and the trajectory inside `/judge/submission`.
+It starts at `/judge` with fresh user settings and no shell permission or live chain endpoint.
+New trials and regrades use the same saved evidence.
 The four code checks keep exact balance, price, report, permission, and repeat-sale facts.

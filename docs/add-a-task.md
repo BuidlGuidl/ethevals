@@ -289,6 +289,11 @@ Lint checks every judge file against the board's rules:
 - Its guard is `flag` or `penalize`.
 - Every criterion counts toward `all-pass`.
 
+Put pinned judge tools and their installer under `tests/`.
+Install them after the agent finishes, within the verifier time limit.
+Keep them out of shared image inputs and the task's `environment/` folder.
+Save judge inputs, transcripts, and program versions in `/logs/verifier`, without changing `artifacts`.
+
 The Claude plan pays for the judge. A task with criteria declares exactly this in `task.toml`, and no other credential:
 
 ```toml

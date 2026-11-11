@@ -11,6 +11,7 @@ os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 import shutil
 sys.path.insert(0, "/opt")
 from agent_judge import prepare, environment
+from install_judge import install
 from rewardkit.runner import run
 
 WORKFLOWS = ('lists_every_proposal', 'status_and_tallies_match', 'quorum_counts_for_only',
@@ -90,6 +91,7 @@ def main():
     if not (tests / 'judge.toml').exists():
         run(tests, workspace=workspace, output=output)
         return
+    install()
     home = prepare([output.parent / 'source-evidence.txt'])
     clean = environment(home)
     os.environ.clear()

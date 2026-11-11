@@ -89,7 +89,7 @@ The build copies local trajectories into the static export and links published t
 
 ## Free checks
 
-Harbor is pinned to 0.25.0 in `pyproject.toml` and `uv.lock`.
+Harbor is pinned to 0.24.0 in `pyproject.toml` and `uv.lock`.
 This version copies declared trajectories into a separate verifier after the agent stops.
 The verifier can read the final reply without changing the instruction or asking for an answer file.
 The oracle and nop runs exercise this path before a version change can pass.
@@ -120,7 +120,7 @@ Test tools can write `/logs/verifier/checks.json`:
 `test.sh` copies `/opt/check_records.py` into `/tests/`, then runs `rewardkit /tests`.
 That shared criterion turns each record into a named RewardKit check with its reason.
 Each task's `reward.toml` sets `all-pass` for the record file and the root `reward`.
-RewardKit 0.2.4 ships in both shared images and needs no network for programmatic checks.
+RewardKit 0.2.3 ships in both shared images and needs no network for programmatic checks.
 The chain image caches Solidity 0.8.30 at build time; tasks can install other compilers in their images.
 RewardKit alone writes `reward.json` and `reward-details.json` under `/logs/verifier/`.
 Rows and free checks read those files; additional reward dimensions remain available.
@@ -224,7 +224,7 @@ The board's task hash is Harbor's `sha256:` package digest.
 Saved board trials must carry the same digest in `lock.json` as their plan.
 Published folders combine the pillar and directory name under `tasks/`.
 Registry entries use `[task].name`, which Harbor also reads from the copied task.
-Harbor 0.25.0 discovers immediate children there when `--repo` has no dataset selector.
+Harbor 0.24.0 discovers immediate children there when `--repo` has no dataset selector.
 `registry.json` also supplies the explicit `ethevals@1.0` dataset entry.
 This version names the registry format; pin the repository revision to select task content.
 
@@ -246,5 +246,5 @@ After each package's first push, an owner must set its visibility to public in G
 It tags HF revisions `gh-SHORT_SHA` and supports manual reruns on `main`.
 Pull requests build the same image tags locally and publish nothing.
 
-References: [Harbor v0.25.0](https://github.com/harbor-framework/harbor/tree/v0.25.0),
+References: [Harbor v0.24.0](https://github.com/harbor-framework/harbor/tree/v0.24.0),
 [separate verifier inputs](https://docs.harborframework.com/tasks/separate-verifier).

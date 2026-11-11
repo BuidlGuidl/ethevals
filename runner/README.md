@@ -16,7 +16,8 @@ Copy a task with similar needs, then run the [free check](../docs/harbor.md#free
 
 Each task's `tests/test.sh` runs RewardKit, which writes the reward and named check details.
 The [Harbor guide](../docs/harbor.md#free-checks) covers Concepts task targets, Forge, criteria, and sidecars.
-A new test tool writes the same check records and ships in the task's environment image.
+A new test tool writes the same check records.
+Judge tools install from `tests/` after the agent finishes, without changing the task's environment image.
 List shared image build inputs in [images/tag.py](ethevals/images/tag.py).
 
 Judges use RewardKit's `claude-code` agent on Opus 5.5 at high effort, with `guard = "flag"`.

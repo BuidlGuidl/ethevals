@@ -12,7 +12,7 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and Docker
 Start Docker, then install Harbor:
 
 ```sh
-uv tool install --python 3.13 harbor==0.25.0
+uv tool install --python 3.13 harbor==0.24.0
 ```
 
 For a task with a chain, give Docker at least 7 GiB of memory.
