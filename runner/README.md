@@ -8,14 +8,14 @@ The root `pyproject.toml` installs `ethevals` from this directory.
 
 Write tasks directly in Harbor's format under `tasks/PILLAR/NAME/`.
 Tasks belong to three pillars: Concepts, Build, and Act.
-Concepts holds quizzes, Build holds builds, and Act holds tasks where the agent acts on a chain.
+Concepts holds questions, Build holds builds, and Act holds tasks where the agent acts on a chain.
 Each folder has `task.toml`, `instruction.md`, `environment/`, `tests/`, and `solution/`.
 Copy a task with similar needs, then run the [free check](../docs/harbor.md#free-checks).
 
 ## Verifiers
 
 Each task's `tests/test.sh` runs RewardKit, which writes the reward and named check details.
-The [Harbor guide](../docs/harbor.md#free-checks) covers quiz targets, Forge, criteria, and sidecars.
+The [Harbor guide](../docs/harbor.md#free-checks) covers Concepts task targets, Forge, criteria, and sidecars.
 A new test tool writes the same check records and ships in the task's environment image.
 List shared image build inputs in [images/tag.py](ethevals/images/tag.py).
 
@@ -45,6 +45,67 @@ The runner removes that key from the agent's execution environment and restores 
 Use `ethevals upload-hub --output results/local` to upload saved, checked jobs without running another trial.
 Pass the same `--config` when the run used separate job settings.
 
+## Identity and no answer
+
+A trial's identity includes its task ID, instruction hash, environment hash, agent, model, effort, mode, and trial number.
+Skills-mode identities also include the skills hash.
+A row keeps Harbor's whole-folder `task_hash` and the `checks_hash` that decided its checks.
+Rows keep schema version 8. The hash fields mark stamped rows.
+
+`instruction.md` supplies the instruction hash.
+Environment files and agent settings supply the environment hash.
+Tests, criteria, verifier settings, artifact declarations, and the job's judge model and effort supply the checks hash.
+The task README, solutions, descriptions, authors, keywords, and task versions change no trial identity or checks hash.
+Known display fields and mode declarations also stay outside the hashes.
+Unknown files and settings count as environment inputs.
+A changed instruction or environment hash reruns every selected mode.
+A changed checks hash plans a regrade, or a rerun when the saved work cannot support the changed checks.
+The board requires current instruction and environment hashes, plus the skills hash in skills mode.
+It keeps the saved result while its checks hash is behind.
+
+`uv run ethevals stamp-rows --rows results/rows.jsonl` stamps saved rows without hashes.
+It finds task files whose Harbor digest matches each row, including historical files in Git.
+It preserves each row's status and fields, and adds the hashes.
+It leaves stamped rows unchanged on repeat runs.
+If a matching folder is unavailable, it stops before writing rows.
+
+A refusal, or an empty final reply to a Concepts task, counts as no answer.
+A reply with words goes to the checks.
+No answer gets one immediate retry in the same CI job, for agents and bare models.
+The retry adds no scored trial, consumes no normal retry, and reserves no extra budget.
+Two no-answer tries count as a fail.
+One saved no-answer try without a completed second try counts as an error under the normal retry rule.
+The row retains the no-answer history and stop reasons, even when the second try answers.
+The bare-model runner also saves the provider stop reason beside its trajectory.
+
+## Regrade saved work
+
+The planner lists regrades under `regrades` and agent trials under `missing`.
+Concepts regrades run the task's real tests through RewardKit in its verifier image.
+Rows for one task share a container.
+Unchanged judge criteria and inputs keep their saved results.
+A criteria change, judge model or effort change, or changed judge input asks the judge again.
+Judge-only regrades reuse saved inputs and keep the other checks.
+Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
+Checks that need a live browser or chain plan reruns.
+Saved work with no address, an HTTP 404 or 410, or expired CI artifacts plans a rerun.
+The plan lists each rerun and its reason.
+Other fetch errors defer the regrade until the next CI run and reserve nothing.
+A failed regrade leaves the saved row unchanged and fails its CI job.
+
+To inspect a check fix locally, run:
+
+```sh
+uv run ethevals regrade --tasks tasks/concepts/compiler-legacy-init-order --modes internet vanilla --budget 0 --output results/check-fix
+```
+
+The command writes new rows and prints status changes after successful regrades.
+It skips missing agent trials.
+A regrade preserves the original trajectory link and model cost, and replaces the checks and verifier output.
+A regrade without a judge reserves zero.
+A judge regrade reserves judge cost under the same all-or-nothing budget check as trials.
+Paid judge calls still require explicit spending intent and a reviewed budget.
+
 ## CI and publication
 
 [checks.yml](../.github/workflows/checks.yml) runs free checks on pull requests without provider secrets.
@@ -52,8 +113,8 @@ It runs the [Harbor free check](../docs/harbor.md).
 [results.yml](../.github/workflows/results.yml) queues paid trials after changes to `main`, except results-only changes.
 It plans the internet and vanilla modes ([ADR 0020](../docs/adr/0020-two-trials-and-model-only-runs-in-ci.md)).
 A manual budget overrides `ETHEVALS_BUDGET_USD`; the fallback is zero.
-A zero budget saves the plan and schedules no trials, including plan-paid trials with no API reserve.
-A positive budget must cover all missing trials' remaining API executions, including judge costs.
+A zero budget saves the plan and schedules no jobs, including free regrades and plan-paid trials.
+A positive budget must cover all missing trials' remaining API executions and all planned judge regrades.
 
 The workflow needs these GitHub secrets:
 
@@ -65,22 +126,27 @@ The workflow needs these GitHub secrets:
 - `EXA_API_KEY`, `MAINNET_RPC_URL`, and `BASE_RPC_URL`: optional search and task-declared fork credentials.
 - `HARBOR_API_KEY`: Harbor Hub API key, available only to the upload step.
 
-The job graph is `plan → matrix → publish`.
+The job graph is `plan → matrix and regrade → publish`.
 The plan reads current `main`; later jobs check out its saved SHA.
-Each matrix job downloads the exact plan artifact named by its plan job's output.
-Partial reruns retain that output; full reruns save a new plan artifact for their attempt.
+Each trial or regrade CI job downloads the exact plan artifact named by its plan job's output.
+Resuming only failed jobs keeps that output.
+If the plan job runs again, it saves a new artifact for the workflow attempt.
 If that exact artifact is missing or expired, the download fails without using another plan.
 This applies to workflows started after the change lands.
 Old runs keep their original workflow definition when rerun, because [GitHub retains the original commit](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs).
 `scripts/ci.py plan-trials` folds current and pending results, saves the Harbor job config, and emits the admitted matrix.
-CI schedules at most 256 trials, with at most 100 per plan group to fit GitHub's pending-job limit.
-Later runs pick up deferred trials.
+CI schedules at most 256 jobs, with at most 100 per plan group to fit GitHub's pending-job limit.
+Regrade jobs group rows by task and receive no agent credentials.
+Only a regrade that needs a judge receives the judge key.
+The plan also limits each release to 1,000 assets and defers work beyond that limit.
+The plan lists regrade batches deferred by job or asset limits.
+Later runs pick up deferred trials and regrades.
 Plan groups use the configured agent name, so models and modes using the same plan share five lanes and run five trials at once.
 Key-paid trials share 10 lanes. GitHub Free runs 20 jobs at once, so 10 runners stay free for the plan lanes and plan trials never wait behind key-paid ones.
 One job runs all of a model's vanilla trials, since each is one API call and shorter than the job's setup.
 
 `scripts/ci.py run-trial` executes one saved plan item with its reserved budget.
-It checks task and skills hashes before Harbor starts.
+It checks task, instruction, environment, checks, and skills hashes before Harbor starts.
 Harbor builds each task's environment and starts its declared sidecars.
 Codex credentials use a temporary file in a private directory outside the artifact directory; the step removes it afterward.
 The file is readable by others, because Harbor copies it into the task as root and the agent user in most task images must read it.
@@ -89,7 +155,8 @@ The job config forces Codex plan payment and requires plan tokens in its credent
 Local and CI trials use the same credential check.
 The judge key enters only the verifier's commands; agent commands use their own configured credentials.
 The run step allows 190 minutes; the job allows 240 minutes for setup, builds, and uploads too.
-Each job uploads only `results/ci-run/public/` after success or failure.
+Each trial or regrade job uploads only `results/ci-run/public/` after success or failure.
+CI artifacts remain available for 14 days.
 Before the artifact upload, a separate step uploads checked Harbor jobs publicly to the configured Hub org.
 That step checks its Hub key too and rebuilds the artifact if the check withholds a folder.
 The default org is `buidlguidl`. Create its API key in Harbor Hub's profile settings.
@@ -134,9 +201,16 @@ Other errors retain the configured retry policy.
 
 The publisher has no model keys and runs after failed matrix jobs on `main`.
 It downloads every workflow retry's artifacts and rebuilds rows from saved Harbor trials at their downloaded paths.
-It folds retries before staging one trajectory JSON and one verifier archive per trial.
+It folds retries before staging each trial's trajectory JSON and verifier archive.
+Regrades retain their original trajectory link and stage their new verifier archive.
 The archive includes check records and RewardKit's criterion reasons and usage.
 Errors also keep their available output.
+Trials with saved workspace artifacts also keep a trial archive beside those release assets.
+The archive contains `result.json`, `lock.json`, agent files, and the artifact manifest and files Harbor needs for regrade.
+The same publication check covers these files before they enter an artifact or release.
+The planner fetches published trajectories, verifier archives, and trial archives into its saved-work cache.
+Older contract rows can use their CI artifacts while those artifacts remain available.
+The publisher also runs when a CI run contains regrades and no agent trials.
 
 `publish-results` writes `combined/rows.jsonl`, `combined/release.json`, and `combined/assets/` locally.
 Without `--publish`, it performs no remote writes.
@@ -157,7 +231,7 @@ Task files remain unchanged. Published folders combine pillar and directory name
 Registry entries use each task's `[task].name`.
 `--hf-repo` and `--license` set dataset card values.
 `scripts/ci.py release` previews the HF upload; `--publish` performs it.
-The upload removes obsolete task files and the old quiz `data/` exports in the same HF commit.
+The upload removes obsolete task files and the old Concepts task `data/` exports in the same HF commit.
 [release.yml](../.github/workflows/release.yml) pushes shared images to GHCR before uploading every task to `buidlguidl/ethevals-test`.
 It runs on pushes to `main`, except results-only changes, with `HF_TOKEN` and the workflow's GHCR token.
 It tags dataset changes `gh-<short sha>` and supports manual reruns without inputs.

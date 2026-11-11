@@ -1,0 +1,77 @@
+[
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** No.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: Yes.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: Maybe no.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "No, or perhaps yes.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "No or yes; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "yes, or perhaps No.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "yes or No; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "Answer: No, or perhaps yes.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "Answer: No or yes; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "Answer: yes, or perhaps No.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "Answer: yes or No; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "**Answer:** No, or perhaps yes.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "**Answer:** No or yes; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "**Answer:** yes, or perhaps No.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "**Answer:** yes or No; either might work.",
+    "passed": false
+  }
+]

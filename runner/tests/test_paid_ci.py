@@ -36,6 +36,7 @@ def test_matrix_downloads_its_plan_artifact(plan_attempt, matrix_attempt, expect
         "github.run_id": "40826749924", "github.run_attempt": str(plan_attempt),
         "steps.plan.outputs.matrix": '{"include":[]}',
         "steps.plan.outputs.scheduled_trials": "1", "steps.plan.outputs.sha": "a" * 40,
+        "steps.plan.outputs.regrade_matrix": '{"include":[]}', "steps.plan.outputs.scheduled_regrades": "0", "steps.plan.outputs.deferred_regrades": "0",
     }
     uploaded_name = expand(upload["with"]["name"], plan_context)
     matrix_context = {"github.run_id": "40826749924", "github.run_attempt": str(matrix_attempt)}
@@ -65,6 +66,7 @@ def test_paid_workflow_limits_secrets_to_the_steps_that_use_them():
         ("plan", "Check the budget and emit the matrix"): {name: "${{ secrets." + name + " }}" for name in rpc_names},
         ("matrix", "Run one planned trial"): {name: "${{ secrets." + name + " }}" for name in trial_names},
         ("matrix", "Upload checked trials to Harbor Hub"): {"HARBOR_API_KEY": "${{ secrets.HARBOR_API_KEY }}"},
+        ("regrade", "Regrade saved trials with the judge"): {"ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}"},
     }
     for name in [*trial_names, "HARBOR_API_KEY"]:
         assert source.count("${{ secrets." + name + " }}") == 1
@@ -104,7 +106,7 @@ def test_ci_plan_holds_judge_errors_without_scheduling_agent_work(tmp_path):
     admitted = json.loads((saved / "trials.json").read_text())
     assert [[row["trial"] for row in entry["missing"]] for entry in admitted] == [[2]]
     assert sorted(path.name for path in saved.iterdir()) == [
-        "config.json", "plan.json", "rows.jsonl", "trials.json"]
+        "config.json", "plan.json", "regrades.json", "rows.jsonl", "trials.json"]
 
 
 def test_run_trial_executes_the_saved_retry_instead_of_planning_again(tmp_path, monkeypatch):
@@ -158,7 +160,8 @@ def test_ci_plan_defers_tasks_with_missing_compose_host_variable(tmp_path, monke
         ("concepts/question", 1, ["ARCHIVE_RPC_URL"]), ("concepts/question", 2, ["ARCHIVE_RPC_URL"])]
     assert "deferred trials because ARCHIVE_RPC_URL is unset" in result.stderr
     emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
-    assert emitted == {"matrix": '{"include":[]}', "scheduled_trials": "0"}
+    assert emitted == {"matrix": '{"include":[]}', "scheduled_trials": "0",
+                       "regrade_matrix": '{"include":[]}', "scheduled_regrades": "0", "deferred_regrades": "0"}
     assert json.loads((output / "trials.json").read_text()) == []
     # The same task becomes eligible as soon as its declared input exists.
     monkeypatch.setenv("ARCHIVE_RPC_URL", "https://archive.example/offline")
@@ -192,7 +195,8 @@ def test_zero_ci_budget_saves_plan_and_emits_no_jobs_even_for_a_plan(tmp_path):
     report = json.loads((output / "plan.json").read_text())
     assert (report["missing_trials"], report["worst_case_usd"]) == (2, 0)
     emitted = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
-    assert emitted == {"matrix": '{"include":[]}', "scheduled_trials": "0"}
+    assert emitted == {"matrix": '{"include":[]}', "scheduled_trials": "0",
+                       "regrade_matrix": '{"include":[]}', "scheduled_regrades": "0", "deferred_regrades": "0"}
     assert not (output / "jobs").exists()
 
 

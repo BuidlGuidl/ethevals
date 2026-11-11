@@ -83,5 +83,20 @@
     "label": "explanation after a comma",
     "reply": "Yes, because the mechanism the question describes applies here.",
     "passed": true
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** Yes, no access list is needed because execTransaction has already warmed the proxy slot and singleton address.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: Yes, no.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: Yes, no.",
+    "passed": false
   }
 ]

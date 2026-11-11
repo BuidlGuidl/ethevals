@@ -9,14 +9,14 @@ import { decodeSelection, encodeSelection } from "../src/selection";
 import { Configuration } from "../components/configuration";
 
 const evaluation: Eval & Pick<DisplayEval, "domain"> = {
-  id: "concepts/units", hash: "current", title: "Units", pillar: "concepts",
+  id: "concepts/units", hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", title: "Units", pillar: "concepts",
   domain: "dapp-development",
   description: "Check units.", instruction: "How many wei equal one ether?", modes: ["internet", "vanilla"],
 };
 const agent = { model: "model-a", agent: "agent-a", effort: "high" };
 function row(overrides: Partial<Row> = {}): Row {
   return {
-    schema_version: 8, task_id: "concepts/units", task_hash: "current", skills_hash: null,
+    schema_version: 8, task_id: "concepts/units", task_hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", skills_hash: null,
     ...agent, mode: "internet", trial: 1, status: "passed",
     checks: { answer: { passed: true, reason: "The answer matches." } }, error_kind: null, error_reason: null,
     total_tokens: 100, model_cost_usd: 0.2, judge_cost_usd: 0.05,
@@ -44,6 +44,19 @@ test("the drawer labels the full Harbor Hub trial and the release fallback", () 
 });
 
 const failure = { status: "failed", checks: { answer: { passed: false, reason: "The answer differs." } } } as const;
+
+test("the drawer names a refusal or empty reply after two no-answer tries", () => {
+  for (const [kind, label] of [["refused", "Refused"], ["empty", "Empty reply"]] as const) {
+    const data = buildBoard([evaluation], [row({ ...failure, no_answer: [
+      { kind, stop_reason: "stop" }, { kind, stop_reason: "stop" },
+    ] })]);
+    const panel = renderToStaticMarkup(createElement(Detail, {
+      data, selection: { evaluation, pillar: "concepts", agent, mode: "internet", run: 1 }, onSelect: () => {},
+    }));
+    assert.ok(panel.includes(`<p class="negative">${label}</p>`));
+    assert.equal(data.tables.internet.summaries[agentKey(agent)].total, 1);
+  }
+});
 const error = { status: "error", checks: {}, error_kind: "execution", error_reason: "Sandbox stopped." } as const;
 
 test("a score counts passed trials and excludes errors, while retaining their details", () => {

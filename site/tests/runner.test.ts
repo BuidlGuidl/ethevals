@@ -61,6 +61,7 @@ if ${withCriteria ? "True" : "False"}:
     assert judge_calls == 1
 write_catalog([task], output)
 metadata["task_hash"] = task_entry(task)["hash"]
+metadata.update({key: task_entry(task)[key] for key in ("instruction_hash", "environment_hash", "checks_hash", "checks_inputs")})
 (trial / "lock.json").write_text(json.dumps({"task": {
     "name": "buidlguidl/question", "type": "local", "digest": metadata["task_hash"]}}))
 write_rows(output / "rows.jsonl", [results_row(trial, metadata,

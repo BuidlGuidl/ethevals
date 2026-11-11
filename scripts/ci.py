@@ -40,11 +40,12 @@ def stored_file(ref, path):
 
 
 def result_record(own_rows=()):
+    from ethevals.stamp_rows import stamp_rows
     rows = []
     for ref in (f"refs/remotes/origin/{BASE_BRANCH}", f"refs/remotes/origin/{RESULTS_BRANCH}"):
         content = stored_file(ref, "results/rows.jsonl") or ""
-        rows = fold_rows(rows, [row for line in content.splitlines() if line.strip()
-                               for row in [json.loads(line)] if row.get("schema_version") == SCHEMA_VERSION])
+        stored = stamp_rows([json.loads(line) for line in content.splitlines() if line.strip()], Path.cwd())
+        rows = fold_rows(rows, [row for row in stored if row.get("schema_version") == SCHEMA_VERSION])
     return fold_rows(rows, own_rows)
 
 
@@ -71,27 +72,60 @@ def plan_trials(args, run_args):
         status = ethevals([*argv, "--rows", str(rows)])
     print(captured.getvalue(), end="")
     report = json.loads(captured.getvalue())
+    for row in report["missing"]:
+        if row.get("rerun_reason"):
+            print(f"Rerun {row['task_id']}, {row['model']}, {row['mode']}, trial {row['trial']}: {row['rerun_reason']}", file=sys.stderr)
+    deferred_regrades = 0
+    for row in report.get("deferred", []):
+        if row.get("defer_reason"):
+            deferred_regrades += 1
+            print(f"Deferred regrade {row['task_id']}, {row['model']}, trial {row['trial']}: {row['defer_reason']}", file=sys.stderr)
     (args.output / "plan.json").write_text(json.dumps(report, indent=2) + "\n")
     # A zero CI budget disables even plan-paid trials whose API reserve is zero.
     scheduled, matrix, plan_counts, key_count, vanilla_jobs = [], [], {}, 0, {}
+    regrades, regrade_matrix, asset_count = [], [], 0
     if report["within_budget"] and options.budget and options.budget > 0:
+        batches = {}
+        for row in report.get("regrades", []):
+            batches.setdefault((row["task_id"], row["kind"], row["judge_required"]), []).append(row)
+        for (task_id, kind, judge_required), batch in batches.items():
+            assets = len(batch) * (2 if kind == "contract" else 1)
+            if len(regrades) == 256 or asset_count + assets > 1000:
+                limit = "jobs" if len(regrades) == 256 else "assets"
+                print(f"Deferred regrade batch {task_id}: {len(batch)} rows; {limit} limit.", file=sys.stderr)
+                deferred_regrades += len(batch)
+                continue
+            items = []
+            for row in batch:
+                items.append({**row, "task_path": os.path.relpath(row["task_path"]),
+                              "saved_work": {key: os.path.relpath(value, args.output) for key, value in row["saved_work"].items()}})
+            index = len(regrades)
+            regrades.append({"missing": [], "missing_trials": 0, "regrades": items,
+                             "selected": [trial_identity(row) for row in batch],
+                             "worst_case_usd": sum(row["worst_case_usd"] for row in batch)})
+            regrade_matrix.append({"index": index, "task_id": task_id, "judge": judge_required})
+            asset_count += assets
         for row in report["missing"]:
             group = config.agents[row["agent_key"]].name if row["paid_by"] == "plan" else ""
             item = {**row, "task_path": os.path.relpath(row["task_path"])}
             # A vanilla trial is one API call, shorter than a job's setup, so one job runs all of a model's vanilla trials.
             if row["mode"] == "vanilla" and row["agent_key"] in vanilla_jobs:
+                if asset_count + 3 > 1000:
+                    continue
                 batch = scheduled[vanilla_jobs[row["agent_key"]]]
                 batch["missing"].append(item)
                 batch["selected"].append(trial_identity(row))
                 batch["missing_trials"] += 1
                 batch["worst_case_usd"] += row["worst_case_usd"]
+                asset_count += 3
                 continue
             # GitHub accepts at most 100 pending jobs per concurrency group.
-            if len(scheduled) == 256 or group and plan_counts.get(group, 0) == 100:
+            if len(scheduled) + len(regrades) == 256 or asset_count + 3 > 1000 or group and plan_counts.get(group, 0) == 100:
                 continue
             index = len(scheduled)
             scheduled.append({"missing": [item], "selected": [trial_identity(row)],
                               "missing_trials": 1, "worst_case_usd": row["worst_case_usd"]})
+            asset_count += 3
             if group:
                 lane = f"plan-{group}-{plan_counts.get(group, 0) % PLAN_LANES}"
                 plan_counts[group] = plan_counts.get(group, 0) + 1
@@ -104,6 +138,7 @@ def plan_trials(args, run_args):
                            **({"task_id": "vanilla tasks", "trial": "all"} if row["mode"] == "vanilla"
                               else {"task_id": row["task_id"], "trial": row["trial"]})})
     (args.output / "trials.json").write_text(json.dumps(scheduled, indent=2) + "\n")
+    (args.output / "regrades.json").write_text(json.dumps(regrades, indent=2) + "\n")
     deferred = len(report["missing"]) - sum(entry["missing_trials"] for entry in scheduled)
     if deferred:
         print(f"Deferred {deferred} trials to a later run.", file=sys.stderr)
@@ -111,18 +146,24 @@ def plan_trials(args, run_args):
         with args.github_output.open("a") as output:
             output.write(f"matrix={json.dumps({'include': matrix}, separators=(',', ':'))}\n")
             output.write(f"scheduled_trials={len(scheduled)}\n")
+            output.write(f"regrade_matrix={json.dumps({'include': regrade_matrix}, separators=(',', ':'))}\n")
+            output.write(f"scheduled_regrades={len(regrades)}\n")
+            output.write(f"deferred_regrades={deferred_regrades}\n")
     return status if options.budget else 0
 
 
 def run_trial(args):
-    scheduled = json.loads((args.plan / "trials.json").read_text())
+    scheduled = json.loads((args.plan / ("regrades.json" if getattr(args, "regrade", False) else "trials.json")).read_text())
     if not 0 <= args.index < len(scheduled):
         raise ValueError("Trial index is outside the admitted plan")
     report = scheduled[args.index]
     for item in report["missing"]:
         item["task_path"] = str(Path(item["task_path"]).resolve())
+    for item in report.get("regrades", []):
+        item["task_path"] = str(Path(item["task_path"]).resolve())
+        item["saved_work"] = {key: str((args.plan / value).resolve()) for key, value in item["saved_work"].items()}
     config = load_job(args.plan / "config.json")
-    secrets = secret_values(config, [Path(item["task_path"]) for item in report["missing"]])
+    secrets = secret_values(config, [Path(item["task_path"]) for item in [*report["missing"], *report.get("regrades", [])]])
     report = budget_check(report, report["worst_case_usd"], required=True)
     previous = previous_rows(args.output, args.plan / "rows.jsonl")
     args.output.mkdir(parents=True, exist_ok=True)
@@ -318,6 +359,7 @@ def main():
     trial.add_argument("--plan", type=Path, required=True)
     trial.add_argument("--index", type=int, required=True)
     trial.add_argument("--output", type=Path, required=True)
+    trial.add_argument("--regrade", action="store_true")
     publisher = commands.add_parser("publish-results")
     publisher.add_argument("--output", type=Path, required=True)
     publisher.add_argument("--repo", required=True)

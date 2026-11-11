@@ -5,8 +5,15 @@ const count = z.number().int().nonnegative();
 const measure = z.number().nonnegative().nullable();
 export const rowSchema = z.object({
   schema_version: z.literal(8),
+  retry: count.optional(),
+  checks_generation: count.optional(),
+  completed_at: z.string().nullable().optional(),
+  regraded_at: z.string().optional(),
   task_id: z.string().min(1),
   task_hash: z.string().min(1),
+  instruction_hash: z.string().min(1),
+  environment_hash: z.string().min(1),
+  checks_hash: z.string().min(1),
   skills_hash: z.string().min(1).nullable(),
   mode,
   agent: z.string().min(1).nullable(),
@@ -14,6 +21,7 @@ export const rowSchema = z.object({
   effort: z.string().nullable(),
   trial: z.number().int().positive(),
   status: z.enum(["passed", "failed", "error"]),
+  no_answer: z.array(z.object({ kind: z.enum(["refused", "empty"]), stop_reason: z.string().nullable() })).optional(),
   checks: z.record(z.string(), z.object({ passed: z.boolean(), reason: z.string().min(1) })),
   error_kind: z.string().nullable(),
   error_reason: z.string().nullable(),

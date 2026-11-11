@@ -98,5 +98,20 @@
     "label": "bare alternative as its own sentence",
     "reply": "The zero address. Alice's address.",
     "passed": false
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** The zero address, Alice's address is assigned to the owner only after the feeRecipient initializer runs.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: The zero address, Alice's address.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: The zero address, Alice's address.",
+    "passed": false
   }
 ]

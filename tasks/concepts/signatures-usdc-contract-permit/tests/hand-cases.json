@@ -1,0 +1,17 @@
+[
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** Yes. ERC-1271.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: No. ERC-1271.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: Maybe yes, with ERC-1271.",
+    "passed": false
+  }
+]

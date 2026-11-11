@@ -20,10 +20,16 @@ jobs:
     name: Plan missing trials
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # Fetch saved trial files from older CI artifacts.
     timeout-minutes: 15
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       scheduled_trials: ${{ steps.plan.outputs.scheduled_trials }}
+      regrade_matrix: ${{ steps.plan.outputs.regrade_matrix }}
+      scheduled_regrades: ${{ steps.plan.outputs.scheduled_regrades }}
+      deferred_regrades: ${{ steps.plan.outputs.deferred_regrades }}
       sha: ${{ steps.plan.outputs.sha }}
       artifact_name: trial-plan-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -39,6 +45,7 @@ jobs:
       - name: Check the budget and emit the matrix
         id: plan
         env:
+          GH_TOKEN: ${{ github.token }}
           RUN_BUDGET: ${{ inputs.budget || vars.ETHEVALS_BUDGET_USD || '0' }}
           MAINNET_RPC_URL: &mainnet-rpc ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: &base-rpc ${{ secrets.BASE_RPC_URL }}
@@ -51,6 +58,19 @@ jobs:
           path: results/ci-plan/
           retention-days: 14
           if-no-files-found: error
+  deferred:
+    name: Regrades left for a later run
+    needs: plan
+    # A deferred regrade leaves its old result on the board, so the CI run must not end green.
+    if: needs.plan.outputs.deferred_regrades != '0'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - env:
+          DEFERRED: ${{ needs.plan.outputs.deferred_regrades }}
+        run: |
+          echo "::error::$DEFERRED regrades were deferred. Their rows keep the old result until a later CI run regrades them. The plan job's log gives each reason."
+          exit 1
   matrix:
     name: ${{ matrix.task_id }} / ${{ matrix.agent_key }} / ${{ matrix.mode }} / trial ${{ matrix.trial }}
     needs: plan
@@ -87,7 +107,7 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: &judge-key ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
           MAINNET_RPC_URL: *mainnet-rpc
@@ -113,10 +133,54 @@ jobs:
           if-no-files-found: warn
           # The publication check covers hidden files, such as an agent's .gitignore.
           include-hidden-files: true
+  regrade:
+    name: Regrade ${{ matrix.task_id }}
+    needs: plan
+    if: needs.plan.outputs.scheduled_regrades != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.regrade_matrix) }}
+      max-parallel: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.plan.outputs.artifact_name }}
+          path: results/ci-plan
+      - run: uv run python scripts/ci.py images
+      - name: Regrade saved trials
+        if: ${{ !matrix.judge }}
+        run: >-
+          uv run python scripts/ci.py run-trial --regrade --plan results/ci-plan
+          --index ${{ matrix.index }} --output results/ci-run
+      - name: Regrade saved trials with the judge
+        if: matrix.judge
+        env:
+          ANTHROPIC_API_KEY: *judge-key
+        run: >-
+          uv run python scripts/ci.py run-trial --regrade --plan results/ci-plan
+          --index ${{ matrix.index }} --output results/ci-run
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: trial-run-${{ github.run_id }}-${{ github.run_attempt }}-regrade-${{ matrix.index }}
+          path: results/ci-run/public/
+          retention-days: 14
+          if-no-files-found: warn
+          include-hidden-files: true
   publish:
     name: Publish results
-    needs: [plan, matrix]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.result == 'success' && needs.plan.outputs.scheduled_trials != '0'
+    needs: [plan, matrix, regrade]
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.result == 'success' && (needs.plan.outputs.scheduled_trials != '0' || needs.plan.outputs.scheduled_regrades != '0')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

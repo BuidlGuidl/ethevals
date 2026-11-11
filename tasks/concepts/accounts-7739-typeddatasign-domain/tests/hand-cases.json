@@ -98,5 +98,20 @@
     "label": "bare alternative as its own sentence",
     "reply": "Dapp. Account.",
     "passed": false
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** **Dapp.**\n\nIn ERC-7739's TypedDataSign workflow, the final digest is `keccak256(0x1901 ‖ appDomainSeparator ‖ hashStruct(TypedDataSign{contents, name, version, chainId, verifyingContract, salt}))`, so the dapp's separator follows the prefix while the account's domain fields are nested inside the TypedDataSign struct. This binds the signature to that specific account and prevents replay across accounts owned by the same key.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: account\n\nThe TypedDataSign workflow wraps the dapp’s Order hash in an account-scoped EIP-712 struct, producing `0x1901 || accountDomainSeparator || hashStruct(TypedDataSign(...))`, while the dapp’s domain is used only for the inner Order digest.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: dapp or account.",
+    "passed": false
   }
 ]

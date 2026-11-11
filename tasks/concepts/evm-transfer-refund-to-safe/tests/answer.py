@@ -7,6 +7,7 @@ import rewardkit as rk
 
 
 def accepts(reply: str) -> bool:
+    reply = re.sub(r'^\s*[*_#`]*(?:(?:short|final)\s+)?answer[*_`]*\s*:[*_`]*\s*', "", reply, flags=re.I)
     text = re.sub(r"(?m)^\s*```[^\n]*\n", "", reply)
     text = re.sub(r"[*_#`]", "", text).casefold()
     text = text.translate(str.maketrans({"’": "'", "‘": "'", "–": "-", "—": "-"}))

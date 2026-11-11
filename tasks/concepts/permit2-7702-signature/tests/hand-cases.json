@@ -1,0 +1,77 @@
+[
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** ERC-1271",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: ecrecover",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: ecrecover or ERC-1271",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "ERC-1271, or perhaps ecrecover.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "ERC-1271 or ecrecover; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "ecrecover, or perhaps ERC-1271.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "ecrecover or ERC-1271; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "Answer: ERC-1271, or perhaps ecrecover.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "Answer: ERC-1271 or ecrecover; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "Answer: ecrecover, or perhaps ERC-1271.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "Answer: ecrecover or ERC-1271; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "**Answer:** ERC-1271, or perhaps ecrecover.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "**Answer:** ERC-1271 or ecrecover; either might work.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "**Answer:** ecrecover, or perhaps ERC-1271.",
+    "passed": false
+  },
+  {
+    "label": "Opposing answers in one reply",
+    "reply": "**Answer:** ecrecover or ERC-1271; either might work.",
+    "passed": false
+  }
+]

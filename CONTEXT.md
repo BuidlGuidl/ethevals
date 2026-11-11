@@ -69,7 +69,7 @@ What decides a trial's checks once the agent stops. A task's tests and criteria 
 _Avoid_: scorer, grader
 
 **Target**:
-The expected final reply to a quiz: one accepted answer, or a list where any one counts.
+The expected final reply to a Concepts task: one accepted answer, or a list where any one counts.
 _Avoid_: answer key, flag
 
 **Criteria**:
@@ -92,11 +92,8 @@ _Avoid_: motivation, notes
 The task's `README.md`, written for people. It quotes the instruction, names the areas the task touches and the gotchas the instruction leaves out, says what each check proves, and says why it matters beyond the task. The agent never sees it.
 _Avoid_: motivation, notes
 
-**Quiz**:
-A task that asks a question with a fixed answer and checks the reply against a target. The word describes a task. It is not a field.
-
 **Builder story**:
-The app a developer would ask an agent for, plus the mechanics that make it theirs. One story gives a few quizzes, and a Build or an Act task.
+The app a developer would ask an agent for, plus the mechanics that make it theirs. One story gives a few Concepts tasks, and a Build or an Act task.
 _Avoid_: scenario, user story
 
 ## How tasks are run and checked
@@ -105,12 +102,35 @@ _Avoid_: scenario, user story
 One agent on a model, or one bare model in the vanilla mode, on one task in one mode at one effort, executed once. The trial number counts repeats. A trial passes when its reward is 1.
 _Avoid_: epoch, run
 
+**Fail**:
+A trial that was checked and did not pass. It counts in the score.
+_Avoid_: miss
+
+**Error**:
+A trial that could not be checked, such as a crash or a plan limit. It stays out of the score.
+
+**No answer**:
+A trial where the model gave nothing to check: it refused, or its final reply to a Concepts task was empty. No answer twice in a row is a fail.
+
 **Job**:
 A batch of trials run together. Its `n_attempts` is how many scored trials it runs for each task, agent, and mode.
 
 **Retry**:
-Running a trial again after an error, up to the job's retry limit. A retry adds no scored trial. Harbor's exclusion list decides which errors get one.
+Running a trial again after an error or no answer. A retry adds no scored trial. No answer gets one right away. An error gets one on the next CI run, up to the job's retry limit, and Harbor's exclusion list decides which errors get one.
 _Avoid_: attempt
+
+**Rerun**:
+Running a task's trials from the start because what the agent sees changed: the instruction or the environment. The new trials replace the old ones.
+
+**Regrade**:
+Deciding a saved trial's checks again without running the agent. A change to a task's checks regrades its trials. The word is Harbor's.
+_Avoid_: re-mark, recheck
+
+**CI run**:
+One run of the results workflow on GitHub. It plans the missing trials, runs them in CI jobs, and opens the "Record trial results" pull request.
+
+**Resume**:
+Finishing a CI run that stopped partway, by running its unfinished CI jobs again. A resume uses no retry.
 
 **Time limit**:
 The wall-clock time an agent or verifier gets. Harbor's default applies unless a task sets its own, and a task sets one only when it needs it. A trial that reaches it is checked on what the agent left.
@@ -132,13 +152,22 @@ _Avoid_: partial score
 The API price of a trial's model calls, recorded the same way whether a plan or an API key paid.
 
 **Task hash**:
-Harbor's package digest of a task's files, saved in each trial's lock. Changing a task's files reruns every mode for that task.
+Harbor's package digest of every file in a task folder, saved in each trial's lock. It names the task for datasets, images, and the Hub. It is not part of a trial's identity.
+
+**Instruction hash**:
+A fingerprint of the instruction. A change reruns the task's trials.
+
+**Environment hash**:
+A fingerprint of the environment and its settings. A change reruns the task's trials.
+
+**Checks hash**:
+A fingerprint of the tests and criteria that decided a trial's checks. A change regrades the task's trials, or reruns them when the saved work can't be checked again.
 
 **Skills hash**:
 A fingerprint of the skills pack's files. Only skills-mode trials include it in their identity, so a skills change reruns only skills-mode trials.
 
 **Results row**:
-The latest record of one trial: its task, agent, model, mode, checks, cost, judge, and whether a plan or a key paid. It links the trajectory.
+The latest record of one trial: its task, agent, model, mode, checks, cost, judge, and whether a plan or a key paid. It links the trajectory. A regrade replaces the row.
 
 **Trajectory**:
 The full record of what the agent did in a trial.
@@ -164,8 +193,18 @@ The oracle and nop runs for a fork task. A maintainer starts it by hand on a pul
 The field of Ethereum work a task tests: Dapp development or Security.
 
 **Pillar**:
-The kind of work a task asks for: Concepts, Build, or Act. Concepts tasks are quizzes. Build tasks are builds, where the tests run what the agent wrote. In Act tasks the agent acts on a chain, by sending transactions or by writing a script that sends them, and the tests check what changed on the chain.
+The kind of work a task asks for: Concepts, Build, or Act.
 _Avoid_: category, stage, track
+
+**Concepts**:
+A question and its answer. Nothing is written and nothing is done. These tasks exist to show what a model knows about Ethereum and how it reasons. The check reads the final reply, against a target or with a judge.
+_Avoid_: quiz
+
+**Build**:
+We ask the agent to make something: a contract, a page, backend code. The world stays as it was. No transaction is sent and no chain state moves. The tests run what the agent wrote.
+
+**Act**:
+We ask the agent to do something on a chain, and it really happens. Transactions are sent, state changes, and the chain is different afterwards. The tests check what changed on the chain.
 
 **Area**:
 The part of a domain a task belongs to, such as Lending or Swaps.

@@ -262,6 +262,7 @@ def test_planner_recovers_finished_trials_and_repeats_changed_tasks(tmp_path):
     folder = Path(__file__).parent / "fixtures/harbor/recorded-trial"
     metadata = json.loads((folder / "board.json").read_text())
     metadata["task_hash"] = task_entry(task)["hash"]
+    metadata.update({key: task_entry(task)[key] for key in ("instruction_hash", "environment_hash", "checks_hash", "checks_inputs")})
     job = tmp_path / "out/jobs/recorded"
     shutil.copytree(folder, job / "trial")
     (job / "board.json").write_text(json.dumps(metadata))
@@ -416,7 +417,8 @@ def test_catalog_contains_only_public_task_fields(tmp_path):
     assert result.returncode == 0, result.stderr
     catalog = json.loads((output / "catalog.json").read_text())
     entry = catalog["tasks"][0]
-    assert {key: value for key, value in entry.items() if key != "hash"} == {
+    assert {key: value for key, value in entry.items() if key not in {
+        "hash", "instruction_hash", "environment_hash", "checks_hash"}} == {
         "id": "concepts/question", "pillar": "concepts", "area": None, "layer": None,
         "name": "buidlguidl/question", "description": "Check a reply.",
         "instruction": "Name a unit.\n", "modes": ["internet"]}

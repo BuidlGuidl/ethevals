@@ -30,9 +30,9 @@ The map is for looking around. A task can touch several use cases and parts of t
 
 ### Three kinds of task
 
-Tasks sit in three pillars: Concepts, Build and Act. Each builder story gives a few quizzes, and a Build or an Act task.
+Tasks sit in three pillars: Concepts, Build and Act. Each builder story gives a few Concepts tasks, and a Build or an Act task.
 
-- **Concepts.** A quiz asks a question with a fixed answer. It tests a concept, and the answer stays the same whichever library you use. Agents with the web answer it too, but a quiz is also worth keeping when a bare model, with no web, gets it wrong.
+- **Concepts.** A Concepts task asks a question with a fixed answer. It tests a concept, and the answer stays the same whichever library you use. Agents with the web answer it too, but a Concepts task is also worth keeping when a bare model, with no web, gets it wrong.
 - **Build.** The agent gets an environment and an instruction written as the builder's message, and writes code: contracts, scripts or a page. The tests run what it wrote.
 - **Act.** The agent acts on a chain. It sends transactions, or writes a script that sends them, and the checks look at what changed on the chain.
 
@@ -77,10 +77,10 @@ Judgment also sets how much you read. Read until you have a few ideas worth filt
 2. Read how it is built today:
    - Start with two or three apps live on Ethereum mainnet. That is where the most value sits and where the patterns are most tested. Read each app and its GitHub repo as a vertical slice: the contracts, and how the frontend and scripts use them. Take the patterns the best teams use and leave the code. Write each one down with the case where it looks satisfied and still breaks; that case is what a check sees. A judge reads what no test or chain state can show, and each of its questions names the sentence it rests on and the code it compares against.
    - Follow what the apps raise into the libraries' source and comments, which show what their authors worry about, and into audit checklists and recent incidents. Go to them with a question from the apps.
-   - Newness is not a reason to pick a task. An agent with the web reads deployed code and docs in minutes. What changed after training helps a quiz, where a bare model answers from memory.
+   - Newness is not a reason to pick a task. An agent with the web reads deployed code and docs in minutes. What changed after training helps a Concepts task, where a bare model answers from memory.
 3. Write a few builder stories, two lines each: the story, and what it never mentions that a senior developer would handle. Let taste drop most of them and judgment pick one.
-4. Write the quizzes, and the instruction for the Build or Act task, from that story.
-5. Show the person you're working with the story, the quizzes, the instruction and the decisions behind them, including the stories you dropped and why. Agree on them before any trial.
+4. Write the Concepts tasks, and the instruction for the Build or Act task, from that story.
+5. Show the person you're working with the story, the Concepts tasks, the instruction and the decisions behind them, including the stories you dropped and why. Agree on them before any trial.
 6. Trial the instruction cheaply. Give it to a strong agent and an open one in a plain project, two or three times each, and read what they did. Write the hidden checks around what they actually missed.
 7. Make the task folder. Read [CONTEXT.md](../CONTEXT.md) for the words and [Add a task](add-a-task.md) for the folder.
 8. Calibrate it with the runner, using your own keys in a `.env` at the repo root, passed with `uv run --env-file .env`. Round 1 is one trial each of `claude-code-opus-5.5`, `codex-gpt-6.1-sol`, `opencode-glm-5.3` and `opencode-kimi-k3` in the internet mode, in one job. Before a failure counts, name its reason: the agent's install or its own limits, our verifier, or the work. Only the last is a miss. If both open models pass every check for the right reasons, the task is too easy. If the failures come from the task itself, such as a vague instruction, two clauses that pull against each other, or a check that accepts only one design, fix the task. Read the strong models' trajectories too. A pass with no reading, testing or fixing along the way means the task is too easy for them. Round 2 is a second trial for each agent whose single result decides the verdict. [Plan and run](../runner/README.md#plan-and-run) has the commands and budgets.

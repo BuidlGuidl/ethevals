@@ -23,6 +23,8 @@ def upload_hub(output: Path, config: JobSettings) -> None:
     uploaded = json.loads(receipt.read_text()) if receipt.exists() else {}
     secrets = secret_values(config, [])
     for board in sorted((output / "jobs").glob("*/board.json")):
+        if (board.parent / "regrade.json").is_file():
+            continue
         folder = board.parent
         try:
             require_checked(folder)

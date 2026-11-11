@@ -1,7 +1,11 @@
 {
   "skills_hash": "demo-pack",
   "n_attempts": 3,
-  "models": ["Demo model A", "Demo model B", "Demo model C"],
+  "models": [
+    "Demo model A",
+    "Demo model B",
+    "Demo model C"
+  ],
   "tasks": [
     {
       "description": "Check whether an agent builds a token with the requested supply and transfer rules.",
@@ -12,7 +16,10 @@
       "pillar": "build",
       "area": "Tokens",
       "hash": "ada3ab97528490a5d92bb2dd243d62b0e3d046b4a2160ea905fb6563e04c69b6",
-      "instruction": "Implement the token described in the environment. Run the tests and explain your changes."
+      "instruction": "Implement the token described in the environment. Run the tests and explain your changes.",
+      "instruction_hash": "ada3ab97528490a5d92bb2dd243d62b0e3d046b4a2160ea905fb6563e04c69b6",
+      "environment_hash": "ada3ab97528490a5d92bb2dd243d62b0e3d046b4a2160ea905fb6563e04c69b6",
+      "checks_hash": "ada3ab97528490a5d92bb2dd243d62b0e3d046b4a2160ea905fb6563e04c69b6"
     },
     {
       "description": "Check whether a model knows Ethereum units.",
@@ -24,7 +31,10 @@
       "id": "concepts/units",
       "pillar": "concepts",
       "hash": "5d453ad1720dd2e626c037632cc03938cfc9d171b6c586a9e4972ff13559c099",
-      "instruction": "Name the smallest unit of ether."
+      "instruction": "Name the smallest unit of ether.",
+      "instruction_hash": "5d453ad1720dd2e626c037632cc03938cfc9d171b6c586a9e4972ff13559c099",
+      "environment_hash": "5d453ad1720dd2e626c037632cc03938cfc9d171b6c586a9e4972ff13559c099",
+      "checks_hash": "5d453ad1720dd2e626c037632cc03938cfc9d171b6c586a9e4972ff13559c099"
     },
     {
       "description": "Check whether a model knows Ethereum's base unit conversion.",
@@ -35,7 +45,10 @@
       "id": "concepts/wei-per-ether",
       "pillar": "concepts",
       "hash": "2bdcae837b7d32f59e379c1d051c269ebb0cde5dc9e0a9187d7baf538c92564a",
-      "instruction": "How many wei equal one ether?"
+      "instruction": "How many wei equal one ether?",
+      "instruction_hash": "2bdcae837b7d32f59e379c1d051c269ebb0cde5dc9e0a9187d7baf538c92564a",
+      "environment_hash": "2bdcae837b7d32f59e379c1d051c269ebb0cde5dc9e0a9187d7baf538c92564a",
+      "checks_hash": "2bdcae837b7d32f59e379c1d051c269ebb0cde5dc9e0a9187d7baf538c92564a"
     },
     {
       "description": "Check whether an agent sends the requested value to the right recipient.",
@@ -46,7 +59,10 @@
       "pillar": "act",
       "area": "Payments",
       "hash": "3be99d6fc5585c78ed82069ba881956f24d9000f1410ffaf832a864f8d2a2382",
-      "instruction": "Send 0.01 ether to the recipient in the environment on the local chain. Record the transaction hash."
+      "instruction": "Send 0.01 ether to the recipient in the environment on the local chain. Record the transaction hash.",
+      "instruction_hash": "3be99d6fc5585c78ed82069ba881956f24d9000f1410ffaf832a864f8d2a2382",
+      "environment_hash": "3be99d6fc5585c78ed82069ba881956f24d9000f1410ffaf832a864f8d2a2382",
+      "checks_hash": "3be99d6fc5585c78ed82069ba881956f24d9000f1410ffaf832a864f8d2a2382"
     }
   ]
 }

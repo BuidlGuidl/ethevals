@@ -2,7 +2,7 @@
 
 The site builds a static board from Harbor task declarations and results rows.
 It groups tasks into three pillars: Concepts, Build, and Act.
-Concepts holds quizzes, Build holds builds, and Act holds tasks where the agent acts on a chain.
+Concepts holds questions, Build holds builds, and Act holds tasks where the agent acts on a chain.
 The browser receives public instructions and check records, without verifier files or targets.
 
 ## Build
@@ -34,7 +34,9 @@ A missing default file produces an empty board.
 A missing explicit file fails the build.
 Malformed rows and duplicate trials fail with their file and line.
 The loader accepts schema version 8 and skips older rows.
-It shows only current task hashes and, for skills-mode rows, the current skills hash.
+The loader stamps rows without hashes from task history. It leaves the results file unchanged.
+It requires current instruction and environment hashes and, for skills-mode rows, the current skills hash.
+A row keeps its last result while its checks hash is behind.
 It also drops trials numbered past the job's `n_attempts`.
 It shows only models listed in the job settings.
 The 160 Inspect rows have been removed.
@@ -51,6 +53,7 @@ Compare shows Overall and pillar scores for up to five configurations.
 Cost adds agent and judge API prices, even when a plan paid.
 
 Each trial drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.
+Failed no-answer trials say "Refused" or "Empty reply".
 Its trajectory link opens the row's `trajectory_url`.
 Harbor Hub links say "Open full trial on Harbor Hub" and open the public trial page.
 If the Hub upload fails or skips, published rows link to the release's trajectory JSON.

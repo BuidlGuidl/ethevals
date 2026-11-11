@@ -73,5 +73,20 @@
     "label": "concession after the answer, explanation after a comma (reviewer case)",
     "reply": "No. Yes, the external call itself succeeds, but decoding the empty return data reverts outside the catch.",
     "passed": true
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** no",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: yes",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: no or yes",
+    "passed": false
   }
 ]

@@ -17,26 +17,28 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(prog="ethevals")
     commands = parser.add_subparsers(dest="command", required=True)
     parsers = {name: commands.add_parser(name) for name in
-               ("run", "plan", "catalog", "export-hf", "publish-logs", "upload-hub")}
+               ("run", "plan", "regrade", "catalog", "export-hf", "publish-logs", "upload-hub", "stamp-rows")}
+    parsers["stamp-rows"].add_argument("--rows", type=Path, default=Path("results/rows.jsonl"))
     for name in ("lint", "free-check"):
         parsers[name] = commands.add_parser(name, help="Check Harbor task folders.")
         parsers[name].add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
         parsers[name].add_argument("--config", type=Path, help="Board-wide Harbor job settings.")
     parsers["free-check"].add_argument("--output", type=Path, default=Path("results/free-check"))
-    for name in ("run", "plan", "catalog"):
+    for name in ("run", "plan", "regrade", "catalog"):
         command = parsers[name]
         command.add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
         command.add_argument("--config", type=Path, help="Board-wide Harbor job settings.")
     parsers["export-hf"].add_argument("--tasks", nargs="+", type=Path, help="Task folders. Defaults to tasks/**/task.toml.")
     parsers["run"].add_argument("--output", type=Path, default=Path("results"))
     parsers["plan"].add_argument("--output", type=Path, default=Path("results"))
+    parsers["regrade"].add_argument("--output", type=Path, required=True)
     parsers["catalog"].add_argument("--output", type=Path, default=Path("results"))
     parsers["export-hf"].add_argument("--output", type=Path, required=True)
     parsers["publish-logs"].add_argument("--output", type=Path, required=True)
     parsers["upload-hub"].add_argument("--output", type=Path, required=True, help="Checked output directory to publish publicly to Harbor Hub.")
     parsers["upload-hub"].add_argument("--config", type=Path, help="Job settings with the Hub org and key variable.")
     parsers["run"].add_argument("--upload-hub", action="store_true", help="Publish checked job folders publicly to Harbor Hub.")
-    for name in ("run", "plan"):
+    for name in ("run", "plan", "regrade"):
         command = parsers[name]
         command.description = "Job n_attempts sets scored repeats; retry.max_retries caps reruns after eligible errors."
         command.add_argument("--agents", nargs="+", help="Agent keys from the job config.")
@@ -62,7 +64,11 @@ def parse_args(argv=None):
 def main(argv=None) -> int:
     parser, args = parse_args(argv)
     try:
-        if args.command in {"plan", "run", "catalog"}:
+        if args.command == "stamp-rows":
+            from .stamp_rows import stamp_file
+            print(f"Stamped {stamp_file(args.rows, Path.cwd())} rows.")
+            return 0
+        if args.command in {"plan", "run", "regrade", "catalog"}:
             from . import jobs
             from .job_config import load_job
             from .trial_rows import previous_rows, write_rows
@@ -80,7 +86,9 @@ def main(argv=None) -> int:
                 paths, config, previous, agents=args.agents, models=args.models, modes=args.modes,
                 n_attempts=args.n_attempts, trial=args.trial, skills_pack=skills_pack,
                 retry_judge_error=args.retry_judge_error,
-            ), args.budget, required=args.command == "run")
+                saved_work=args.output / "saved-work",
+                regrades_only=args.command == "regrade",
+            ), args.budget, required=args.command in {"run", "regrade"})
             if args.command == "plan":
                 print(json.dumps(report, indent=2))
                 return 0 if report["within_budget"] else 1
@@ -93,7 +101,7 @@ def main(argv=None) -> int:
             from .secret_check import secret_values
             from .trial_rows import recover_rows, fold_rows, read_rows
 
-            secrets = secret_values(config, [Path(item["task_path"]) for item in report["missing"]])
+            secrets = secret_values(config, [Path(item["task_path"]) for item in [*report["missing"], *report.get("regrades", [])]])
             hub_key = os.environ.pop(config.hub.key_env, None) if config.hub else None
             try:
                 success = asyncio.run(jobs.run(report, config, args.output, previous, skills_pack=skills_pack,
@@ -101,9 +109,17 @@ def main(argv=None) -> int:
             finally:
                 if hub_key is not None:
                     os.environ[config.hub.key_env] = hub_key
-            if args.upload_hub:
+            if args.command == "run" and args.upload_hub:
                 upload_hub(args.output, config)
                 write_rows(args.output / "rows.jsonl", fold_rows(read_rows(args.output / "rows.jsonl"), recover_rows(args.output)))
+            if args.command == "regrade":
+                old = {jobs.trial_identity(row): row for row in previous}
+                selected = {tuple(identity) for identity in report["selected"]}
+                for row in read_rows(args.output / "rows.jsonl"):
+                    identity = jobs.trial_identity(row)
+                    if identity in selected and old[identity]["status"] != row["status"]:
+                        print(f"{row['task_id']} | {row['model']} | {row['mode']} | trial {row['trial']}: "
+                              f"{old[identity]['status']} to {row['status']}")
             print(f"Results rows: {args.output / 'rows.jsonl'}")
             return 0 if success else 1
         if args.command == "export-hf":

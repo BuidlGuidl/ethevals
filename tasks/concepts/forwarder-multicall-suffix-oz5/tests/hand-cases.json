@@ -78,5 +78,20 @@
     "label": "concession after the answer, explanation after a comma (reviewer case)",
     "reply": "No. Yes, the forged suffix is present in the inner call, but Multicall appends the real caller's context after it, so the owner check fails.",
     "passed": true
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** **No.** OpenZeppelin 5.x `Multicall` detects the forwarded context (`msg.sender != _msgSender()`) and appends the forwarder-verified signer's 20-byte address to each batched call before delegatecalling it. Each subcall still sees the trusted forwarder as `msg.sender`, so `_msgSender()` reads those last 20 bytes, which are the stranger's address rather than the injected owner bytes, and `require(_msgSender() == owner)` reverts.",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: Yes. `Multicall`’s delegatecall preserves the trusted forwarder as `msg.sender`, so `_msgSender()` trusts the inner call’s final 20 bytes—`owner`—as the appended signer and the guard passes.",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: no or yes.",
+    "passed": false
   }
 ]

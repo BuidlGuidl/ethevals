@@ -31,16 +31,16 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
             linked.append(row)
             continue
         hub_url = (row.get("trajectory_url") or "").startswith("https://hub.harborframework.com/jobs/")
-        if (row.get("trajectory_url") or "").startswith("https://") and (not hub_url or row.get("verifier_url")):
+        if row.get("verifier_url") and (row.get("trajectory_url") or "").startswith("https://"):
             linked.append(row)
             continue
         checked_job = Path(row["verifier_files"]).parent.parent
         require_checked(checked_job)
-        key = hashlib.sha256(json.dumps([trial_identity(row), row["retry"], row["completed_at"]]).encode()).hexdigest()[:24]
+        key = hashlib.sha256(json.dumps([trial_identity(row), row.get("checks_generation", 0), row["retry"], row["completed_at"]]).encode()).hexdigest()[:24]
         asset_dir = root / "assets"
         asset_dir.mkdir(parents=True, exist_ok=True)
         links = {}
-        if row.get("trajectory_file"):
+        if row.get("trajectory_file") and (not row.get("regraded_at") or not row.get("trajectory_download_url")):
             source = Path(row["trajectory_file"])
             if not source.resolve().is_relative_to(checked_job.resolve()):
                 raise ValueError("The trajectory must stay inside its checked job")
@@ -50,7 +50,8 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
             destination = asset_dir / name
             if source.resolve() != destination:
                 shutil.copyfile(source, destination)
-            links.update(trajectory_file=str(destination), trajectory_url=row["trajectory_url"] if hub_url else f"{base}/{name}")
+            links.update(trajectory_file=str(destination), trajectory_url=row["trajectory_url"] if hub_url else f"{base}/{name}",
+                         trajectory_download_url=f"{base}/{name}")
             assets.append({"name": name, "source": str(destination), "url": f"{base}/{name}"})
         verifier = Path(row["verifier_files"])
         if not verifier.is_dir() or verifier.is_symlink():
@@ -64,6 +65,18 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
                 if source.is_file():
                     archive.add(source, arcname=source.relative_to(verifier), recursive=False)
         assets.append({"name": name, "source": str(destination), "url": f"{base}/{name}"})
+        trial = verifier.parent
+        if ((trial / "artifacts/workspace").is_dir() and (trial / "artifacts/manifest.json").is_file()
+                and not row.get("artifacts_url")):
+            artifact_name = f"artifacts-{key}.tar.gz"
+            artifact_path = asset_dir / artifact_name
+            with tarfile.open(artifact_path, "w:gz") as archive:
+                for relative in ("result.json", "lock.json", "agent", "artifacts"):
+                    source = trial / relative
+                    if source.exists():
+                        archive.add(source, arcname=relative)
+            assets.append({"name": artifact_name, "source": str(artifact_path), "url": f"{base}/{artifact_name}"})
+            links["artifacts_url"] = f"{base}/{artifact_name}"
         linked.append({**row, **links, "verifier_url": f"{base}/{name}"})
     assets = sorted({asset["name"]: asset for asset in assets}.values(), key=lambda asset: asset["name"])
     if len(assets) > 1000:

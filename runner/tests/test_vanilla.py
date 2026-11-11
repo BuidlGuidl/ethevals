@@ -15,7 +15,7 @@ from support import cli
 
 
 @contextmanager
-def stand_in(reply="metre", status=200, host="127.0.0.1"):
+def stand_in(reply="metre", status=200, host="127.0.0.1", finish_reason="stop"):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -23,7 +23,7 @@ def stand_in(reply="metre", status=200, host="127.0.0.1"):
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             requests.append(request)
             payload = {"id": "local-completion", "object": "chat.completion", "created": 1,
-                       "model": request["model"], "choices": [{"index": 0, "finish_reason": "stop",
+                       "model": request["model"], "choices": [{"index": 0, "finish_reason": finish_reason,
                        "message": {"role": "assistant", "content": reply(request) if callable(reply) else reply}}],
                        "usage": {"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110,
                                  "prompt_tokens_details": {"cached_tokens": 40}}}
@@ -67,6 +67,18 @@ def test_bare_model_gets_one_instruction_without_tools_or_environment(tmp_path, 
     assert (trajectory.agent.model_name, trajectory.agent.tool_definitions) == (model, [])
     assert (agent.version(), trajectory.agent.version) == ("9.8.7", "9.8.7")
     assert (context.n_input_tokens, context.n_cache_tokens, context.n_output_tokens, context.cost_usd) == (100, 40, 10, None)
+    assert json.loads((tmp_path / "provider.json").read_text()) == {"stop_reason": "stop", "refused": False}
+
+
+def test_bare_model_saves_a_provider_refusal(tmp_path):
+    with stand_in(reply=None, finish_reason="content_filter") as (completion, requests):
+        agent = AgentFactory.create_agent_from_config(AgentConfig(
+            name="ethevals.vanilla:VanillaAgent", model_name="openai/first-model",
+            kwargs={"completion": completion}), logs_dir=tmp_path)
+        asyncio.run(agent.run("Name a unit.", object(), AgentContext()))
+    assert len(requests) == 1
+    assert json.loads((tmp_path / "provider.json").read_text()) == {"stop_reason": "content_filter", "refused": True}
+    assert Trajectory.model_validate_json((tmp_path / "trajectory.json").read_text()).steps[-1].message == ""
 
 
 def test_model_error_does_not_retry_or_write_a_reply(tmp_path):

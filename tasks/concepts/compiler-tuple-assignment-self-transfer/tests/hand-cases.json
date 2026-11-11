@@ -63,5 +63,20 @@
     "label": "numeric explanation",
     "reply": "60. The final write determines the stored value.",
     "passed": true
+  },
+  {
+    "label": "labelled right reply",
+    "reply": "**Answer:** 60",
+    "passed": true
+  },
+  {
+    "label": "labelled wrong reply",
+    "reply": "Answer: 140",
+    "passed": false
+  },
+  {
+    "label": "labelled hedge",
+    "reply": "Answer: 60 or 140",
+    "passed": false
   }
 ]
