@@ -40,7 +40,7 @@ def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], l
                 details = read_details(Path(work["verifier"]))
                 saved = [detail["judge"] for detail in details if detail.get("kind") in {"llm", "agent", "jev"}]
                 for judge in task_judges(Path(item["task_path"])).values():
-                    if not any((settings.get("files") or []) == (judge.judge.files or [])
+                    if not any((settings.get("files") or []) == (getattr(judge.judge, "files", []) or [])
                                and settings.get("atif_trajectory") == judge.judge.atif_trajectory
                                for settings in saved):
                         return None, {**item, "rerun_reason": "The judge's input selection changed."}, None

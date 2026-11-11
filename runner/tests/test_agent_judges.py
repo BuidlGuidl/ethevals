@@ -103,6 +103,28 @@ def test_a_model_call_cannot_stand_in_for_the_planned_agent_judge(tmp_path):
         "explained": {"passed": True, "reason": "The unit is explained."}})
 
 
+@pytest.mark.parametrize("legacy_files", [[], ["/logs/verifier/reply.txt"]])
+def test_saved_agent_judge_admission_keeps_the_existing_input_selection_rule(tmp_path, monkeypatch, legacy_files):
+    import ethevals.regrade as regrade
+
+    task, _ = agent_task(tmp_path)
+    verifier = tmp_path / 'verifier'
+    verifier.mkdir()
+    (verifier / 'reward-details.json').write_text(json.dumps({'judge': {
+        'kind': 'agent' if not legacy_files else 'llm',
+        'judge': {'files': legacy_files, 'atif_trajectory': None},
+        'score': 1, 'criteria': [{'name': 'explained', 'value': 1, 'reasoning': 'The unit is explained.'}]}}))
+    monkeypatch.setattr(regrade, 'fetch_work', lambda *args: {'verifier': str(verifier)})
+    item = {'kind': 'judge', 'source_row': {}, 'task_path': str(task)}
+    ready, rerun, deferred = regrade.prepare_regrades([item], tmp_path / 'cache')
+    assert deferred == []
+    if legacy_files:
+        assert ready == []
+        assert rerun == [{**item, 'rerun_reason': "The judge's input selection changed."}]
+    else:
+        assert (ready, rerun) == ([{**item, 'saved_work': {'verifier': str(verifier)}}], [])
+
+
 def test_file_agent_replay_reuses_answers_until_the_copied_input_changes(tmp_path, monkeypatch):
     import rewardkit.reward
     from rewardkit.models import JudgeResult, Score
