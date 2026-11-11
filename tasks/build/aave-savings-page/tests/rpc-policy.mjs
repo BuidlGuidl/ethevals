@@ -12,6 +12,16 @@ const reads = new Set([
   'web3_clientVersion', 'web3_sha3',
 ]);
 
+// Answers one page JSON-RPC read from the fork. A revert keeps its data, so the page can decode the error.
+export async function pageRead(rpc, url, item) {
+  try {
+    requireRead(item.method);
+    return { jsonrpc: '2.0', id: item.id, result: await rpc(url, item.method, item.params || []) };
+  } catch (error) {
+    return { jsonrpc: '2.0', id: item.id, error: { code: error.code || -32603, message: error.message, data: error.data } };
+  }
+}
+
 export function requireRead(method) {
   if (!reads.has(method)) throw Object.assign(new Error('RPC permits reads only'), { code: 4200 });
 }

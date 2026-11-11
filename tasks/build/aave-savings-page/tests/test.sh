@@ -32,9 +32,8 @@ Path("/logs/verifier/checks.json").write_text(
 PY
 cp /opt/check_records.py /tests/check_records.py
 export PLAYWRIGHT_BROWSERS_PATH=/root/savings-browsers
-env -u CLAUDE_CODE_OAUTH_TOKEN node /tests/browser.mjs /workspace /logs/verifier > /logs/verifier/browser.log 2>&1
-python3 /tests/source_snapshot.py /workspace /logs/verifier/project-source.txt
-python3 /opt/agent_judge.py /logs/verifier/cap-page.txt /logs/verifier/cap-page.png /logs/verifier/project-source.txt /logs/agent/trajectory.json
+chmod 700 /tests/bin/*
+python3 /tests/run_reward.py
 STARTED_AT="$started_at" python3 - <<'PY'
 import json
 import os

@@ -1,0 +1,8 @@
+{
+  "browser": {
+    "contextOptions": {
+      "serviceWorkers": "block",
+      "viewport": {"width": 1440, "height": 1100}
+    }
+  }
+}
