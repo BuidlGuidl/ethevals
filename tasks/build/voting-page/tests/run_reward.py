@@ -67,6 +67,20 @@ def validate_reply(text, manifest):
     return decisions
 
 
+def source_decisions(details, manifest):
+    def leaves(detail):
+        if detail.get('kind') == 'group':
+            for component in detail['components']:
+                yield from leaves(component['detail'])
+        else:
+            yield detail
+
+    judges = [leaf for detail in details.values() for leaf in leaves(detail) if leaf.get('kind') == 'agent']
+    if len(judges) != 1:
+        raise ValueError('RewardKit must record one source judge.')
+    return validate_reply(judges[0]['judge_output'], manifest)
+
+
 def main():
     tests = Path(sys.argv[1] if len(sys.argv) > 1 else '/tests')
     output = Path(os.environ.get('REWARD_OUTPUT', '/logs/verifier/reward.json'))
@@ -90,8 +104,7 @@ def main():
             return isinstance(value, list) and any(errors(child) for child in value)
         if errors(details):
             raise RuntimeError('RewardKit reported a verifier error; see reward-details.json.')
-        judge_detail = next(detail for detail in details.values() if detail.get('kind') == 'agent')
-        decisions = validate_reply(judge_detail['judge_output'], manifest)
+        decisions = source_decisions(details, manifest)
         (output.parent / 'source-decisions.json').write_text(json.dumps(decisions, indent=2) + '\n')
         if any(item['decision'] == 'unknown' for item in decisions.values()):
             raise RuntimeError('The judge could not decide every workflow. See source-decisions.json.')

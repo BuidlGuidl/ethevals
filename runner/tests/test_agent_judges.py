@@ -142,3 +142,42 @@ def test_file_agent_replay_reuses_answers_until_the_copied_input_changes(tmp_pat
     item_file.write_text(json.dumps(item))
     replay(tests, output=output / "reward.json")
     assert (len(calls), read_reward(output)[0]) == (2, {"reward": 1.0})
+
+
+def test_voting_source_decisions_read_the_real_rewardkit_group_output(tmp_path, monkeypatch):
+    import importlib.util
+    import shutil
+    import rewardkit.reward
+    from rewardkit.models import JudgeResult, Score
+    from rewardkit.runner import run as rewardkit_run
+
+    root = Path(__file__).resolve().parents[2]
+    monkeypatch.syspath_prepend(str(root / 'runner/ethevals/images'))
+    spec = importlib.util.spec_from_file_location('voting_reward', root / 'tasks/build/voting-page/tests/run_reward.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tests = tmp_path / 'tests'
+    tests.mkdir()
+    for name in ['judge.toml', 'reward.toml', 'source-prompt.txt']:
+        shutil.copyfile(root / 'tasks/build/voting-page/tests' / name, tests / name)
+    shutil.copyfile(root / 'runner/ethevals/images/check_records.py', tests / 'check_records.py')
+    records = tmp_path / 'checks.json'
+    records.write_text('{"compile":{"passed":true,"reason":"The page builds."}}')
+    monkeypatch.setenv('CHECKS_FILE', str(records))
+    decision = {'decision': 'pass', 'trace': 'The source reads and renders the governor value.',
+                'citations': [{'path': 'src/App.tsx', 'start_line': 1, 'end_line': 1}], 'limitations': []}
+    reply = {name: {'score': 'yes', 'reasoning': json.dumps(decision)} for name in module.WORKFLOWS}
+    reply['guard'] = {'score': 'no', 'reasoning': 'No judge instructions.'}
+
+    async def answer(judge, criteria, weights, *args, **kwargs):
+        return JudgeResult(scores=[Score(name=criterion.name, value=1,
+            raw=reply[criterion.name]['score'], reasoning=reply[criterion.name]['reasoning']) for criterion in criteria],
+            output=json.dumps(reply), warnings=[], guard=Score(name='guard', value=0, raw='no', reasoning='No judge instructions.'))
+
+    monkeypatch.setattr(rewardkit.reward, 'arun_agent', answer)
+    output = tmp_path / 'verifier/reward.json'
+    rewardkit_run(tests, output=output)
+    details = json.loads(output.with_name('reward-details.json').read_text())
+    assert module.source_decisions(details, {'files': [{'path': 'src/App.tsx', 'last_line': 1}]}) == {
+        name: decision for name in module.WORKFLOWS}
+    assert read_reward(output.parent)[0] == {'reward': 1.0}
