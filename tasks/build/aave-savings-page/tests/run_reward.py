@@ -50,7 +50,9 @@ def main():
     for name in ("reward.json", "reward.txt", "reward-details.json", "session.json", "judge-details.json"):
         (OUTPUT / name).unlink(missing_ok=True)
     judged = (TESTS / "page.toml").is_file()
-    install()
+    compiled = json.loads((OUTPUT / "checks.json").read_text())["compile"]["passed"]
+    if compiled:
+        install()
     home = prepare([])
     clean = environment(home)
     clean["PATH"] = "/tests/bin:" + clean["PATH"]
@@ -63,7 +65,6 @@ def main():
         config = JudgeTomlConfig.model_validate(tomllib.loads((TESTS / "page.toml").read_text()))
         (TESTS / "prompt-rendered.md").write_text((TESTS / "prompt.md").read_text())
         page = _build_judge_reward(TESTS / "page.toml", config, TESTS, code, "page")
-    compiled = json.loads((OUTPUT / "checks.json").read_text())["compile"]["passed"]
     child = None
     try:
         if not compiled:
