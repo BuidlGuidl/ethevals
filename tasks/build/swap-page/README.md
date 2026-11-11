@@ -47,6 +47,8 @@ The judge also tests a 0.3% price move and a 2% move before the wallet request.
 `move-price <percent>` buys ETH through eight active v3 pools and three hooked v4 pools.
 It changes prices through real swaps without editing pool storage, liquidity, code, or permissions.
 V2 pools stay unchanged.
+The mover uses the funding holders' full token reserves for repeated price tests.
+Wallet requests and market moves share one queue, so a failed fixture cannot roll back a page transaction.
 For Angstrom pools, the mover mines an authorized node's unlock and its trade in one block.
 
 | Check | What it proves | Area | Code |

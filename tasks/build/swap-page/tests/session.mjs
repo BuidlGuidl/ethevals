@@ -7,7 +7,7 @@ import { createMarket } from './market.mjs';
 import { gradeSwap } from './checks.mjs';
 import { injectWallet } from './wallet.mjs';
 import { warmQuotes } from './warm.mjs';
-import { requireRead, walletIdle } from './rpc-policy.mjs';
+import { pageRead, walletIdle, mutationQueue } from './rpc-policy.mjs';
 import { rpc } from './rpc.mjs';
 
 const output = '/logs/verifier';
@@ -23,6 +23,7 @@ let active;
 let handler;
 let init;
 let fatal;
+const mutate = mutationQueue();
 const wallet = await injectWallet({
   exposeBinding: async (_name, fn) => { handler = fn; },
   addInitScript: async (fn, arg) => { init = { fn: fn.toString(), arg }; },
@@ -42,7 +43,6 @@ const wallet = await injectWallet({
 
 async function finishTest() {
   if (!active) return;
-  await walletIdle(wallet);
   const all = await reader.transactions(wallet);
   const transactions = all.slice(active.start);
   const spenders = observedSpenders(wallet, context.treasury);
@@ -106,20 +106,22 @@ const server = http.createServer(async (request, response) => {
     const args = JSON.parse(Buffer.concat(chunks).toString() || '[]');
     let value;
     if (request.url === '/wallet') {
-      value = await handler(null, args);
-      await save('wallet-log.json', { address: harness.account.address, requests: wallet.requests, transactions: wallet.transactions });
+      value = await mutate(async () => {
+        const result = await handler(null, args);
+        await save('wallet-log.json', { address: harness.account.address, requests: wallet.requests, transactions: wallet.transactions });
+        return result;
+      });
     } else if (request.url === '/rpc') {
-      const dispatch = async item => {
-        try { requireRead(item.method); return { jsonrpc: '2.0', id: item.id, result: await rpc(harness.mainRpc, item.method, item.params || []) }; }
-        catch (error) { return { jsonrpc: '2.0', id: item.id, error: { code: error.code || -32603, message: error.message } }; }
-      };
+      const dispatch = item => pageRead(rpc, harness.mainRpc, item);
       value = Array.isArray(args) ? await Promise.all(args.map(dispatch)) : await dispatch(args);
     } else if (request.url === '/move-price') {
       const percent = Number(args[0]);
       if (args.length !== 1 || !(percent > 0 && percent < 25)) throw new Error('Usage: move-price <percent>, above 0 and below 25.');
-      value = await market.moveMarket(percent, 'eth-buyers');
-    } else if (request.url === '/wallet-test') value = await beginTest(args);
-    else if (request.url === '/finish') value = await finish();
+      value = await mutate(() => market.moveMarket(percent, 'eth-buyers'));
+    } else if (request.url === '/wallet-test' || request.url === '/finish') {
+      if (!await walletIdle(wallet)) throw Object.assign(new Error('The wallet did not finish its pending requests.'), { infrastructure: true });
+      value = await mutate(() => request.url === '/wallet-test' ? beginTest(args) : finish());
+    }
     else throw new Error('Unknown verifier command.');
     response.writeHead(200, { ...cors, 'content-type': 'application/json' });
     response.end(stringify(request.url === '/wallet' ? { value } : value));

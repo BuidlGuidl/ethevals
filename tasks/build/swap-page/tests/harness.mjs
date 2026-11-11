@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { chromium, privateKeyToAccount, generatePrivateKey } from './deps.mjs';
 import { rpc, fundWallet } from './rpc.mjs';
 import { injectWallet } from './wallet.mjs';
-import { requireRead, walletIdle } from './rpc-policy.mjs';
+import { pageRead, walletIdle } from './rpc-policy.mjs';
 import { serveBuild } from './static-server.mjs';
 
 export async function until(fn, timeout = 20_000) {
@@ -100,13 +100,7 @@ export async function createHarness({ workspace, output, sourceContext = '/chain
         if (!payload || !(Array.isArray(payload) ? payload.every(item => typeof item.method === 'string') : typeof payload.method === 'string')) {
           return request.url().startsWith(origin + '/') ? route.continue() : route.abort();
         }
-        const dispatch = async item => {
-          try {
-            // Page reads see the fork. Writes and chain controls belong to the wallet only.
-            requireRead(item.method);
-            return { jsonrpc: '2.0', id: item.id, result: await rpc(mainRpc, item.method, item.params || []) };
-          } catch (error) { return { jsonrpc: '2.0', id: item.id, error: { code: error.code || -32603, message: error.message, data: error.data } }; }
-        };
+        const dispatch = item => pageRead(rpc, mainRpc, item);
         const result = Array.isArray(payload) ? await Promise.all(payload.map(dispatch)) : await dispatch(payload);
         await route.fulfill({ status: 200, contentType: 'application/json', headers, body: stringify(result) });
       });

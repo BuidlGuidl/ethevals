@@ -16,8 +16,26 @@ export function requireRead(method) {
   if (!reads.has(method)) throw Object.assign(new Error('RPC permits reads only'), { code: 4200 });
 }
 
+export async function pageRead(rpc, url, item) {
+  try {
+    requireRead(item.method);
+    return { jsonrpc: '2.0', id: item.id, result: await rpc(url, item.method, item.params || []) };
+  } catch (error) {
+    return { jsonrpc: '2.0', id: item.id, error: { code: error.code || -32603, message: error.message, data: error.data } };
+  }
+}
+
 export const walletWrites = requests => requests.filter(({ method }) =>
   /^(?:eth_sendTransaction|wallet_sendTransaction|wallet_sendCalls|eth_sign.*|personal_sign)$/.test(method));
+
+export function mutationQueue() {
+  let tail = Promise.resolve();
+  return operation => {
+    const result = tail.then(operation);
+    tail = result.catch(() => {});
+    return result;
+  };
+}
 
 export async function walletIdle(wallet, { idleMs = 3000, timeoutMs = 20_000 } = {}) {
   const started = Date.now();
