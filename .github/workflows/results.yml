@@ -182,7 +182,7 @@ jobs:
     needs: [plan, matrix, regrade]
     if: always() && github.ref == 'refs/heads/main' && needs.plan.result == 'success' && (needs.plan.outputs.scheduled_trials != '0' || needs.plan.outputs.scheduled_regrades != '0')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 180
     permissions:
       contents: write # Publish trial assets and append the results branch.
       pull-requests: write # Open the results PR.

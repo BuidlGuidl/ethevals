@@ -260,7 +260,7 @@ def publish_artifacts(args):
         commit_results(linked, args.repo, args.publish)
         if args.publish:
             report = publish_logs(combined, args.repo, args.run_id, args.commit,
-                                  publish=True, rows=rows, resume=True)
+                                  publish=True, rows=rows)
         (combined / "release.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))
     except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:

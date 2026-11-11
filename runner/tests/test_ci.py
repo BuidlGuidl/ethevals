@@ -9,7 +9,7 @@ import pytest
 
 from ethevals.trial_rows import fold_rows, read_rows, write_rows
 from ethevals.images.tag import BUILD_INPUTS, image_tag
-from test_publish import recorded_row
+from test_publish import ReleaseGitHub, recorded_row
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -316,28 +316,27 @@ def test_publish_records_downloaded_trials_before_upload_and_retries_release(tmp
     ci.command("git", "update-ref", "refs/remotes/origin/main", "HEAD")
     monkeypatch.setattr(ci, "command", remote)
     real_run = subprocess.run
-    uploads = []
+    github = ReleaseGitHub(fail_after=1, failures=1, error="HTTP 502: Bad Gateway")
 
     def upload(args, **kwargs):
         if args[0] != "gh":
             return real_run(args, **kwargs)
         assert [(r["trial"], r["retry"], r["status"]) for r in saved[-1]] == [(1, 1, "passed")]
         assert saved[-1][0]["trajectory_url"].startswith("https://github.com/owner/repo/releases/download/results-12/")
-        if args[2] == "view":
-            return subprocess.CompletedProcess(args, 0)
-        uploads.append(args)
-        if len(uploads) == 1:
-            raise subprocess.CalledProcessError(1, args)
-        return subprocess.CompletedProcess(args, 0)
+        return github(args, **kwargs)
 
     monkeypatch.setattr("ethevals.publish.subprocess.run", upload)
     import argparse
     args = argparse.Namespace(output=tmp_path, repo="owner/repo", run_id="12", commit="b" * 40, publish=True)
     assert ci.publish_artifacts(args) == 1
     assert len(saved) == 1
+    assert len(github.files) == 1
+    assert not (tmp_path / "combined/published").exists()
     assert ci.result_record()[0]["retry"] == 1
     assert ci.publish_artifacts(args) == 0
     assert len(saved) == 1
-    assert uploads[0] == uploads[1]
-    assert uploads[1][:7] == ["gh", "release", "upload", "results-12", "--repo", "owner/repo", "--clobber"]
-    assert json.loads((tmp_path / "combined/release.json").read_text())["dry_run"] is False
+    report = json.loads((tmp_path / "combined/release.json").read_text())
+    assert report["dry_run"] is False
+    assert len(github.sent) == len(set(github.sent)) == 2
+    assert github.files == {asset["name"]: Path(asset["source"]).stat().st_size for asset in report["assets"]}
+    assert read_rows(Path(report["rows_file"])) == report["rows"]
