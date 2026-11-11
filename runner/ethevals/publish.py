@@ -24,7 +24,9 @@ def _release_files(repo: str, tag: str) -> dict[str, int]:
     release_id = json.loads(release.stdout)["databaseId"]
     assets = subprocess.run(["gh", "api", f"repos/{repo}/releases/{release_id}/assets?per_page=100",
                              "--paginate", "--slurp"], check=True, capture_output=True, text=True)
-    return {asset["name"]: asset["size"] for page in json.loads(assets.stdout) for asset in page}
+    # A cut-off upload leaves its file listed in another state, and that file has to be sent again.
+    return {asset["name"]: asset["size"] for page in json.loads(assets.stdout) for asset in page
+            if asset["state"] == "uploaded"}
 
 
 def publish_logs(output: Path, repo: str, run_id: str, commit: str,
@@ -132,14 +134,15 @@ def publish_logs(output: Path, repo: str, run_id: str, commit: str,
                     message = (error.stderr or "").lower()
                     if not any(marker in message for marker in ("rate limit", "http 429", "too many requests")):
                         raise
+                    last = attempt == UPLOAD_TRIES - 1
+                    if not last:
+                        # GitHub asks for a pause after this reply, so wait before the next request, the read included.
+                        time.sleep(RATE_LIMIT_WAIT * 2**attempt)
                     existing = _release_files(repo, tag)
-                    if all(existing.get(asset["name"]) == sizes[asset["name"]] for asset in batch):
-                        break
-                    if attempt == UPLOAD_TRIES - 1:
+                    if last and any(existing.get(asset["name"]) != sizes[asset["name"]] for asset in batch):
                         uploaded = sum(existing.get(name) == size for name, size in sizes.items())
                         raise RuntimeError(f"Release {tag}: {uploaded} files up, {len(assets) - uploaded} left. "
                                            "Rerun the failed job to continue the upload.") from error
-                    time.sleep(RATE_LIMIT_WAIT * 2**attempt)
                 else:
                     existing.update((asset["name"], sizes[asset["name"]]) for asset in missing)
                     break

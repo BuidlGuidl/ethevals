@@ -18,6 +18,7 @@ class ReleaseGitHub:
     def __init__(self, *, fail_after=None, failures=0, error=None):
         self.exists = False
         self.files = {}
+        self.unfinished = set()
         self.sent = []
         self.batches = []
         self.waits = []
@@ -36,7 +37,8 @@ class ReleaseGitHub:
             return result
         if operation == "assets":
             assert "--paginate" in command and "--slurp" in command
-            files = [{"name": name, "size": size} for name, size in self.files.items()]
+            files = [{"name": name, "size": size, "state": "open" if name in self.unfinished else "uploaded"}
+                     for name, size in self.files.items()]
             pages = [files[i:i + 100] for i in range(0, len(files), 100)]
             return subprocess.CompletedProcess(command, 0, stdout=json.dumps(pages))
         assert operation in {"create", "upload"}
@@ -56,6 +58,7 @@ class ReleaseGitHub:
                 if path.name in self.files:
                     assert "--clobber" in command
                 self.files[path.name] = path.stat().st_size
+                self.unfinished.discard(path.name)
                 self.sent.append(path.name)
         except subprocess.CalledProcessError:
             if operation == "create":
@@ -130,6 +133,18 @@ def test_continue_replaces_cut_off_file(tmp_path, release_github):
     release_github.files[broken] = 1
     report = publish_logs(tmp_path / "release", "owner/repo", "12", "a" * 40, publish=True, rows=rows)
     assert release_github.sent == [broken]
+    assert_uploaded(report, release_github)
+
+
+def test_continue_sends_again_a_file_github_never_finished(tmp_path, release_github):
+    rows = many_rows(tmp_path)
+    staged = publish_logs(tmp_path / "release", "owner/repo", "12", "a" * 40, rows=rows)
+    release_github.exists = True
+    release_github.files = {asset["name"]: Path(asset["source"]).stat().st_size for asset in staged["assets"]}
+    unfinished = staged["assets"][0]["name"]
+    release_github.unfinished = {unfinished}
+    report = publish_logs(tmp_path / "release", "owner/repo", "12", "a" * 40, publish=True, rows=rows)
+    assert release_github.sent == [unfinished]
     assert_uploaded(report, release_github)
 
 
