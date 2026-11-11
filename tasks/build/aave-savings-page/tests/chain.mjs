@@ -50,7 +50,8 @@ export function isWithdrawal(call) {
   catch { return false; }
 }
 
-// As Aave's ACL admin on the verifier's fork, set USDC's cap to its supply plus 5,000 USDC.
+// As Aave's ACL admin on the verifier's fork, set USDC's cap to what Aave counts as supplied, plus 5,000 USDC.
+// That count includes the treasury's accrued tokens, which grow with every day the judge moves the clock.
 export async function lowerSupplyCap(url) {
   const provider = '0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e';
   const providerAbi = parseAbi([
@@ -65,7 +66,7 @@ export async function lowerSupplyCap(url) {
   const adminRole = await read(url, manager, parseAbi(['function isPoolAdmin(address) view returns (bool)']), 'isPoolAdmin', [admin]);
   if (BigInt(adminRole) !== 1n) throw Object.assign(new Error('ACL admin does not hold the pool admin role'), { infrastructure: true });
   const previous = await reserve(url);
-  const supplyCap = (previous.total + 999_999n) / 1_000_000n + 5000n;
+  const supplyCap = (previous.supplied + 999_999n) / 1_000_000n + 5000n;
   await rpc(url, 'anvil_setNextBlockBaseFeePerGas', ['0x0']);
   await rpc(url, 'anvil_impersonateAccount', [admin]);
   try {
@@ -76,7 +77,6 @@ export async function lowerSupplyCap(url) {
     await rpc(url, 'anvil_stopImpersonatingAccount', [admin]);
   }
   const market = await reserve(url);
-  // Accrued treasury tokens leave less than 5,000 USDC of room.
   if (market.cap !== supplyCap * 1_000_000n || market.room < 100_000_000n || market.room > 5_000_000_000n) {
     throw Object.assign(new Error('Verifier supply cap does not match its fixture'), { infrastructure: true });
   }

@@ -83,7 +83,7 @@ The market the agent builds against has plenty of room.
 The verifier fills the cap only on its own copy of the chain, so a page passes only if it handles a full cap it never saw.
 
 ```text
-room left        3,647.67 USDC
+room left        about 5,000 USDC
 the judge enters 6,000.10 USDC
 careful page     asks for nothing, says the cap is full
 quick page       sends an approve, then the supply reverts
@@ -108,7 +108,7 @@ It gets the built page through Playwright, chain reads through `cast`, and four 
 ```text
 move-time <days>              moves the chain's clock forward
 old-usdt-approval             leaves a 1 USDT approval from the wallet to the Pool
-full-cap                      lowers USDC's supply cap to its supply plus 5,000 USDC
+full-cap                      lowers USDC's supply cap to leave about 5,000 USDC of room
 wallet-network <chain id>     puts the wallet on another network
 ```
 
@@ -241,7 +241,7 @@ Time, snapshots, and the cap:
 - The fork's block interval is zero. Time moves only on `move-time` and a day before each withdrawal is mined.
 - Before the judge starts, `warm.mjs` reads the reserve and token state the pages read. It also simulates the deposits and withdrawals with `eth_simulateV1`, which changes nothing.
 - On `full-cap`, the verifier impersonates the provider's ACL admin, after checking its pool admin role, and lowers USDC's cap through the pool configurator.
-- The new cap is the aUSDC total supply rounded up to whole USDC, plus 5,000 USDC. Accrued treasury tokens leave less than that as room.
+- The new cap is what Aave counts as supplied, including the treasury's accrued tokens, rounded up to whole USDC, plus 5,000 USDC.
 - The admin holds no ETH, so that block's base fee and gas price are zero.
 - Pool revision 11 reverts with `SupplyCapExceeded()`, selector `0xf58f733a`, where older pools used the string error `51`.
 
