@@ -40,7 +40,7 @@ def evidence_trial(tmp_path, monkeypatch, name):
 
 
 @pytest.mark.parametrize("name", list(OLD_HASHES))
-def test_named_saved_checks_plan_passes_and_fails_before_the_tasks_own_kind(tmp_path, monkeypatch, name):
+def test_regrade_from_plans_passes_and_fails_before_the_tasks_own_kind(tmp_path, monkeypatch, name):
     task, config, row = evidence_trial(tmp_path, monkeypatch, name)
     other = {**row, "trial": 3, "checks_hash": "sha256:" + "0" * 64,
              "verifier_files": None, "verifier_url": None}
@@ -54,7 +54,7 @@ def test_named_saved_checks_plan_passes_and_fails_before_the_tasks_own_kind(tmp_
 
 
 @pytest.mark.parametrize("name", list(OLD_HASHES))
-def test_named_saved_checks_rerun_when_check_output_is_gone(tmp_path, monkeypatch, name):
+def test_regrade_from_reruns_when_check_output_is_gone(tmp_path, monkeypatch, name):
     task, config, row = evidence_trial(tmp_path, monkeypatch, name)
     row.update(verifier_files=None, verifier_url=None)
     report = plan([task], config, [row], n_attempts=1, saved_work=tmp_path / "cache")

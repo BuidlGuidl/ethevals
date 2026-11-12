@@ -98,7 +98,7 @@ A criteria change, judge program, model, or effort change, or changed file input
 A judge that declares MCP servers needs a live session.
 A judge-only change uses a workspace regrade when available, and otherwise reruns those trials.
 Judge-only regrades reuse saved inputs and keep the other checks.
-`tests/saved-checks.json` can name old checks hashes whose saved code records still stand.
+`tests/regrade-from.json` can name old checks hashes whose saved code records still stand.
 It is a JSON array of `sha256:` hashes, read without running task code.
 For those hashes, a regrade runs the task's `test.sh` with saved check output and trajectory.
 It starts no chain, workspace, or agent container and asks every current judge again.

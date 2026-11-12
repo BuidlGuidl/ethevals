@@ -35,13 +35,13 @@ def regrade_options(path: Path) -> dict:
             for entry in normalize_artifact_entries(task.config.artifacts)):
         kind = "workspace"
     judges = task_judges(path)
-    statement = path / "tests/saved-checks.json"
-    saved_checks = json.loads(statement.read_text()) if statement.is_file() else []
-    if not isinstance(saved_checks, list) or any(not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
-                                                 for value in saved_checks):
+    statement = path / "tests/regrade-from.json"
+    regrade_from = json.loads(statement.read_text()) if statement.is_file() else []
+    if not isinstance(regrade_from, list) or any(not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
+                                                 for value in regrade_from):
         raise ValueError(f"{statement}: expected an array of SHA256 checks hashes")
     return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in judges],
-            "saved_checks": saved_checks,
+            "regrade_from": regrade_from,
             "live_judge": any(judge.judge.mcp_servers for judge in judges.values())}
 
 

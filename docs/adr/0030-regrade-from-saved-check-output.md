@@ -18,7 +18,7 @@ Whole-file checks hashes cannot express that code records still stand.
 
 ## The decision
 
-- A task can name old checks hashes in `tests/saved-checks.json`, a JSON array of SHA256 hashes.
+- A task can name old checks hashes in `tests/regrade-from.json`, a JSON array of SHA256 hashes.
   For those hashes, its tests claim that the saved code records still stand.
   The planner reads the file without running task code.
   It has no task list or new task setting.
