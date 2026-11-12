@@ -14,6 +14,10 @@ def test_sidecar_controls_and_context_access_before_verification(tmp_path):
     source = ROOT / "runner/tests/fixtures/harbor/act/send-six-decimal-token"
     task = tmp_path / source.parent.name / "transfer"
     shutil.copytree(source, task)
+    (task / "tests/transfer.toml").unlink()
+    declaration = task / "task.toml"
+    declaration.write_text(declaration.read_text().replace(
+        '[verifier.env]\nANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"\n', ""))
     probe = '''import json
 from pathlib import Path
 import socket
