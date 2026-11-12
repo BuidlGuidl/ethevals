@@ -38,7 +38,8 @@ if ${withCriteria ? "True" : "False"}:
         '[scoring]\\naggregation = "all-pass"\\n[[criterion]]\\nname = "named_unit"\\n'
         'description = "Did the reply name a unit?"\\ntype = "binary"\\n')
     declaration = task / "task.toml"
-    declaration.write_text(declaration.read_text() + '\\n[verifier.env]\\nCLAUDE_CODE_OAUTH_TOKEN = "' + '$' + '{CLAUDE_CODE_OAUTH_TOKEN}"\\n')
+    declaration.write_text(declaration.read_text() + '\\n[verifier.env]\\nCLAUDE_CODE_OAUTH_TOKEN = "' + '$' + '{CLAUDE_CODE_OAUTH_TOKEN:-}"\\n'
+        'ANTHROPIC_API_KEY = "' + '$' + '{ANTHROPIC_API_KEY:-}"\\n')
     metadata.update(judge={"program": "openai/gpt-5", "model": "openai/gpt-5", "effort": "high"}, judge_paid_by="free")
     criteria = output / "criteria"
     shutil.copytree(task / "tests", criteria)
