@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/nft-royalty-after-burn"
+description = "Check whether a model knows that OpenZeppelin 5 keeps a per-token royalty across a burn and a re-mint."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "erc2981", "openzeppelin", "nft", "royalty"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024
