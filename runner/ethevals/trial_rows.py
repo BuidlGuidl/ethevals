@@ -108,7 +108,8 @@ def recover_regrades(output: Path) -> list[dict]:
         if receipt.is_file() and json.loads(receipt.read_text()).get("withheld"):
             continue
         for index, item in enumerate(json.loads(metadata.read_text())):
-            folder = metadata.parent / str(index)
+            folder = (next(metadata.parent.glob("*/result.json"), metadata.parent / "0/result.json").parent
+                      if item["kind"] == "workspace" else metadata.parent / str(index))
             error_file = folder / "regrade-error.json"
             finished = folder / "regrade-finished.json"
             result = folder / "result.json"

@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+python3 /tests/judge_credentials.py
 started_at=$(date +%s)
 mkdir -p /logs/verifier
 chmod 700 /tests /logs/verifier
@@ -7,10 +8,10 @@ chmod 700 /tests /logs/verifier
 python3 /tests/stop-agent.py
 cd /workspace
 build_status=0
-env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u OPENROUTER_API_KEY -u ANTHROPIC_AUTH_TOKEN -u EXA_API_KEY \
+env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u OPENROUTER_API_KEY -u ANTHROPIC_AUTH_TOKEN -u EXA_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN \
   runuser -u agent -- pnpm build > /logs/verifier/build.log 2>&1 || build_status=$?
 typecheck_status=0
-env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u OPENROUTER_API_KEY -u ANTHROPIC_AUTH_TOKEN -u EXA_API_KEY \
+env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u OPENROUTER_API_KEY -u ANTHROPIC_AUTH_TOKEN -u EXA_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN \
   runuser -u agent -- pnpm exec tsc --noEmit > /logs/verifier/typecheck.log 2>&1 || typecheck_status=$?
 python3 /tests/stop-agent.py
 BUILD_STATUS="$build_status" TYPECHECK_STATUS="$typecheck_status" python3 - <<'PY'
@@ -32,9 +33,10 @@ Path("/logs/verifier/checks.json").write_text(
 PY
 cp /opt/check_records.py /tests/check_records.py
 export PLAYWRIGHT_BROWSERS_PATH=/root/savings-browsers
-node /tests/browser.mjs /workspace /logs/verifier > /logs/verifier/browser.log 2>&1
-python3 /tests/source_snapshot.py /workspace /logs/verifier/project-source.txt
-rewardkit /tests
+export LD_LIBRARY_PATH=/root/savings-libs/usr/lib/x86_64-linux-gnu:/root/savings-libs/usr/lib/aarch64-linux-gnu:/root/savings-libs/lib/x86_64-linux-gnu:/root/savings-libs/lib/aarch64-linux-gnu
+export FONTCONFIG_FILE=/root/savings-fonts.conf
+chmod 700 /tests/bin/*
+python3 /tests/run_reward.py
 STARTED_AT="$started_at" python3 - <<'PY'
 import json
 import os

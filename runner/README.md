@@ -16,8 +16,18 @@ Copy a task with similar needs, then run the [free check](../docs/harbor.md#free
 
 Each task's `tests/test.sh` runs RewardKit, which writes the reward and named check details.
 The [Harbor guide](../docs/harbor.md#free-checks) covers Concepts task targets, Forge, criteria, and sidecars.
-A new test tool writes the same check records and ships in the task's environment image.
+A new test tool writes the same check records.
+Judge tools install from `tests/` after the agent finishes, without changing the task's environment image.
 List shared image build inputs in [images/tag.py](ethevals/images/tag.py).
+
+Judges use RewardKit's `claude-code` agent on Opus 5.5 at high effort, with `guard = "flag"`.
+`CLAUDE_CODE_OAUTH_TOKEN` pays through the Claude plan. Results retain the API-price cost.
+File-reading judges receive saved inputs inside their working directory.
+Browser judges get source, the built page, a wallet, chain reads, and task fixture commands.
+The judge starts one folder above submitted code with fresh user settings.
+Build commands and submitted child processes receive no judge token.
+A judge crash or timeout removes the reward and records a trial error.
+Shared verifiers retain the container isolation gap in [ADR 0011](../docs/adr/0011-verifiers-use-rewardkit-and-criteria-run-in-the-task.md).
 
 ## Plan and run
 
@@ -34,7 +44,7 @@ uv run ethevals run --modes internet --n-attempts 1 --budget 100 --output result
 
 Every execution requires an explicit budget.
 The reserve covers remaining API-key executions and paid criteria.
-Plan-funded agents reserve no API spend, but their criteria still need a judge key and budget.
+Plan-paid agents and judges reserve no API spend. Both still require an explicit execution budget.
 Read [Board jobs](../docs/harbor.md#board-jobs) for payment sources, recovery, and trajectory links.
 
 Use `uv run harbor view results/local/jobs` to browse saved jobs locally.
@@ -54,7 +64,7 @@ Rows keep schema version 8. The hash fields mark stamped rows.
 
 `instruction.md` supplies the instruction hash.
 Environment files and agent settings supply the environment hash.
-Tests, criteria, verifier settings, artifact declarations, and the job's judge model and effort supply the checks hash.
+Tests, criteria, verifier settings, artifact declarations, and the job's judge program, model, and effort supply the checks hash.
 The task README, solutions, descriptions, authors, keywords, and task versions change no trial identity or checks hash.
 Known display fields and mode declarations also stay outside the hashes.
 Unknown files and settings count as environment inputs.
@@ -84,10 +94,25 @@ The planner lists regrades under `regrades` and agent trials under `missing`.
 Concepts regrades run the task's real tests through RewardKit in its verifier image.
 Rows for one task share a container.
 Unchanged judge criteria and inputs keep their saved results.
-A criteria change, judge model or effort change, or changed judge input asks the judge again.
+A criteria change, judge program, model, or effort change, or changed file input asks the judge again.
+A judge that declares MCP servers needs a live session.
+A judge-only change uses a workspace regrade when available, and otherwise reruns those trials.
 Judge-only regrades reuse saved inputs and keep the other checks.
+`tests/regrade-from.json` can name old checks hashes whose saved code records still stand.
+It is a JSON array of `sha256:` hashes, read without running task code.
+For those hashes, a regrade runs the task's `test.sh` with saved check output and trajectory.
+It starts no chain, workspace, or agent container and asks every current judge again.
+The tests use `ETHEVALS_REGRADE_ITEM` to skip live steps and keep saved evidence.
+This takes precedence over the task's normal regrade kind.
+Instruction, environment, and artifact changes still rerun trials.
+See [ADR 0030](../docs/adr/0030-regrade-from-saved-check-output.md) for the claim's review and removal rules.
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
-Checks that need a live browser or chain plan reruns.
+Other Build tasks that save all of `/workspace` run a fresh Harbor trial with a saved-work agent.
+See [ADR 0029](../docs/adr/0029-regrade-pages-from-saved-work.md).
+The agent restores files and installs dependencies from the saved lockfile without calling a model.
+It keeps the fresh chain context link and RPC URL, and restores saved public setup values where available.
+Older check output can supply matching public context fields through `fixture.json`.
+Partly saved Build tasks and Act tasks still plan reruns.
 Saved work with no address, an HTTP 404 or 410, or expired CI artifacts plans a rerun.
 The plan lists each rerun and its reason.
 Other fetch errors defer the regrade until the next CI run and reserve nothing.
@@ -103,7 +128,7 @@ The command writes new rows and prints status changes after successful regrades.
 It skips missing agent trials.
 A regrade preserves the original trajectory link and model cost, and replaces the checks and verifier output.
 A regrade without a judge reserves zero.
-A judge regrade reserves judge cost under the same all-or-nothing budget check as trials.
+A plan-paid judge regrade reserves no API spend. API-paid judges keep the same budget rule as trials.
 Paid judge calls still require explicit spending intent and a reviewed budget.
 
 ## CI and publication
@@ -120,7 +145,7 @@ The workflow needs these GitHub secrets:
 
 - `CLAUDE_CODE_OAUTH_TOKEN`: the Claude plan token. The job config forces plan payment and requires this token.
 - `CODEX_AUTH_JSON`: the full ChatGPT `auth.json`. Rotate it weekly.
-- `ANTHROPIC_API_KEY`: the judge and Anthropic vanilla trials.
+- `ANTHROPIC_API_KEY`: Anthropic vanilla trials.
 - `OPENAI_API_KEY` and `OPENROUTER_API_KEY`: vanilla trials for those providers; OpenCode also uses OpenRouter.
   OpenCode runs as [`ethevals.opencode`](ethevals/opencode.py), whose `shell.env` plugin blanks its keys in the agent's shell commands.
 - `EXA_API_KEY`, `MAINNET_RPC_URL`, and `BASE_RPC_URL`: optional search and task-declared fork credentials.
@@ -137,7 +162,10 @@ Old runs keep their original workflow definition when rerun, because [GitHub ret
 `scripts/ci.py plan-trials` folds current and pending results, saves the Harbor job config, and emits the admitted matrix.
 CI schedules at most 256 jobs, with at most 100 per plan group to fit GitHub's pending-job limit.
 Regrade jobs group rows by task and receive no agent credentials.
-Only a regrade that needs a judge receives the judge key.
+Regrades in fresh trial environments run one saved trial per job, with the trial jobs' chain secrets.
+Each gets 60 minutes to execute and 90 minutes for the job, including image builds and uploads.
+Eighteen saved trials therefore use eighteen jobs, with at most ten running at once.
+Only a regrade that needs a judge receives the judge credential.
 The plan also limits each release to 1,000 assets and defers work beyond that limit.
 The plan lists regrade batches deferred by job or asset limits.
 Later runs pick up deferred trials and regrades.
@@ -153,7 +181,7 @@ The file is readable by others, because Harbor copies it into the task as root a
 Harbor receives `CODEX_AUTH_JSON_PATH` and uploads the file itself.
 The job config forces Codex plan payment and requires plan tokens in its credential file before Harbor starts.
 Local and CI trials use the same credential check.
-The judge key enters only the verifier's commands; agent commands use their own configured credentials.
+The judge plan token enters only the verifier's commands; agent commands use their own configured credentials.
 The run step allows 190 minutes; the job allows 240 minutes for setup, builds, and uploads too.
 Each trial or regrade job uploads only `results/ci-run/public/` after success or failure.
 CI artifacts remain available for 14 days.
@@ -166,7 +194,7 @@ Missing keys and failed uploads keep the trial result and schedule no extra paid
 The trajectory JSON remains a release asset and supplies the board link when the Hub upload fails or skips.
 The trial step checks every file in each Harbor job folder while its credentials remain available.
 Local runs use the same check before writing results rows.
-The check matches exact credential values from job settings, including the judge key.
+The check matches exact credential values from job settings, including the judge plan token.
 It also checks each task's declared host variables and the token values inside Codex `auth.json`.
 The check ignores values shorter than eight bytes. Force flags such as `"1"` never match trial files.
 A literal agent setting, such as a base URL, counts only when its name looks like a credential by Harbor's sensitive-key rule.
@@ -244,11 +272,11 @@ See [Dataset publication](../docs/harbor.md#dataset-publication) for standalone 
 ## Maintainer checks
 
 Use Python 3.13, uv, Node.js 22 or later, pnpm 9.14.2, and Docker with Compose.
-Keep all five provider key variables unset for free work.
+Keep provider keys and the Claude plan token unset for free work.
 From the repository root, run these commands in one shell:
 
 ```sh
-unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
+unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY CLAUDE_CODE_OAUTH_TOKEN
 uv sync --frozen
 (cd site && pnpm install --frozen-lockfile)
 uv run ethevals lint

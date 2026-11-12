@@ -2,6 +2,8 @@
 status: accepted
 ---
 
+[ADR 0026](0026-judges-use-agents-and-the-claude-plan.md) replaces the judge program and payment rules below.
+
 # Check voting pages through captures, the wallet and the chain
 
 Six rounds of saved pages exposed valid wording that the verifier's text readers rejected.

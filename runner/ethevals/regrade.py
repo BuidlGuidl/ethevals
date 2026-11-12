@@ -3,12 +3,14 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tarfile
 from urllib.error import HTTPError
 
 from harbor.models.task.task import Task
+from harbor.models.task.artifacts import normalize_artifact_entries
 from harbor.models.task.config import VerifierEnvironmentMode
 from harbor.models.task.verifier_mode import resolve_task_verifier_mode, resolve_verifier_environment_definition
 
@@ -27,7 +29,20 @@ def regrade_options(path: Path) -> dict:
             and not list((path / "environment").glob("*compose.y*ml"))
             and (path / "environment/foundry.toml").is_file()):
         kind = "contract"
-    return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in task_judges(path)]}
+    if kind is None and path.parent.name == "build" and any(
+            entry.source.rstrip("/") == "/workspace" and entry.service in {None, "main"}
+            and set(entry.exclude) <= {"node_modules", "dist", ".git", "chain_context.json"}
+            for entry in normalize_artifact_entries(task.config.artifacts)):
+        kind = "workspace"
+    judges = task_judges(path)
+    statement = path / "tests/regrade-from.json"
+    regrade_from = json.loads(statement.read_text()) if statement.is_file() else []
+    if not isinstance(regrade_from, list) or any(not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
+                                                 for value in regrade_from):
+        raise ValueError(f"{statement}: expected an array of SHA256 checks hashes")
+    return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in judges],
+            "regrade_from": regrade_from,
+            "live_judge": any(judge.judge.mcp_servers for judge in judges.values())}
 
 
 def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], list[dict], list[dict]]:
@@ -38,7 +53,7 @@ def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], l
                 details = read_details(Path(work["verifier"]))
                 saved = [detail["judge"] for detail in details if detail.get("kind") in {"llm", "agent", "jev"}]
                 for judge in task_judges(Path(item["task_path"])).values():
-                    if not any((settings.get("files") or []) == (judge.judge.files or [])
+                    if not any((settings.get("files") or []) == (getattr(judge.judge, "files", []) or [])
                                and settings.get("atif_trajectory") == judge.judge.atif_trajectory
                                for settings in saved):
                         return None, {**item, "rerun_reason": "The judge's input selection changed."}, None
@@ -88,8 +103,9 @@ def run_regrades(items: list[dict], config, output: Path, previous: list[dict], 
                            "--entrypoint", "python3", "-v", f"{worker.resolve()}:/regrade.py:ro",
                            "-v", f"{(path / 'tests').resolve()}:/original-tests:ro", "-v", f"{job.resolve()}:/batch"]
                 if any(item["judge_required"] for item in batch):
-                    command += ["-e", config.judge.key_env, "-e", f"REWARDKIT_JUDGE={config.judge.model}",
-                                "-e", f"REWARDKIT_REASONING_EFFORT={config.judge.effort}"]
+                    command += ["-e", config.judge.key_env]
+                    for name, value in config.judge.environment().items():
+                        command += ["-e", f"{name}={value}"]
                 for index, item in enumerate(batch):
                     destination = job / str(index)
                     (destination / "agent").mkdir(parents=True, exist_ok=True)

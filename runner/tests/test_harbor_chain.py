@@ -14,6 +14,13 @@ def test_sidecar_controls_and_context_access_before_verification(tmp_path):
     source = ROOT / "runner/tests/fixtures/harbor/act/send-six-decimal-token"
     task = tmp_path / source.parent.name / "transfer"
     shutil.copytree(source, task)
+    judge = task / "tests/transfer.toml"
+    judge.write_text(judge.read_text().replace(
+        'judge = "anthropic/claude-opus-5-5"', 'judge = "claude-code"\nmodel = "anthropic/claude-opus-5-5"\ncwd = "/judge"'))
+    declaration = task / "task.toml"
+    declaration.write_text(declaration.read_text().replace(
+        'ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"',
+        'CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"\nANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"'))
     probe = '''import json
 from pathlib import Path
 import socket

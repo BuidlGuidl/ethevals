@@ -15,7 +15,8 @@ modes = ["vanilla", "internet", "skills"]
 environment_mode = "separate"
 
 [verifier.env]
-ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
 
 [environment]
 cpus = 1

@@ -1,8 +1,8 @@
 # Swap page
 
 The user asks for a Swap page for ETH, USDC, and USDT on Uniswap.
-The verifier drives the page with an injected wallet on a mainnet fork.
-It compares the page's amounts and wallet requests with chain balances.
+An agent judge uses the built page with a funded wallet on a private mainnet copy.
+Code checks read the wallet log and chain after the judge finishes.
 
 ## The instruction
 
@@ -23,98 +23,62 @@ The chain forks Ethereum mainnet at block `26260992`.
 Setup records a fresh treasury address without code in the trusted chain context at `/chain/chain_context.json`.
 Neither the instruction nor the starting project names a Uniswap version or a quote API, and the agent has no quote API key.
 
-The task copies the savings verifier's wallet, isolated fork, static server, and private browser installation:
+The verifier stops submitted processes, builds as the agent user without model credentials, and starts its private chain copy.
+It funds a wallet with 10 ETH, 10,000 USDC, and 10,000 USDT.
+Pool warm-up and the static server stay verifier-owned.
+Playwright routes page reads to that copy and blocks direct writes and outside endpoints.
+The wallet signs outside the page and records every request and transaction.
 
-- Only the chain sidecar receives `MAINNET_RPC_URL`. Build commands run as `agent` without model credentials.
-- The verifier stops agent processes before the build and before its fork starts.
-- Browser reads reach that fork through Playwright request routing. Other endpoints, WebSockets, and direct chain writes are blocked.
-- The wallet signs transactions outside the page and records requests before execution.
-- Fork startup, funding, pool warm-up, and market fixture failures produce trial errors. Broken pages fail checks with evidence and a screenshot.
-- Setup warms v3 fee tiers, listed v4 pools, and direct v2 pairs for the journey amounts before the first snapshot.
+RewardKit runs Claude Code on Opus 5.5 at high effort, paid by the Claude plan.
+The judge starts at `/judge`, one folder above the submitted source in `/judge/submission`.
+It gets the built page through Playwright, chain reads through `cast`, and fixture commands.
+User-level settings permit read-only chain commands and disable background tasks.
+The browser allow list excludes code execution in the MCP process.
 
-The driver uses the page the way a user would:
+Before each swap, `wallet-test <input> <output> <amount> [mode]` records the intended amount for the chain checks.
+The judge chooses the page's controls itself.
+It covers 1 ETH to USDC, 500 USDC to ETH, and 1,000 USDT to USDC.
+It repeats the USDT swap with a leftover 1 USDT allowance to the spender found in its first USDT swap.
+`reject` refuses the swap request after earlier approval or fee requests have run.
+`race` moves the market 2% inside the wallet just before sending the swap.
+`moved` allows the page to cancel a stale quote without sending a transaction.
+The judge also tests a 0.3% price move and a 2% move before the wallet request.
 
-- It selects tokens through visible controls and checks the resulting pair.
-- It types an amount and saves the page text before every action press.
-- It waits up to 45 seconds for a quote or swap action.
-- It finds actions through general action words, button roles, and position near the swap form or inside a dialog.
-- It accepts Swap tokens, Get quote, Sign, Permit, Submit, Allow, Enable, Review, Confirm, Approve, Accept, Continue, Refresh, and network Switch controls. Each journey has a six-press limit. Refresh is a fallback. Direction controls and token pickers never count as swap actions.
-- If a stale-quote dialog blocks the form, the driver dismisses it before it opens a fresh review.
-- It classifies wallet requests by decoded calldata rather than request order.
-
-Every journey starts from the funded snapshot:
-
-- `usdc-eth`, `eth-usdc`, and `usdt-usdc` are the scored successful swaps, of 500 USDC, 1 ETH, and 1,000 USDT. The other three directions are not covered. The USDT journey starts without an allowance.
-- `usdt-seeded` replays the USDT swap with a nonzero allowance seeded to the spender the first USDT journey found. It scores the same checks as the successful swaps, including cleared allowances. This models approving 500 exactly, a reverted swap, and a retry with 1,000. On USDT, `approve(1000)` reverts unless the page resets the existing approval to 0 first.
-- `drift` swaps 500 USDC to ETH. The wallet hook moves the market about 0.3% just before sending the swap. Only `shows_received` scores this journey, so a receipt that echoes the quote can fail. If the page's slippage makes the swap revert, the journey adds no `shows_received` evidence.
-- `moved` swaps 2,000 USDC to ETH. It waits up to 45 seconds for an output amount or an enabled, named Review, Swap, or Confirm button, and opens Review when available. Then it moves the market and observes the page for a fixed minute, independent of any saved page's quote expiry. Of the programmatic checks, only `honors_minimum` scores it. A clean revert with zero user and treasury asset deltas after gas honours the minimum.
-- `rejected` swaps 500 USDC to ETH, and the wallet returns error 4001 for the swap request only. Earlier approval or fee transactions go through, so a premature cut remains visible.
-- `reverted` swaps 500 USDC to ETH and moves the market inside the wallet hook just before the swap is sent. If the page uses an untouched pool and the swap succeeds, the usual successful fee check applies.
-
-The market moves buy ETH through eight active v3 ETH/stablecoin pools and three main hooked v4 pools.
-Each pool's USD-per-ETH price rises about 2%, or 0.3% for `drift`, through actual swaps at the pinned block.
-V2 pools stay unmoved, so a page that routes through V2 isn't tested by `drift`, `moved` or `reverted`.
-The mover never edits price storage, liquidity, code, or permissions.
-For Angstrom pools, it mines an authorized node's empty unlock and the market trade in one block.
+`move-price <percent>` buys ETH through eight active v3 pools and three hooked v4 pools.
+It changes prices through real swaps without editing pool storage, liquidity, code, or permissions.
+V2 pools stay unchanged.
+The mover uses the funding holders' full token reserves for repeated price tests.
+Wallet requests and market moves share one queue, so a failed fixture cannot roll back a page transaction.
+For Angstrom pools, the mover mines an authorized node's unlock and its trade in one block.
 
 | Check | What it proves | Area | Code |
 | --- | --- | --- | --- |
-| `compile` | "Add a Swap page": build and type check pass | frontend compilation | [test.sh](tests/test.sh) |
-| `swaps_assets` | "Swap between those three ... on Uniswap": each scored direction spends the entered amount and receives its output through Uniswap | trading | [browser.mjs](tests/browser.mjs) |
-| `cut_only_on_swap` | "A 0.25% cut of each swap": the swap transaction pays 0.25% of input or gross output within 1%; rejected and reverted swaps lose only gas | fee handling | [checks.mjs](tests/checks.mjs) |
-| `honors_minimum` | "What they'll get before they confirm": the submitted minimum is at least 99% of the last confirmed minimum, and successful output reaches that display | slippage | [checks.mjs](tests/checks.mjs) |
-| `exact_approvals` | "Don't leave open-ended token approvals behind": no token allowance remains to Permit2, listed routers, or observed spenders, and no unexpired Permit2 amount remains | token permissions | [chain.mjs](tests/chain.mjs) |
-| `finite_deadline` | "Swap ... on Uniswap": each scored router or Swap-log transaction has a deadline no later than one year after the fork timestamp | transaction lifetime | [decode.mjs](tests/decode.mjs) |
-| `native_eth` | "Hold ETH": ETH output arrives as ETH without a WETH balance increase | native currency | [checks.mjs](tests/checks.mjs) |
-| `routers_empty` | "Swap between those three": router ETH, WETH, USDC, and USDT balances return to their pinned baseline | settlement | [chain.mjs](tests/chain.mjs) |
-| `shows_received` | "What they actually got after": the received amount matches the chain delta within its displayed precision, capped at 1% of the chain amount | receipt display | [checks.mjs](tests/checks.mjs) |
-| `explains_price_change` | "What they'll get before they confirm": a notice or refresh step tells the user the quote changed before the wallet request | user feedback, judge | [price-change.toml](tests/price-change.toml) |
+| `compile` | The build and type check pass | frontend compilation | [test.sh](tests/test.sh) |
+| `swaps_assets` | The required directions and seeded USDT swap succeed through Uniswap, and successful swaps spend the entered amount | trading | [session.mjs](tests/session.mjs) |
+| `cut_only_on_swap` | Each successful swap transaction pays 0.25% of input or gross output within 1%; cancellation and reverts lose only gas | fee handling | [checks.mjs](tests/checks.mjs) |
+| `exact_approvals` | Successful swaps leave no ERC-20 allowance or unexpired Permit2 amount to listed routers, Permit2, or observed spenders | token permissions | [chain.mjs](tests/chain.mjs) |
+| `finite_deadline` | Each router or Swap-log transaction has a decoded deadline no later than one year after the fork timestamp | transaction lifetime | [decode.mjs](tests/decode.mjs) |
+| `native_eth` | Successful ETH output arrives as ETH without a WETH balance increase | native currency | [checks.mjs](tests/checks.mjs) |
+| `routers_empty` | Router ETH, WETH, USDC, and USDT balances return to their initial values | settlement | [chain.mjs](tests/chain.mjs) |
+| `shows_received` | After a swap, the page shows what the user actually received | receipt display, judge | [page.toml](tests/page.toml) |
+| `honors_minimum` | The page shows a minimum and each swap keeps to it | slippage, judge | [page.toml](tests/page.toml) |
+| `explains_price_change` | When a price move prevents the shown minimum, the page tells the user before asking the wallet | user feedback, judge | [page.toml](tests/page.toml) |
 
-The reward is 1 only when every check passes.
-RewardKit alone writes the reward from the named check records and the judge.
-Free checks skip the paid judge.
+The wallet session saves chain snapshots at swap boundaries.
+The code checks decide each swap group from those snapshots and receipts after the judge finishes.
+Treasury deltas at each successful swap's block must match the group's total treasury deltas.
+That rejects cuts paid before or after the swap transaction.
+Treasury WETH counts as ETH for the fee, but the user's ETH output must arrive unwrapped.
+The wallet is an EOA without atomic batching.
+The input cut can form part of the entered amount or be added to it.
+The allowance and router checks include listed SDK routers, legacy routers, and spenders from wallet requests.
 
-The judge checks the page's response to the changed price in `moved`.
-Text changes during the move and around every press enter a timestamped timeline, including brief notices.
-The judge reads the page before the move, every later press, and the wallet request log.
-The runner requires the trajectory input, but the criterion judges page behaviour from the saved timeline and wallet requests.
-
-- It accepts a stale-quote notice with a forced refresh or a new confirmation.
-- It judges changes after the user reaches the review or confirmation view. Without a review step, it fails only if the number at press time differs from the request or was stale.
-- A live form quote can refresh before review without a notice. Once the user reaches the confirming view, silent replacement of the amounts they must confirm fails.
-- An unchanged quote on an untouched route passes without a price-change notice.
-
-The checks read the confirmed minimum this way:
-
-- The parser accepts Minimum received, Min. received, Minimum output, min, at least, or worst-case labels beside the output token. The token can appear before or after the number, including across lines.
-- The driver can open one Details, More, or Show disclosure before it reads the minimum.
-- Without a minimum, it uses expected output minus stated slippage, with 1% tolerance for both submitted and received amounts. Without both, it records "could not read a minimum".
-- The last readable minimum before a user action supplies the confirmed amount. Wallet-pending text cannot erase it or lower it after confirmation.
-- Optional Universal Router commands and their nested actions do not contribute to an enforced minimum.
-- Router-gross minima can exceed the user's net minimum when the fee comes from output.
-
-The fee, input, and deadline checks work this way:
-
-- The fee check reads treasury balances at the swap's block and the preceding block, for tokens and native ETH. It rejects cuts paid in an earlier or later transaction.
-- The fee check treats treasury WETH as ETH at one-to-one value. The user's ETH output must still arrive unwrapped.
-- The test wallet is a plain EOA without atomic batching, so a fee that relies on batching fails `cut_only_on_swap`.
-- The input debit must match the typed amount within one base unit. An input fee can form part of that amount or be added to it.
-- The deadline check rejects bounds more than one year after the fork block's timestamp. It does not require a deadline to follow the current wall clock. Transfers, approvals, and WETH wrapping alone do not trigger it.
-- V2 Router02 and SwapRouter02's v2 functions use the same minimum and deadline checks as the other routers.
-
-The instruction asks the page not to leave open-ended token approvals behind.
-Uniswap's own app fails this row when it grants a maximum token approval or a reusable maximum Permit2 amount.
-A router bug or a phishing signature can spend the remaining wallet balance under those approvals.
-An exact one-shot Permit2 signature still fails if the underlying ERC-20 approval to Permit2 remains unlimited.
-
-The approval check reads WETH, USDC, and USDT allowances to these spenders:
-
-- every router in the pinned SDK's mainnet map
-- the legacy Universal Router, both v3 routers, and V2 Router02
-- approval and Permit2 spenders from each journey's wallet requests, including failed requests
-- every swap request's destination
-
-The allowance and router balance checks include those addresses and compare balances with their pinned baseline.
+RewardKit writes one reward after the judge and code checks finish.
+Every check must pass for reward 1.
+A judge crash or timeout leaves no reward and produces a trial error.
+A page the judge cannot use receives no on its criteria.
+The free check removes the judge and uses a walk-through guarded by the exact solution source hash.
+That walk-through never runs on different submitted source.
 
 ## Why it matters
 
@@ -125,29 +89,20 @@ Both layers matter when limiting future spending.
 
 ## Notes
 
-- The main container has one CPU and 4 GiB of memory, and the chain sidecar has a 3 GiB limit. The task sets no agent time limit.
-- The solution is a reference page with an explicit fresh-price review. Its token picker uses buttons and a dialog to exercise a different control shape. It uses exact approvals and takes the fee from output inside the router transaction.
-- The task-local wallet adds transaction classification arguments to its `beforeSend` callback. The task-local RPC helper and the verifier's viem clients use 120-second timeouts for fork reads and market transactions, since the fork loads mainnet state on first read. The chain reader sends past-block reads one at a time: with one CPU, Anvil hangs when a second past-block `eth_getBalance` waits while another past-block read fetches state. The savings copies do not include these swap-specific changes.
-- ETH settlement, empty routers, and receipt amounts partly repeat checks in other page tasks.
-- Slippage of 2% or more can let `moved` and `reverted` succeed without testing a stale-price revert.
+The main container has one CPU and 4 GiB of memory, and the chain has a 3 GiB limit.
+The task sets no agent time limit.
+Past-block chain reads run one at a time because concurrent fork reads can block Anvil on one CPU.
+A route through an unmoved V2 pool does not exercise a stale-price failure.
 
-Run the free check with `MAINNET_RPC_URL` set and all model key variables unset:
+Run the free check with `MAINNET_RPC_URL` set and model credentials unset:
 
 ```sh
 uv run ethevals lint --tasks tasks/build/swap-page
-uv run ethevals free-check --tasks tasks/build/swap-page \
-  --output /tmp/swap-page-free-check
+uv run ethevals free-check --tasks tasks/build/swap-page --output /tmp/swap-page-free-check
 ```
 
-Install `environment/verifier/package.json` into a private local directory for verifier self-tests:
+Run verifier behavior tests with the task's verifier packages installed in a private directory:
 
 ```sh
-VERIFIER_DEPS=/path/to/packages \
-  node --test tasks/build/swap-page/tests/*.test.mjs
-python3 tasks/build/swap-page/tests/test_source_snapshot.py
+VERIFIER_DEPS=/path/to/packages node --test tasks/build/swap-page/tests/*.test.mjs
 ```
-
-Set `SWAP_FIXTURE_OUTPUT` to replay saved page evidence through the current check functions.
-It expects the browser verifier output directories that [fixtures.test.mjs](tests/fixtures.test.mjs) lists.
-Those optional self-tests replay receipts and page text through the same `gradeJourney` function as the browser verifier.
-They include the failed fee journeys, the USDT to USDC swap, and the entered-amount check.

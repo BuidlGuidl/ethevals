@@ -6,11 +6,12 @@ hub:
   org: buidlguidl
   key_env: HARBOR_API_KEY
 judge:
+  program: claude-code
   model: anthropic/claude-opus-5-5
   effort: high
-  paid_by: api_key
+  paid_by: plan
   cost_limit_usd: 2.0
-  key_env: ANTHROPIC_API_KEY
+  key_env: CLAUDE_CODE_OAUTH_TOKEN
 modes: [vanilla, internet, skills]
 models:
   opus-5.5:

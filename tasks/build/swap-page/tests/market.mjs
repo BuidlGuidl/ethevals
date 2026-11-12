@@ -103,7 +103,7 @@ export function createMarket({ url, output }) {
       for (const symbol of ['USDC', 'USDT']) {
         const holder = HOLDER[symbol]
         const balance = await call(TOKENS[symbol], 'function balanceOf(address) view returns (uint256)', [holder])
-        const amount = balance / 2n
+        const amount = balance
         if (amount < 10_000_000n * 10n ** 6n) throw new Error(symbol + ' holder lacks market-move funds')
         await rpc('anvil_setBalance', [holder, '0x' + (10n ** 18n).toString(16)])
         await rpc('anvil_impersonateAccount', [holder])

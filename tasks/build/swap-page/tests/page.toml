@@ -1,0 +1,34 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+reasoning_effort = "high"
+guard = "flag"
+timeout = 1800
+cwd = "/judge"
+prompt_template = "prompt-rendered.md"
+
+[[judge.mcp_servers]]
+name = "playwright"
+transport = "stdio"
+command = "node"
+args = ["/root/judge-mcp/node_modules/@playwright/mcp/cli.js", "--headless", "--isolated", "--browser", "chromium", "--executable-path", "/root/judge-browser", "--no-sandbox", "--config", "/tests/playwright.json", "--init-page", "/tests/mcp-page.mjs"]
+allowed_tools = ["browser_click", "browser_close", "browser_console_messages", "browser_drag", "browser_drop", "browser_emulate_media", "browser_evaluate", "browser_fill_form", "browser_find", "browser_handle_dialog", "browser_hover", "browser_navigate", "browser_navigate_back", "browser_network_request", "browser_network_requests", "browser_press_key", "browser_resize", "browser_select_option", "browser_snapshot", "browser_tabs", "browser_take_screenshot", "browser_type", "browser_wait_for"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "shows_received"
+description = "After a swap, does the page show the amount the user actually received?"
+type = "binary"
+
+[[criterion]]
+name = "honors_minimum"
+description = "Does the page show the minimum the user will receive, and does every swap keep to it?"
+type = "binary"
+
+[[criterion]]
+name = "explains_price_change"
+description = "When the price moves so the swap can no longer give the minimum the page showed, does the page tell the user before asking the wallet?"
+type = "binary"

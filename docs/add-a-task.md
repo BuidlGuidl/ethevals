@@ -54,7 +54,7 @@ Let's look at each piece:
 | `[metadata].modes`            | yes               | any of `vanilla`, `internet`, and `skills`                                |
 | `[verifier].environment_mode` | no                | `shared` for a task with a chain, `separate` for one without              |
 | `[verifier].user`             | no                | `root` for Forge tests                                                    |
-| `[verifier.env]`              | if it has criteria | the judge's key, and nothing else                                        |
+| `[verifier.env]`              | if it has criteria | the two optional judge credentials, `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` |
 | `artifacts`                   | if it's `separate` | the paths Harbor copies from the agent's container to the verifier       |
 | `[environment]`               | no                | `cpus` and `memory_mb` for the agent's container                          |
 
@@ -246,16 +246,21 @@ rewardkit /tests  # (3)
 
 Read [Verifiers](../runner/README.md#verifiers) before you add one.
 
-**Criteria.** A judge answers yes-or-no questions about what only the trajectory shows, like whether the agent checked its work. Use criteria only for what no test can check. Each criterion is one check.
+**Criteria.** An agent judge answers short yes-or-no questions about the work.
+It can read source, use a running page, and read the chain.
+Code keeps checks that read exact chain facts. Each criterion is one check.
 
 <details>
 <summary>Example criteria</summary>
 
 ```toml
 [judge]
-judge = "anthropic/claude-opus-5-5"  # (1)
+judge = "claude-code"  # (1)
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
 reasoning_effort = "high"
-atif-trajectory = "/logs/agent/trajectory.json"  # (2)
+# Copy the trajectory into /judge/submission before judging.  # (2)
 guard = "flag"  # (3)
 
 [scoring]
@@ -267,8 +272,8 @@ type = "binary"
 description = "Before reporting success, did the agent confirm on-chain that the transfer landed, for example by reading the transaction receipt or the recipient's token balance?"  # (6)
 ```
 
-1. The judge for a plain Harbor run. The board sets one judge model and effort for every task.
-2. The judge reads the agent's trajectory.
+1. The judge for a plain Harbor run. The board sets the judge program, model, and effort for every task.
+2. The judge reads the copied trajectory inside its working directory.
 3. Reports any instructions the agent wrote for the judge.
 4. Every criterion must pass.
 5. The check's name.
@@ -279,18 +284,38 @@ description = "Before reporting success, did the agent confirm on-chain that the
 Lint checks every judge file against the board's rules:
 
 - Every criterion is yes-or-no, with its own name.
-- The judge reads `/logs/agent/trajectory.json`, or only plain-text files under `/logs/verifier/` without a trajectory, such as a Concepts task's final reply, `/logs/verifier/final-reply.txt`.
+- Agent judges declare `cwd` and receive their inputs inside that folder, instead of through `files`.
+- The judge starts one folder above submitted code, with verifier-owned user settings.
 - Its guard is `flag` or `penalize`.
 - Every criterion counts toward `all-pass`.
 
-The judge needs an API key. A task with criteria declares exactly this in `task.toml`, and no other credential:
+Put pinned judge tools and their installer under `tests/`.
+Install them after the agent finishes, within the verifier time limit.
+Keep them out of shared image inputs and the task's `environment/` folder.
+Save judge inputs, transcripts, and program versions in `/logs/verifier`, without changing `artifacts`.
+
+File judges copy the file judge variant from [treasury sale's tests](../tasks/act/treasury-eth-sale/tests).
+Page judges copy the page judge variant from [swap page's tests](../tasks/build/swap-page/tests).
+Each variant has `judge-settings.json`, `agent_judge.py`, and `install_judge.py`.
+A runner test keeps every task's copies equal to its variant.
+The page variant allows both pages' condition commands.
+Copy the MCP package manifests outside `tests/` before installing browser packages.
+RewardKit imports Python files and parses TOML files throughout `tests/`, including dependency folders.
+
+The board pays through the Claude plan.
+Published tasks also accept an Anthropic API key for plain Harbor users.
+An agent judge declares both optional inputs in `task.toml`:
 
 ```toml
 [verifier.env]
-ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
 ```
 
-The free check can't run the judge, because that's a paid call. So read each question yourself, and make sure the trajectory can answer it. Reviewers check this too.
+The free check removes judge files and runs no model.
+A browser task can supply a walk-through guarded to run only on its exact solution source.
+A judge that declares MCP servers needs a live session, so judge-only changes rerun that task.
+File-reading agent judges keep saved-input regrades.
 
 **`reward.toml`.** Every task has a `tests/reward.toml` that makes the reward 1 only when every check passes:
 
@@ -344,7 +369,7 @@ flowchart LR
 1. Harbor builds `environment/` and starts the chain sidecar. The sidecar runs `setup/setup.s.sol`, which writes `chain_context.json` and `private_chain_context.json`.
 2. Once setup is done, Harbor starts the agent in `main` and sends it `instruction.md`.
 3. The agent works in `/workspace` and talks to the chain over RPC. It never sees `tests/`, `solution/`, or `private_chain_context.json`.
-4. When the agent stops, Harbor copies `tests/` into `main` and runs `test.sh` as root. The tests read both context files and the chain as the agent left it, and the judge reads the trajectory. RewardKit writes the reward.
+4. When the agent stops, Harbor copies `tests/` into `main` and runs `test.sh` as root. The tests read both context files and the chain as the agent left it, and the judge examines the work. RewardKit writes the reward.
 
 A task without a chain has no sidecar, and its verifier is `separate`.
 When the agent stops, Harbor saves the paths in `artifacts` and stops `main`.
@@ -529,7 +554,8 @@ user = "root"  # (4)
 timeout_sec = 1800  # (5)
 
 [verifier.env]
-ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"  # (6)
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"  # (6)
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
 
 [environment]
 cpus = 1
@@ -723,18 +749,20 @@ python3 /tests/run_reward.py  # (2)
 
 ```toml
 [judge]
-judge = "anthropic/claude-opus-5-5"
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
 reasoning_effort = "high"
 guard = "flag"
-files = ["/logs/verifier/page-evidence.txt"]  # (1)
+cwd = "/judge"  # (1)
 
 [scoring]
 aggregation = "all-pass"
 ```
 
-1. The judge reads only the page text the tests saved, not the agent's code or trajectory.
+1. The verifier copies the source evidence into `/judge/submission` before the judge starts.
 
-Six criteria follow, one for each code check that captures the page. For example, `shown_for_only_quorum` asks whether each proposal shows quorum as reached only when its For votes reach it.
+Eight criteria follow. `quorum_counts_for_only` asks whether quorum uses only For votes at the governor's snapshot.
 [The full file](../tasks/build/voting-page/tests/judge.toml) has them all.
 `tests/reward.toml` is the same as in [`tests/`](#tests).
 

@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { chromium, privateKeyToAccount, generatePrivateKey } from './deps.mjs';
 import { rpc, fundWallet } from './rpc.mjs';
 import { injectWallet } from './wallet.mjs';
-import { requireRead, walletIdle } from './rpc-policy.mjs';
+import { pageRead, walletIdle } from './rpc-policy.mjs';
 import { serveBuild } from './static-server.mjs';
 
 export async function until(fn, timeout = 20_000) {
@@ -20,7 +20,7 @@ export async function until(fn, timeout = 20_000) {
 }
 
 // All callbacks and funding data come from verifier-owned task files.
-export async function createHarness({ workspace, output, sourceContext = '/chain/chain_context.json', funding, warm }) {
+export async function createHarness({ workspace, output, sourceContext = '/chain/chain_context.json', funding, warm, externalBrowser = false }) {
   const processes = [];
   let browser;
   let preview;
@@ -86,7 +86,7 @@ export async function createHarness({ workspace, output, sourceContext = '/chain
       '/root/savings-libs/lib/x86_64-linux-gnu', '/root/savings-libs/lib/aarch64-linux-gnu'];
     // The preflight cannot see libraries passed only to the browser child.
     process.env.PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = '1';
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    if (!externalBrowser) browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
       env: { ...process.env, LD_LIBRARY_PATH: libraryDirs.join(':'), FONTCONFIG_FILE: '/root/savings-fonts.conf' } });
     async function session({ atomic = false, beforeSend } = {}) {
       const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, serviceWorkers: 'block' });
@@ -100,13 +100,7 @@ export async function createHarness({ workspace, output, sourceContext = '/chain
         if (!payload || !(Array.isArray(payload) ? payload.every(item => typeof item.method === 'string') : typeof payload.method === 'string')) {
           return request.url().startsWith(origin + '/') ? route.continue() : route.abort();
         }
-        const dispatch = async item => {
-          try {
-            // Page reads see the fork. Writes and chain controls belong to the wallet only.
-            requireRead(item.method);
-            return { jsonrpc: '2.0', id: item.id, result: await rpc(mainRpc, item.method, item.params || []) };
-          } catch (error) { return { jsonrpc: '2.0', id: item.id, error: { code: error.code || -32603, message: error.message, data: error.data } }; }
-        };
+        const dispatch = item => pageRead(rpc, mainRpc, item);
         const result = Array.isArray(payload) ? await Promise.all(payload.map(dispatch)) : await dispatch(payload);
         await route.fulfill({ status: 200, contentType: 'application/json', headers, body: stringify(result) });
       });
@@ -121,7 +115,7 @@ export async function createHarness({ workspace, output, sourceContext = '/chain
       await page.goto(origin, { waitUntil: 'domcontentloaded' });
       return active;
     }
-    return { mainRpc, account, sourceBlock, session, reset, capture, close, get active() { return active; } };
+    return { mainRpc, origin, account, sourceBlock, session, reset, capture, close, get active() { return active; } };
   } catch (error) {
     await close();
     throw error;

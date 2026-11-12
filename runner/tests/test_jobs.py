@@ -9,6 +9,7 @@ def job_config(tmp_path, paid_by="plan"):
     path = tmp_path / "job.json"
     path.write_text(json.dumps({
         "harbor_version": "0.24.0", "n_attempts": 2, "retry": {"max_retries": 1},
+        "judge": {"program": "anthropic/claude-opus-5-5", "paid_by": "api_key", "key_env": "ANTHROPIC_API_KEY"},
         "modes": ["internet"],
         "models": {"local": {"name": "local/model", "effort": "high"}},
         "agents": {"local": {"name": "nop", "version": "1.0.0", "model": "local",

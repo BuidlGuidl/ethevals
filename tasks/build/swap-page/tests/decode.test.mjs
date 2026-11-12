@@ -4,7 +4,7 @@ import { encodeFunctionData, encodeAbiParameters, parseAbiParameters } from './d
 import { ur, v4, TOKENS, ROUTERS, PERMIT2, P2ABI } from './lib.mjs'
 import { ABI, decode } from './decode.mjs'
 import { classify, classifyRequest } from './chain.mjs'
-import { finiteDeadline, sentMinimum, minimumCheck, belief } from './checks.mjs'
+import { finiteDeadline } from './checks.mjs'
 
 test('SDK and legacy calldata decode across router versions', () => {
 const recipient = '0x0000000000000000000000000000000000000001'
@@ -75,16 +75,14 @@ test('classifies and decodes every V2 Router02 function and SwapRouter02 v2 mult
     const data = direct ? inner : encodeFunctionData({ abi: ABI.filter(fn => fn.name === 'multicall' && fn.inputs[0].type === 'uint256'),
       functionName: 'multicall', args: [timestamp + 1200n, [inner]] });
     const decoded = decode(data, router);
-    const symbol = output === TOKENS.WETH ? 'ETH' : 'USDC';
     assert.equal(classify({ to: router, data }).kind, 'swap', fn.name);
     assert.equal(classifyRequest({ method: 'eth_sendTransaction', params: [{ to: router, data }] }).kind, 'swap');
     assert.equal(finiteDeadline(decoded, timestamp), true, fn.name);
-    assert.equal(sentMinimum(decoded, symbol), 200000000n, fn.name);
     if (!direct) assert.equal(finiteDeadline(decode(inner, router), timestamp), false);
   }
 });
 
-test('0x8000 cannot use an optional Universal Router swap to enforce the minimum', () => {
+test('0x8000 decodes optional and required Universal Router commands separately', () => {
   const router = ROUTERS['UniversalRouter legacy'];
   const fields = ur.COMMAND_DEFINITION[0].params;
   const encode = minimum => encodeAbiParameters(parseAbiParameters(fields.map(field => field.type + ' ' + field.name).join(',')),
@@ -92,7 +90,4 @@ test('0x8000 cannot use an optional Universal Router swap to enforce the minimum
   const data = encodeFunctionData({ abi: ABI, functionName: 'execute', args: ['0x8000', [encode(200000000000000000n), encode(0n)], 1700001200n] });
   const decoded = decode(data, router);
   assert.deepEqual(decoded.commands.map(command => command.allowRevert), [true, false]);
-  assert.equal(sentMinimum(decoded, 'ETH'), 0n);
-  assert.equal(minimumCheck(belief('Minimum 0.2 ETH', 'ETH'), decoded, 'ETH', 210000000000000000n).passed, false);
-  assert.equal(sentMinimum({ commands: [{ allowRevert: true, actions: [{ amountOutMinimum: 200000000000000000n }] }, { amountOutMin: 0n }] }, 'ETH'), 0n);
 });

@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cast call:*)", "Bash(cast balance:*)", "Bash(cast receipt:*)",
+      "Bash(cast tx:*)", "Bash(cast block:*)", "Bash(cast block-number:*)",
+      "Bash(cast logs:*)", "Bash(cast code:*)", "Bash(cast codesize:*)",
+      "Bash(cast storage:*)", "Bash(cast nonce:*)", "Bash(cast chain-id:*)",
+      "Bash(cast gas-price:*)", "Bash(cast age:*)", "Bash(cast run:*)",
+      "Bash(cast decode-calldata:*)", "Bash(cast calldata-decode:*)",
+      "Bash(cast decode-abi:*)", "Bash(cast abi-decode:*)", "Bash(cast 4byte:*)",
+      "Bash(cast 4byte-decode:*)", "Bash(cast sig:*)", "Bash(cast calldata:*)",
+      "Bash(cast from-wei:*)", "Bash(cast to-wei:*)", "Bash(cast to-unit:*)",
+      "Bash(cast format-units:*)", "Bash(cast parse-units:*)", "Bash(cast to-dec:*)",
+      "Bash(cast to-hex:*)", "Bash(cast to-uint256:*)", "Bash(cast max-uint:*)",
+      "Bash(cast keccak:*)", "Bash(cast decode-event:*)", "Bash(cast decode-error:*)",
+      "Bash(cast help:*)", "Bash(cast --help:*)", "Bash(cast --version)",
+      "Bash(move-price:*)", "Bash(wallet-test:*)",
+      "Bash(move-time:*)", "Bash(old-usdt-approval:*)", "Bash(old-usdt-approval)",
+      "Bash(full-cap:*)", "Bash(full-cap)", "Bash(wallet-network:*)"
+    ]
+  },
+  "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
+}

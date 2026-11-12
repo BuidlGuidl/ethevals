@@ -228,7 +228,7 @@ def test_contract_fetch_searches_indices_from_every_plan_attempt(tmp_path):
     ({"status": "passed"}, {"instruction_hash": "new"}, False,
      {"action": "rerun", "reason": "The instruction or environment changed."}),
     ({"status": "passed"}, {"checks_hash": "new", "regrade": {"kind": None, "judge_files": []}}, False,
-     {"action": "rerun", "reason": "The changed checks need a live browser or chain."}),
+     {"action": "rerun", "reason": "The changed checks cannot use a saved-input regrade."}),
     ({"status": "error", "error_kind": "no_answer"}, {}, False, {"action": "retry", "recovery": False}),
     ({"status": "error", "retry": 1}, {}, False, {"action": "exhausted"}),
     ({"status": "error", "error_kind": "judge", "judge": {"model": "judge"}}, {}, False, {"action": "exhausted"}),
@@ -362,7 +362,7 @@ def test_changed_browser_or_chain_checks_plan_fresh_trials(tmp_path):
     report = plan([destination], config, [{**old, "status": "passed"}], n_attempts=1)
     rerun, = report["missing"]
     assert (report["regrade_trials"], rerun["retry"], rerun["worst_case_usd"], rerun["checks_generation"]) == (0, 0, 6, 1)
-    assert rerun["rerun_reason"] == "The changed checks need a live browser or chain."
+    assert rerun["rerun_reason"] == "The changed checks cannot use a saved-input regrade."
 
 
 def test_criteria_only_regrade_reserves_the_judge_and_never_the_agent(tmp_path):

@@ -36,7 +36,7 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
         raise ValueError(f"{path}: metadata.modes must list supported modes")
     digest, _ = Packager.compute_content_hash(path)
     config = config or load_job()
-    judge = {"model": config.judge.model, "effort": config.judge.effort} if task_judges(path) else None
+    judge = config.judge.identity() if task_judges(path) else None
     return {"id": f"{pillar}/{path.name}", "hash": "sha256:" + digest, "pillar": pillar,
             **task_hashes(path, judge),
             "area": metadata.get("area"), "layer": metadata.get("layer"),
@@ -74,13 +74,19 @@ def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=Fals
             return {"action": "rerun", "reason": "The saved work lacks the changed artifacts."}
         options = current["regrade"]
         judges = set(options["judge_files"])
+        if row.get("checks_hash") in options.get("regrade_from", []):
+            return {"action": "regrade", "kind": "evidence", "judge_required": bool(judges)}
         if judges and changed <= judges | {"@judge"}:
+            if options.get("live_judge"):
+                if options["kind"] == "workspace":
+                    return {"action": "regrade", "kind": "workspace", "judge_required": True}
+                return {"action": "rerun", "reason": "The judge needs a live browser or chain."}
             return {"action": "regrade", "kind": "judge", "judge_required": True}
         if options["kind"]:
             producer_changed = changed - judges - {"@judge", "tests/answer.py", "tests/hand-cases.json", "tests/reward.toml"}
             return {"action": "regrade", "kind": options["kind"],
-                    "judge_required": bool(judges and (changed & (judges | {"@judge"}) or producer_changed))}
-        return {"action": "rerun", "reason": "The changed checks need a live browser or chain."}
+                    "judge_required": bool(judges and (options["kind"] == "workspace" or changed & (judges | {"@judge"}) or producer_changed))}
+        return {"action": "rerun", "reason": "The changed checks cannot use a saved-input regrade."}
     exception = row.get("error_kind")
     recovery = bool(retry_judge_error and row.get("judge") and exception in {
         "judge", "RewardFileNotFoundError", "RewardFileEmptyError", "VerifierOutputParseError"})
@@ -149,7 +155,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     if decision["action"] == "exhausted":
                         exhausted.append(row)
                         continue
-                    judge = {"model": config.judge.model, "effort": config.judge.effort} if judges else None
+                    judge = config.judge.identity() if judges else None
                     item = {**metadata, "task_path": str(path.resolve()), "agent_key": key,
                             "agent_version": agent.version, "harbor_version": config.harbor_version,
                             "paid_by": agent.paid_by,
@@ -164,6 +170,9 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                                  "agent_reserve_usd": reserve, "judge_reserve_usd": judge_reserve,
                                  "worst_case_usd": (reserve + judge_reserve) * (config.retry.max_retries + 1)}
                         if decision["action"] == "regrade":
+                            if decision["kind"] == "workspace" and missing_env:
+                                deferred.append({**item, "missing_env": missing_env})
+                                continue
                             candidates.append({**item, "kind": decision["kind"], "judge_required": decision["judge_required"],
                                                "source_row": row, "retry": row["retry"], "rerun": rerun,
                                                "worst_case_usd": judge_reserve if decision["judge_required"] else 0.0})
@@ -238,6 +247,10 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
             raise ValueError("The task differs from the plan; plan the trials again")
         if item["judge"] and item.get("judge_required", True):
             check_judge_key(config.judge)
+        if item.get("kind") == "workspace":
+            missing = [name for name in task_host_variables(path) if not os.environ.get(name)]
+            if missing:
+                raise ValueError(f"{path}: missing {', '.join(missing)}")
     prepared = []
     for item in report["missing"]:
         path = Path(item["task_path"])
@@ -262,7 +275,12 @@ async def run(report: dict, config: JobSettings, output: Path, previous: list[di
         if item["mode"] == "skills":
             harbor.skills = [str(skills_path)]
         prepared.append((item, harbor))
-    rows = run_regrades(report.get("regrades", []), config, output, previous, secrets)
+    regrades = report.get("regrades", [])
+    rows = run_regrades([item for item in regrades if item["kind"] != "workspace"], config, output, previous, secrets)
+    for item in regrades:
+        if item["kind"] == "workspace":
+            harbor = AgentConfig(import_path="ethevals.saved_agent:SavedWorkAgent", kwargs={"trial": item["saved_work"]["trial"]})
+            rows = await run_trial(item, harbor, config, output, secrets, rows)
     for item, harbor in prepared:
         for no_answer_try in range(2):
             rows = await run_trial(item, harbor, config, output, secrets, rows)
@@ -285,6 +303,8 @@ async def run_trial(item, harbor, config, output, secrets, rows):
         destination.mkdir(parents=True, exist_ok=True)
         remember_secrets(destination, secrets)
         write_whole(destination / "board.json", json.dumps(item, indent=2) + "\n", output)
+        if item.get("kind") == "workspace":
+            write_whole(destination / "regrade.json", json.dumps([item], indent=2) + "\n", output)
         config_path = destination / "config.json"
         if config_path.exists():
             try:
@@ -297,11 +317,7 @@ async def run_trial(item, harbor, config, output, secrets, rows):
         job = await Job.create(JobConfig(
             job_name=name, jobs_dir=output / "jobs", n_concurrent_trials=1, quiet=True,
             agents=[harbor], tasks=[{"path": item["task_path"]}],
-            verifier={"env": {
-                "REWARDKIT_JUDGE": config.judge.model,
-                "REWARDKIT_REASONING_EFFORT": config.judge.effort,
-                "CLAUDE_CODE_OAUTH_TOKEN": "", "REWARDKIT_FORCE_SUBSCRIPTION": "",
-            } if item["judge"] else {}}, environment={"type": "docker"},
+            verifier={"env": config.judge.environment() if item["judge"] else {}}, environment={"type": "docker"},
         ))
         await job.run()
     finally:

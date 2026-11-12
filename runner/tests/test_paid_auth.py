@@ -106,7 +106,7 @@ def test_missing_plan_credential_refuses_before_harbor(tmp_path, monkeypatch, ke
     assert not (tmp_path / "out/jobs").exists()
 
 
-def test_claude_plan_uses_its_token_and_board_judge_requires_an_api_key(tmp_path, monkeypatch):
+def test_claude_agent_and_judge_accept_plan_tokens_with_an_api_key_present(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "offline-plan-token")
     monkeypatch.setenv("CLAUDE_FORCE_OAUTH", "1")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-judge-key")

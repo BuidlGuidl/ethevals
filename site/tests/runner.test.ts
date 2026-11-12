@@ -18,7 +18,7 @@ for (const withCriteria of [false, true]) test(`a real Harbor row reaches the bo
   const repo = path.dirname(siteRoot);
   const fixture = path.join(repo, "runner/tests/fixtures/harbor");
   const env = { ...process.env };
-  for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY"]) delete env[key];
+  for (const key of ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "EXA_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"]) delete env[key];
   const script = `
 import json
 import shutil
@@ -38,8 +38,9 @@ if ${withCriteria ? "True" : "False"}:
         '[scoring]\\naggregation = "all-pass"\\n[[criterion]]\\nname = "named_unit"\\n'
         'description = "Did the reply name a unit?"\\ntype = "binary"\\n')
     declaration = task / "task.toml"
-    declaration.write_text(declaration.read_text() + '\\n[verifier.env]\\nANTHROPIC_API_KEY = "' + '$' + '{ANTHROPIC_API_KEY}"\\n')
-    metadata.update(judge={"model": "openai/gpt-5", "effort": "high"}, judge_paid_by="free")
+    declaration.write_text(declaration.read_text() + '\\n[verifier.env]\\nCLAUDE_CODE_OAUTH_TOKEN = "' + '$' + '{CLAUDE_CODE_OAUTH_TOKEN:-}"\\n'
+        'ANTHROPIC_API_KEY = "' + '$' + '{ANTHROPIC_API_KEY:-}"\\n')
+    metadata.update(judge={"program": "openai/gpt-5", "model": "openai/gpt-5", "effort": "high"}, judge_paid_by="free")
     criteria = output / "criteria"
     shutil.copytree(task / "tests", criteria)
     (criteria / "answer.py").write_text('from rewardkit import criterion\\n@criterion\\ndef unit(workspace):\\n'
@@ -59,6 +60,9 @@ if ${withCriteria ? "True" : "False"}:
     saved["verifier_result"]["rewards"] = rewards
     (trial / "result.json").write_text(json.dumps(saved))
     assert judge_calls == 1
+if ${withCriteria ? "True" : "False"}:
+    judge = task / "tests/judge.toml"
+    judge.write_text(judge.read_text().replace('judge = "openai/gpt-5"', 'judge = "claude-code"\\nmodel = "anthropic/claude-opus-5-5"\\ncwd = "/judge"'))
 write_catalog([task], output)
 metadata["task_hash"] = task_entry(task)["hash"]
 metadata.update({key: task_entry(task)[key] for key in ("instruction_hash", "environment_hash", "checks_hash", "checks_inputs")})
@@ -77,7 +81,7 @@ write_rows(output / "rows.jsonl", [results_row(trial, metadata,
     unit: { passed: true, reason: "The final reply matches." },
     ...(withCriteria ? { named_unit: { passed: true, reason: "The reply names the unit metre." } } : {}),
   });
-  assert.deepEqual(rows[0].judge, withCriteria ? { model: "openai/gpt-5", effort: "high" } : null);
+  assert.deepEqual(rows[0].judge, withCriteria ? { program: "openai/gpt-5", model: "openai/gpt-5", effort: "high" } : null);
   const data = buildBoard(evals, rows);
   const agent = data.tables.internet.agents[0];
   const cell = data.tables.internet.pillars.concepts.evals[0].cells[agentKey(agent)];

@@ -28,10 +28,10 @@ export async function rpc(url, method, params = []) {
   return data.result;
 }
 
-export async function read(url, address, abi, functionName, args = []) {
-  return rpc(url, 'eth_call', [{ to: address, data: encodeFunctionData({ abi, functionName, args }) }, 'latest']);
+export async function read(url, address, abi, functionName, args = [], block = 'latest') {
+  return rpc(url, 'eth_call', [{ to: address, data: encodeFunctionData({ abi, functionName, args }) }, block]);
 }
-export const balance = async (url, token, owner) => BigInt(await read(url, token, tokenAbi, 'balanceOf', [owner]));
+export const balance = async (url, token, owner, block = 'latest') => BigInt(await read(url, token, tokenAbi, 'balanceOf', [owner], block));
 
 export async function advanceTime(url, seconds) {
   const before = await rpc(url, 'eth_getBlockByNumber', ['latest', false]);

@@ -35,25 +35,29 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
 It checks that the task works; it does not measure a real agent.
 A real agent needs a model API key or plan authentication.
 
-## Tasks that need a chain or an LLM judge
+## Tasks that need a chain or an agent judge
 
 Some tasks need an RPC URL to fork a chain.
-Tasks with an LLM judge also need an API key for judging.
+Tasks with an agent judge need either `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` for judging.
+The plan token wins when both are set.
+Plain Harbor runs the criteria as well as the code checks, with no ETH Evals install.
+Judge tools install from the task's own tests.
 
 For example, the [treasury ETH sale task](https://github.com/BuidlGuidl/ethevals/blob/main/tasks/act/treasury-eth-sale/README.md) asks an agent to write and run a quarterly sale script.
-It uses both a mainnet fork at block 26,260,992 and an LLM judge.
+It uses both a mainnet fork at block 26,260,992 and an agent judge.
 
 This example uses OpenCode through OpenRouter.
 Set these variables in your shell:
 
 ```sh
 export MAINNET_RPC_URL='your-mainnet-rpc-url'
-export ANTHROPIC_API_KEY='your-judge-api-key'
+export CLAUDE_CODE_OAUTH_TOKEN='your-claude-plan-token'
 export OPENROUTER_API_KEY='your-agent-api-key'
 ```
 
 The RPC provider must serve historical state at the pinned block.
-The Anthropic key pays for the judge, which checks the agent's work.
+The Claude plan pays for the judge in this example.
+To use API billing for the judge, unset the plan token and set `ANTHROPIC_API_KEY` instead.
 The OpenRouter key pays for the agent's model calls.
 
 Run the task:
@@ -77,7 +81,7 @@ Choose one agent and set up its credentials.
 
 A ChatGPT or Claude plan can pay for the agent.
 For the treasury task, keep the RPC URL and judge key from the earlier example.
-A plan cannot pay for the judge, which still needs `ANTHROPIC_API_KEY`.
+Either judge credential works with plain Harbor.
 
 <details>
 <summary>Codex with a ChatGPT plan or OpenAI API key</summary>
@@ -143,7 +147,7 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
   --n-concurrent 1
 ```
 
-`CLAUDE_FORCE_OAUTH` tells Harbor to use the plan even when the judge's Anthropic key is present.
+`CLAUDE_FORCE_OAUTH` tells Harbor to use the plan for the agent.
 
 ### With an Anthropic API key
 
@@ -160,7 +164,8 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
   --n-concurrent 1
 ```
 
-For a task with an LLM judge, the Anthropic key pays for both the agent and the judge.
+For a judged task, the same Anthropic API key can pay for its judge.
+If the plan token is also set, the judge uses the plan instead.
 
 </details>
 
@@ -180,7 +185,7 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
 ```
 
 The treasury example already uses this setup.
-Its Anthropic key pays for the judge separately.
+Its judge credential pays for the judge separately.
 
 </details>
 
@@ -193,10 +198,17 @@ Read the task's README for its instruction and checks.
 Then check its configuration:
 
 - `environment/docker-compose.yaml` names any required RPC variables and the fork block.
-- `[verifier.env]` in `task.toml` names the judge key, if the task needs one.
+- `[verifier.env]` in `task.toml` names the judge credential, if the task needs one.
 
 For example, the treasury task declares its [RPC requirement](https://github.com/BuidlGuidl/ethevals/blob/main/tasks/act/treasury-eth-sale/environment/docker-compose.yaml) and [judge key](https://github.com/BuidlGuidl/ethevals/blob/main/tasks/act/treasury-eth-sale/task.toml) separately.
 Agent credentials are additional to these task requirements.
+
+With neither judge credential, a judged task writes no score and starts no judge.
+The verifier log and `judge-error.txt` say: `The judge needs CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY.`
+Harbor reports a trial error; read `jobs/JOB/TRIAL/verifier/test-stdout.txt` for the reason.
+This applies to oracle runs too. Tasks without judges need no judge credential.
+The plain-Harbor Concepts proof took about two minutes and $0.16 in cost-equivalent.
+Browser proofs took about seven to ten minutes and $1.21 to $1.84 in cost-equivalent.
 
 <details>
 <summary>RPC variables from the exported folders</summary>

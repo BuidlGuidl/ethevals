@@ -5,12 +5,13 @@ import path from 'node:path';
 // Serve files without loading package scripts, Vite configuration, or links outside dist.
 export async function serveBuild(workspace, port) {
   const directory = path.join(workspace, 'dist');
-  if ((await fs.lstat(directory)).isSymbolicLink()) throw new Error('The built dist directory is a symbolic link');
-  const root = await fs.realpath(directory);
+  const stat = await fs.lstat(directory).catch(() => null);
+  const root = stat && !stat.isSymbolicLink() ? await fs.realpath(directory) : null;
   const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
     '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
   const server = http.createServer(async (request, response) => {
     try {
+      if (!root) throw new Error('The build is unavailable');
       const name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
       let target = path.resolve(root, `.${name}`);
       if (!target.startsWith(root + path.sep) && target !== root) throw new Error('Path is outside dist');

@@ -13,19 +13,32 @@ from .config import Declaration, parse_file
 
 
 class JudgeSettings(Declaration):
+    program: str = "claude-code"
     model: str = "anthropic/claude-opus-5-5"
     effort: Literal["low", "medium", "high"] = "high"
     cost_limit_usd: float = Field(default=2.0, ge=0, allow_inf_nan=False)
-    paid_by: Literal["api_key", "free"] = "api_key"
-    key_env: Literal["ANTHROPIC_API_KEY"] = "ANTHROPIC_API_KEY"
+    paid_by: Literal["plan", "api_key", "free"] = "plan"
+    key_env: str = "CLAUDE_CODE_OAUTH_TOKEN"
+
+    def identity(self) -> dict:
+        return {"program": self.program, "model": self.model, "effort": self.effort}
+
+    def environment(self) -> dict[str, str]:
+        return {"REWARDKIT_JUDGE": self.program, "REWARDKIT_MODEL": self.model,
+                "REWARDKIT_REASONING_EFFORT": self.effort,
+                "REWARDKIT_FORCE_SUBSCRIPTION": "1" if self.paid_by == "plan" else "",
+                **({"ANTHROPIC_API_KEY": "", "ANTHROPIC_AUTH_TOKEN": ""} if self.paid_by == "plan"
+                   else {"CLAUDE_CODE_OAUTH_TOKEN": ""})}
 
 
 def check_judge_key(settings: JudgeSettings) -> None:
     if settings.paid_by == "free":
         return
     key = os.environ.get(settings.key_env, "")
-    if not key.strip() or key.startswith("sk-ant-oat"):
-        raise ValueError(f"The judge requires {settings.key_env} and cannot use a plan token.")
+    if not key.strip():
+        raise ValueError(f"The judge requires {settings.key_env}.")
+    if settings.paid_by == "api_key" and key.startswith("sk-ant-oat"):
+        raise ValueError(f"The judge requires an API key in {settings.key_env}.")
 
 
 class ModelSettings(Declaration):

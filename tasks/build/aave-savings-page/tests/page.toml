@@ -1,0 +1,40 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+reasoning_effort = "high"
+guard = "flag"
+timeout = 1800
+cwd = "/judge"
+prompt_template = "prompt-rendered.md"
+
+[[judge.mcp_servers]]
+name = "playwright"
+transport = "stdio"
+command = "env"
+args = ["LD_LIBRARY_PATH=/root/savings-libs/usr/lib/x86_64-linux-gnu:/root/savings-libs/usr/lib/aarch64-linux-gnu:/root/savings-libs/lib/x86_64-linux-gnu:/root/savings-libs/lib/aarch64-linux-gnu", "FONTCONFIG_FILE=/root/savings-fonts.conf", "node", "/root/judge-mcp/node_modules/@playwright/mcp/cli.js", "--headless", "--isolated", "--browser", "chromium", "--executable-path", "/root/judge-browser", "--no-sandbox", "--config", "/tests/playwright.json", "--init-page", "/tests/mcp-page.mjs"]
+allowed_tools = ["browser_click", "browser_close", "browser_console_messages", "browser_drag", "browser_drop", "browser_emulate_media", "browser_evaluate", "browser_fill_form", "browser_find", "browser_handle_dialog", "browser_hover", "browser_navigate", "browser_navigate_back", "browser_network_request", "browser_network_requests", "browser_press_key", "browser_resize", "browser_select_option", "browser_snapshot", "browser_tabs", "browser_take_screenshot", "browser_type", "browser_wait_for"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "shows_deposit"
+description = "After a deposit, does the page show how much the user has deposited, including the interest earned so far?"
+type = "binary"
+
+[[criterion]]
+name = "shows_apy"
+description = "Does the page show the current APY, matching Aave's rate on the chain?"
+type = "binary"
+
+[[criterion]]
+name = "explains_supply_cap"
+description = "When a deposit is more than Aave will accept, does the page tell the user that Aave's limit is the reason?"
+type = "binary"
+
+[[criterion]]
+name = "switches_and_continues"
+type = "binary"
+description = """On the wrong network, does pressing Deposit or Withdraw switch the wallet to Ethereum and carry on?
+Judge from the code, not from what the agent says."""

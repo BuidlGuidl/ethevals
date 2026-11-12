@@ -28,6 +28,9 @@ def download_ci(repo: str, run_id: str, pattern: str, destination: Path) -> None
         listing = subprocess.check_output(["gh", "api", f"repos/{repo}/actions/runs/{run_id}/artifacts",
                                            "--paginate", "--jq", '.artifacts[] | [.name, .expired] | @tsv'], text=True)
         matches = [line.split("\t") for line in listing.splitlines() if fnmatch(line.split("\t")[0], pattern)]
+        # GitHub drops an old run's artifacts from the listing, so an empty listing means the same as expired.
+        if not matches:
+            raise SavedWorkGone(f"No CI artifacts match {pattern}") from None
         if matches and all(expired == "true" for _, expired in matches):
             raise SavedWorkGone(f"CI artifacts matching {pattern} expired") from None
         raise
@@ -79,7 +82,7 @@ def ci_trial(row: dict, cache: Path) -> Path:
     """Recover older contract trials from the CI artifact while it exists."""
     match = re.fullmatch(r"https://github.com/([^/]+/[^/]+)/releases/download/results-([0-9]+)/.*", row.get("verifier_url") or "")
     if not match:
-        raise SavedWorkGone("No saved contract files are published")
+        raise SavedWorkGone("No saved work is published")
     repo, run_id = match.groups()
     root = cache / f"ci-{run_id}"
     # Rows from one run share its plan and artifact cache.
@@ -130,16 +133,25 @@ def fetch_work(row: dict, kind: str, cache: Path) -> dict:
                   row.get("model"), row.get("mode"), row.get("trial"), row.get("retry")]).removeprefix("sha256:")
     directory = cache / key
     directory.mkdir(parents=True, exist_ok=True)
-    if kind == "contract":
+    if kind in {"contract", "workspace"}:
         local = Path(row["verifier_files"]).parent if row.get("verifier_files") else None
         if local and (local / "artifacts/manifest.json").is_file():
             target = directory / "trial"
             if not target.exists():
                 shutil.copytree(local, target)
-            return {"trial": str(target.resolve())}
-        if row.get("artifacts_url"):
-            return {"trial": str(unpack(asset(row["artifacts_url"], cache), directory / "trial").resolve())}
-        return {"trial": str(ci_trial(row, cache).resolve())}
+        elif row.get("artifacts_url"):
+            target = unpack(asset(row["artifacts_url"], cache), directory / "trial")
+        else:
+            target = ci_trial(row, cache)
+        if kind == "workspace":
+            entries = json.loads((target / "artifacts/manifest.json").read_text())
+            entries = [entry for entry in entries if entry["source"].rstrip("/") == "/workspace"
+                       and entry.get("service") in {None, "main"}]
+            if len(entries) != 1 or entries[0]["status"] != "ok" or not (target / entries[0]["destination"]).is_dir():
+                raise SavedWorkGone("The saved workspace is unavailable")
+            if not (target / "verifier").is_dir() and row.get("verifier_url"):
+                unpack(asset(row["verifier_url"], cache), target / "verifier")
+        return {"trial": str(target.resolve())}
     local = Path(row["trajectory_file"]) if row.get("trajectory_file") else None
     if not local or not local.is_file():
         url = trajectory_url(row)
@@ -151,7 +163,7 @@ def fetch_work(row: dict, kind: str, cache: Path) -> dict:
     if local.resolve() != target.resolve():
         shutil.copyfile(local, target)
     work = {"trajectory": str(target.resolve())}
-    if kind == "judge" or row.get("judge"):
+    if kind in {"judge", "evidence"} or row.get("judge"):
         verifier = Path(row["verifier_files"]) if row.get("verifier_files") else None
         if not verifier or not verifier.is_dir():
             if not row.get("verifier_url"):

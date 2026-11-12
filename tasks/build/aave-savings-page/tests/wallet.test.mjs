@@ -123,3 +123,39 @@ test('the delegated wallet validates its own permit signature and rejects anothe
     }
   }
 });
+
+test('on another network the wallet sends nothing until the page switches it back', { timeout: 30_000 }, async () => {
+  const server = net.createServer();
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  await new Promise(resolve => server.close(resolve));
+  const url = `http://127.0.0.1:${port}`;
+  const anvil = spawn('anvil', ['--port', String(port), '--accounts', '0', '--chain-id', '1', '--base-fee', '0', '--silent'], { stdio: 'ignore' });
+  try {
+    for (let i = 0; i < 150; i++) {
+      try { if (await rpc(url, 'eth_chainId') === '0x1') break; } catch { /* Wait for the test chain. */ }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    const account = privateKeyToAccount(generatePrivateKey());
+    await rpc(url, 'anvil_setBalance', [account.address, '0x100000']);
+    let binding;
+    const context = { exposeBinding: async (_name, handler) => { binding = handler; }, addInitScript: async () => {} };
+    const state = await injectWallet(context, { account, mainRpc: url });
+    const request = (method, params = []) => binding({}, { method, params });
+    state.otherChain = 8453;
+    state.chainId = 8453;
+    assert.equal(await request('eth_chainId'), '0x2105');
+    const refused = await request('eth_sendTransaction', [{ to: owner, value: '0x1' }]);
+    assert.equal(refused.message, 'The test wallet is on chain 8453 and sends nothing there.');
+    assert.equal(await request('eth_getBalance', [owner, 'latest']), '0x0');
+    assert.equal((await request('wallet_switchEthereumChain', [{ chainId: '0xa' }])).code, 4902);
+    assert.equal(await request('wallet_switchEthereumChain', [{ chainId: '0x1' }]), null);
+    assert.equal(await binding({}, { method: 'eth_chainId', poll: true }), '0x1');
+    await request('eth_sendTransaction', [{ to: owner, value: '0x1' }]);
+    assert.equal(await request('eth_getBalance', [owner, 'latest']), '0x1');
+    assert.deepEqual(state.requests.map(entry => entry.method), ['eth_chainId', 'eth_sendTransaction', 'eth_getBalance',
+      'wallet_switchEthereumChain', 'wallet_switchEthereumChain', 'eth_sendTransaction', 'eth_getBalance']);
+  } finally {
+    if (anvil.exitCode === null) { const exited = once(anvil, 'exit'); anvil.kill('SIGTERM'); await exited; }
+  }
+});

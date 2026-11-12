@@ -93,6 +93,10 @@ def test_pinned_fork_keeps_its_secret_out_of_setup_agent_and_logs(tmp_path, monk
         source = ROOT / "runner/tests/fixtures/harbor/act/send-six-decimal-token"
         task = tmp_path / source.parent.name / "fork"
         shutil.copytree(source, task)
+        (task / "tests/transfer.toml").unlink()
+        declaration = task / "task.toml"
+        declaration.write_text(declaration.read_text().replace(
+            '[verifier.env]\nANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"\n', ""))
         compose = task / "environment/docker-compose.yaml"
         document = yaml.safe_load(compose.read_text())
         document["services"]["chain"]["environment"] = {

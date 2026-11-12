@@ -76,7 +76,7 @@ Rows use schema version 9 and link a trajectory JSON file when one exists.
 They retain all reward dimensions; `reward == 1` supplies the test pass bit.
 Cost comes from Harbor's API-price usage record, regardless of the payment source.
 Unknown cost stays null; free stand-ins cost $0.
-Rows record judge model, effort, API-price cost, and payment source separately.
+Rows record judge program, model, effort, API-price cost, and payment source separately.
 The free check still skips paid criteria.
 
 To open a local job on the board, build from `site/`:
@@ -97,7 +97,7 @@ The oracle and nop runs exercise this path before a version change can pass.
 Run the free check from the repository root:
 
 ```sh
-unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY
+unset OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ANTHROPIC_AUTH_TOKEN EXA_API_KEY CLAUDE_CODE_OAUTH_TOKEN
 uv run python scripts/ci.py images
 uv run ethevals free-check --output results/free-check
 ```
@@ -176,21 +176,24 @@ Compiler download failures raise errors instead of failed checks.
 The helper keeps Forge stdout and stderr beside `checks.json`.
 
 Criteria live in RewardKit judge TOML files under `tests/` and run through `test.sh`.
-Lint requires named binary criteria, `atif-trajectory = "/logs/agent/trajectory.json"`, and `guard = "flag"` or `"penalize"`.
-A Concepts task's judge may instead read only `files = ["/logs/verifier/final-reply.txt"]`, which its `test.sh` writes from the trajectory, so the judge never sees the model's reasoning.
-Each judge and its enclosing rewards use `all-pass`, so every test and criterion counts toward the same reward.
-The task's judge model and effort provide the defaults for plain Harbor runs.
-The board overrides them through `REWARDKIT_JUDGE` and `REWARDKIT_REASONING_EFFORT` from the job config.
-Each judged task declares only `ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"` in `[verifier.env]`.
-A missing key stops Harbor with the variable's name.
-Use a judge-only API key with its own spend limit.
-Harbor scopes agent credentials to agent commands; verifier commands receive no plan token.
-The board refuses a plan token in the judge key before starting Harbor.
-For shared verifiers, the judge key reaches the agent's container after the agent stops.
-Processes the agent left running can still read it, as ADR 0011 records.
-Each agent execution reserves three calls per judge batch, multiplied by samples and `cost_limit_usd`.
-In individual mode, the reserve covers each criterion and its separate guard call.
-Executions paid by a plan also reserve judge spend.
+Every judge uses `judge = "claude-code"`, model `anthropic/claude-opus-5-5`, high effort, and `guard = "flag"`.
+Agent judges read inputs copied into their working folder instead of `files` prompt attachments.
+The judge starts one folder above submitted code with fresh user settings.
+Browser judges use pinned Playwright MCP tools, a funded wallet, chain reads, and fixture commands.
+Code keeps checks that read exact chain facts.
+Every judge and its enclosing rewards use `all-pass`.
+
+Each agent-judged task declares optional `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` inputs in `[verifier.env]`.
+Task tests choose the plan token first, or the API key when only it is set.
+The board still requires the Claude plan and records the judge's API-price cost.
+The runner sets the judge program, model, and effort separately.
+Builds and submitted child processes receive no judge token.
+Shared verifiers retain the container isolation gap in ADR 0011.
+Plan-paid judges reserve no API spend, like plan-paid agents.
+Every execution still requires an explicit budget.
+A judge that declares MCP servers needs a live session, so a judge-only change reruns its trials.
+File-reading agent judges keep saved-input regrades and compare saved input content fingerprints.
+
 `reward-details.json` supplies criterion reasons, errors, and API-price judge usage to rows.
 A missing cost stays null; local stand-ins use `judge.paid_by: free` and cost $0.
 RewardKit retries malformed replies internally up to three calls.
@@ -233,7 +236,41 @@ harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test --age
 Select a task with `--include-task-name NAME` and set the host variables its compose file names first.
 Replace `oracle` with `nop` to check untouched work.
 The folder needs Docker and Harbor, with no ETH Evals install.
-Plain Harbor runs execute the task's verifier; the board also runs declared paid criteria through RewardKit.
+Plain Harbor runs every check and the task's agent judge through RewardKit.
+Judge tools install from the task's `tests/` folder and use its pinned settings.
+
+For a judged task, set either `CLAUDE_CODE_OAUTH_TOKEN` for the Claude plan or `ANTHROPIC_API_KEY` for API billing.
+If both are set, the plan token wins and the judge receives no API key.
+For example:
+
+```sh
+export CLAUDE_CODE_OAUTH_TOKEN='your-plan-token'
+harbor run --repo https://huggingface.co/datasets/buidlguidl/ethevals-test \
+  --include-task-name concepts--wallet-atomic-ready --agent oracle --n-concurrent 1
+```
+
+To use API billing instead, unset the plan token and set `ANTHROPIC_API_KEY` before the same command.
+For fork tasks, also set `MAINNET_RPC_URL`; the exported task guide lists each task's RPC requirement.
+An agent other than `oracle` also needs its own credentials.
+The board keeps its plan-only admission rule and overrides, regardless of these public task defaults.
+
+With a judge credential, the result includes code checks, criteria, reasons, and the judge transcript in the verifier logs.
+The plain-Harbor Concepts proof took about two minutes and $0.16 in native cost-equivalent.
+The browser proofs took about seven to ten minutes and $1.21 to $1.84 in cost-equivalent.
+Those figures include setup and use the Claude plan; they do not measure a plan-window share.
+
+Without either credential, a judged task stops at the start of verification, writes no score, and calls no model.
+Its verifier log and `judge-error.txt` contain one line:
+
+```text
+The judge needs CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY.
+```
+
+Harbor reports a trial error because no reward exists.
+Read `jobs/JOB/TRIAL/verifier/test-stdout.txt` for that reason.
+This also applies to `oracle`; the published task does not pretend that unpaid criteria passed.
+The runner's explicit free check removes judges and uses solution-only walk-throughs on browser tasks.
+Tasks without judges continue to run without a judge credential.
 
 On `main`, the release workflow pushes the shared images before uploading the dataset with `HF_TOKEN`.
 The upload removes obsolete files under `tasks/` and the old Concepts task `data/` folder in the same commit.

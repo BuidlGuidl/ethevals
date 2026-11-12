@@ -83,14 +83,22 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         if name in credentials:
             raise ValueError(f"{path / 'task.toml'}: {name} is a job credential; tasks cannot request it")
     judges = task_judges(path)
-    if task.config.verifier.env != ({config.judge.key_env: "${" + config.judge.key_env + "}"} if judges else {}):
-        raise ValueError(f"{path / 'task.toml'}: verifier.env must declare only the required judge key when a judge exists")
+    native = any(judge.judge.judge == "claude-code" for judge in judges.values())
+    expected = ({name: "${" + name + ":-}" for name in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")}
+                if native else {config.judge.key_env: "${" + config.judge.key_env + "}"} if judges else {})
+    if task.config.verifier.env != expected:
+        raise ValueError(f"{path / 'task.toml'}: verifier.env must declare both optional judge credentials for an agent judge")
     names = set()
     for file, judge in judges.items():
         verifier_files = judge.judge.files and all(
             name.startswith("/logs/verifier/") and ".." not in Path(name).parts
             and not any(char in name for char in "*?[]") for name in judge.judge.files)
-        if judge.judge.atif_trajectory != "/logs/agent/trajectory.json" and not (
+        agent_judge = judge.judge.judge == "claude-code"
+        if config.judge.program == "claude-code" and not agent_judge:
+            raise ValueError(f"{file}: the judge must use claude-code")
+        if agent_judge and (judge.judge.files or not judge.judge.cwd):
+            raise ValueError(f"{file}: an agent judge needs cwd and reads no files through the prompt")
+        if not agent_judge and judge.judge.atif_trajectory != "/logs/agent/trajectory.json" and not (
                 judge.judge.atif_trajectory is None and verifier_files):
             raise ValueError(f"{file}: the judge must read the ATIF trajectory or only files under /logs/verifier/")
         if judge.judge.guard not in {"flag", "penalize"}:
@@ -198,7 +206,7 @@ async def free_check(paths: list[Path], output: Path) -> None:
         originals[staged.resolve()] = path
         judges = task_judges(staged)
         if judges:
-            print(f"{path}: criteria skipped in the free check; the judge needs a paid API call.", flush=True)
+            print(f"{path}: criteria skipped in the free check; the judge needs a model call.", flush=True)
             for file in judges:
                 file.unlink()
             for reward in (staged / "tests").rglob("reward.toml"):

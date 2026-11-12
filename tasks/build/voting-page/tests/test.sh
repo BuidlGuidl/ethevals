@@ -1,7 +1,9 @@
 #!/bin/sh
 set -eu
+python3 /tests/judge_credentials.py
 mkdir -p /logs/verifier
 chmod 700 /tests /logs/verifier
+if [ -z "${ETHEVALS_REGRADE_ITEM:-}" ]; then
 rm -f /logs/verifier/reward.json /logs/verifier/reward.txt /logs/verifier/reward-details.json \
   /logs/verifier/judge-response.json /logs/verifier/source-decisions.json /logs/verifier/rewardkit-request.json \
   /logs/verifier/source-evidence.txt /logs/verifier/source-manifest.json /logs/verifier/checks.json
@@ -41,4 +43,5 @@ Path('/logs/verifier/checks.json').write_text(json.dumps(records) + '\n')
 if Path('/tests/judge.toml').exists():
     bundle(Path('/workspace'), Path('/chain/chain_context.json'), Path('/root/voting-contracts'), Path('/logs/verifier'))
 PY
+fi
 python3 /tests/run_reward.py
