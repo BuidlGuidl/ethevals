@@ -159,6 +159,8 @@ def batch():
                 "error_kind": "judge" if item["judge_required"] else "verification",
                 "error_reason": "The regrade failed; see regrade.log."}))
         shutil.copytree("/logs/verifier", destination / "verifier", dirs_exist_ok=True)
+        # The host reads these files as another user; task tests may leave private folders.
+        subprocess.run(["chmod", "-R", "a+rX", str(destination)], check=True)
         (destination / "regrade-finished.json").write_text(json.dumps(datetime.now(timezone.utc).isoformat()))
 
 

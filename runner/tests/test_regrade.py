@@ -497,6 +497,8 @@ def test_concepts_regrade_runs_real_tests_and_publishes_one_verifier_archive(tmp
     old = results_row(source, item, trajectory_url="https://example.org/original.json")
     old["model_cost_usd"] = 4.25
     (task / "tests/answer.py").write_text((task / "tests/answer.py").read_text().replace('== "metre"', '== "centimetre"'))
+    script = task / "tests/test.sh"
+    script.write_text(script.read_text().replace("rewardkit /tests", "mkdir -m 700 /logs/verifier/private\nrewardkit /tests"))
     report = budget_check(plan([task], config, [old], n_attempts=1, saved_work=tmp_path / "cache"), 0)
 
     async def no_agent(*args):
@@ -508,6 +510,8 @@ def test_concepts_regrade_runs_real_tests_and_publishes_one_verifier_archive(tmp
     assert (row["status"], row["model_cost_usd"], row["trajectory_url"], row["checks_hash"], row["checks"]) == (
         "failed", 4.25, "https://example.org/original.json", report["regrades"][0]["checks_hash"],
         {"unit": {"passed": False, "reason": "The final reply is absent or differs."}})
+    private, = output.glob("jobs/*/0/verifier/private")
+    assert private.stat().st_mode & 0o005 == 0o005
     release = publish_logs(tmp_path / "release", "owner/repo", "12", "a" * 40, rows=[row])
     assert [asset["name"].split("-")[0] for asset in release["assets"]] == ["verifier"]
     assert release["rows"][0]["trajectory_url"] == old["trajectory_url"]
