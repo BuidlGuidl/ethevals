@@ -77,7 +77,7 @@ Yes-or-no questions a judge answers about the agent's work, kept in a RewardKit 
 _Avoid_: rubric
 
 **Judge**:
-An agent that answers criteria in the verifier. It can read the work and use the running page and chain when the task provides them. Claude Code on Opus 5.5 runs at high effort, paid by the Claude plan.
+An agent that answers criteria in the verifier. It can read the work and use the running page and chain when the task provides them. Claude Code on Opus 5.5 runs at high effort. The board uses the Claude plan; public tasks also accept an Anthropic API key.
 _Avoid_: grader
 
 **Solution**:
