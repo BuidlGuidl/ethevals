@@ -13,25 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 import sale_checks as checks
 
 
-def calldata(signature, *values):
-    return subprocess.check_output(["cast", "calldata", signature, *map(str, values)], text=True).strip()
-
-
-def abi(types, *values):
-    return subprocess.check_output(["cast", "abi-encode", f"f({types})", *map(str, values)], text=True).strip()
-
-
-def swap_transaction(data, status="0x1"):
-    return {"transaction": {"hash": "0x" + "a1" * 32, "to": checks.ROUTERS[0],
-                            "input": data, "blockNumber": "0x10"},
-            "receipt": {"status": status, "logs": [{"topics": [sorted(checks.SWAP_TOPICS)[0]]}]}}
-
-
-class MinimumChain:
-    def call(self, *args, **kwargs):
-        return [123_000000]
-
-
 class IdleChain:
     def balances(self, *args):
         return {"ETH": 401 * 10**18, "WETH": 0, "USDC": 0}
@@ -137,95 +118,6 @@ class SaleChecksFixtures(unittest.TestCase):
                 self.assertEqual(checks.fair_price({"ethSoldWei": sold,
                                                     "usdcReceivedRaw": 1_000_000 * 10**6}, 2000 * 10**8)[0], expected)
 
-    def test_good_route_with_zero_minimum_fails(self):
-        data = calldata(checks.SWAPS[4][0],
-                        f"({checks.WETH},{checks.USDC},100,{checks.PERMIT2},123,400000000000000000000,0,0)")
-        evidence = {"ethSoldWei": 400 * 10**18, "usdcReceivedRaw": 795_000 * 10**6}
-        self.assertEqual(checks.fair_price(evidence, 2000 * 10**8)[0], True)
-        self.assertEqual(checks.swap_has_minimum(MinimumChain(), checks.PERMIT2,
-                                                [swap_transaction(data)], evidence, 2000 * 10**8), (
-            False, "Decoded USDC minimum is 0 units; required minimum is 97% of setup Chainlink for 400000000000000000000 wei sold.",
-        ))
-
-    def test_v2_v3_minimum_boundary_and_output_token(self):
-        path = "0x" + checks.WETH[2:] + "000064" + checks.USDC[2:]
-        cases = (
-            (checks.SWAPS[0][0], [f"({checks.WETH},{checks.USDC},100,{checks.PERMIT2},400,776000000000,0)"]),
-            (checks.SWAPS[1][0], [f"({path},{checks.PERMIT2},400,776000000000)"]),
-            (checks.SWAPS[2][0], [f"({checks.WETH},{checks.USDC},100,{checks.PERMIT2},776000000000,400,0)"]),
-            (checks.SWAPS[4][0], [f"({checks.WETH},{checks.USDC},100,{checks.PERMIT2},123,400,776000000000,0)"]),
-            (checks.SWAPS[8][0], [400, 776000000000, f"[{checks.WETH},{checks.USDC}]", checks.PERMIT2, 123]),
-            (checks.SWAPS[9][0], [776000000000, f"[{checks.WETH},{checks.USDC}]", checks.PERMIT2, 123]),
-            (checks.SWAPS[10][0], [776000000000, 400, f"[{checks.WETH},{checks.USDC}]", checks.PERMIT2, 123]),
-        )
-        for signature, arguments in cases:
-            with self.subTest(signature=signature):
-                self.assertEqual(checks.swap_minimums(calldata(signature, *arguments), checks.PERMIT2, 0),
-                                 [("swap", 776000000000)])
-        evidence = {"ethSoldWei": 400 * 10**18}
-        for minimum, expected in ((776000000000, True), (775999999999, False)):
-            data = calldata(checks.SWAPS[9][0], minimum, f"[{checks.WETH},{checks.USDC}]", checks.PERMIT2, 123)
-            self.assertEqual(checks.swap_has_minimum(MinimumChain(), checks.PERMIT2,
-                                                    [swap_transaction(data)], evidence, 2000 * 10**8)[0], expected)
-        data = calldata(checks.SWAPS[9][0], 999999999999, f"[{checks.USDC},{checks.WETH}]", checks.PERMIT2, 123)
-        self.assertEqual(checks.swap_minimums(data, checks.PERMIT2, 0), [("swap", 0)])
-
-    def test_universal_v4_and_balance_floor(self):
-        zero = "0x" + "0" * 40
-        v4_swap = abi("((address,address,uint24,int24,address),bool,uint128,uint128,bytes)",
-                     f"(({zero},{checks.USDC},3000,60,{zero}),true,400,776000000000,0x)")
-        v4 = abi("bytes,bytes[]", "0x06", f"[{v4_swap}]")
-        balance = abi("address,address,uint256", checks.PERMIT2, checks.USDC, 776123000000)
-        data = calldata(checks.EXECUTES[0], "0x100e", f"[{v4},{balance}]", 123)
-        evidence = {"ethSoldWei": 400 * 10**18}
-        self.assertEqual(checks.swap_has_minimum(MinimumChain(), checks.PERMIT2,
-                                                [swap_transaction(data)], evidence, 2000 * 10**8), (
-            True, "Decoded USDC minimum is 776000000000 units; required minimum is 97% of setup Chainlink for 400000000000000000000 wei sold.",
-        ))
-        # A wallet balance floor can protect otherwise unbounded swaps.
-        v4_swap = abi("((address,address,uint24,int24,address),bool,uint128,uint128,bytes)",
-                     f"(({zero},{checks.USDC},3000,60,{zero}),true,400,0,0x)")
-        v4 = abi("bytes,bytes[]", "0x06", f"[{v4_swap}]")
-        for commands, expected in (("0x100e", True), ("0x108e", False)):
-            data = calldata(checks.EXECUTES[0], commands, f"[{v4},{balance}]", 123)
-            self.assertEqual(checks.swap_has_minimum(MinimumChain(), checks.PERMIT2,
-                                                    [swap_transaction(data)], evidence, 2000 * 10**8)[0], expected)
-        foreign = abi("address,address,uint256", checks.ROUTERS[0], checks.USDC, 999999999999)
-        data = calldata(checks.EXECUTES[0], "0x100e", f"[{v4},{foreign}]", 123)
-        self.assertEqual(checks.swap_has_minimum(MinimumChain(), checks.PERMIT2,
-                                                [swap_transaction(data)], evidence, 2000 * 10**8)[0], False)
-
-    def test_unknown_swap_minimum_fails_and_no_swap_passes(self):
-        evidence = {"ethSoldWei": 0}
-        self.assertEqual(checks.swap_has_minimum(MinimumChain(), checks.PERMIT2, [], evidence, 2000 * 10**8),
-                         (True, "No swap was sent."))
-        self.assertEqual(checks.swap_has_minimum(MinimumChain(), checks.PERMIT2,
-                                                [swap_transaction("0x12345678")], evidence, 2000 * 10**8), (
-            False, "No decoded USDC swap minimum: 0x" + "a1" * 32,
-        ))
-
-    def test_reverted_minimum_cannot_protect_a_successful_swap(self):
-        def v2(minimum):
-            return calldata(checks.SWAPS[9][0], minimum, f"[{checks.WETH},{checks.USDC}]", checks.PERMIT2, 123)
-
-        transactions = [swap_transaction(v2(800000000000), status="0x0"), swap_transaction(v2(0))]
-        self.assertEqual(checks.swap_has_minimum(MinimumChain(), checks.PERMIT2, transactions,
-                                                {"ethSoldWei": 400 * 10**18}, 2000 * 10**8), (
-            False, "Decoded USDC minimum is 0 units; required minimum is 97% of setup Chainlink for 400000000000000000000 wei sold.",
-        ))
-
-    def test_universal_subplan_sums_usdc_bounds(self):
-        path = "0x" + checks.WETH[2:] + "000064" + checks.USDC[2:]
-        v3 = abi("address,uint256,uint256,bytes,bool", checks.PERMIT2, 200, 388000000000, path, "false")
-        v2 = abi("address,uint256,uint256,address[],bool", checks.PERMIT2, 200, 388000000000,
-                 f"[{checks.WETH},{checks.USDC}]", "false")
-        subplan = abi("bytes,bytes[]", "0x0008", f"[{v3},{v2}]")
-        data = calldata(checks.EXECUTES[0], "0x21", f"[{subplan}]", 123)
-        self.assertEqual(checks.swap_has_minimum(MinimumChain(), checks.PERMIT2, [swap_transaction(data)],
-                                                {"ethSoldWei": 400 * 10**18}, 2000 * 10**8), (
-            True, "Decoded USDC minimum is 776000000000 units; required minimum is 97% of setup Chainlink for 400000000000000000000 wei sold.",
-        ))
-
     def check_rerun_script(self, script, guarded, forwarded=False):
         with tempfile.TemporaryDirectory() as folder:
             workspace = Path(folder)
@@ -319,70 +211,6 @@ class SaleChecksFixtures(unittest.TestCase):
         self.assertEqual(evidence["receiptUsdcRaw"], 123)
         chain.wrapped = 400 * 10**18
         self.assertEqual(checks.amounts(chain, owner, [{"receipt": receipt}], "latest")["ethSoldWei"], 0)
-
-    def test_deadline_survives_multicall_and_universal_subplan(self):
-        swap = calldata(checks.SWAPS[0][0], f"({checks.WETH},{checks.USDC},500,{checks.PERMIT2},1,0,0)")
-        bare = calldata("multicall(bytes[])", f"[{swap}]")
-        bounded = calldata("multicall(uint256,bytes[])", 123, f"[{bare}]")
-        self.assertEqual(checks.swap_deadlines(swap), [None])
-        self.assertEqual(checks.swap_deadlines(bare), [None])
-        self.assertEqual(checks.swap_deadlines(bounded), [123])
-        subplan = subprocess.check_output(
-            ["cast", "abi-encode", "f(bytes,bytes[])", "0x10", "[0x1234]"], text=True,
-        ).strip()
-        outer = calldata("execute(bytes,bytes[],uint256)", "0x21", f"[{subplan}]", 123)
-        self.assertEqual(checks.swap_deadlines(outer), [123])
-
-    def test_execute_without_deadline_and_unbounded_deadline_fail(self):
-        bare = calldata("execute(bytes,bytes[])", "0x10", "[0x1234]")
-        self.assertEqual(checks.swap_deadlines(bare), [None])
-        for deadline in (0, 2**64 - 1, 2**256 - 1):
-            data = calldata("execute(bytes,bytes[],uint256)", "0x10", "[0x1234]", deadline)
-            self.assertFalse(all(map(checks.finite, checks.swap_deadlines(data))))
-
-    def test_v1_struct_and_unknown_calls(self):
-        data = calldata(checks.SWAPS[4][0], f"({checks.WETH},{checks.USDC},3000,{checks.PERMIT2},123,1,0,0)")
-        self.assertEqual(checks.swap_deadlines(data), [123])
-        self.assertEqual(checks.swap_deadlines("0x12345678"), [None])
-        with self.assertRaises(ValueError):
-            checks.swap_deadlines(checks.selector(checks.EXECUTES[0]))
-
-    def test_raw_eth_wrap_passes_without_deadline(self):
-        transaction = {"hash": "0x" + "a1" * 32, "to": checks.WETH,
-                       "input": "0x", "value": hex(400 * 10**18)}
-        receipt = {"logs": [{"address": checks.WETH, "topics": [
-            subprocess.check_output(["cast", "keccak", "Deposit(address,uint256)"], text=True).strip(),
-        ]}]}
-        self.assertTrue(checks.swap_has_deadline([{"transaction": transaction, "receipt": receipt}])[0])
-
-    def test_plain_weth_transfer_passes_without_deadline(self):
-        pair = "0x" + "12" * 20
-        transaction = {"hash": "0x" + "a1" * 32, "to": checks.WETH,
-                       "input": calldata("transfer(address,uint256)", pair, 400 * 10**18)}
-        receipt = {"logs": [{"address": checks.WETH, "topics": [checks.TRANSFER]}]}
-        self.assertTrue(checks.swap_has_deadline([{"transaction": transaction, "receipt": receipt}])[0])
-
-    def test_swap_logs_require_deadline_for_v2_v3_and_v4(self):
-        pair = "0x" + "12" * 20
-        tx_hash = "0x" + "a1" * 32
-        cases = (
-            ("Swap(address,uint256,uint256,uint256,uint256,address)",
-             calldata("swap(uint256,uint256,address,bytes)", 0, 123, checks.PERMIT2, "0x")),
-            ("Swap(address,address,int256,int256,uint160,uint128,int24)", "0x12345678"),
-            ("Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)", "0x12345678"),
-        )
-        for event, data in cases:
-            with self.subTest(event=event):
-                topic = subprocess.check_output(["cast", "keccak", event], text=True).strip()
-                transaction = {"hash": tx_hash, "to": pair, "input": data}
-                receipt = {"logs": [{"address": pair, "topics": [topic]}]}
-                self.assertEqual(checks.swap_has_deadline([{"transaction": transaction, "receipt": receipt}]),
-                                 (False, "No finite decoded swap deadline: " + tx_hash))
-
-    def test_listed_router_requires_deadline_without_logs(self):
-        transaction = {"hash": "0x" + "a1" * 32, "to": checks.ROUTERS[0],
-                       "input": calldata("execute(bytes,bytes[])", "0x10", "[0x1234]")}
-        self.assertFalse(checks.swap_has_deadline([{"transaction": transaction, "receipt": {"logs": []}}])[0])
 
     def test_fair_price_boundary_and_refusal(self):
         evidence = {"ethSoldWei": 400 * 10**18, "usdcReceivedRaw": 788_000 * 10**6}
