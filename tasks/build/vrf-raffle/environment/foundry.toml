@@ -1,0 +1,12 @@
+[profile.default]
+src = "src"
+test = "test"
+libs = ["lib"]
+solc = "0.8.30"
+remappings = [
+    "forge-std/=/opt/solidity/lib/forge-std/src/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "@openzeppelin/contracts@4.9.6/=lib/openzeppelin-contracts-4.9.6/contracts/",
+    "@chainlink/contracts/=lib/chainlink/",
+]
+ffi = false
