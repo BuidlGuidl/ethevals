@@ -1,0 +1,22 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/findings.md"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "unbooked_loss_escapes_on_withdrawal"
+type = "binary"
+description = """The file holds an audit report on the Sluice contracts.
+The known vulnerability: SluiceVault.totalAssets values each strategy at its booked deployedAssets, the value its last harvest recorded, not its live value. A withdrawal, on the other hand, takes live assets out of the market: _ensureIdle calls BaseStrategy.undeploy, which pays out of the market and lowers deployedAssets by exactly the amount returned. When a market takes bad debt between harvests, the share price still shows the pre-loss value, so a holder who withdraws or redeems before the next harvest is paid in full out of the impaired market, the booked value shrinks only by what they took, and the next harvest books the whole loss against the holders who stayed. For example, with two 500,000 USDC holders and a 100,000 write-off in the market, the first to redeem gets 500,000 and the other is left with 400,000 instead of 450,000 each. claimFees, deallocate and reallocate pull through the same path.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""
+
+[[criterion]]
+name = "sold_rewards_skip_fee_and_unlock"
+type = "binary"
+description = """The file holds an audit report on the Sluice contracts.
+The known vulnerability: SluiceVault._harvest is where income is charged the performance fee and locked so it reaches the share price over PROFIT_UNLOCK_TIME, but SluiceVault.sellRewards claims a strategy's incentive rewards (BaseStrategy.claimRewards, AaveV3Strategy._claimRewards) and leaves the swap proceeds in the vault's idle USDC, which totalAssets counts at once. Reward income never passes through harvest, so the treasury gets no performance fee on it and it reaches the share price in one step. Anyone who deposits just before an allocator's sellRewards transaction and redeems just after takes a share of income that the existing holders earned. For example, 20,000 USDC of rewards sold while a 1,000,000 deposit sits next to an existing 1,000,000 hands about 10,000 to the newcomer in one block and nothing to the treasury.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""

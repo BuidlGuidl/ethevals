@@ -1,0 +1,23 @@
+schema_version = "1.3"
+artifacts = ["/workspace"]
+
+[task]
+name = "buidlguidl/audit-dex"
+description = "Check whether an auditor finds three mismatched assumptions in a singleton exchange: a launch fee the vault ignores, a launch clock anyone can start early, and a farm that counts its reward streams twice."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "solidity", "audit", "amm"]
+
+[metadata]
+pillar = "build"
+area = "Audits"
+modes = ["internet"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[environment]
+cpus = 1
+memory_mb = 2048

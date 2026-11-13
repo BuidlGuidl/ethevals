@@ -1,0 +1,10 @@
+# Proves both known Highs against the audited code in ../../environment.
+# Run from this folder: forge test
+[profile.default]
+src = "../../environment/src"
+test = "test"
+libs = []
+solc = "0.8.30"
+allow_paths = ["../../environment"]
+remappings = ["forge-std/=/opt/solidity/lib/forge-std/src/", "ballast/=../../environment/"]
+ffi = false

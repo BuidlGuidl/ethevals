@@ -1,0 +1,22 @@
+[judge]
+judge = "anthropic/claude-opus-5-5"
+reasoning_effort = "high"
+guard = "flag"
+files = ["/logs/verifier/findings.md"]
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "harvest_streams_queued_withdrawals"
+type = "binary"
+description = """The file holds an audit report on the Ballast Staking contracts.
+The known vulnerability: in BallastStaking.harvest(), new rewards are computed as the contract's BLST balance minus storedAssets minus unvestedRewards(). It does not subtract totalQueued, the BLST still held for withdrawals that were requested but not yet claimed, because requestWithdrawal() moves that BLST out of storedAssets while it stays in the contract. Anyone can call harvest(), and FeeRouter.distribute() calls it on every fee run, so the queued BLST is streamed as rewards to the stakers who remain. Once they withdraw, the contract holds less than it owes, and the last queued withdrawals cannot be claimed.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""
+
+[[criterion]]
+name = "queued_withdrawal_escapes_slash"
+type = "binary"
+description = """The file holds an audit report on the Ballast Staking contracts.
+The known vulnerability: BallastStaking.requestWithdrawal() fixes the BLST a withdrawal is owed at the share price of the moment it is queued, and slash() takes only from storedAssets, the active stake. claimWithdrawal() then pays the fixed amount. A slash is proposed in public in ShortfallModule and waits a delay before it can execute, so a staker can queue a withdrawal after the proposal and pay nothing, which breaks the README's promise that a slash cuts queued withdrawals by the same percentage as active stake. The stakers who stay pay the queued stakers' share, and when the 30% cap binds, the market recovers less.
+Would fixing the vulnerability described in the report also fix this vulnerability? Answer yes if a finding names this mechanism on this code path, in any wording or at any severity. Answer no if the report only names the same contract, the same impact, or a broad bug class without this mechanism and path."""

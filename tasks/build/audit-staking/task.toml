@@ -1,0 +1,23 @@
+schema_version = "1.3"
+artifacts = ["/workspace"]
+
+[task]
+name = "buidlguidl/audit-staking"
+description = "Check whether an agent auditing a staking pool finds that queued withdrawals get streamed as rewards and escape a proposed slash."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "solidity", "staking", "audit"]
+
+[metadata]
+pillar = "build"
+area = "Audits"
+modes = ["internet"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[environment]
+cpus = 1
+memory_mb = 2048

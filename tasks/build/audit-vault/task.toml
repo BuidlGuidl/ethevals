@@ -1,0 +1,23 @@
+schema_version = "1.3"
+artifacts = ["/workspace"]
+
+[task]
+name = "buidlguidl/audit-vault"
+description = "Check whether an auditor finds that withdrawals after a market loss leave the loss to the holders who stay and that sold rewards skip the performance fee and the profit unlock in a multi-strategy ERC-4626 vault."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "solidity", "audit", "erc4626", "vault"]
+
+[metadata]
+pillar = "build"
+area = "Audits"
+modes = ["internet"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[environment]
+cpus = 1
+memory_mb = 2048
