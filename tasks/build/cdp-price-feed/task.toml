@@ -1,0 +1,22 @@
+schema_version = "1.3"
+artifacts = ["/workspace"]
+
+[task]
+name = "buidlguidl/cdp-price-feed"
+description = "Check whether an agent's CDP price feed follows each Chainlink feed's heartbeat and decimals, prices LSTs against their staking rate, and degrades instead of reverting when a feed breaks."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "solidity", "oracles", "chainlink", "stablecoins", "cdp"]
+
+[metadata]
+pillar = "build"
+area = "Oracles"
+layer = "contracts"
+modes = ["internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 2048

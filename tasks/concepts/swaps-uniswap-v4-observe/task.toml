@@ -1,0 +1,19 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/swaps-uniswap-v4-observe"
+description = "Check whether a model knows that Uniswap v4 pools have no observe() and leave TWAP oracles to hooks."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "uniswap", "swaps", "oracles"]
+
+[metadata]
+pillar = "concepts"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024
