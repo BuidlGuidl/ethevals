@@ -1,0 +1,233 @@
+/* ETH Evals · website prototype, simplified Results. Loaded after site.css.
+   Adds the lean tables (grouped header, sortable columns, lift cell), the reading note,
+   and the home list without rank numbers. */
+
+/* ---------- lean tables: agents and models ---------- */
+.board.lean .c-name { width: 256px; }
+.board.lean .c-lift { width: 190px; }
+.board.lean.models { min-width: 760px; }
+.board.lean thead tr.grp th { padding: 9px 8px 8px; color: var(--dim); }
+.board.lean thead tr.grp + tr th { padding-top: 11px; }
+.sortb { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; padding: 3px 6px; margin: -3px -6px; }
+.sortb:hover { color: var(--ink); background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+.board.lean th[aria-sort="ascending"], .board.lean th[aria-sort="descending"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.sarr { margin-left: 6px; font-size: 11px; vertical-align: -1px; }
+.pr .few { font-size: 11px; color: var(--amber); margin-left: 1px; }
+.liftc { display: grid; gap: 7px; padding: 10px 14px; text-align: left; }
+.liftc b { font: 500 13px var(--mono); }
+.liftc b.pos { color: var(--ink); }
+.liftc b.faint { color: var(--dim); font-weight: 400; }
+
+/* ---------- results: header without KPI cards, closing note ---------- */
+.hero6.rep { grid-template-columns: minmax(0, 1fr); }
+.readnote { border-top: 1px solid var(--grid); padding-top: 18px; color: var(--muted); font-size: 13.5px; line-height: 1.65; max-width: 110ch; }
+.readnote b { color: var(--ink); font-weight: 600; }
+.readnote a { color: var(--ink); white-space: nowrap; }
+
+/* ---------- home: header without KPI cards, top agents without rank numbers ---------- */
+.hero6.home { grid-template-columns: minmax(0, 1fr); }
+.mrow { grid-template-columns: 260px minmax(0, 1fr) 110px; }
+@media (max-width: 760px) { .mrow { grid-template-columns: minmax(0, 1fr) 76px; } }
+
+/* ---------- phones: a narrow sticky name column, so Without and With fit beside it ---------- */
+@media (max-width: 760px) {
+  .board.lean .c-name { width: 118px; }
+  .board.configs.lean .row-label { width: 118px; padding: 10px 10px; }
+  .board.lean .cfg-name { font-size: 13px; }
+  .board.lean .cfg-sub, .board.lean thead .row-label .subline { display: none; }
+  .board.lean .c-lift { width: 150px; }
+}
+
+/* ---------- results: one table, three views ---------- */
+/* Without | With skills are joined (same agents, same evals); Model only sits apart, past a thin rule. */
+.tvsel { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tvsep { width: 1px; height: 26px; background: var(--border-2); }
+.segmented.tv-alt { border-style: dashed; }
+.segmented.tv-alt button[aria-pressed="true"] { border-style: solid; }
+.tvintro { color: var(--muted); font-size: 14px; line-height: 1.6; max-width: 92ch; }
+.tvnote { display: grid; gap: 8px; max-width: 96ch; padding: 14px 18px; background: var(--tint); border-left: 2px solid var(--ink); color: var(--muted); font-size: 13.5px; line-height: 1.65; }
+.tvnote b { color: var(--ink); font-weight: 600; }
+/* the paired change sits beside the score, smaller */
+.pr .v .lft { font: 500 10.5px var(--mono); margin-left: 6px; letter-spacing: 0; vertical-align: 2px; color: var(--green); }
+.pr .v .lft.faint { color: rgb(20 20 19 / 45%); font-weight: 400; }
+.pr .v .lft.neg { color: var(--red); }
+#agents .toolbar { justify-content: flex-start; }
+
+/* fixed column widths, and a table box that hugs them: no column moves between Internet and Internet + Skills */
+.table-shell.fit { width: fit-content; max-width: 100%; }
+.board.lean { table-layout: fixed; width: auto; min-width: 0; }
+.board.lean .c-name { width: 256px; }
+.board.lean .c-score { width: 150px; }
+.board.lean .c-num { width: 112px; }
+@media (max-width: 760px) {
+  .board.lean .c-name { width: 118px; }
+  .board.lean .c-score { width: 104px; }
+  .board.lean .c-num { width: 88px; }
+}
+/* the note under the table wraps to the table width instead of widening the box */
+.table-shell.fit .table-note { width: 0; min-width: 100%; box-sizing: border-box; }
+
+/* selector on the left, the note on the right: the selector sits right above the table */
+.toolbar.tvbar { align-items: flex-end; justify-content: space-between; gap: 16px 32px; flex-wrap: nowrap; }
+.tvbar .tvsel { flex: none; }
+.tvbar .tvintro, .tvbar .tvnote { max-width: 62ch; margin: 0; font-size: 13px; line-height: 1.55; }
+.tvbar .tvnote { padding: 10px 14px; }
+@media (max-width: 1000px) { .toolbar.tvbar { flex-wrap: wrap; } .tvbar .tvintro, .tvbar .tvnote { max-width: none; } }
+/* the change from skills: small, in the corner, in the skills colour */
+.board.lean .pr { position: relative; }
+.pr .lft { position: absolute; right: 7px; bottom: 5px; font: 500 10.5px var(--mono); letter-spacing: 0; color: var(--accent); }
+.pr .lft.faint { color: var(--accent); opacity: .5; font-weight: 400; }
+.pr .lft.neg { color: var(--red); }
+@media (max-width: 760px) { .pr .lft { right: 4px; bottom: 3px; font-size: 9.5px; } }
+#agents .toolbar.tvbar { justify-content: space-between; }
+/* every change from skills in the same blue */
+.pr .lft.faint { opacity: 1; font-weight: 500; }
+
+/* ---------- evals list: scorer kind, modes as tags ---------- */
+.csb { white-space: nowrap; }
+.csb b { display: block; font-weight: 600; font-size: 13px; }
+.csb span { display: block; font: 10.5px var(--mono); color: var(--dim); margin-top: 2px; }
+.cmodes { white-space: nowrap; }
+.mtag { display: inline-block; font: 10.5px var(--mono); padding: 1px 6px; margin: 0 4px 3px 0; border: 1px solid var(--border-2); color: var(--muted); background: var(--sheet); }
+.mtag.m-skills { border-color: var(--accent); color: var(--accent); }
+.mtag.m-vanilla { border-style: dashed; }
+
+/* ---------- results by agent: a pillar band above the evals ---------- */
+table.matrix.grouped th.mxp { font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); text-align: left; padding: 7px 10px; }
+table.matrix.grouped th.mxp-0 { background: #e9e8e2; }
+table.matrix.grouped th.mxp-1 { background: #d9d8d1; }
+table.matrix.grouped .gstart { border-left: 2px solid var(--ink); }
+table.matrix.grouped th.rot.gstart { border-left-color: transparent; box-shadow: inset 2px 0 0 var(--ink); }
+table.matrix.grouped td.gstart { padding-left: 0; }
+/* the corner cell spans both header rows: it must stay a table cell (row labels elsewhere are grids) */
+table.matrix.grouped thead th.row-label { display: table-cell; vertical-align: bottom; }
+.simple th .subline { display: block; margin-top: 3px; text-transform: none; letter-spacing: 0; }
+
+/* ---------- results by agent v2: agents as columns, evals as rows grouped by pillar ---------- */
+table.matrix.t2 { border-spacing: 1px; }
+table.matrix.t2 th.agh { text-align: center; vertical-align: bottom; padding: 10px 6px; min-width: 110px; background: var(--tint); }
+table.matrix.t2 th.agh .cfg-name { display: block; font-size: 13.5px; }
+table.matrix.t2 th.agh .cfg-sub { display: block; white-space: nowrap; }
+table.matrix.t2 thead th.row-label { display: table-cell; background: var(--tint); }
+table.matrix.t2 tr.mxgrp th.mxp { font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); text-align: left; padding: 8px 14px; position: static; }
+table.matrix.t2 tr.mxgrp th.mxp-0 { background: #e9e8e2; }
+table.matrix.t2 tr.mxgrp th.mxp-1 { background: #d9d8d1; }
+table.matrix.t2 th.evl { min-width: 300px; max-width: 360px; padding: 8px 14px; }
+table.matrix.t2 th.evl a { font: 600 13.5px var(--sans); text-decoration: none; color: var(--ink); }
+table.matrix.t2 th.evl a:hover { text-decoration: underline; }
+table.matrix.t2 td.mx, table.matrix.t2 .mxc { width: auto; min-width: 110px; height: 40px; }
+table.matrix.t2 .mxc { width: 100%; }
+/* v2: harness wraps under the name, so seven agent columns fit beside the eval names */
+table.matrix.t2 th.agh { min-width: 0; width: 132px; }
+table.matrix.t2 th.agh .cfg-sub { white-space: normal; line-height: 1.4; }
+table.matrix.t2 td.mx, table.matrix.t2 .mxc { min-width: 0; }
+table.matrix.t2 th.evl { min-width: 280px; }
+
+/* ---------- evals: one matrix, same selector as Results ---------- */
+#evals .toolbar.tvbar { justify-content: space-between; }
+.evcount { font: 11px var(--mono); color: var(--dim); margin: 0; }
+table.matrix.t2 td.mx.na { color: var(--dim); font-size: 12px; }
+/* the pillar name stays at the left edge while the rows scroll sideways */
+table.matrix.t2 .mxp-l { position: sticky; left: 14px; }
+
+/* phones: a spreadsheet-like window. The eval column is narrow and stays put, the agent columns are compact
+   (model name only: the harness is in the panel a cell opens), and the agent names stay at the top while the
+   evals scroll under them, so ~3.5 agents are in view instead of 1.5. Desktop is unchanged. */
+@media (max-width: 760px) {
+  /* vh, not svh: svh in this scroller with a sticky header hung Chrome's renderer in testing */
+  #evals .table-scroll { max-height: 72vh; overflow: auto; }
+  table.matrix.t2 thead th { position: sticky; top: 0; z-index: 3; }
+  table.matrix.t2 thead th.row-label { left: 0; z-index: 4; }
+  /* row labels are grids elsewhere (report.css); here they must stay real table cells, or the sticky header loops */
+  table.matrix.t2 :is(th.evl, thead th.row-label) { display: table-cell; min-width: 128px; width: 128px; max-width: 128px; box-shadow: 3px 0 6px -3px rgb(0 0 0 / 22%); }
+  table.matrix.t2 th.evl { padding: 7px 10px; }
+  table.matrix.t2 th.evl a { display: block; font-size: 12.5px; line-height: 1.3; }
+  table.matrix.t2 th.evl .cid { display: none; }
+  table.matrix.t2 th.agh { width: 62px; min-width: 62px; padding: 8px 4px; }
+  table.matrix.t2 td.mx { min-width: 62px; }
+  table.matrix.t2 th.agh .cfg-name { font-size: 11.5px; line-height: 1.25; }
+  table.matrix.t2 th.agh .cfg-sub { display: none; }
+  table.matrix.t2 td.mx, table.matrix.t2 .mxc { height: 38px; font-size: 11.5px; }
+  table.matrix.t2 .mxp-l { left: 10px; }
+  #evals .mx-title { display: flex; justify-content: space-between; gap: 12px; }
+  #evals .mx-title::after { content: "Swipe for every agent →"; color: var(--dim); letter-spacing: 0; text-transform: none; white-space: nowrap; }
+}
+
+/* ---------- landing = results: the logo, the release, the claim, what we do; then the leaderboard ---------- */
+/* phones: the brand takes only its own width (style.css stretches it to a row of its own), so the links fit */
+@media (max-width: 760px) { .sitenav .brand { width: auto; flex: none; margin: 0 8px 0 0; } }
+@media (max-width: 380px) { .sitenav .brand { margin-right: 2px; } .sitenav .navlinks a { padding: 0 6px; } .sitenav .uitg { margin-left: 4px; } }
+/* The tagline sits next to the brand where the menu has room. */
+.sitenav .navtag { display: none; }
+@media (min-width: 1100px) {
+  .sitenav .navtag { display: inline-flex; align-items: center; height: 18px; margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--border-2); font: 12px var(--mono); letter-spacing: .03em; color: var(--muted); }
+}
+/* tight vertical rhythm, so the leaderboard starts within the first screen */
+.lhero { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 12px; padding: 36px 0 0; }
+main#page:has(> .lhero) { gap: 44px; }
+/* the logo and the release line share one width: the logo's */
+.lh-brand { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; width: fit-content; max-width: 100%; }
+.lh-logo { margin: 0; }
+/* clean: the nav's name drawn large, in the same type; the square stays a small mark in the nav */
+.lh-word { display: block; width: fit-content; font: 700 clamp(56px, 7.2vw, 100px)/1 var(--sans); font-stretch: 80%; letter-spacing: -.01em; color: var(--ink); white-space: nowrap; }
+.lh-ascii { display: none; }
+.lh-ascii svg { display: block; width: 100%; height: auto; }
+/* the release, set under the logo like a version line */
+.lh-plate { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; padding-top: 10px; border-top: 1px solid var(--grid); font: 11.5px var(--mono); color: var(--dim); }
+.lh-plate > span { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.lh-plate b { color: var(--ink); font-weight: 500; }
+.lh-ver { background: var(--ink); color: var(--sheet); font-weight: 600; padding: 1px 7px; }
+.lh-tag { margin-top: 10px; font: 600 clamp(26px, 2.9vw, 38px)/1.1 var(--sans); font-stretch: 80%; letter-spacing: -.015em; color: var(--ink); text-wrap: balance; }
+/* wide enough for the description to sit on two lines on a desktop */
+.lh-desc, .lh-pillars { max-width: 84ch; font-size: 16.5px; line-height: 1.6; color: var(--muted); text-wrap: pretty; }
+.lh-pillars b { color: var(--ink); font-weight: 600; }
+/* "four pillars" leads to what each one covers, on How it works. An inline link must read as one before the
+   pointer gets there: the accent colour plus a visible solid underline (not colour alone), and a thicker,
+   full-colour underline on hover. */
+.lh-pillars a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 3px; }
+.lh-pillars a:hover { color: var(--accent); text-decoration-thickness: 2px; text-decoration-color: currentColor; }
+@media (max-width: 760px) { .lhero { padding-top: 24px; } .lh-tag { margin-top: 6px; } .lh-desc, .lh-pillars { font-size: 15px; } }
+/* On Results the big logo is the brand: the nav's brand and tagline show only once it has gone under the nav,
+   and it fades as the copy flies up to take the nav's place (the flight is in site-simple.js). */
+.sitenav .brand { transition: opacity .2s, visibility .2s; }
+.sitenav .navtag { transition: opacity .3s .25s, visibility .3s .25s; }
+.sitenav.hero-brand :is(.brand, .navtag) { opacity: 0; visibility: hidden; transition-delay: 0s; }
+.lh-logo { transition: opacity .3s; }
+.sitenav:not(.hero-brand) ~ main .lh-logo { opacity: 0; }
+.logo-ghost { position: fixed; z-index: 60; margin: 0; pointer-events: none; transform-origin: 50% 50%; }
+@media (prefers-reduced-motion: reduce) { .sitenav .brand, .sitenav .navtag, .lh-logo { transition: none; } }
+.lsec { display: grid; gap: 14px; }
+.lsec h2 { font: 600 24px/1.05 var(--sans); font-stretch: 80%; letter-spacing: -.015em; border-bottom: 1px solid var(--grid); padding-bottom: 10px; }
+.kf { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--grid); }
+.kf li { display: grid; grid-template-columns: 30px 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--grid); }
+.kfn { font: 500 20px/1 var(--sans); font-stretch: 75%; color: var(--accent); }
+.kf b { font: 600 15px var(--sans); }
+.kf p { color: var(--dim); font-size: 13px; line-height: 1.5; margin-top: 3px; }
+
+/* panel mode switch: same layout as the tables' */
+.tvsel.dmodes { justify-self: start; }
+.dmodes button:disabled { opacity: .4; cursor: not-allowed; }
+
+.rsub { color: var(--muted); font-size: 14px; line-height: 1.5; margin-top: 6px; max-width: 80ch; }
+.lft-key { color: var(--accent); font-weight: 500; }
+
+/* ---------- detail panel: the page behind stays still ---------- */
+/* While the panel is open only the panel scrolls. The lock goes on html: style.css puts it on body, but
+   report-lab's overflow-x: clip on html stops body's overflow from reaching the viewport, so it did nothing.
+   The lock hides the scrollbar; padding of the bar's width (--sbw, measured when the panel opens) keeps the
+   page from shifting sideways, and the panel still reaches the window's right edge. */
+html:has(dialog[open]) { overflow: hidden; padding-right: var(--sbw, 0px); }
+/* reaching the end of the panel doesn't hand the scroll on to the page (scroll chaining) */
+dialog { overscroll-behavior: contain; }
+/* phones: the panel is the whole screen, edge to edge */
+@media (max-width: 760px) { dialog { width: 100%; border-left: 0; box-shadow: none; } }
+/* the panel takes focus itself (site-simple.js), so it needs no ring of its own */
+dialog:focus { outline: none; }
+/* Close: one line, a 40px touch target, and taps answered at once (no wait for a double-tap zoom) */
+.close-button { flex: none; white-space: nowrap; min-height: 40px; }
+dialog button { touch-action: manipulation; }
+/* touch screens: no hover fill, which stays stuck after a tap and makes Close look pressed */
+@media (hover: none) {
+  .close-button:hover { background: transparent; color: var(--ink); }
+  :root[data-ui="geek"] .close-button:hover { background: transparent; border-color: var(--border-2); color: var(--ink); }
+}
