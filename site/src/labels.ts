@@ -21,6 +21,7 @@ const models = new Map([
   ["openai/gpt-6.1-sol", "GPT-6.1 Sol"],
   ["openai/gpt-6-astra", "GPT-6 Astra"],
   ["openai/gpt-6.2-astra", "GPT-6.2 Astra"],
+  ["openai/gpt-6.2-sol", "GPT-6.2 Sol"],
   ["openrouter/moonshotai/kimi-k3.1-pro", "Kimi K3.1 Pro"],
   ["openrouter/z-ai/glm-5.3", "GLM 5.3"],
   ["openrouter/deepseek/deepseek-v4.1-flash-1017", "DeepSeek V4.1 Flash"],

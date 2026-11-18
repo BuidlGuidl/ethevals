@@ -29,6 +29,9 @@ models:
   gpt-6.2-astra:
     name: openai/gpt-6.2-astra
     effort: high
+  gpt-6.2-sol:
+    name: openai/gpt-6.2-sol
+    effort: high
   kimi-k3.1-pro:
     name: openrouter/moonshotai/kimi-k3.1-pro
     effort: high
@@ -85,6 +88,15 @@ agents:
     name: ethevals.vanilla:VanillaAgent
     version: 0.1.0
     model: gpt-6.2-astra
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 2.0
+    env:
+      OPENAI_API_KEY: '${OPENAI_API_KEY:-}'
+  vanilla-gpt-6.2-sol:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: gpt-6.2-sol
     modes: [vanilla]
     paid_by: api_key
     cost_limit_usd: 2.0
@@ -189,6 +201,20 @@ agents:
     name: codex
     version: 0.169.1
     model: gpt-6.2-astra
+    modes: [internet, skills]
+    paid_by: plan
+    cost_limit_usd: 20.0
+    env:
+      CODEX_FORCE_AUTH_JSON: "YES"
+      # CI writes the credential file; reserve its input name and clear the raw JSON.
+      CODEX_AUTH_JSON: ""
+    required_files:
+      - path: '${CODEX_AUTH_JSON_PATH:-~/.codex/auth.json}'
+        policy: plan_tokens
+  codex-gpt-6.2-sol:
+    name: codex
+    version: 0.169.1
+    model: gpt-6.2-sol
     modes: [internet, skills]
     paid_by: plan
     cost_limit_usd: 20.0
