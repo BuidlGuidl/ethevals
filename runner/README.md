@@ -266,7 +266,9 @@ It runs on pushes to `main`, except results-only changes, with `HF_TOKEN` and th
 It tags dataset changes `gh-<short sha>` and supports manual reruns without inputs.
 `scripts/ci.py images` builds shared images locally with the same pinned GHCR tags used by the source tasks.
 Its `--publish` flag pushes Linux amd64 and arm64 images.
-Pull-request, fork, and paid-trial jobs build locally, so they need no prior image release.
+Pull-request and fork jobs build locally.
+Trial and regrade jobs pull only the shared images their tasks name, and build any tag that is not published yet.
+None of them needs a prior image release.
 See [Dataset publication](../docs/harbor.md#dataset-publication) for standalone Harbor commands.
 
 ## Maintainer checks

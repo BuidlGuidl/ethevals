@@ -128,6 +128,44 @@ def test_one_build_input_entry_adds_an_image_to_builds_and_lint(tmp_path, monkey
     assert error.value.code == 2
 
 
+def planned_job_images(tmp_path, monkeypatch, tasks, published, *flags):
+    plan = tmp_path / "plan"
+    plan.mkdir(parents=True)
+    job = [{"missing": [], "regrades": [{"task_path": task} for task in tasks]}] if "--regrade" in flags else \
+        [{"missing": [{"task_path": task} for task in tasks]}]
+    (plan / ("regrades.json" if "--regrade" in flags else "trials.json")).write_text(json.dumps([{"missing": []}, *job]))
+    (plan / ("trials.json" if "--regrade" in flags else "regrades.json")).write_text("[]")
+    calls = []
+
+    def external(*args, **kwargs):
+        calls.append(args)
+        if "pull" in args and args[-1] not in published:
+            raise subprocess.CalledProcessError(1, args)
+
+    monkeypatch.chdir(ROOT)
+    monkeypatch.setattr(ci, "command", external)
+    monkeypatch.setattr(sys, "argv", ["ci.py", "images", "--plan", str(plan), "--index", "1", *flags])
+    assert ci.main() == 0
+    return [(args[3], args[-1]) if "pull" in args else (args[1], args[args.index("--tag") + 1]) for args in calls]
+
+
+QUIZ = "ghcr.io/buidlguidl/" + image_tag(image="quiz")
+CHAIN = "ghcr.io/buidlguidl/" + image_tag(image="chain")
+QUIZ_TASK = "tasks/concepts/accounts-1271-permit2-cross-account-replay"
+CHAIN_TASK = "tasks/act/vault-v2-market-exit"
+
+
+def test_trial_jobs_pull_only_the_published_images_their_tasks_name(tmp_path, monkeypatch):
+    assert planned_job_images(tmp_path, monkeypatch, [QUIZ_TASK], {QUIZ, CHAIN}) == [("pull", QUIZ)]
+    assert planned_job_images(tmp_path / "chain", monkeypatch, [CHAIN_TASK], {QUIZ, CHAIN}, "--regrade") == [
+        ("pull", CHAIN)]
+
+
+def test_trial_jobs_build_an_image_that_is_not_published_yet(tmp_path, monkeypatch):
+    assert planned_job_images(tmp_path, monkeypatch, [QUIZ_TASK, CHAIN_TASK], {QUIZ}) == [
+        ("pull", QUIZ), ("pull", CHAIN), ("build", CHAIN)]
+
+
 @pytest.mark.parametrize("image", ["redis:7-alpine", "ghcr.io/buidlguidl/ethevals-task-owned:latest"])
 def test_task_owned_image_passes_ci_image_checks_and_lint(tmp_path, monkeypatch, image):
     import argparse

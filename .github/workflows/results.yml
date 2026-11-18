@@ -99,8 +99,9 @@ jobs:
         with:
           name: ${{ needs.plan.outputs.artifact_name }}
           path: results/ci-plan
-      # Keep Docker's default builder. A buildx container builder can't see these local images and pulls from GHCR.
-      - run: uv run python scripts/ci.py images
+      # Keep Docker's default builder. A buildx container builder can't see local images and pulls from GHCR.
+      # Pull this job's published shared images, and build any that release.yml has not pushed yet.
+      - run: uv run python scripts/ci.py images --plan results/ci-plan --index ${{ matrix.index }}
       - name: Run one planned trial
         timeout-minutes: 190
         env:
@@ -156,7 +157,7 @@ jobs:
         with:
           name: ${{ needs.plan.outputs.artifact_name }}
           path: results/ci-plan
-      - run: uv run python scripts/ci.py images
+      - run: uv run python scripts/ci.py images --plan results/ci-plan --index ${{ matrix.index }} --regrade
       - name: Regrade saved trials
         if: ${{ !matrix.judge && !matrix.workspace }}
         run: >-
