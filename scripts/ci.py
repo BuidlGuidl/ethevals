@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -306,8 +307,34 @@ def hf_tag(sha):
     return f"gh-{sha[:7]}"
 
 
+def job_images(plan, index, regrade):
+    """Shared image tags that the task folders of one planned job name."""
+    report = json.loads((plan / ("regrades.json" if regrade else "trials.json")).read_text())[index]
+    folders = {Path(item["task_path"]) for item in [*report["missing"], *report.get("regrades", [])]}
+    text = "\n".join(file.read_text(errors="replace") for folder in folders
+                     for file in sorted(folder.rglob("*")) if file.is_file())
+    return set(re.findall(r"ghcr\.io/buidlguidl/ethevals-[\w:.-]+", text))
+
+
+def pull(tag):
+    """Pull a published image built from the same inputs as its tag.
+
+    Packages fetched during the build, such as Python dependencies, are not pinned, so they can differ from a local build.
+    """
+    with tempfile.TemporaryDirectory(prefix="ethevals-public-image-") as anonymous:
+        try:
+            command("docker", "--config", anonymous, "pull", tag)
+            return True
+        except subprocess.CalledProcessError:
+            # release.yml pushes new tags during the same push to main, so a trial can start first.
+            print(f"{tag} could not be pulled; building it locally", file=sys.stderr)
+            return False
+
+
 def images(args):
     directory = Path(__file__).resolve().parents[1] / "runner/ethevals/images"
+    plan = getattr(args, "plan", None)
+    needed = None if plan is None else job_images(plan, args.index, args.regrade)
     tags = []
     for name, inputs in BUILD_INPUTS.items():
         dockerfile = inputs[0]
@@ -316,7 +343,7 @@ def images(args):
         if args.publish:
             command("docker", "buildx", "build", "--platform", "linux/amd64,linux/arm64", "--push",
                     "--file", directory / dockerfile, "--tag", tag, directory)
-        else:
+        elif needed is None or (tag in needed and not pull(tag)):
             command("docker", "build", "--file", directory / dockerfile, "--tag", tag, directory)
     if args.publish:
         # GHCR starts new packages as private. Do not publish tasks until readers can pull them.
@@ -356,6 +383,10 @@ def main():
     checks_parser.add_argument("--shard", help="With --part docker, run shard I of N, written I/N.")
     builder = commands.add_parser("images", help="Build shared images with the GHCR tags used by task folders.")
     builder.add_argument("--publish", action="store_true", help="Push multi-architecture images to GHCR.")
+    builder.add_argument("--plan", type=Path,
+                         help="Prepare only the images that one planned job's tasks name, pulling each published one.")
+    builder.add_argument("--index", type=int, help="With --plan, the planned job's index.")
+    builder.add_argument("--regrade", action="store_true", help="With --plan, read the planned regrades.")
     planner = commands.add_parser("plan-trials")
     planner.add_argument("--output", type=Path, required=True)
     planner.add_argument("--restore-results", action="store_true")
@@ -384,6 +415,8 @@ def main():
         if args.command == "run-trial":
             return run_trial(args)
         if args.command == "images":
+            if args.plan and args.index is None:
+                raise ValueError("--plan needs --index")
             return images(args)
         if args.command == "publish-results":
             return publish_artifacts(args)
