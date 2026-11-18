@@ -370,6 +370,7 @@ test("configurations show one agent logo beside the name, or one provider logo f
     ["anthropic/claude-fable-5-1", "claude-code", "claude", "claude-code", "Fable 5.1"],
     ["openai/gpt-6.1-sol", "codex", "openai", "codex", "GPT-6.1 Sol"],
     ["openai/gpt-6-astra", "codex", "openai", "codex", "GPT-6 Astra"],
+    ["openai/gpt-6.2-astra", "codex", "openai", "codex", "GPT-6.2 Astra"],
     ["openrouter/moonshotai/kimi-k3.1-pro", "opencode", "openrouter", "opencode", "Kimi K3.1 Pro"],
     ["openrouter/z-ai/glm-5.3", "opencode", "openrouter", "opencode", "GLM 5.3"],
     ["openrouter/deepseek/deepseek-v4.1-flash-1017", "opencode", "openrouter", "opencode", "DeepSeek V4.1 Flash"],
