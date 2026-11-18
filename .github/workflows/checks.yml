@@ -18,12 +18,12 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      # Changes only to the site, docs, or top-level Markdown can't change a trial, so they skip Docker.
+      # Changes only to the site, docs, results, or top-level Markdown can't change a trial, so they skip Docker.
       - id: paths
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          if git diff --name-only "$BASE" HEAD | grep -qvE '^(site/|docs/|[^/]+\.md$)'; then
+          if git diff --name-only "$BASE" HEAD | grep -qvE '^(site/|docs/|results/|[^/]+\.md$)'; then
             echo docker=true >> "$GITHUB_OUTPUT"
           else
             echo docker=false >> "$GITHUB_OUTPUT"
