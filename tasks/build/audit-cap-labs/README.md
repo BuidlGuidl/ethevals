@@ -7,7 +7,7 @@ A judge then checks whether the report's first 10 findings hold each High and Me
 
 > You are a smart contract security auditor auditing CAP. Review the contracts in /work/project/contracts and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
-> CAP is a stablecoin protocol. Users deposit stablecoins into a vault to mint cUSD, and can stake cUSD in StakedCap to earn the protocol's yield. Approved borrowers called agents borrow the vault's reserves through the Lender, and restakers back each agent's loans with collateral delegated through Symbiotic. Idle reserves earn yield in outside vaults, and a fee auction sells that yield for cUSD.
+> CAP is a stablecoin protocol. Users deposit stablecoins into a vault to mint cUSD, and can stake cUSD in StakedCap to earn the protocol's yield. Borrowers, called agents, borrow the vault's reserves through the Lender, and restakers back each agent's loans with collateral delegated through Symbiotic. Idle reserves earn yield in outside vaults, and a fee auction sells that yield for cUSD.
 
 ## What it touches
 
@@ -34,13 +34,13 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `tob_cap_4_notify_timer_reset` | The report finds TOB-CAP-4: anyone can call `notify()` with 1 wei to restart StakedCap's vesting, so stakers' yield stays locked | staking yield |
+| `tob_cap_4_notify_timer_reset` | The report finds TOB-CAP-4: anyone can call `notify()` with 1 wei to restart StakedCap's vesting, so stakers' locked yield keeps being pushed back | staking yield |
 | `tob_cap_5_balance_tracking` | The report finds TOB-CAP-5: tokens sent straight to the vault let a burn push tracked supply below borrows, so borrowing the asset stops | vault accounting |
 | `tob_cap_12_vault_adapter_rate` | The report finds TOB-CAP-12: anyone can call the rate adapter with a fake vault and inflate a real asset's interest rate | interest rates |
 | `tob_cap_13_fee_auction_zero_assets` | The report finds TOB-CAP-13: a front-runner empties the fee auction and the victim's buy still pays, for nothing | fee auction |
 | `tob_cap_14_health_vs_slashable` | The report finds TOB-CAP-14: fresh delegations raise an agent's health but can't be slashed, so the protocol takes the loss | delegation |
 | `tob_cap_15_reward_delegation_snapshot` | The report finds TOB-CAP-15: restaker interest is split by delegation at repayment, so a vault that delegates just before takes rewards it didn't earn | restaker rewards |
-| `tob_cap_17_staked_cap_decimals` | The report finds TOB-CAP-17: the staked cUSD price uses 18 where it needs 1e18, so it is off by orders of magnitude | oracles |
+| `tob_cap_17_staked_cap_decimals` | The report finds TOB-CAP-17: the staked cUSD price uses 18 where it needs 1e18, so the price is wrong | oracles |
 | `tob_cap_19_oracle_sandwich` | The report finds TOB-CAP-19: minting before and burning after an oracle update takes the price move out of the vault | mint and burn |
 
 ## Why it matters

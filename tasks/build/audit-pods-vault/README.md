@@ -39,7 +39,7 @@ The reward is 1 only when every check passes.
 | `c3_withdraw_rounds_shares_down` | The report finds C-3: `withdraw` rounds the burned shares down, so repeated small withdrawals drain the vault | rounding |
 | `h1_withdraw_blocks_end_round` | The report finds H-1: a withdrawal can leave the round's starting assets above the vault's assets, so `endRound` underflows and reverts | round accounting |
 | `h2_base_deposit_reentrancy` | The report finds H-2: the base vault queues a deposit before pulling the tokens, so a token with a callback can re-enter and inflate it | order of state changes |
-| `h3_processing_rounds_shares_up` | The report finds H-3: processing the queue rounds minted shares up, so 1-wei deposits each get a whole share | rounding |
+| `h3_processing_rounds_shares_up` | The report finds H-3: processing the queue rounds minted shares up, so each 1-wei deposit gets one share unit | rounding |
 
 ## Why it matters
 
