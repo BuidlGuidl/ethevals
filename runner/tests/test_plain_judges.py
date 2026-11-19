@@ -106,7 +106,7 @@ def test_native_tasks_ship_the_same_credential_rule_and_optional_host_inputs(mon
     clear_credentials(monkeypatch)
     canonical = (TESTS / 'judge_credentials.py').read_bytes()
     files = list((ROOT / 'tasks').glob('*/*/tests/judge_credentials.py'))
-    assert len(files) == 9
+    assert len(files) == 10
     for file in files:
         assert file.read_bytes() == canonical
         task = tomllib.loads((file.parent.parent / 'task.toml').read_text())

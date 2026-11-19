@@ -1,0 +1,3 @@
+You are a smart contract security auditor auditing ONCHAINID. Review the contracts in /work/project/contracts and write your findings to /workspace/findings.md. List at most 10, the most severe first.
+
+ONCHAINID is the identity layer for T-REX (ERC-3643) permissioned tokens. Identity contracts hold keys and claims, and tokens read them to decide who may hold. This version makes each identity an ERC-7579 smart account that also works with ERC-4337. A validator module keeps the ERC-734 keys and decides what each key may call. A factory deploys identities and links wallets to them. Smaller modules handle queued approvals, recovery, claims and reputation.

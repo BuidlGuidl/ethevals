@@ -9,7 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 JUDGE_VARIANTS = {
     'file judge': ('act/treasury-eth-sale', [
-        'act/treasury-eth-sale', 'build/voting-page',
+        'act/treasury-eth-sale', 'build/audit-onchainid', 'build/voting-page',
         'concepts/governance-arbitrum-block-clock', 'concepts/smart-accounts-userop-hash-v08',
         'concepts/swaps-permit2-zero-expiration', 'concepts/wallet-atomic-ready', 'concepts/wallet-batch-status-600']),
     'page judge': ('build/swap-page', ['build/swap-page', 'build/aave-savings-page']),
