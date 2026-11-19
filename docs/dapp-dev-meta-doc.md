@@ -1,18 +1,76 @@
-# dapp-dev meta doc: how we find and shape tasks
+# How we find and shape tasks
 
-This doc is for the agent helping someone write dapp-development tasks for ETH Evals and the Ethereum Foundation's ethereum-benchmarks. It covers how we think about the territory, what a good task looks like to us, and how to start finding one. The details live behind the links.
+This doc is for people and agents writing tasks for ETH Evals. It shares how we think about tasks, what makes one worth keeping, and a light path from an idea to a pull request. It is a guide for taste, not a rigid checklist.
 
-We test agents that already build like senior developers. A task finds where they still fall short across the whole job of shipping an app: contracts, scripts and the frontend. Security is one part of that job.
+ETH Evals tests practical Ethereum, meaning how well agents build, act, and make real-world calls when working with Ethereum. We are past testing whether a model knows basic Solidity or can follow a detailed spec. What separates models now is judgment.
 
-## How we think about the territory
+## The three pillars
 
-### The tech tree is the door
+Each task sits in one pillar and stands on its own. You do not need to bundle Concepts tasks with a Build or Act task.
 
-[The Ethereum tech tree](https://gist.github.com/technophile-04/4d50f54a43fc1c407d6b6fe894596548) takes a developer from junior to senior. Agents are already past most of it. They know an app needs a cron job, and they know how to deploy. What we take from the tech tree is its big blocks: DEX, lending, NFTs, DAOs, smart contract wallets and the rest. Those blocks are where you start. For each one you read how it is built today, mainly in apps live on Ethereum mainnet, and the task comes out of that reading.
+- **Concepts.** A question with a fixed answer or judge criteria. It checks practical Ethereum knowledge and reasoning, especially where a bare model with no web gets it wrong.
+- **Build.** The agent starts in an environment and writes code: contracts, a frontend, scripts, or an audit report. The verifier checks what it wrote.
+- **Act.** The agent sends real transactions on a chain, usually a mainnet fork, and the verifier checks what changed onchain (balances, receipts, approvals, protocol state).
 
-### The map
+For Act tasks, it is fine for the instruction to say the chain is a fork. Frontier models often refuse real-looking mainnet transactions out of caution, and saying it is a fork avoids false refusals while keeping the rest of the task realistic.
 
-Use cases are what the app is for, in the words of ethereum.org's [use cases](https://ethereum.org/en/use-cases/), with the tech tree's blocks in brackets:
+## What makes a task worth keeping
+
+### Practical Ethereum and real-world judgment
+
+Latest open models are strong at tactical checks and textbook patterns. Short bug snippets, isolated trivia, and tightly specified instructions rarely separate models anymore.
+
+Good tasks test judgment, meaning the calls an experienced Ethereum developer makes without being told. For example:
+
+- In a Build task, does the frontend handle network switching when sending a transaction, or does a governor handle Snapshot delegates and wrapping cleanly ([`token-governor`](../tasks/build/token-governor/))?
+- In an Act task, does the agent notice the biggest pools are mispriced before selling 400 ETH ([`treasury-eth-sale`](../tasks/act/treasury-eth-sale/)), or check pending cap raises before exiting a vault?
+- In a security or audit task (filed under Build for now), can the agent audit a real codebase and tell an exploitable bug from code that looks like a famous exploit but is already patched?
+
+### The instruction reads like a real user
+
+Write the instruction the way a real user would send it: a developer asking for an app, an operator asking to rebalance a vault, or a team asking for a pre-launch audit. Say what they want, why, and the few details they would naturally include, such as where files go or that they are running on a fork.
+
+Leave the rest to the agent. If every agent would build something incompatible, the instruction is too loose. If it lists every function and edge case, it becomes a spec, and a spec only tests instruction following.
+
+For every check, point to the sentence in the instruction that failing work breaks, read as a careful user would read it. If the person asking would say "that's not what I asked for", the check is fair even when hidden. If they would say "I should have asked for that", fix the instruction, not the check.
+
+### The bar
+
+A task is worth keeping when either a frontier model fails it, or at least two open models fail it, for a real practical-Ethereum reason rather than a trick or ambiguous wording. The active agents and models live in [`runner/ethevals/job.yaml`](../runner/ethevals/job.yaml).
+
+Only a trial proves whether a task meets this bar. A past incident or audit report is a good reason to try an idea, not proof that current models will fail it.
+
+A few quick questions to sanity-check an idea:
+
+- Would an experienced reviewer block a merge or stop a transaction over this?
+- Does it test real-world judgment rather than pattern matching?
+- Does it reflect how Ethereum is used today?
+
+## Where ideas come from
+
+Start from whichever door fits best:
+
+- **Your own Ethereum work.** Things you built, sent onchain, got wrong, or had to debug in production. War stories make the best tasks, especially for Act.
+- **Live mainnet protocols and incidents.** Reading how real apps work on Ethereum mainnet, what their libraries warn about in comments, and what went wrong in audits or post-mortems.
+- **The map below.** Optional inspiration when you want to see areas we have not covered yet.
+
+Before writing checks, scan the existing tasks in [`tasks/`](../tasks/) and [open pull requests](https://github.com/BuidlGuidl/ethevals/pulls) so we do not duplicate what is already covered.
+
+## From idea to pull request
+
+1. **Share the rough idea first.** Write a few lines on who is asking, what they want done, and where you expect agents to fail. Align on the idea with the team before building the full task.
+2. **Build the task folder.** Read [CONTEXT.md](../CONTEXT.md) for the repo's vocabulary and [Add a task](add-a-task.md) for the folder layout, sidecar chains, and verifier setup.
+3. **Run `free-check`.** Confirm lint passes, the oracle run passes every check, and the nop run fails.
+4. **Trial it on the models you have access to.** Run the task in internet mode on your frontier plans (ideally both Claude Code and Codex). If you also have OpenRouter access, run the open models from [`job.yaml`](../runner/ethevals/job.yaml) too for the strongest evidence. If you do not have OpenRouter keys, that is fine. Maintainers and CI can run those checks.
+5. **Read the trajectories before tuning.** Separate real failures in the agent's work from setup bugs, ambiguous instructions, or overly narrow checks. Fix the task when the failure is ours, then open the pull request. See [Plan and run](../runner/README.md#plan-and-run) for runner commands and budgets.
+
+## Optional map and resources
+
+Use these as inspiration, not as a list you have to walk through.
+
+### Areas of Ethereum
+
+Rough use cases from [ethereum.org](https://ethereum.org/en/use-cases/) with blocks from the [Ethereum tech tree](https://gist.github.com/technophile-04/4d50f54a43fc1c407d6b6fe894596548):
 
 - Financial tools (DEX and swaps, lending, vaults and staking, stablecoins, payments and payouts, oracles)
 - Digital ownership and gaming (NFTs, onchain art and metadata, games and randomness)
@@ -22,90 +80,22 @@ Use cases are what the app is for, in the words of ethereum.org's [use cases](ht
 - Science and public goods (grants, quadratic funding, DeSci, ReFi)
 - UX and infra (smart contract wallets and account abstraction, indexing, bridges and L2s, mempool and MEV)
 
-The last one takes its name from the tech tree, because ethereum.org has no use case for it. The list will extend as tasks arrive.
+### Sources
 
-A task works in one or more parts of the app: the contracts, the scripts and the frontend.
+Where developers learn and build:
 
-The map is for looking around. A task can touch several use cases and parts of the app, and many tasks can sit in the same one. What matters is overlap. Before you write checks, read the README of each task already in [`tasks/`](../tasks/), and make sure your checks are mostly new. Do the same for the tasks in [open pull requests](https://github.com/BuidlGuidl/ethevals/pulls?q=is%3Apr+is%3Aopen+label%3A%22type%3A+build%22%2C%22type%3A+script%22%2C%22type%3A+quiz%22).
-
-### Three kinds of task
-
-Tasks sit in three pillars: Concepts, Build and Act. Each builder story gives a few Concepts tasks, and a Build or an Act task.
-
-- **Concepts.** A Concepts task asks a question with a fixed answer. It tests a concept, and the answer stays the same whichever library you use. Agents with the web answer it too, but a Concepts task is also worth keeping when a bare model, with no web, gets it wrong.
-- **Build.** The agent gets an environment and an instruction written as the builder's message, and writes code: contracts, scripts or a page. The tests run what it wrote.
-- **Act.** The agent acts on a chain. It sends transactions, or writes a script that sends them, and the checks look at what changed on the chain.
-
-In a Build or Act task, hidden checks look at two things. Did the agent do the job, and did it do what a senior Ethereum app developer would do without being told?
-
-## What a good task looks like
-
-### A builder story with its own mechanics
-
-A builder story is the app a developer would ask for, plus the mechanics that make it theirs. "A lending market" names a use case. The story adds what this team's market does differently.
-
-The one finished example is [token governor](../tasks/build/token-governor/). Its story is a team with a live token they can't change, who want holders to control the treasury and protocol through a governor their Snapshot delegates and wrap flow can use. Its README shows the instruction, what the instruction leaves out, and the checks.
-
-### The instruction reads like a builder's message
-
-Write the instruction as the message that builder would send. A real builder says what they want and why, plus the few things they would mention anyway, such as where the code goes or who will call it. That is usually enough for the checks to reach the work. The rest is the agent's call, and that is where the unsaid things live. If every agent would build something different, the instruction is too loose. If it lists every function and edge case, it has become a spec, and a spec only tests whether the agent can follow it.
-
-### The bar is what an open model misses and a strong one works hard for
-
-A good task is one that a current open model, such as GLM or Kimi, gets wrong without being told, for a reason a senior developer would recognise. A strong model may pass it, but only with hard work. The best tasks make a strong model fail at least one check in at least one of its trials. A good task lets it pass after real reading, testing and fixing, not on its first attempt. Time is not the measure, and an agent may take an hour. Only a trial shows any of this. An incident or a textbook shows that people got something wrong. That's a reason to try the idea, not proof that a model will miss it.
-
-For each check, point to the sentence in the instruction that the failing work breaks, read as a careful builder would read it. If the builder would say "that's not what I asked for", the check is fair however hidden. If they would say "I should have asked for that", fix the request, not the check. Two clauses that pull against each other fail this test too.
-
-Keep these in mind while you shape a task:
-
-- Would a reviewer on a real team block the merge without this check?
-- Would a competent developer still get it wrong, where a senior one gets it right?
-- Does more than one source teach this idea?
-- Does it use today's tools and standards?
-
-## How to start finding one
-
-### Taste and judgment
-
-Finding a task is a funnel with two filters. Reading turns up many ideas quickly, and most of them look fine. Taste is the first filter. It is the feel for a good task that the section above describes, and it rules out most ideas fast. What it leaves is a few good ideas it can't choose between. Judgment is the second filter. It weighs what each of those would teach us against what it costs in reading, trials and the reviewer's time, and it picks one. Taste without judgment gives a fine task too late. Judgment without taste gives a task on time that every model passes.
-
-Judgment also sets how much you read. Read until you have a few ideas worth filtering, then stop. Hand reading to helpers when it saves time: two or three of them, each with one clear question and a short report to bring back. Keep it one level deep, so each helper does its own reading and reports to you. The taste stays with you, so read their reports and the code they point to before you choose.
-
-### The steps
-
-1. Pick a big block from the map that you can picture a builder asking for.
-2. Read how it is built today:
-   - Start with two or three apps live on Ethereum mainnet. That is where the most value sits and where the patterns are most tested. Read each app and its GitHub repo as a vertical slice: the contracts, and how the frontend and scripts use them. Take the patterns the best teams use and leave the code. Write each one down with the case where it looks satisfied and still breaks; that case is what a check sees. A judge reads what no test or chain state can show, and each of its questions names the sentence it rests on and the code it compares against.
-   - Follow what the apps raise into the libraries' source and comments, which show what their authors worry about, and into audit checklists and recent incidents. Go to them with a question from the apps.
-   - Newness is not a reason to pick a task. An agent with the web reads deployed code and docs in minutes. What changed after training helps a Concepts task, where a bare model answers from memory.
-3. Write a few builder stories, two lines each: the story, and what it never mentions that a senior developer would handle. Let taste drop most of them and judgment pick one.
-4. Write the Concepts tasks, and the instruction for the Build or Act task, from that story.
-5. Show the person you're working with the story, the Concepts tasks, the instruction and the decisions behind them, including the stories you dropped and why. Agree on them before any trial.
-6. Trial the instruction cheaply. Give it to a strong agent and an open one in a plain project, two or three times each, and read what they did. Write the hidden checks around what they actually missed.
-7. Make the task folder. Read [CONTEXT.md](../CONTEXT.md) for the words and [Add a task](add-a-task.md) for the folder.
-8. Calibrate it with the runner, using your own keys in a `.env` at the repo root, passed with `uv run --env-file .env`. Round 1 is one trial each of `claude-code-opus-5.5`, `codex-gpt-6.1-sol`, `opencode-glm-5.3` and `opencode-kimi-k3` in the internet mode, in one job. Before a failure counts, name its reason: the agent's install or its own limits, our verifier, or the work. Only the last is a miss. If both open models pass every check for the right reasons, the task is too easy. If the failures come from the task itself, such as a vague instruction, two clauses that pull against each other, or a check that accepts only one design, fix the task. Read the strong models' trajectories too. A pass with no reading, testing or fixing along the way means the task is too easy for them. Round 2 is a second trial for each agent whose single result decides the verdict. [Plan and run](../runner/README.md#plan-and-run) has the commands and budgets.
-
-## Sources
-
-Where builders learn. Use these as doors.
-
-- The Ethereum tech tree as one markdown file: [gist](https://gist.github.com/technophile-04/4d50f54a43fc1c407d6b6fe894596548), or the [raw file](https://gist.githubusercontent.com/technophile-04/4d50f54a43fc1c407d6b6fe894596548/raw/ethereum-tech-tree.md) for agents
+- [Ethereum tech tree](https://gist.github.com/technophile-04/4d50f54a43fc1c407d6b6fe894596548) ([raw markdown](https://gist.github.com/technophile-04/4d50f54a43fc1c407d6b6fe894596548/raw/ethereum-tech-tree.md))
 - [SpeedRunEthereum challenges](https://github.com/scaffold-eth/se-2-challenges) and [build prompts](https://speedrunethereum.com/build-prompts)
-- [ETH Tech Tree](https://github.com/BuidlGuidl/eth-tech-tree-challenges)
-- [BuidlGuidl CTF](https://ctf.buidlguidl.com)
+- [ETH Tech Tree](https://github.com/BuidlGuidl/eth-tech-tree-challenges) and [BuidlGuidl CTF](https://ctf.buidlguidl.com)
+- [ethereum.org developer docs](https://ethereum.org/en/developers/docs/)
 
-How experienced teams build:
+Libraries, skills, and audits where teams record real gotchas:
 
-- Apps live on Ethereum mainnet in the use case, and their GitHub repos
 - [wagmi](https://wagmi.sh), [viem](https://viem.sh), [Scaffold-ETH 2](https://github.com/scaffold-eth/scaffold-eth-2)
 - [OpenZeppelin](https://github.com/OpenZeppelin/openzeppelin-contracts), [Solady](https://github.com/vectorized/solady), [Permit2](https://github.com/Uniswap/permit2)
-- Skills where teams write down their patterns: [OpenZeppelin](https://github.com/OpenZeppelin/openzeppelin-skills), [Trail of Bits](https://github.com/trailofbits/skills), [Pashov Audit Group](https://github.com/pashov/skills), [Cyfrin](https://github.com/Cyfrin/solskill), [Uniswap](https://github.com/Uniswap/uniswap-ai), [Paul Berg](https://github.com/PaulRBerg/agent-skills)
-- Audit reports: [Spearbit](https://github.com/spearbit/portfolio), [Trail of Bits](https://github.com/trailofbits/publications), [Pashov Audit Group](https://github.com/pashov/audits)
-
-What went wrong in the wild: [Rekt](https://rekt.news).
+- Pattern skills: [OpenZeppelin](https://github.com/OpenZeppelin/openzeppelin-skills), [Trail of Bits](https://github.com/trailofbits/skills), [Pashov Audit Group](https://github.com/pashov/skills), [Cyfrin](https://github.com/Cyfrin/solskill), [Uniswap](https://github.com/Uniswap/uniswap-ai), [Paul Berg](https://github.com/PaulRBerg/agent-skills)
+- Audit reports and incidents: [Spearbit](https://github.com/spearbit/portfolio), [Trail of Bits](https://github.com/trailofbits/publications), [Pashov Audit Group](https://github.com/pashov/audits), [Rekt](https://rekt.news)
 
 Background:
 
-- [ethereum.org developer docs](https://ethereum.org/en/developers/docs/)
-- [The dapp-development proposal](https://shiv-notes.notion.site/Dapp-development-discussion-3f9c3b5e527581529604dc8d4dc251b5)
 - [Anthropic's post on automating eval design](https://claude.dev/blog/automating-eval-design-and-hillclimbing/)
