@@ -1,0 +1,3 @@
+You are a smart contract security auditor auditing Automata DCAP Attestation. Review the contracts in /work/project/contracts and /work/project/lib/automata-on-chain-pccs/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
+
+Automata DCAP Attestation verifies Intel SGX and TDX attestation quotes on-chain. An entrypoint contract reads each quote's header and passes it to the verifier for that quote version, which checks the quote against Intel's signed collateral. That collateral lives in the on-chain PCCS, a separate set of contracts anyone can upload Intel-signed data to, which the verifiers read through a router. A caller can also submit a RISC Zero or SP1 proof that the quote was verified off-chain instead.
