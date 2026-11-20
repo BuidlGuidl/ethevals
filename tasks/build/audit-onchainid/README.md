@@ -1,7 +1,8 @@
 # ONCHAINID audit
 
-The agent audits ONCHAINID's contracts at the commit OpenZeppelin reviewed and writes a findings report.
-A judge then checks whether the report's first 10 findings hold each Critical and High finding from [OpenZeppelin's audit](https://www.openzeppelin.com/news/onchainid-audit), one question per finding.
+The team behind ONCHAINID, the identity layer for T-REX permissioned tokens, has rebuilt each identity as a smart account and hands the code to a security auditor.
+The agent is that auditor: it gets ONCHAINID at the commit OpenZeppelin reviewed and writes up what it finds.
+A judge then checks whether its report holds the Critical and the two High findings from [OpenZeppelin's audit](https://www.openzeppelin.com/news/onchainid-audit).
 
 ## The instruction
 
@@ -11,12 +12,8 @@ A judge then checks whether the report's first 10 findings hold each Critical an
 
 ## What it touches
 
-The image clones [T-REX-Network/ONCHAINID](https://github.com/T-REX-Network/ONCHAINID) at `d2096509e3bed2589fff36f6f673498f47e23d73`, the commit the audit names.
-It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
-`contracts/` holds the 28 files the audit covered, about 4,400 lines. The tests and the deploy script are there too.
-The project pulls its libraries with Soldeer, which the agent can run, since it has the web.
-
-All three findings sit on the line between an ACTION key, which may call other contracts, and a MANAGEMENT key, which controls the identity:
+The instruction lists the modules and says nothing about where to look.
+All three findings sit on the line between an ACTION key, which may call other contracts, and a MANAGEMENT key, which controls the identity.
 
 - **Two readers of one batch.** The validator checks a batch before it runs, and the account decodes it again to run it. The auditor has to notice that the two decodes measure their bounds against different calldata, and build a batch the two read differently.
 - **Two approval paths.** The queued-approval module has an auto-approval path and a queue-then-approve path. The auditor has to compare their guards and see that only one refuses calls to the factory.
@@ -24,9 +21,11 @@ All three findings sit on the line between an ACTION key, which may call other c
 
 ## The checks
 
-The verifier copies `/workspace/findings.md` to `/logs/verifier/findings.md` and gives that file to the judge.
-Each finding counts when one of the report's first 10 findings names the same flaw, in the same code, with the same consequence.
-Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark, a list of areas to review, or the mechanism placed where it does no harm doesn't count.
+The agent starts with [T-REX-Network/ONCHAINID](https://github.com/T-REX-Network/ONCHAINID) at `d2096509e3bed2589fff36f6f673498f47e23d73` in `/work/project`, as one commit with no history, since later commits hold the fixes.
+`contracts/` holds the 28 files the audit covered, about 4,400 lines. The tests and the deploy script are there too.
+The agent writes `/workspace/findings.md`, and the judge reads only that file.
+A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
+Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
 
 | Check | What it proves | Area |
@@ -38,15 +37,28 @@ The reward is 1 only when every check passes.
 
 ## Why it matters
 
-Identity contracts decide who may hold a regulated token, so a key that can raise its own rights can take over the identity.
-OpenZeppelin's [ONCHAINID audit](https://www.openzeppelin.com/news/onchainid-audit) (September 2026) found these three flaws, and the project fixed them:
+This is one of 16 audit tasks picked from public OpenZeppelin and Trail of Bits reports. [Issue #109](https://github.com/BuidlGuidl/ethevals/issues/109) has the full list and how we picked them.
+ONCHAINID is in because it has two permission gaps, and one place where the signature checker and the account read the same call differently.
+
+When the code that approves a call and the code that runs it read the calldata differently, an approval for one call can carry another.
+In March 2023 [Alchemy reported](https://www.alchemy.com/blog/erc-4337-useroperation-packing-vulnerability) that ERC-4337's EntryPoint and its example VerifyingPaymaster copied calldata into a hash with assembly that trusts the encoded offsets.
+So two different user operations could have the same hash, and a paymaster's signature could leave `initCode` and `callData` out, free to change after signing. The EntryPoint was patched, and the post reports no loss.
+ONCHAINID's identities work with ERC-4337, and C-1 is the same kind of split, between its validator and its account.
+
+Every path that can change who controls a wallet needs the owner check, and one path without it hands the wallet over.
+In July 2017 an attacker drained 153,037 ETH from three Parity multisig wallets, by [OpenZeppelin's account](https://www.openzeppelin.com/news/on-the-parity-wallet-multisig-hack-405a8c12e8f7).
+The wallet forwarded unmatched calls to a library, which made the library's public functions "callable by anyone", and its `initWallet` "has no checks to prevent an attacker from calling it after the contract was initialized".
+The attacker set the owner list to its own address alone and sent all the funds out.
+H-2 is such a path: the key registry writes the identity's keys, and the queued path lets an ACTION key call it.
+
+These three were caught in OpenZeppelin's audit (September 2026), and the project fixed them:
 
 - C-1 in [T-REX-Network/ONCHAINID#39](https://github.com/T-REX-Network/ONCHAINID/pull/39).
 - H-1 and H-2 in [T-REX-Network/ONCHAINID#41](https://github.com/T-REX-Network/ONCHAINID/pull/41).
 
 ## Notes
 
-The audit also lists Medium and Low findings. The task checks only the Critical and the two Highs, and other true findings in the report don't fail it.
-The project's own tests in `test/poc/` show escalation paths the developers had already closed, and the auditors had the same files.
-One of them sends an ACTION key's queued `addKey` to the key registry and passes only because its setup installs the validator as an executor, which is close to H-2.
-The free check runs no judge. Its oracle run passes `report_written` with the solution's report, and its nop run fails it.
+- The audit also lists Medium and Low findings. The task checks only the Critical and the two Highs, and other true findings in the report don't fail it.
+- The project's own tests in `test/poc/` show escalation paths the developers had already closed, and the auditors had the same files. One of them sends an ACTION key's queued `addKey` to the key registry and passes only because its setup installs the validator as an executor, which is close to H-2.
+- The project pulls its libraries with Soldeer, so the agent has to run `forge soldeer install` before it can build. It has the web.
+- The free check runs no judge. Its oracle run passes `report_written` with the solution's report, and its nop run fails it.

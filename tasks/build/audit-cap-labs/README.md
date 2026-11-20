@@ -1,7 +1,8 @@
 # CAP audit
 
-The agent audits CAP's contracts at the commit Trail of Bits reviewed and writes a findings report.
-A judge then checks whether the report's first 10 findings hold each High and Medium finding from [Trail of Bits' review](https://github.com/trailofbits/publications/blob/master/reviews/2025-05-caplabs-coveredagentprotocol-securityreview.pdf) that an attacker or ordinary user can use, one question per finding.
+A team building a stablecoin that lends its reserves to approved borrowers hands its contracts to a security auditor.
+The agent is that auditor: it gets CAP's contracts at the commit Trail of Bits reviewed and writes up what it finds.
+A judge then checks whether its report holds the eight High and Medium findings from [Trail of Bits' review](https://github.com/trailofbits/publications/blob/master/reviews/2025-05-caplabs-coveredagentprotocol-securityreview.pdf) that an attacker or ordinary user can use.
 
 ## The instruction
 
@@ -11,12 +12,9 @@ A judge then checks whether the report's first 10 findings hold each High and Me
 
 ## What it touches
 
-The image clones [cap-labs-dev/cap-contracts](https://github.com/cap-labs-dev/cap-contracts) at `56819219e935470271a03d4e3415fcbe810e6b0b`, the commit the review names, with its six submodules (forge-std, LayerZero and others) and their own submodules at their pinned commits.
-It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
-`contracts/` holds 107 files, about 7,900 lines, more than half of them interfaces, storage layouts and deploy helpers. The review covered the vault, StakedCap, the lender and debt tokens, the fee auction, the oracles, delegation and the Symbiotic middleware, and the zap. The LayerZero and EigenLayer integrations and the deploy code were out of scope. The tests are there too.
-The project pulls Symbiotic, EigenLayer and OpenZeppelin from npm with Yarn. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so `forge build` fails until the agent runs `yarn install`. The project asks for Node.js 20, so that install stops until it is told to ignore the version. It has the web.
-
-The eight findings spread over the whole protocol, and several only show once the auditor follows value from one contract into the next:
+The instruction names the whole `contracts/` folder and says nothing about where to look.
+The review covered the vault, StakedCap, the lender and debt tokens, the fee auction, the oracles, delegation and the Symbiotic middleware, and the zap. The LayerZero and EigenLayer integrations and the deploy code were out of scope.
+The eight findings spread over the whole protocol, and several only show once the auditor follows value from one contract into the next.
 
 - **Two ledgers for one balance.** The vault keeps its own totals but pays from its real balance. The auditor has to find the path where the two drift apart and follow the result into the lender's borrow limit.
 - **Inputs nobody checks.** The rate adapter trusts whatever vault the caller names, and the price adapter mixes up a decimal count and a decimal scale. The auditor has to read each oracle path and ask who can call it and with what.
@@ -25,9 +23,11 @@ The eight findings spread over the whole protocol, and several only show once th
 
 ## The checks
 
-The verifier copies `/workspace/findings.md` to `/logs/verifier/findings.md` and gives that file to the judge.
-Each finding counts when one of the report's first 10 findings names the same flaw, in the same code, with the same consequence.
-Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark, a list of areas to review, or the mechanism placed where it does no harm doesn't count.
+The agent starts with [cap-labs-dev/cap-contracts](https://github.com/cap-labs-dev/cap-contracts) at `56819219e935470271a03d4e3415fcbe810e6b0b` in `/work/project`, with its six submodules (forge-std, LayerZero and others) and their own submodules at their pinned commits, as one commit with no history, since later commits hold the fixes.
+`contracts/` holds 107 files and about 7,900 lines, more than half of them interfaces, storage layouts and deploy helpers, and the tests are there too.
+The agent writes `/workspace/findings.md`, and the judge reads only that file.
+A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
+Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 Several findings sit close to others in the review, such as the three front-running findings and the review's lower-severity fee auction and notify findings, so the questions for those findings say which neighbour does not count.
 The reward is 1 only when every check passes.
 
@@ -45,11 +45,25 @@ The reward is 1 only when every check passes.
 
 ## Why it matters
 
-A stablecoin that lends its reserves rests on its accounting, its oracles and the collateral behind each loan, and each of these findings breaks one of them.
-Trail of Bits' [Covered Agent Protocol review](https://github.com/trailofbits/publications/blob/master/reviews/2025-05-caplabs-coveredagentprotocol-securityreview.pdf) (May 2025) found all eight. The project fixed seven of them and acknowledged TOB-CAP-15, which it handles in operations only.
+This is one of 16 audit tasks picked from public OpenZeppelin and Trail of Bits reports. [Issue #109](https://github.com/BuidlGuidl/ethevals/issues/109) has the full list and how we picked them.
+CAP is in because it is the widest review in the set, across vault accounting, a rate adapter, a fee auction, staking yield and restaking delegation, and several findings only show once the auditor follows funds between the lender, the delegation layer and Symbiotic.
+
+A protocol that trades with its users at an oracle price pays anyone who trades just before the price updates.
+Synthetix ran into this with synth exchanges, which convert at the on-chain price. Traders who used the gap before an oracle update made "profit at the expense of the entire SNX stakers", per [SIP-37](https://sips.synthetix.io/sips/sip-37/).
+Synthetix first slowed those trades down, then added a waiting period that takes the profit back.
+TOB-CAP-19 is the same gap in CAP's mint and burn.
+
+A price in the wrong unit gets traded against at once.
+On 15 February 2026 one of Moonwell's oracles priced cbETH with the raw cbETH/ETH rate instead of multiplying it by ETH/USD, so it read about $1.12 instead of roughly $2,200.
+Liquidation bots seized 1,096 cbETH, and Moonwell was left with $1.78M in bad debt, per [its post-mortem](https://forum.moonwell.fi/t/mip-x43-cbeth-oracle-incident-summary/2068).
+Moonwell's mistake was in an oracle's configuration. TOB-CAP-17 is the same kind of mistake in code: the staked cUSD price uses 18 where it needs 1e18.
+
+These eight were caught in Trail of Bits' [Covered Agent Protocol review](https://github.com/trailofbits/publications/blob/master/reviews/2025-05-caplabs-coveredagentprotocol-securityreview.pdf) (May 2025).
+The project fixed seven of them and acknowledged TOB-CAP-15, which it handles in operations only.
 
 ## Notes
 
-The review's other Highs and Mediums are not checked, because they rest on an admin's configuration (TOB-CAP-2, -3, -6 and -18) or are design choices (TOB-CAP-16 and -28). Other true findings in the report don't fail the task.
-Trail of Bits says it ran short of time on this review and expects more serious bugs in the code, so an agent may report real flaws the review doesn't list. They use up report slots.
-The free check runs no judge. Its oracle run passes `report_written` with the solution's report, and its nop run fails it.
+- The review's other Highs and Mediums are not checked, because they rest on an admin's configuration (TOB-CAP-2, -3, -6 and -18) or are design choices (TOB-CAP-16 and -28). Other true findings in the report don't fail the task.
+- Trail of Bits says it ran short of time on this review and expects more serious bugs in the code, so an agent may report real flaws the review doesn't list. They use up report slots.
+- The project pulls Symbiotic, EigenLayer and OpenZeppelin from npm with Yarn. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but not the project's packages, so `forge build` fails until the agent runs `yarn install`. The project asks for Node.js 20, so that install stops until it is told to ignore the version. It has the web.
+- The free check runs no judge. Its oracle run passes `report_written` with the solution's report, and its nop run fails it.

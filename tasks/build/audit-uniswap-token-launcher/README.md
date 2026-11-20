@@ -1,7 +1,8 @@
 # Uniswap Token Launcher audit
 
-The agent audits Uniswap's Token Launcher contracts at the commit OpenZeppelin reviewed and writes a findings report.
-A judge then checks whether the report's first 10 findings hold the Critical and the High finding from [OpenZeppelin's audit](https://www.openzeppelin.com/news/uniswap-token-launcher-audit) that this task uses, one question per finding.
+A team building a launcher that sells a new token in an auction and then opens a Uniswap v4 pool with the proceeds hands the code to a security auditor.
+The agent is that auditor: it gets Token Launcher at the commit OpenZeppelin reviewed and writes up what it finds.
+A judge then checks whether its report holds the Critical and the High finding from [OpenZeppelin's audit](https://www.openzeppelin.com/news/uniswap-token-launcher-audit) that this task uses.
 
 ## The instruction
 
@@ -11,22 +12,20 @@ A judge then checks whether the report's first 10 findings hold the Critical and
 
 ## What it touches
 
-The image clones [Uniswap/token-launcher](https://github.com/Uniswap/token-launcher) (now `Uniswap/liquidity-launcher`) at `9eff2a7612e99e9a072e128be529be2ed19be313`, the commit the audit names, with its ten submodules and their own submodules at their pinned commits.
-One of them is the auction itself, `lib/twap-auction`, from `Uniswap/twap-auction` (now `continuous-clearing-auction`). The audit read it as a reference but did not review it.
-Another is the Optimism monorepo, which makes the image large.
-It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
-`src/` holds 28 files, about 1,500 lines, all of them in the audit's scope. The tests are there too.
-
-Both findings sit where LBPStrategyBasic hands its tokens to the auction and waits for the auction to call back:
+The instruction names `src/` and says nothing about the auction it hands off to.
+The auction is a submodule, `lib/twap-auction`, which the audit read as a reference but did not review.
+Both findings sit where LBPStrategyBasic hands its tokens to the auction and waits for the auction to call back.
 
 - **The unhappy path.** The reserved tokens leave the strategy only after a callback the auction makes when it succeeds. The auditor has to read the auction to learn when it makes that call, and then look for any way out of the strategy when it doesn't.
 - **Settings passed through unread.** The strategy forwards the auction parameters as opaque bytes. The auditor has to decode them in the auction's code, see which recipients they set, and work out what happens when those recipients are not the strategy.
 
 ## The checks
 
-The verifier copies `/workspace/findings.md` to `/logs/verifier/findings.md` and gives that file to the judge.
-Each finding counts when one of the report's first 10 findings names the same flaw, in the same code, with the same consequence.
-Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark, a list of areas to review, or the mechanism placed where it does no harm doesn't count.
+The agent starts with [Uniswap/token-launcher](https://github.com/Uniswap/token-launcher) (now `Uniswap/liquidity-launcher`) at `9eff2a7612e99e9a072e128be529be2ed19be313` in `/work/project`, with its ten submodules and their own submodules at their pinned commits, as one commit with no history, since later commits hold the fixes.
+`src/` holds 28 files and about 1,500 lines, all of them in the audit's scope, and the tests are there too.
+The agent writes `/workspace/findings.md`, and the judge reads only that file.
+A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
+Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
 
 | Check | What it proves | Area |
@@ -37,16 +36,30 @@ The reward is 1 only when every check passes.
 
 ## Why it matters
 
-A launch strategy holds the new token's supply for the whole sale, so a path it never planned for can lock a launch's liquidity for good.
-OpenZeppelin's [Uniswap Token Launcher audit](https://www.openzeppelin.com/news/uniswap-token-launcher-audit) (September 2026) found both flaws, and the project fixed them:
+This is one of 16 audit tasks picked from public OpenZeppelin and Trail of Bits reports. [Issue #109](https://github.com/BuidlGuidl/ethevals/issues/109) has the full list and how we picked them.
+Token Launcher is in because both findings sit where the launcher hands off to the auction: what happens to the reserved tokens if the auction fails, and where the auction sends the money and the leftover tokens.
+
+A sale contract that releases what it holds through one path locks it for good when that path never opens.
+In April 2022 the Akutar NFT auction locked 11,539.5 ETH, more than $34M, for good: the function the project owner claims the funds with checks a condition that can never be met, per [BlockSec](https://blocksec.com/blog/how-akutar-nft-loses-34-m-usd).
+C-1 has the same shape: the reserved tokens leave the strategy only in the callback a successful auction makes.
+
+A sale pays its raise to whatever recipient it was created with.
+In September 2021 a change to the code of Sushi's MISO launchpad set the fund wallet of its ETH and WETH auctions to the attacker's address, and 865 ETH from one auction went there when it finalized, per [Sushi's post-mortem](https://hackmd.io/@notsushi/SyPfvHj2K). Sushi got all of it back.
+That was a change to the launchpad's interface, not a contract bug. H-1 is the contract's side of the same gap: the strategy knows the money has to come to it and never checks.
+
+These two were caught before launch.
+OpenZeppelin reviewed the code in August and September 2025, and the project fixed both that September:
 
 - C-1 in [Uniswap/token-launcher#51](https://github.com/Uniswap/token-launcher/pull/51), which adds sweep functions.
 - H-1 in [Uniswap/token-launcher#49](https://github.com/Uniswap/token-launcher/pull/49), which checks the funds recipient.
 
+Two months later Uniswap [announced the auction](https://blog.uniswap.org/continuous-clearing-auctions), whose proceeds seed a Uniswap v4 pool at the discovered price, and [Aztec raised $59M](https://blog.uniswap.org/aztec-cca) through it.
+
 ## Notes
 
-The audit's other High is not checked. It is a mismatch between an interface and its implementation in a pull request reviewed before the main commit, a deploy-time bug rather than an attack.
-The audit also lists Medium and Low findings, and other true findings in the report don't fail the task.
-In an earlier trial setup the auction submodule was empty, so the agent could not read the auction's code. This image fills every submodule.
-`forge build` compiles every contract, then forge's lint step stops on a script path it can't find and exits with an error. The tests fork mainnet and need a `FORK_URL`, which the image doesn't set.
-The free check runs no judge. Its oracle run passes `report_written` with the solution's report, and its nop run fails it.
+- The audit's other High is not checked. It is a mismatch between an interface and its implementation in a pull request reviewed before the main commit, a deploy-time bug rather than an attack.
+- The audit also lists Medium and Low findings, and other true findings in the report don't fail the task.
+- The auction submodule comes from `Uniswap/twap-auction` (now `continuous-clearing-auction`). Another submodule is the Optimism monorepo, which makes the image large.
+- In an earlier trial setup the auction submodule was empty, so the agent could not read the auction's code. This image fills every submodule.
+- The project's libraries are git submodules, and the image fills them. `forge build` compiles every contract, then forge's lint step stops on a script path it can't find and exits with an error. The tests fork mainnet and need a `FORK_URL`, which the image doesn't set. It has the web.
+- The free check runs no judge. Its oracle run passes `report_written` with the solution's report, and its nop run fails it.

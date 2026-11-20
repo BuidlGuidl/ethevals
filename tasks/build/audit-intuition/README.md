@@ -1,7 +1,8 @@
 # Intuition audit
 
-The agent audits Intuition's vault contracts at the commit Trail of Bits reviewed and writes a findings report.
-A judge then checks whether the report's first 10 findings hold each Medium finding from [Trail of Bits' review](https://github.com/trailofbits/publications/blob/master/reviews/2024-03-intuition-smart-contracts-securityreview.pdf), one question per finding.
+Intuition hands a security auditor the contracts behind its protocol for onchain claims, where every atom and triple has a vault that takes ETH deposits.
+The agent is that auditor: it gets the code at the commit Trail of Bits reviewed and writes up what it finds.
+A judge then checks whether its report holds the five Medium findings from [Trail of Bits' review](https://github.com/trailofbits/publications/blob/master/reviews/2024-03-intuition-smart-contracts-securityreview.pdf).
 
 ## The instruction
 
@@ -11,13 +12,8 @@ A judge then checks whether the report's first 10 findings hold each Medium find
 
 ## What it touches
 
-The image clones [0xIntuition/intuition-tob-audit](https://github.com/0xIntuition/intuition-tob-audit) at `8e80c751600c481164415f7a7f225217cc164ad2`, the first of the two commits the review names. The second, `edc4584`, already fixes TOB-INTUITION-6.
-It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
-`src/` holds 7 files, about 2,000 lines. The review covered `EthMultiVault.sol`, `AtomWallet.sol` and `IntuitionProxy.sol`, and nearly all the logic sits in `EthMultiVault.sol`.
-The repo ships no tests or scripts at this commit.
-The image fills the five pinned submodules in `lib/`: forge-std, solmate, solady, council and openzeppelin-contracts. `.gitmodules` also names openzeppelin-contracts-upgradeable, but the commit pins no copy of it. The remappings take OpenZeppelin and the ERC-4337 contracts from npm. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so `forge build` fails until the agent runs `npm install`. It has the web.
-
-All five findings are in the bookkeeping of one contract, where a deposit pays several fees and buys shares in more than one vault:
+The instruction describes the protocol and says nothing about where to look.
+All five findings are in the bookkeeping of `EthMultiVault`, where a deposit pays several fees and buys shares in more than one vault.
 
 - **Fees that leave but stay counted.** The auditor has to follow each fee from where it's computed to where it's sent, and check that every vault's assets drop by what left.
 - **One amount computed twice.** A triple deposit buys shares in its three atoms. The auditor has to see that the amount left out of the triple vault and the amount handed to the atoms come from different bases.
@@ -27,9 +23,12 @@ All five findings are in the bookkeeping of one contract, where a deposit pays s
 
 ## The checks
 
-The verifier copies `/workspace/findings.md` to `/logs/verifier/findings.md` and gives that file to the judge.
-Each finding counts when one of the report's first 10 findings names the same flaw, in the same code, with the same consequence.
-Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark, a list of areas to review, or the mechanism placed where it does no harm doesn't count.
+The agent starts with [0xIntuition/intuition-tob-audit](https://github.com/0xIntuition/intuition-tob-audit) at `8e80c751600c481164415f7a7f225217cc164ad2` in `/work/project`, with its pinned submodules, as one commit with no history, since later commits hold the fixes.
+That is the first of the two commits the review names. The second, `edc4584`, already fixes TOB-INTUITION-6.
+`src/` holds 7 files, about 2,000 lines. The review covered `EthMultiVault.sol`, `AtomWallet.sol` and `IntuitionProxy.sol`, and nearly all the logic sits in `EthMultiVault.sol`. The repo ships no tests or scripts at this commit.
+The agent writes `/workspace/findings.md`, and the judge reads only that file.
+A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
+Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
 
 | Check | What it proves | Area |
@@ -43,8 +42,20 @@ The reward is 1 only when every check passes.
 
 ## Why it matters
 
+This is one of 16 audit tasks picked from public OpenZeppelin and Trail of Bits reports. [Issue #109](https://github.com/BuidlGuidl/ethevals/issues/109) has the full list and how we picked them.
+Intuition is in because three contracts hold five findings: the auditor has to reconcile fees, shares and assets on every deposit path, and spot an identifier that can collide. It's also a little-known project.
+
+Hashing several variable-length values packed together loses the boundaries between them.
+Solidity's [ABI docs](https://docs.soliditylang.org/en/latest/abi-spec.html) warn that with `keccak256(abi.encodePacked(a, b))` and both values dynamic, "it is easy to craft collisions", and say `abi.encode` should be preferred.
+Foundry's linter rates the same pattern [High](https://www.getfoundry.sh/forge/linting/encode-packed-collision).
+That is how a triple's id is built here.
+
 A vault's books decide what every share redeems for, so an amount that is counted but gone, or held but not counted, takes value from depositors or leaves it stranded.
-Trail of Bits' [Intuition smart contracts review](https://github.com/trailofbits/publications/blob/master/reviews/2024-03-intuition-smart-contracts-securityreview.pdf) (March 2024) found these five Medium flaws, and the project fixed them:
+Intuition's live contracts still turn on this bookkeeping: its [bug bounty](https://immunefi.com/bug-bounty/intuition/information/), live since July 2026, pays up to $100,000 and names vault accounting and fee routing among the areas it covers.
+We found no public theft from a colliding packed hash, or from a vault that credits a fee it already paid out.
+
+These five were caught in review.
+Trail of Bits reported them in its [Intuition smart contracts review](https://github.com/trailofbits/publications/blob/master/reviews/2024-03-intuition-smart-contracts-securityreview.pdf) (March 2024), and the project fixed them:
 
 - TOB-INTUITION-6 in [edc4584](https://github.com/0xIntuition/intuition-tob-audit/commit/edc45845db0246c57b538ed5ab6e1f32becba89c).
 - TOB-INTUITION-10 in [0xIntuition/intuition-beta-contracts#33](https://github.com/0xIntuition/intuition-beta-contracts/pull/33).
@@ -53,8 +64,10 @@ Trail of Bits' [Intuition smart contracts review](https://github.com/trailofbits
 
 ## Notes
 
-The review also lists Low and Informational findings. The task checks only the five Mediums, and other true findings in the report don't fail it.
-It's a summary report, so it gives each finding's title and fix but no detail. The questions are written from the code and the fixes.
-TOB-INTUITION-6 and TOB-INTUITION-13 both involve the protocol fee, and TOB-INTUITION-12 and TOB-INTUITION-13 both involve the atom equity of a triple deposit, so each question says which one it is.
-TOB-INTUITION-20 sits next to TOB-INTUITION-7, a Low finding that `createAtom` mints the ghost shares twice. Only the missing assets count for TOB-INTUITION-20.
-The free check runs no judge. Its oracle run passes `report_written` with the solution's report, and its nop run fails it.
+- The review also lists Low and Informational findings. The task checks only the five Mediums, and other true findings in the report don't fail it.
+- It's a summary report, so it gives each finding's title and fix but no detail. The questions are written from the code and the fixes.
+- TOB-INTUITION-6 and TOB-INTUITION-13 both involve the protocol fee, and TOB-INTUITION-12 and TOB-INTUITION-13 both involve the atom equity of a triple deposit, so each question says which one it is.
+- TOB-INTUITION-20 sits next to TOB-INTUITION-7, a Low finding that `createAtom` mints the ghost shares twice. Only the missing assets count for TOB-INTUITION-20.
+- The image fills the five pinned submodules in `lib/`: forge-std, solmate, solady, council and openzeppelin-contracts. `.gitmodules` also names openzeppelin-contracts-upgradeable, but the commit pins no copy of it.
+- The remappings take OpenZeppelin and the ERC-4337 contracts from npm. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but not the project's packages, so `forge build` fails until the agent runs `npm install`. It has the web.
+- The free check runs no judge. Its oracle run passes `report_written` with the solution's report, and its nop run fails it.
