@@ -8,7 +8,7 @@ guard = "flag"
 prompt_template = "judge-prompt.md"
 
 [scoring]
-aggregation = "all-pass"
+aggregation = "weighted-mean"
 
 [[criterion]]
 name = "tob_aut_5_stale_crl"

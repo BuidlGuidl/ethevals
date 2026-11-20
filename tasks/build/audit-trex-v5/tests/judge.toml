@@ -8,7 +8,7 @@ guard = "flag"
 prompt_template = "judge-prompt.md"
 
 [scoring]
-aggregation = "all-pass"
+aggregation = "weighted-mean"
 
 [[criterion]]
 name = "h1_cross_domain_identity_rebind"

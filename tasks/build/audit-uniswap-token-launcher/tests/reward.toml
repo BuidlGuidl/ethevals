@@ -3,4 +3,5 @@ aggregation = "all-pass"
 
 [[reward]]
 name = "reward"
-aggregation = "all-pass"
+aggregation = "weighted-mean"
+weights = { judge = 1, report = 0 }

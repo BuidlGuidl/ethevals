@@ -29,7 +29,7 @@ The agent writes `/workspace/findings.md`, and the judge reads only that file.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 Several findings sit close to others in the review, such as the three front-running findings and the review's lower-severity fee auction and notify findings, so the questions for those findings say which neighbour does not count.
-The reward is 1 only when every check passes.
+The task gives partial credit: the reward is how many of the eight findings the report found, divided by eight. `report_written` carries no weight.
 
 | Check | What it proves | Area |
 | --- | --- | --- |

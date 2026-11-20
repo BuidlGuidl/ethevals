@@ -28,7 +28,7 @@ The agent starts with [ThenafiBNB/THENA-Contracts](https://github.com/ThenafiBNB
 The agent writes `/workspace/findings.md`, and the judge reads only that file.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
-The reward is 1 only when every check passes.
+The task gives partial credit: the reward is how many of the five findings the report found, divided by five. `report_written` carries no weight.
 
 | Check | What it proves | Area |
 | --- | --- | --- |

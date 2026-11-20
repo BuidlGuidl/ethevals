@@ -25,7 +25,7 @@ The agent starts with [T-REX-Network/T-REX](https://github.com/T-REX-Network/T-R
 The agent writes `/workspace/findings.md`, and the judge reads only that file.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
-The reward is 1 only when every check passes.
+The task has one finding, so the reward is 1 when the report found it and 0 when it didn't. `report_written` carries no weight.
 
 | Check | What it proves | Area |
 | --- | --- | --- |
