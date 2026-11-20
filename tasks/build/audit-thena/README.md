@@ -14,7 +14,7 @@ A judge then checks whether the report's first 10 findings hold each Critical an
 The image clones [ThenafiBNB/THENA-Contracts](https://github.com/ThenafiBNB/THENA-Contracts) at `2bb84cf6bb429e9bac8ac8464f4546da855ef4ca`, the commit the audit names.
 It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
 `contracts/` holds 82 files and about 12,900 lines. The audit covered five of them: `VoterV3.sol`, `GaugeV2.sol`, `GaugeV2_CL.sol`, `GaugeExtraRewarder.sol` and `PermissionsRegistry.sol`. The findings also reach into `MinterUpgradeable.sol`.
-The project builds with Hardhat and pulls its libraries with npm. The image has no Node.js, so the agent has to fetch it and run `npm install` itself, which it can, since it has the web. Its `.gitmodules` lists Foundry libraries, but the commit pins none, so `lib/` is not there.
+The project builds with Hardhat and pulls its libraries with npm. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so the agent has to run `npm install` itself. It has the web. Its `.gitmodules` lists Foundry libraries, but the commit pins none, so `lib/` is not there.
 
 All five findings follow one week's emissions, or one retired gauge, through the minter, the voter and the gauges:
 

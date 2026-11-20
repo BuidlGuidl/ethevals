@@ -14,7 +14,7 @@ A judge then checks whether the report's first 10 findings hold each Critical an
 The image clones [pods-finance/yield-contracts](https://github.com/pods-finance/yield-contracts) at `9389ab46e9ecdd1ea1fd7228c9d9c6821c00f057`, the commit the audit names.
 It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
 `contracts/` holds the 13 files the audit covered, about 1,350 lines, plus 8 mocks. The Hardhat tests and scripts are there too.
-The project is a Hardhat project with no submodules. It pulls OpenZeppelin and its tools with npm, and the image has no Node.js, so the agent would have to fetch Node and the packages itself. It has the web.
+The project is a Hardhat project with no submodules. It pulls OpenZeppelin and its tools with npm. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so the agent has to run `npm install` before it can build. It has the web.
 
 The six findings sit in one small vault, and each takes a careful look at one piece of it:
 

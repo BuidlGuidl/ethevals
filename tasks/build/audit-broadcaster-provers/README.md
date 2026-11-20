@@ -14,7 +14,7 @@ A judge then checks whether the report's first 10 findings hold each High findin
 The image clones [openintentsframework/broadcaster](https://github.com/openintentsframework/broadcaster) at `e329d3a15d477bb795cf24c82c9da53ec4b693b7`, the commit the audit names, with its five submodules and their own submodules at their pinned commits, including `linea-monorepo` and `scroll-contracts`.
 It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
 `src/contracts/` holds 35 files, about 4,100 lines. The audit covered the twelve provers in `src/contracts/provers` and a diff of the Receiver, the pointer and their interfaces. The tests, docs and scripts are there too.
-The project pulls Arbitrum's and Optimism's contract libraries from npm, and the image doesn't install them, so `forge build` fails at first. The image has no Node.js either. The agent can fetch both, since it has the web.
+The project pulls Arbitrum's and Optimism's contract libraries from npm. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so `forge build` fails until the agent runs `npm install`. It has the web.
 
 Each finding needs a fact that is not in the prover's own code:
 

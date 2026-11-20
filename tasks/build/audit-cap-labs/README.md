@@ -14,7 +14,7 @@ A judge then checks whether the report's first 10 findings hold each High and Me
 The image clones [cap-labs-dev/cap-contracts](https://github.com/cap-labs-dev/cap-contracts) at `56819219e935470271a03d4e3415fcbe810e6b0b`, the commit the review names, with its six submodules (forge-std, LayerZero and others) and their own submodules at their pinned commits.
 It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
 `contracts/` holds 107 files, about 7,900 lines, more than half of them interfaces, storage layouts and deploy helpers. The review covered the vault, StakedCap, the lender and debt tokens, the fee auction, the oracles, delegation and the Symbiotic middleware, and the zap. The LayerZero and EigenLayer integrations and the deploy code were out of scope. The tests are there too.
-The project pulls Symbiotic, EigenLayer and OpenZeppelin from npm with yarn, and the image doesn't install them, so `forge build` fails at first. The image has no Node.js either. The agent can fetch both, since it has the web.
+The project pulls Symbiotic, EigenLayer and OpenZeppelin from npm with Yarn. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so `forge build` fails until the agent runs `yarn install`. The project asks for Node.js 20, so that install stops until it is told to ignore the version. It has the web.
 
 The eight findings spread over the whole protocol, and several only show once the auditor follows value from one contract into the next:
 

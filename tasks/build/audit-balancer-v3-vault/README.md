@@ -14,7 +14,7 @@ A judge then checks whether the report's first 10 findings hold each of the thre
 The image clones [balancer/balancer-v3-monorepo](https://github.com/balancer/balancer-v3-monorepo) at `a24ebf0141e9350a42639d8593c1436241deae59`, the commit of the review's first round, which covered `pkg/vault`.
 It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
 `pkg/vault/contracts/` holds 39 files and about 10,900 lines, with the package's tests next to them. The rest of the monorepo, the interfaces, the pools and the shared utilities, is there too.
-The monorepo has no submodules. It pulls its libraries with Yarn, and Forge finds them in `node_modules`. The image has no Node.js, so the agent has to fetch it and run `yarn install` before it can build, which it can, since it has the web.
+The monorepo has no submodules. It pulls its libraries with Yarn, and Forge finds them in `node_modules`. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so the agent has to run `yarn install` before it can build. It has the web.
 
 All three findings drain the Vault through its ERC-4626 buffers, which hold wrapped and underlying tokens so swaps can wrap and unwrap without calling the wrapper. Anyone can use a buffer for any wrapper contract, including one they wrote:
 

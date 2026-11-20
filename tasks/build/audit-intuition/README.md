@@ -15,7 +15,7 @@ The image clones [0xIntuition/intuition-tob-audit](https://github.com/0xIntuitio
 It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
 `src/` holds 7 files, about 2,000 lines. The review covered `EthMultiVault.sol`, `AtomWallet.sol` and `IntuitionProxy.sol`, and nearly all the logic sits in `EthMultiVault.sol`.
 The repo ships no tests or scripts at this commit.
-The image fills the five pinned submodules in `lib/`: forge-std, solmate, solady, council and openzeppelin-contracts. `.gitmodules` also names openzeppelin-contracts-upgradeable, but the commit pins no copy of it. The remappings take OpenZeppelin and the ERC-4337 contracts from npm, and the image has no Node.js, so `forge build` needs the agent to fetch Node and the packages first. It has the web.
+The image fills the five pinned submodules in `lib/`: forge-std, solmate, solady, council and openzeppelin-contracts. `.gitmodules` also names openzeppelin-contracts-upgradeable, but the commit pins no copy of it. The remappings take OpenZeppelin and the ERC-4337 contracts from npm. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so `forge build` fails until the agent runs `npm install`. It has the web.
 
 All five findings are in the bookkeeping of one contract, where a deposit pays several fees and buys shares in more than one vault:
 

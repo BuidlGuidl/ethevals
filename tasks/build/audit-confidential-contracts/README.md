@@ -14,7 +14,7 @@ A judge then checks whether the report's first 10 findings hold the Critical and
 The image clones [OpenZeppelin/openzeppelin-confidential-contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) at `432762c667f68c34bb759838e460601d603300d5`, the commit the audit names, with its OpenZeppelin Contracts submodules at their pinned commits.
 It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
 `contracts/` holds 26 files and about 2,800 lines, mocks included. The audit covered 14 of them.
-The encrypted-math library, `@fhevm/solidity`, is an npm package, not a submodule. The image has no Node.js, so the agent has to fetch it and run `npm install` before it can build, which it can, since it has the web.
+The encrypted-math library, `@fhevm/solidity`, is an npm package, not a submodule. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so the agent has to run `npm install` before it can build. It has the web.
 
 Both findings come from one rule of the platform: encrypted math can't revert, because the coprocessor does it later. A transfer without enough balance moves zero, and an addition that overflows wraps around.
 

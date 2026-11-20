@@ -14,7 +14,7 @@ A judge then checks whether the report's first 10 findings hold each Critical an
 The image clones [1inch/swap-vm](https://github.com/1inch/swap-vm) at `60172ba83234bacb793c11564fed3a806b6d3388`, the commit the audit names.
 It deletes the git history, since later commits hold the fixes, and starts a fresh repo with one commit at `/work/project`.
 `src/` holds 42 files, about 3,800 lines. The audit's SwapVM scope is 16 of them, and all five findings sit in `src/`. The tests are there too.
-The audit also covered Aqua and 1inch's solidity-utils, which SwapVM imports. The project pulls them, OpenZeppelin and forge-std with npm, and the image has no Node.js, so `forge build` needs the agent to fetch Node and the packages first. It has the web.
+The audit also covered Aqua and 1inch's solidity-utils, which SwapVM imports. The project pulls them, OpenZeppelin and forge-std with npm. The image has Node.js 22 with npm, and Yarn and pnpm through Corepack, but it does not install the project's packages, so `forge build` fails until the agent runs `npm install`. It has the web.
 
 The findings take two kinds of work:
 
