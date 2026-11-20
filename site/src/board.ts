@@ -21,6 +21,7 @@ export interface Eval {
   description: string;
   instruction: string;
   modes: Mode[];
+  reward: "all-pass" | "partial-credit";
 }
 export type DisplayEval = Omit<Eval, "hash" | "instruction_hash" | "environment_hash" | "checks_hash"> & { domain: Domain };
 
@@ -33,6 +34,7 @@ export interface Agent {
 export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind" | "error_reason"
   | "total_tokens" | "total_seconds" | "model_cost_usd" | "judge_cost_usd"
   | "cost_source" | "limit" | "paid_by" | "no_answer"> & {
+  reward: number | null;
   cost: number | null;
   issue: string;
   trajectoryUrl: string | null;
@@ -96,11 +98,11 @@ export function emptyTrialLabel(cell: EvalCell): string {
   return cell.state === "na" ? "Not applicable" : cell.errors ? `${cell.errors} errors; no scored trials` : "No trials yet";
 }
 
-export function costPerPass(trials: Pick<Trial, "status" | "model_cost_usd">[]): number | null {
+export function costPerPass(trials: Pick<Trial, "status" | "reward" | "model_cost_usd">[]): number | null {
   const scored = trials.filter((trial) => trial.status !== "error");
-  const passed = scored.filter((trial) => trial.status === "passed").length;
-  if (!passed || scored.some((trial) => trial.model_cost_usd === null)) return null;
-  return scored.reduce((sum, trial) => sum + trial.model_cost_usd!, 0) / passed;
+  const reward = scored.reduce((sum, trial) => sum + (trial.reward ?? 0), 0);
+  if (!reward || scored.some((trial) => trial.model_cost_usd === null)) return null;
+  return scored.reduce((sum, trial) => sum + trial.model_cost_usd!, 0) / reward;
 }
 
 export function skillLift(skills: number | null, internet: number | null): number | null {
@@ -122,10 +124,11 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[]): EvalCell {
   const passed = scored.filter((row) => row.status === "passed").length;
   return {
     state: !evaluation.modes.includes(mode) ? "na" : scored.length ? "score" : "pending",
-    score: scored.length ? passed / scored.length : null,
+    score: scored.length ? scored.reduce((sum, row) => sum + (row.rewards.reward ?? 0), 0) / scored.length : null,
     passed, total: scored.length, errors: rows.length - scored.length,
     trials: rows.sort((a, b) => a.trial - b.trial).map((row) => ({
       trial: row.trial, status: row.status, checks: row.checks, error_kind: row.error_kind,
+      reward: row.status === "error" ? null : row.rewards.reward ?? null,
       error_reason: row.error_reason, total_tokens: row.total_tokens, total_seconds: row.total_seconds,
       model_cost_usd: row.model_cost_usd, judge_cost_usd: row.judge_cost_usd,
       cost_source: row.cost_source,
@@ -218,6 +221,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
     evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {
       id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar, domain: taskDomain(evaluation),
       description: evaluation.description, instruction: evaluation.instruction, modes: evaluation.modes,
+      reward: evaluation.reward,
     }])),
   };
 }

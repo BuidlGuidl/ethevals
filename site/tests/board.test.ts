@@ -11,13 +11,14 @@ import { Configuration } from "../components/configuration";
 const evaluation: Eval & Pick<DisplayEval, "domain"> = {
   id: "concepts/units", hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", title: "Units", pillar: "concepts",
   domain: "dapp-development",
-  description: "Check units.", instruction: "How many wei equal one ether?", modes: ["internet", "vanilla"],
+  description: "Check units.", instruction: "How many wei equal one ether?", modes: ["internet", "vanilla"], reward: "all-pass",
 };
 const agent = { model: "model-a", agent: "agent-a", effort: "high" };
 function row(overrides: Partial<Row> = {}): Row {
   return {
     schema_version: 8, task_id: "concepts/units", task_hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", skills_hash: null,
     ...agent, mode: "internet", trial: 1, status: "passed",
+    rewards: { reward: 1 },
     checks: { answer: { passed: true, reason: "The answer matches." } }, error_kind: null, error_reason: null,
     total_tokens: 100, model_cost_usd: 0.2, judge_cost_usd: 0.05,
     paid_by: "api_key", judge: null, judge_paid_by: null, cost_source: "harbor", total_seconds: 8, working_seconds: 7,
@@ -43,7 +44,7 @@ test("the drawer labels the full Harbor Hub trial and the release fallback", () 
   }
 });
 
-const failure = { status: "failed", checks: { answer: { passed: false, reason: "The answer differs." } } } as const;
+const failure = { status: "failed", rewards: { reward: 0 }, checks: { answer: { passed: false, reason: "The answer differs." } } } as const;
 
 test("the drawer names a refusal or empty reply after two no-answer tries", () => {
   for (const [kind, label] of [["refused", "Refused"], ["empty", "Empty reply"]] as const) {
@@ -57,13 +58,68 @@ test("the drawer names a refusal or empty reply after two no-answer tries", () =
     assert.equal(data.tables.internet.summaries[agentKey(agent)].total, 1);
   }
 });
-const error = { status: "error", checks: {}, error_kind: "execution", error_reason: "Sandbox stopped." } as const;
+const error = { status: "error", rewards: {}, checks: {}, error_kind: "execution", error_reason: "Sandbox stopped." } as const;
 
 test("a score counts passed trials and excludes errors, while retaining their details", () => {
   const cell = getCell(evaluation, agent, "internet", [row(), row({ trial: 2 }), row({ trial: 3, ...failure }), row({ trial: 4, ...error })]);
   assert.deepEqual({ state: cell.state, score: cell.score, passed: cell.passed, total: cell.total, errors: cell.errors },
     { state: "score", score: 2 / 3, passed: 2, total: 3, errors: 1 });
   assert.equal(cell.trials[3].error_reason, "Sandbox stopped.");
+});
+
+test("partial-credit tasks average their rewards and show percentages in the matrix and drawer", () => {
+  const task = { ...evaluation, id: "concepts/findings", title: "Findings", reward: "partial-credit" } satisfies Eval;
+  const trials = [
+    row({ ...failure, task_id: task.id, rewards: { reward: 0.5 } }),
+    row({ ...failure, task_id: task.id, trial: 2 }),
+    row({ ...error, task_id: task.id, trial: 3 }),
+  ];
+  const data = buildBoard([evaluation, task], [row(), ...trials]);
+  const pillar = data.tables.internet.pillars.concepts;
+  const key = agentKey(agent);
+  assert.equal(pillar.evals[1].cells[key].score, 0.25);
+  assert.equal(pillar.cells[key].score, 0.625);
+  const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }));
+  assert.match(html, /25% score\. Open details\."[^>]*>25%<\/button>/);
+  assert.match(html, /1 of 1 trials passed\. Open details\."[^>]*>1\/1<\/button>/);
+  const selection = { agent, mode: "internet", pillar: "concepts" } as const;
+  const render = (extra: Partial<Parameters<typeof Detail>[0]["selection"]>) => renderToStaticMarkup(createElement(Detail, {
+    data, selection: { ...selection, ...extra }, onSelect: () => {},
+  }));
+  const drawer = render({});
+  assert.ok(drawer.includes("63% · 1/3 trials passed · 1 errors excluded"));
+  assert.match(drawer, /class="heat-chip"[^>]*>25%<\/span>/);
+  const list = render({ evaluation: data.evaluations[task.id] });
+  assert.match(list, /aria-label="Trial 1, 50%, 0 of 1 checks passed/);
+  assert.match(list, /class="verdict caution">50%<\/span>/);
+  assert.match(list, /class="verdict negative">[^]*?0%<\/span>/);
+  assert.match(list, /class="verdict caution">[^]*?ERROR<\/span>/);
+  assert.ok(!list.includes(">FAIL</span>"));
+  const selected = render({ evaluation: data.evaluations[task.id], run: 1 });
+  assert.match(selected, /Trial 1 of 3 <span class="verdict caution">50%<\/span>/);
+  assert.match(selected, /class="caution"[^>]*aria-label="Trial 1: 50%"[^>]*>Trial 1 50%<\/button>/);
+  assert.ok(selected.includes("The answer differs."));
+});
+
+test("partial-credit scenarios: two audits and a build average into the pillar", () => {
+  const six = { ...evaluation, id: "concepts/six-findings", reward: "partial-credit" } satisfies Eval;
+  const one = { ...evaluation, id: "concepts/one-finding", reward: "partial-credit" } satisfies Eval;
+  const data = buildBoard([evaluation, six, one], [
+    row(), row({ ...failure, trial: 2 }),
+    row({ ...failure, task_id: six.id, rewards: { reward: 0.5 } }),
+    row({ ...failure, task_id: six.id, trial: 2, rewards: { reward: 0.3333 } }),
+    row({ task_id: one.id }), row({ ...failure, task_id: one.id, trial: 2 }),
+  ]);
+  const pillar = data.tables.internet.pillars.concepts, key = agentKey(agent);
+  const scores = Object.fromEntries(pillar.evals.map((entry) => [entry.id, entry.cells[key].score]));
+  assert.equal(scores[evaluation.id], 0.5);
+  assert.ok(Math.abs(scores[six.id]! - 0.41665) < 1e-9);
+  assert.equal(scores[one.id], 0.5);
+  assert.ok(Math.abs(pillar.cells[key].score! - (0.5 + 0.41665 + 0.5) / 3) < 1e-9);
+  const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }));
+  assert.match(html, />1\/2<\/button>/);
+  assert.match(html, />42%<\/button>/);
+  assert.match(html, />50%<\/button>/);
 });
 
 test("unsupported, unrun, and failed cells have distinct states", () => {
@@ -234,18 +290,18 @@ test("drawer domain scores average tasks then scored pillars and respect the sel
     row({ task_id: "concepts/overflow" }), row({ task_id: "concepts/overflow", trial: 2, ...failure }),
     row({ task_id: "concepts/overflow", trial: 3, ...error }), row({ mode: "vanilla", agent: null, ...failure })]);
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, domain: "security", onSelect: () => {} }));
-  assert.match(panel, /aria-pressed="false"><span>Dapp development<\/span><b>38%<\/b><small>2\/4 scored<\/small>/);
-  assert.match(panel, /aria-pressed="true"><span>Security<\/span><b>25%<\/b><small>1\/3 scored<\/small>/);
-  assert.ok(panel.includes('<p>25% · 3/7 scored · 1 errors excluded</p>'));
+  assert.match(panel, /aria-pressed="false"><span>Dapp development<\/span><b>38%<\/b><small>2\/4 trials passed<\/small>/);
+  assert.match(panel, /aria-pressed="true"><span>Security<\/span><b>25%<\/b><small>1\/3 trials passed<\/small>/);
+  assert.ok(panel.includes('<p>25% · 3/7 trials passed · 1 errors excluded</p>'));
   assert.deepEqual([...panel.matchAll(/class="eval-list-title"><b>([^<]+)/g)].map((match) => match[1]), ["Reentrancy", "Overflow"]);
   assert.ok(panel.includes('<h3>Concepts</h3>'));
   assert.ok(!panel.includes('<h3>Build</h3>'));
   const concepts = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet", pillar: "concepts" }, onSelect: () => {} }));
-  assert.match(concepts, /<span>Dapp development<\/span><b>75%<\/b><small>2\/3 scored<\/small>/);
+  assert.match(concepts, /<span>Dapp development<\/span><b>75%<\/b><small>2\/3 trials passed<\/small>/);
   const build = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet", pillar: "build" }, onSelect: () => {} }));
   assert.match(build, /disabled=""><span>Security<\/span><small>No tasks yet<\/small>/);
   const vanilla = renderToStaticMarkup(createElement(Detail, { data, selection: { agent: { ...agent, agent: null }, mode: "vanilla" }, onSelect: () => {} }));
-  assert.match(vanilla, /<span>Dapp development<\/span><b>0%<\/b><small>0\/1 scored<\/small>/);
+  assert.match(vanilla, /<span>Dapp development<\/span><b>0%<\/b><small>0\/1 trials passed<\/small>/);
   assert.match(vanilla, /<span>Security<\/span><small>No trials yet<\/small>/);
 });
 

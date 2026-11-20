@@ -84,6 +84,7 @@ test("a domain URL filters tasks and counts, and a populated Security domain bec
   const tasks = [...taskCatalog(t).evals, {
     id: "concepts/reentrancy", title: "Reentrancy", pillar: "concepts" as const, area: "Audits",
     hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", description: "Check reentrancy.", instruction: "Find the reentrancy.", modes: ["internet" as const],
+    reward: "all-pass" as const,
   }];
   const dapp = renderToStaticMarkup(createElement(TaskList, { tasks, query: new URLSearchParams("domain=dapp-development") }));
   assert.deepEqual(titles(dapp), ["Fees", "Units", "Alpha token", "Zebra vault", "Supply tokens"]);
@@ -184,7 +185,7 @@ test("the catalog loader selects demo tasks and rejects a blank area or an unkno
     instruction: "Send one token.", modes: ["internet"], area: "Tokens" };
   writeFileSync(file, JSON.stringify({ skills_hash: "pack", n_attempts: 3, models: [], tasks: [task] }));
   assert.deepEqual(loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root).evals,
-    [{ ...task, title: "Send token" }]);
+    [{ ...task, title: "Send token", reward: "all-pass" }]);
   writeFileSync(file, JSON.stringify({ skills_hash: "pack", n_attempts: 3, models: [], tasks: [{ ...task, area: " " }] }));
   assert.throws(() => loadTaskCatalog({ ETHEVALS_DEMO: "1" }, root), /cannot load task catalog/);
   writeFileSync(file, JSON.stringify({ skills_hash: "pack", n_attempts: 3, models: [], tasks: [{ ...task, layer: "pages" }] }));

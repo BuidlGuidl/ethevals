@@ -167,7 +167,7 @@ The recipes below show two real setups.
 `tests/` holds the checks that decide whether the agent got it right.
 Harbor copies it in only after the agent stops, and runs `tests/test.sh`.
 
-A check is one pass-or-fail result with a name and a one-line reason. A trial passes only if every check passes.
+A check is one pass-or-fail result with a name and a one-line reason. A trial passes when its reward is 1.
 Check the outcome the instruction asked for, and give every failure a reason that says what went wrong.
 Split separate requirements into separate checks, so a failure tells readers which one broke.
 You pick the checks that fit your task, and you can use more than one kind:
@@ -287,7 +287,7 @@ Lint checks every judge file against the board's rules:
 - Agent judges declare `cwd` and receive their inputs inside that folder, instead of through `files`.
 - The judge starts one folder above submitted code, with verifier-owned user settings.
 - Its guard is `flag` or `penalize`.
-- Every criterion counts toward `all-pass`.
+- Every criterion counts toward the reward.
 
 Put pinned judge tools and their installer under `tests/`.
 Install them after the agent finishes, within the verifier time limit.
@@ -317,7 +317,7 @@ A browser task can supply a walk-through guarded to run only on its exact soluti
 A judge that declares MCP servers needs a live session, so judge-only changes rerun that task.
 File-reading agent judges keep saved-input regrades.
 
-**`reward.toml`.** Every task has a `tests/reward.toml` that makes the reward 1 only when every check passes:
+**`reward.toml`.** The default `tests/reward.toml` gives a reward of 1 only when every check passes.
 
 ```toml
 [scoring.check_records]  # (1)
@@ -332,6 +332,12 @@ aggregation = "all-pass"
 2. The trial's reward. A trial passes when it's 1.
 
 RewardKit writes `reward.json` and `reward-details.json` to `/logs/verifier/`. The board reads each check and its reason from `reward-details.json`.
+
+**Partial credit.** A task can give partial credit when its criteria are separate things to find, and finding some is still useful work. Each criterion then earns an equal part of the reward, so 3 of 6 gives 0.5.
+In `tests/judge.toml`, set `[scoring]` to `aggregation = "weighted-mean"`. Each criterion must be required, binary, and have weight 1.
+Set the judge's guard to `flag`.
+In `tests/reward.toml`, keep `all-pass` scoring for each code check file. Set the `reward` aggregation to `weighted-mean` with `weights = { judge = 1, report = 0 }` for `report.py`.
+Lint accepts only this mix for partial credit. Use one judge file in `tests/` and give every code check file weight 0.
 
 ### `solution/`
 
@@ -1457,6 +1463,7 @@ uv run ethevals free-check --tasks "$task" --output results/author-task
 - The oracle run applies your solution. Every check must pass.
 - The nop run does nothing. At least one check must fail.
 
+For a task that gives partial credit, at least one check in each code check file must fail in the nop run.
 The oracle run catches a broken solution. The nop run catches checks that pass on untouched work. Together they catch both before anyone pays for a trial.
 Both runs must write the same check names.
 `free-check` skips criteria, because the judge needs a paid call. It ends with:

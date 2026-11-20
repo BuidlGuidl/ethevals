@@ -21,6 +21,7 @@ export const rowSchema = z.object({
   effort: z.string().nullable(),
   trial: z.number().int().positive(),
   status: z.enum(["passed", "failed", "error"]),
+  rewards: z.object({ reward: z.number().min(0).max(1).optional() }).catchall(z.number()),
   no_answer: z.array(z.object({ kind: z.enum(["refused", "empty"]), stop_reason: z.string().nullable() })).optional(),
   checks: z.record(z.string(), z.object({ passed: z.boolean(), reason: z.string().min(1) })),
   error_kind: z.string().nullable(),
@@ -38,7 +39,9 @@ export const rowSchema = z.object({
   trajectory_url: z.string().regex(/^(https?:\/\/|\/(?!\/))/).nullable(),
   trajectory_file: z.string().nullable().optional(),
 }).refine((row) => row.mode === "skills" ? row.skills_hash !== null : row.skills_hash === null,
-  { message: "Skills rows require a pack hash; other modes require null." });
+  { message: "Skills rows require a pack hash; other modes require null." })
+  .refine((row) => row.status === "error" || row.rewards.reward !== undefined,
+    { message: "Scored rows require a reward." });
 
 
 export type Row = z.infer<typeof rowSchema>;

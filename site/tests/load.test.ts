@@ -14,6 +14,7 @@ const paid: Row = {
   schema_version: 8, task_id: "concepts/units", task_hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", skills_hash: null,
   model: "model-a", agent: "agent-a", effort: "high", mode: "internet",
   trial: 1, status: "passed", checks: { answer: { passed: true, reason: "Matches." } },
+  rewards: { reward: 1 },
   error_kind: null, error_reason: null, total_tokens: 100,
   model_cost_usd: 0.2, judge_cost_usd: 0.05, paid_by: "api_key", judge: null, judge_paid_by: null, cost_source: "harbor",
   total_seconds: 8, working_seconds: 7, trajectory_url: null, limit: null,
@@ -32,7 +33,8 @@ function fixture(t: TestContext) {
   const rows = path.join(root, "results/rows.jsonl");
   return { root, site, rows, write: (values: Partial<Row>[]) => {
     writeFileSync(rows, "\n" + values.map((value) => JSON.stringify({ ...paid,
-      skills_hash: value.mode === "skills" ? "current-pack" : null, ...value })).join("\n"));
+      skills_hash: value.mode === "skills" ? "current-pack" : null,
+      rewards: value.status === "error" ? {} : { reward: Number(value.status !== "failed") }, ...value })).join("\n"));
   } };
 }
 
@@ -74,6 +76,18 @@ test("loader accepts v8 rows, ignores unused metadata, and skips older rows", (t
   assert.equal("retry" in cell.trials[0], false);
   assert.equal("model_metered_usd" in cell.trials[0], false);
   assert.deepEqual(parseRows(JSON.stringify({ ...paid, schema_version: 7 }) + "\n" + JSON.stringify(paid), "rows.jsonl", []), [paid]);
+});
+
+test("loader reads rewards and defaults an older catalog to all-pass", (t) => {
+  const f = fixture(t);
+  assert.equal(loadBoard({}, f.site).evaluations[evaluation.id].reward, "all-pass");
+  writeFileSync(path.join(f.site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", n_attempts: 3,
+    models: ["model-a"], tasks: [{ ...evaluation, reward: "partial-credit" }] }));
+  f.write([{ status: "failed", rewards: { reward: 0.5, report: 1 } }, { status: "error", trial: 2, rewards: {} }]);
+  const data = loadBoard({}, f.site);
+  assert.equal(data.evaluations[evaluation.id].reward, "partial-credit");
+  const cell = data.tables.internet.pillars.concepts.evals[0].cells['["model-a","agent-a","high"]'];
+  assert.deepEqual([cell.score, ...cell.trials.map((trial) => trial.reward)], [0.5, 0.5, null]);
 });
 
 test("the board skips a row an old publisher wrote until the runner stamps it", (t) => {
