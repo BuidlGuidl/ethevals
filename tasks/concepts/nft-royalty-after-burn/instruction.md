@@ -1,0 +1,1 @@
+Our collection uses OpenZeppelin Contracts 5.7's ERC721Royalty. We set a per-token royalty on token 7 with _setTokenRoyalty, later burned token 7, and then minted token 7 again. Does royaltyInfo(7, price) now use that per-token royalty or the default royalty? Answer per-token or default, then explain in one sentence.
