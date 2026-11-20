@@ -13,7 +13,8 @@ import { Logo } from "../components/logo";
 import { ModeToggle } from "../components/mode-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { TooltipProvider } from "../components/ui/tooltip";
-import { Score, Hint, formulas, heat, percent, money } from "../components/scores";
+import { Score, Hint, cellText, formulasFor, heat, percent, money } from "../components/scores";
+import { ScoringToggle, scoringParam, useScoredBoard } from "../components/scoring-toggle";
 import { updateQuery, useQuery } from "../components/url-state";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
@@ -47,7 +48,7 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
           <span className="eval-list-result"><span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${trial.status}`).join(", ")}>
             {cell.trials.map((trial) => <span key={trial.trial} className={`run-dot ${trial.status}`} />)}</span>
-          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cell.score === null ? "–" : `${cell.passed}/${cell.total}`}</span></span>
+          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cell.score === null ? "–" : cellText(cell)}</span></span>
         </button>;
       })}
       {table.pillars[value].cells[key].state === "empty" && <p className="muted">No tasks yet for this mode.</p>}
@@ -55,6 +56,7 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
 }
 
 function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Trial[]; onRun: (run: number) => void }) {
+  const scored = trials.some((trial) => trial.score !== undefined);
   return <>
     <p>{evaluation.description}</p>
     <details className="prompt-disclosure" open><summary>Instruction</summary><pre>{unwrapPrompt(evaluation.instruction)}</pre>
@@ -62,12 +64,12 @@ function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Tri
     <section className="detail-section"><h3>Trials</h3>{trials.length ?
       <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Trials. Scroll horizontally for all columns.">
         <table className="runs-table"><caption className="sr-only">Trials for this task and configuration. Open a row for checks and trajectories.</caption>
-          <thead><tr>{["Trial", "Result", "Checks", "Time", "Tokens", "Cost"].map((label) => <th scope="col" key={label}>{label}</th>)}<th scope="col"><span className="sr-only">Open trial</span></th></tr></thead>
+          <thead><tr>{["Trial", "Result", "Checks", ...(scored ? ["Score"] : []), "Time", "Tokens", "Cost"].map((label) => <th scope="col" key={label}>{label}</th>)}<th scope="col"><span className="sr-only">Open trial</span></th></tr></thead>
           <tbody>{trials.map((trial) => {
             const checks = Object.values(trial.checks), passed = checks.filter((check) => check.passed).length;
             return <tr key={trial.trial}><td><button className="run-open" onClick={() => onRun(trial.trial)}
               aria-label={`Trial ${trial.trial}, ${verdictLabels[trial.status]}, ${passed} of ${checks.length} checks passed, ${duration(trial)}, ${tokens(trial.total_tokens)} tokens, ${money(trial.cost, 4)}. Open trial.`}>Trial {trial.trial}</button></td>
-              <td><Verdict trial={trial} /></td><td>{passed}/{checks.length}</td><td>{duration(trial)}</td><td>{tokens(trial.total_tokens)}</td><td>{money(trial.cost, 4)}</td><td aria-hidden="true">›</td></tr>;
+              <td><Verdict trial={trial} /></td><td>{passed}/{checks.length}</td>{scored && <td>{trial.status === "error" ? "–" : percent(trial.score ?? null)}</td>}<td>{duration(trial)}</td><td>{tokens(trial.total_tokens)}</td><td>{money(trial.cost, 4)}</td><td aria-hidden="true">›</td></tr>;
           })}</tbody></table>
       </div></div> : <p>No trials yet.</p>}
     </section>
@@ -81,8 +83,9 @@ function RunView({ trial, trials, onRun }: { trial: Trial; trials: Trial[]; onRu
       className={run.status === "passed" ? "positive" : run.status === "failed" ? "negative" : "caution"}
       aria-pressed={run.trial === trial.trial} aria-label={`Trial ${run.trial}: ${run.status}`} onClick={() => onRun(run.trial)}>
       Trial {run.trial} {run.status === "passed" ? "✓" : run.status === "failed" ? "✗" : "!"}</button>)}</div>
-    <dl className="run-stats">{[
+    <dl className="run-stats" data-scored={trial.score !== undefined || undefined}>{[
       ["Checks", `${checks.filter(([, check]) => check.passed).length} / ${checks.length}`],
+      ...(trial.score !== undefined ? [["Score", trial.status === "error" ? "–" : percent(trial.score)]] : []),
       ["Tokens", tokens(trial.total_tokens)], ["Cost", money(trial.cost, 4)], ["Time", duration(trial)],
     ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {trial.issue && <p className="issue">{trial.error_kind ?? trial.limit?.type ?? "Trial"}: {trial.issue}</p>}
@@ -91,7 +94,7 @@ function RunView({ trial, trials, onRun }: { trial: Trial; trials: Trial[]; onRu
     {trial.limit && <p className="caution">{trial.limit.type} limit: {trial.limit.limit}{trial.limit.reason ? ` · ${trial.limit.reason}` : ""}</p>}
     <section className="verifier-verdict"><h3>Verifier checks</h3><ul className="checks">{checks.sort((a, b) => Number(a[1].passed) - Number(b[1].passed)).map(([name, check]) =>
       <li key={name}><span className={check.passed ? "positive" : "negative"}>{check.passed ? <Check size={16} /> : <X size={16} />}</span>
-        <div><code>{name}</code><p>{check.reason}</p></div></li>)}</ul>
+        <div><code>{name}</code>{trial.points && <small className="check-points">{trial.points[name]} {trial.points[name] === 1 ? "point" : "points"}</small>}<p>{check.reason}</p></div></li>)}</ul>
       {!checks.length && <p className="muted">No checks completed.</p>}
     </section>
     <p className="muted">{trial.paid_by === "free" ? "No model spend" : `Paid by ${trial.paid_by === "plan" ? "plan" : "API key"}`} · Cost at API prices</p>
@@ -146,7 +149,9 @@ export default function Board({ data }: { data: BoardData }) {
   return <Results data={data} query={query} />;
 }
 
-export function Results({ data, query }: { data: BoardData; query: URLSearchParams }) {
+export function Results({ data: built, query }: { data: BoardData; query: URLSearchParams }) {
+  const data = useScoredBoard(built, query);
+  const formulas = formulasFor(data.scoring);
   const mode = readMode(query.get("mode"));
   const evalsMode = readMode(query.get("evals"));
   const domain = domains.find((value) => value === query.get("domain"));
@@ -179,6 +184,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
     (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(a)].scores.overall ?? -1));
   return <TooltipProvider delayDuration={200}><main id="main" className="page results-page">
     {data.demo && <aside className="banner"><strong>Demo data</strong> · Invented results for a board preview.</aside>}
+    <ScoringToggle scoring={data.scoring} />
     <header className="hero"><div className="hero-brand"><h1 id="hero-logo" aria-label="ETH Evals"><Logo id="hero-gradient" /></h1>
       <p className="hero-plate"><span><b>{data.counts.evals}</b> tasks</span><span><b>{data.counts.agents}</b> agents</span><span><b>{data.counts.runs.toLocaleString("en")}</b> trials</span></p></div>
       <p className="hero-tag">The Open Benchmark for AI on Ethereum</p>
@@ -186,7 +192,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
       <p className="hero-desc">We evaluate <Link href="/how-it-works/#hw-pillars">three pillars</Link>: <b>Concepts</b>, <b>Build</b>, and <b>Act</b>.</p>
     </header>
     <section id="leaderboard" className="results-section"><div className="section-head"><div><h2>Results</h2><p>The same work, with and without Ethereum skills.</p></div>
-      <Link className="text-link" href={`/compare/?mode=${mode}`}>Compare configurations →</Link></div>
+      <Link className="text-link" href={`/compare/?mode=${mode}${scoringParam(data.scoring)}`}>Compare configurations →</Link></div>
       <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} /><p className="mode-note">{modeHints[mode]}</p></div>
       {agents.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Leaderboard. Scroll horizontally for all columns.">
         <table className="leaderboard"><caption className="sr-only">Configuration scores, sorted by {sort.key} {sort.ascending ? "ascending" : "descending"}</caption>
@@ -221,8 +227,8 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
                 return <td key={agentKey(agent)}>{cell.state === "na" || cell.score === null ?
                   <span className="matrix-cell" data-empty title={emptyTrialLabel(cell)}>–</span> :
                   <Hint text={formulas.eval}><button className="matrix-cell" style={heat(cell.score)}
-                    aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} trials passed. Open details.`}
-                    onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{cell.passed}/{cell.total}</button></Hint>}</td>;
+                    aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} trials passed${cell.percent ? `, score ${percent(cell.score)}` : ""}. Open details.`}
+                    onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{cellText(cell)}</button></Hint>}</td>;
               })}
             </tr>)}
           </Fragment>)}</tbody></table></div><div className="table-note">Trials passed per task. Click a scored cell for its instruction and trials. Errors are excluded from counts.</div></div>

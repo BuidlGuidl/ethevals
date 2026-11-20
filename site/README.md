@@ -55,6 +55,15 @@ Different agents, models, and efforts stay separate.
 Compare shows Overall and pillar scores for up to five configurations.
 Cost adds agent and judge API prices, even when a plan paid.
 
+This comparison build adds a scoring switch above the board, kept in the `scoring` query parameter.
+All or nothing is the default and the live board. Partial, Mixed, and Weighted score a trial from 0 to 1 from its saved checks.
+Unknown values fall back to all or nothing, and links between Results and Compare keep the parameter.
+The leaderboard, task matrix, drawer, and Compare follow the switch. Cost per pass does not change.
+`src/scoring-settings.ts` holds each task's Mixed flag and Weighted points, beside `src/areas.ts` for the same reason.
+The build fails when it names a check no current row has, or a listed task's row has a check it does not list.
+`src/labels.ts` keeps the switch's copy in `scoringCopy`.
+`pnpm exec tsx scripts/scoring-table.ts` prints Internet Overall and pillar scores under all four versions.
+
 Each trial drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.
 Failed no-answer trials say "Refused" or "Empty reply".
 Its trajectory link opens the row's `trajectory_url`.

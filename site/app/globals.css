@@ -132,6 +132,11 @@
   .empty { @apply border border-border bg-sheet p-6; }
   .empty p { @apply mt-2 text-muted; }
   .banner { @apply mb-8 border border-amber/30 bg-amber/5 p-3 text-xs text-amber; }
+  .scoring-panel { @apply mb-10 flex flex-wrap items-start gap-x-6 gap-y-3 border border-border-strong bg-sheet p-4 text-xs; }
+  .scoring-switch { @apply flex flex-wrap items-center gap-3; }
+  .scoring-notes { @apply grid min-w-0 max-w-[720px] flex-1 basis-[320px] gap-1; }
+  .check-points { @apply ml-2 text-[10px] text-muted; }
+  .run-stats[data-scored] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .muted { @apply text-muted; }
   .positive { @apply text-green; }
   .negative { @apply text-red; }

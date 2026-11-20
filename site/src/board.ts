@@ -1,5 +1,6 @@
 import type { Row } from "./rows";
 import { taskDomain, type Domain } from "./areas";
+import { checkPoints, defaultScoring, trialScore, type Scoring } from "./scoring";
 export type { Row } from "./rows";
 
 export const pillars = ["concepts", "build", "act"] as const;
@@ -36,6 +37,9 @@ export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind" | "er
   cost: number | null;
   issue: string;
   trajectoryUrl: string | null;
+  // Set only when a version other than all or nothing is selected.
+  score?: number;
+  points?: Record<string, number>;
 };
 
 interface Counts {
@@ -47,6 +51,8 @@ interface Counts {
 export interface EvalCell extends Counts {
   state: "score" | "na" | "pending";
   trials: Trial[];
+  // A multi-check task under a version other than all or nothing shows its score, not passed/total.
+  percent?: true;
 }
 export interface PillarCell extends Counts {
   state: "score" | "empty" | "pending";
@@ -72,6 +78,7 @@ export interface ConfigurationSummary {
 }
 export interface BoardData {
   demo: boolean;
+  scoring: Scoring;
   evaluations: Record<string, DisplayEval>;
   tables: Record<Mode, Table>;
   lifts: Record<string, Record<Pillar | "overall", number | null>>;
@@ -149,6 +156,66 @@ function pillarCell(cells: EvalCell[]): PillarCell {
   };
 }
 
+// Pillar cells and summaries follow from the task cells, so a new trial score only needs this again.
+function summarize(table: Table): Table {
+  const summaries: Table["summaries"] = {};
+  const scored = { ...table, pillars: Object.fromEntries(pillars.map((pillar) => {
+    const { evals } = table.pillars[pillar];
+    return [pillar, { evals, cells: Object.fromEntries(table.agents.map((agent) => {
+      const key = agentKey(agent);
+      return [key, pillarCell(evals.map((entry) => entry.cells[key]))];
+    })) }];
+  })) as Table["pillars"], summaries };
+  for (const agent of table.agents) {
+    const key = agentKey(agent);
+    const cells = pillars.map((pillar) => scored.pillars[pillar].cells[key]);
+    const summary = scoreSummary(cells);
+    const trials = pillars.flatMap((pillar) => scored.pillars[pillar].evals.flatMap((entry) => entry.cells[key].trials));
+    const counted = trials.filter((trial) => trial.status !== "error");
+    const scores: ConfigurationSummary["scores"] = { overall: null, concepts: null, build: null, act: null };
+    for (const pillar of pillars) scores[pillar] = scored.pillars[pillar].cells[key].score;
+    scores.overall = summary.score;
+    summaries[key] = {
+      scores, costPerPass: costPerPass(trials),
+      medianTokens: median(counted.map((trial) => trial.total_tokens)),
+      passed: summary.passed, total: summary.total, errors: summary.errors,
+    };
+  }
+  return scored;
+}
+
+function lifts(tables: BoardData["tables"], keys: string[]): BoardData["lifts"] {
+  return Object.fromEntries(keys.map((key) => {
+    const lift: ConfigurationSummary["scores"] = { overall: null, concepts: null, build: null, act: null };
+    for (const pillar of pillars) {
+      const internet = tables.internet.pillars[pillar].evals;
+      const skills = tables.skills.pillars[pillar].evals;
+      const paired = internet.map((entry, index) => skillLift(skills[index].cells[key].score, entry.cells[key].score));
+      lift[pillar] = overallScore(paired);
+    }
+    lift.overall = overallScore(pillars.map((pillar) => lift[pillar]));
+    return [key, lift];
+  }));
+}
+
+// Scores a board built under all or nothing with another version. A task's score is the mean of its trial scores.
+export function scoreBoard(data: BoardData, scoring: Scoring): BoardData {
+  if (scoring === data.scoring) return data;
+  const rescore = (id: string, cells: Record<string, EvalCell>) => {
+    const percent = Object.values(cells).some((cell) => cell.trials.some((trial) => Object.keys(trial.checks).length > 1));
+    return Object.fromEntries(Object.entries(cells).map(([key, cell]) => {
+      const trials = cell.trials.map((trial) => ({ ...trial, score: trialScore(id, trial, scoring),
+        ...(scoring === "weighted" && { points: checkPoints(id, Object.keys(trial.checks), scoring)! }) }));
+      const scores = trials.filter((trial) => trial.status !== "error").map((trial) => trial.score);
+      return [key, { ...cell, trials, score: overallScore(scores), ...(percent && { percent: true as const }) }];
+    }));
+  };
+  const tables = Object.fromEntries(Object.entries(data.tables).map(([mode, table]) => [mode, summarize({ ...table,
+    pillars: Object.fromEntries(pillars.map((pillar) => [pillar, { cells: {},
+      evals: table.pillars[pillar].evals.map(({ id, cells }) => ({ id, cells: rescore(id, cells) })) }])) as Table["pillars"] })])) as BoardData["tables"];
+  return { ...data, scoring, tables, lifts: lifts(tables, Object.keys(data.lifts)) };
+}
+
 // The loader supplies current, checked rows. Group each row and compute each cell once.
 export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): BoardData {
   const groups = new Map<string, Row[]>();
@@ -176,45 +243,12 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
           return [key, evalCell(evaluation, mode, groups.get(JSON.stringify([evaluation.id, mode, key])) ?? [])];
         })),
       }));
-      table.pillars[pillar] = {
-        evals,
-        cells: Object.fromEntries(columns.map((agent) => {
-          const key = agentKey(agent);
-          return [key, pillarCell(evals.map((entry) => entry.cells[key]))];
-        })),
-      };
+      table.pillars[pillar] = { evals, cells: {} };
     }
-    for (const agent of columns) {
-      const key = agentKey(agent);
-      const cells = pillars.map((pillar) => table.pillars[pillar].cells[key]);
-      const summary = scoreSummary(cells);
-      const trials = pillars.flatMap((pillar) => table.pillars[pillar].evals.flatMap((entry) => entry.cells[key].trials));
-      const scored = trials.filter((trial) => trial.status !== "error");
-      const scores: ConfigurationSummary["scores"] = { overall: null, concepts: null, build: null, act: null };
-      for (const pillar of pillars) scores[pillar] = table.pillars[pillar].cells[key].score;
-      scores.overall = summary.score;
-      table.summaries[key] = {
-        scores, costPerPass: costPerPass(trials),
-        medianTokens: median(scored.map((trial) => trial.total_tokens)),
-        passed: summary.passed, total: summary.total, errors: summary.errors,
-      };
-    }
-    tables[mode] = table;
-  }
-  const lifts: BoardData["lifts"] = {};
-  for (const key of configurations.keys()) {
-    const lift: ConfigurationSummary["scores"] = { overall: null, concepts: null, build: null, act: null };
-    for (const pillar of pillars) {
-      const internet = tables.internet.pillars[pillar].evals;
-      const skills = tables.skills.pillars[pillar].evals;
-      const paired = internet.map((entry, index) => skillLift(skills[index].cells[key].score, entry.cells[key].score));
-      lift[pillar] = overallScore(paired);
-    }
-    lift.overall = overallScore(pillars.map((pillar) => lift[pillar]));
-    lifts[key] = lift;
+    tables[mode] = summarize(table);
   }
   return {
-    demo, tables, lifts, counts: { evals: evaluations.length, agents: configurations.size, runs: rows.length },
+    demo, scoring: defaultScoring, tables, lifts: lifts(tables, [...configurations.keys()]), counts: { evals: evaluations.length, agents: configurations.size, runs: rows.length },
     evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {
       id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar, domain: taskDomain(evaluation),
       description: evaluation.description, instruction: evaluation.instruction, modes: evaluation.modes,
