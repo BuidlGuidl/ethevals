@@ -82,6 +82,58 @@ def test_lint_requires_all_pass_across_judges_and_tests(tmp_path):
         lint_task(task, load_job(job_config(tmp_path)))
 
 
+def use_partial_credit(task):
+    judge = task / "tests/judge.toml"
+    judge.write_text(judge.read_text().replace('aggregation = "all-pass"', 'aggregation = "weighted-mean"'))
+    (task / "tests/reward.toml").write_text(
+        '[scoring.report]\naggregation = "all-pass"\n'
+        '[[reward]]\nname = "reward"\naggregation = "weighted-mean"\nweights = { judge = 1, report = 0 }\n')
+    (task / "tests/report.py").write_text('import rewardkit as rk\nrk.file_exists("answer.txt", name="answer")\n')
+
+
+def test_lint_and_catalog_accept_partial_credit(tmp_path):
+    from ethevals.jobs import write_catalog
+
+    task = task_folder(tmp_path)
+    add_judge(task, key_env="CLAUDE_CODE_OAUTH_TOKEN")
+    use_partial_credit(task)
+    write_catalog([task], tmp_path)
+    assert json.loads((tmp_path / "catalog.json").read_text())["tasks"][0]["reward"] == "partial-credit"
+
+
+@pytest.mark.parametrize("file,before,after,message", [
+    ("reward.toml", 'aggregation = "weighted-mean"', 'aggregation = "all-pass"', "criteria must count toward all-pass"),
+    ("reward.toml", "report = 0", "report = 1", "every code check file weight 0"),
+    ("reward.toml", ", report = 0", "", "every code check file weight 0"),
+    ("reward.toml", "judge = 1", "judge = 0", "judge weight 1"),
+    ("judge.toml", 'aggregation = "weighted-mean"', 'aggregation = "all-pass"', "contribute to all-pass reward"),
+    ("judge.toml", "[judge]", "[judge]\nweight = 0", "positive judge weight"),
+    ("judge.toml", "[[criterion]]", "[[criterion]]\nweight = 2", "required binary criteria with weight 1"),
+    ("judge.toml", "[[criterion]]", "[[criterion]]\noptional = true", "required binary criteria with weight 1"),
+    ("judge.toml", 'type = "binary"', 'type = "likert"', "required binary criteria with weight 1"),
+    ("judge.toml", "[[criterion]]", "[[criterion]]\nnegate = true", "no negation"),
+    ("judge.toml", 'guard = "flag"', 'guard = "penalize"', "with partial credit"),
+])
+def test_lint_refuses_mixed_partial_credit(tmp_path, file, before, after, message):
+    task = task_folder(tmp_path)
+    add_judge(task)
+    use_partial_credit(task)
+    file = task / "tests" / file
+    file.write_text(file.read_text().replace(before, after))
+    with pytest.raises(ValueError, match=message):
+        lint_task(task, load_job(job_config(tmp_path)))
+
+
+def test_lint_refuses_two_partial_credit_judge_files(tmp_path):
+    task = task_folder(tmp_path)
+    add_judge(task)
+    use_partial_credit(task)
+    judge = task / "tests/judge.toml"
+    judge.with_name("second.toml").write_text(judge.read_text().replace('name = "explained"', 'name = "second"'))
+    with pytest.raises(ValueError, match="one judge file"):
+        lint_task(task, load_job(job_config(tmp_path)))
+
+
 def test_lint_accepts_verifier_files_without_a_trajectory(tmp_path):
     task = task_folder(tmp_path)
     add_judge(task)
@@ -221,20 +273,24 @@ def test_export_card_explains_the_required_judge_key(tmp_path):
     assert (output / "tasks/concepts--question/tests/judge.toml").read_bytes() == (task / "tests/judge.toml").read_bytes()
 
 
-def test_free_check_skips_nested_judges_and_preserves_programmatic_checks(tmp_path, monkeypatch):
+@pytest.mark.parametrize("partial", [False, True], ids=["nested-all-pass", "partial-credit"])
+def test_free_check_skips_judges_and_preserves_programmatic_checks(tmp_path, monkeypatch, partial):
     from harbor.job import Job
     from rewardkit.runner import run as run_rewardkit
     from ethevals.harbor_tasks import free_check
 
     task = task_folder(tmp_path)
     add_judge(task, key_env="CLAUDE_CODE_OAUTH_TOKEN")
-    group = task / "tests/judgment"
-    group.mkdir()
-    (task / "tests/judge.toml").rename(group / "judge.toml")
-    (group / "reward.toml").write_text('[[reward]]\naggregation = "all-pass"\nweights = {judge = 1}\n')
-    (task / "tests/reward.toml").write_text(
-        '[[reward]]\nname = "reward"\naggregation = "all-pass"\nweights = {judgment = 1, output = 1}\n')
-    (task / "tests/output.py").write_text('import rewardkit as rk\nrk.file_exists("answer.txt", name="answer")\n')
+    if partial:
+        use_partial_credit(task)
+    else:
+        group = task / "tests/judgment"
+        group.mkdir()
+        (task / "tests/judge.toml").rename(group / "judge.toml")
+        (group / "reward.toml").write_text('[[reward]]\naggregation = "all-pass"\nweights = {judge = 1}\n')
+        (task / "tests/reward.toml").write_text(
+            '[[reward]]\nname = "reward"\naggregation = "all-pass"\nweights = {judgment = 1, output = 1}\n')
+        (task / "tests/output.py").write_text('import rewardkit as rk\nrk.file_exists("answer.txt", name="answer")\n')
     before = {file.relative_to(task): file.read_bytes() for file in task.rglob("*") if file.is_file()}
 
     class SavedJob:

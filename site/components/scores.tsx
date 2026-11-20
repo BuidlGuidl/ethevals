@@ -7,8 +7,8 @@ export const pp = (value: number | null) => value === null ? "–" : `${Math.rou
 export const heat = (score: number | null) => score === null ? undefined : { "--score": `${score * 100}%` } as CSSProperties;
 export const formulas = {
   overall: "Overall = mean of scored pillar scores; pillars without a score are skipped.",
-  pillar: "Pillar score = mean of scored task pass rates; tasks without scores are skipped.",
-  eval: "Task pass rate = passed trials ÷ scored trials; errors are excluded.",
+  pillar: "Pillar score = mean of scored task scores; tasks without scores are skipped.",
+  eval: "Task score = mean of its trials: a pass is 1, a fail is 0, partial credit is in between; errors are excluded.",
   lift: "Lift = mean change over tasks scored in both modes for the same configuration, in percentage points. Overall averages paired pillar lifts.",
 };
 export function Hint({ text, children }: { text: string; children: React.ReactElement }) {

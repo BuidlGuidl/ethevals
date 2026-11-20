@@ -139,14 +139,17 @@ The wall-clock time an agent or verifier gets. Harbor's default applies unless a
 One named pass-or-fail result about a trial, with a one-line reason. A test check takes its test function's name, and a criteria check takes its criterion's name.
 
 **Reward**:
-Harbor's result for a trial, written by RewardKit. `reward` is 1 only when every check passes. A task can add other reward keys.
+Harbor's result for a trial, written by RewardKit: a number from 0 to 1. `reward` is 1 only when every check passes, unless the task gives partial credit. A task can add other reward keys.
+
+**Partial credit**:
+A task gives partial credit when each of its criteria earns an equal part of the reward, so a trial that meets 3 of 6 gets 0.5. A task declares it when its criteria are separate things to find, such as the known findings of an audit. Every other task is all-pass.
+_Avoid_: partial score, share reward
 
 **Compile**:
 The check that the tests, and the agent code they import, compile. A task has one, shared by every test tool. If it fails, every test fails with it.
 
 **Score**:
-How many of an agent's scored trials passed, shown as a count such as 3 of 5. Errors don't count.
-_Avoid_: partial score
+How an agent did on a task, from 0% to 100%: the average of its scored trials' rewards. A passed trial counts 1 and a failed one 0, so the board shows a count such as 3 of 5. On a task that gives partial credit a trial can count in between, and the board shows a percent. Errors don't count.
 
 **Cost**:
 The API price of a trial's model calls, recorded the same way whether a plan or an API key paid.

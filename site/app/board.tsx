@@ -20,11 +20,16 @@ import { readMode } from "../src/modes";
 
 type Sort = "overall" | Pillar;
 const verdictLabels = { passed: "PASS", failed: "FAIL", error: "ERROR" };
+const creditTrial = (trial: Trial, reward: Eval["reward"]) => reward === "partial-credit" && trial.reward !== null;
+const trialLabel = (trial: Trial, reward: Eval["reward"]) => creditTrial(trial, reward) ? percent(trial.reward) : verdictLabels[trial.status];
+const partialTrial = (trial: Trial, reward: Eval["reward"]) => creditTrial(trial, reward) && trial.status === "failed" && (trial.reward ?? 0) > 0;
+const verdictTone = (trial: Trial, reward: Eval["reward"]) => trial.status === "passed" ? "positive" :
+  trial.status === "error" || partialTrial(trial, reward) ? "caution" : "negative";
 
-function Verdict({ trial }: { trial: Trial }) {
-  return <span className={`verdict ${trial.status === "passed" ? "positive" : trial.status === "failed" ? "negative" : "caution"}`}>
-    {trial.status === "passed" ? <Check size={14} /> : trial.status === "failed" ? <X size={14} /> : <AlertTriangle size={14} />}
-    {verdictLabels[trial.status]}</span>;
+function Verdict({ trial, reward }: { trial: Trial; reward: Eval["reward"] }) {
+  return <span className={`verdict ${verdictTone(trial, reward)}`}>
+    {trial.status === "passed" ? <Check size={14} /> : trial.status === "error" ? <AlertTriangle size={14} /> : partialTrial(trial, reward) ? null : <X size={14} />}
+    {trialLabel(trial, reward)}</span>;
 }
 
 const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
@@ -45,9 +50,9 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
-          <span className="eval-list-result"><span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${trial.status}`).join(", ")}>
-            {cell.trials.map((trial) => <span key={trial.trial} className={`run-dot ${trial.status}`} />)}</span>
-          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cell.score === null ? "–" : `${cell.passed}/${cell.total}`}</span></span>
+          <span className="eval-list-result"><span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${creditTrial(trial, evaluation.reward) ? trialLabel(trial, evaluation.reward) : trial.status}`).join(", ")}>
+            {cell.trials.map((trial) => <span key={trial.trial} className={`run-dot ${partialTrial(trial, evaluation.reward) ? "partial" : trial.status}`} />)}</span>
+          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{evaluation.reward === "partial-credit" || cell.score === null ? percent(cell.score) : `${cell.passed}/${cell.total}`}</span></span>
         </button>;
       })}
       {table.pillars[value].cells[key].state === "empty" && <p className="muted">No tasks yet for this mode.</p>}
@@ -66,21 +71,21 @@ function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Tri
           <tbody>{trials.map((trial) => {
             const checks = Object.values(trial.checks), passed = checks.filter((check) => check.passed).length;
             return <tr key={trial.trial}><td><button className="run-open" onClick={() => onRun(trial.trial)}
-              aria-label={`Trial ${trial.trial}, ${verdictLabels[trial.status]}, ${passed} of ${checks.length} checks passed, ${duration(trial)}, ${tokens(trial.total_tokens)} tokens, ${money(trial.cost, 4)}. Open trial.`}>Trial {trial.trial}</button></td>
-              <td><Verdict trial={trial} /></td><td>{passed}/{checks.length}</td><td>{duration(trial)}</td><td>{tokens(trial.total_tokens)}</td><td>{money(trial.cost, 4)}</td><td aria-hidden="true">›</td></tr>;
+              aria-label={`Trial ${trial.trial}, ${trialLabel(trial, evaluation.reward)}, ${passed} of ${checks.length} checks passed, ${duration(trial)}, ${tokens(trial.total_tokens)} tokens, ${money(trial.cost, 4)}. Open trial.`}>Trial {trial.trial}</button></td>
+              <td><Verdict trial={trial} reward={evaluation.reward} /></td><td>{passed}/{checks.length}</td><td>{duration(trial)}</td><td>{tokens(trial.total_tokens)}</td><td>{money(trial.cost, 4)}</td><td aria-hidden="true">›</td></tr>;
           })}</tbody></table>
       </div></div> : <p>No trials yet.</p>}
     </section>
   </>;
 }
 
-function RunView({ trial, trials, onRun }: { trial: Trial; trials: Trial[]; onRun: (run: number) => void }) {
+function RunView({ trial, trials, reward, onRun }: { trial: Trial; trials: Trial[]; reward: Eval["reward"]; onRun: (run: number) => void }) {
   const checks = Object.entries(trial.checks);
   return <>
     <div className="run-switcher" role="group" aria-label="Trials">{trials.map((run) => <button key={run.trial}
-      className={run.status === "passed" ? "positive" : run.status === "failed" ? "negative" : "caution"}
-      aria-pressed={run.trial === trial.trial} aria-label={`Trial ${run.trial}: ${run.status}`} onClick={() => onRun(run.trial)}>
-      Trial {run.trial} {run.status === "passed" ? "✓" : run.status === "failed" ? "✗" : "!"}</button>)}</div>
+      className={verdictTone(run, reward)}
+      aria-pressed={run.trial === trial.trial} aria-label={`Trial ${run.trial}: ${creditTrial(run, reward) ? trialLabel(run, reward) : run.status}`} onClick={() => onRun(run.trial)}>
+      Trial {run.trial} {creditTrial(run, reward) ? trialLabel(run, reward) : run.status === "passed" ? "✓" : run.status === "failed" ? "✗" : "!"}</button>)}</div>
     <dl className="run-stats">{[
       ["Checks", `${checks.filter(([, check]) => check.passed).length} / ${checks.length}`],
       ["Tokens", tokens(trial.total_tokens)], ["Cost", money(trial.cost, 4)], ["Time", duration(trial)],
@@ -114,10 +119,10 @@ export function Detail({ selection, data, domain, onSelect }: {
   }, [evaluation?.id, runLevel]);
   const scope = pillar ? table.pillars[pillar].cells[key] : summary;
   return <div className="detail-body">
-    <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial ? <>Trial {trial.trial} of {trials.length} <Verdict trial={trial} /></> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
+    <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial && evaluation ? <>Trial {trial.trial} of {trials.length} <Verdict trial={trial} reward={evaluation.reward} /></> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
       {trial && <p>{evaluation!.title}</p>}
       <Configuration agent={agent} /><p className="muted">{modeNames[mode]}</p>
-      {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scope.passed}/{scope.total} scored · {scope.errors} errors excluded</p>}
+      {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scope.passed}/{scope.total} trials passed · {scope.errors} errors excluded</p>}
       {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No tasks yet" : "No trials yet"}</p>}
       {!evaluation && <div className="domain-scores" role="group" aria-label="Filter by domain">
         {domains.map((option) => {
@@ -126,7 +131,7 @@ export function Detail({ selection, data, domain, onSelect }: {
           const tasks = cells.flat().length, score = scoreSummary(cells.map(scoreSummary));
           return <button type="button" key={option} aria-pressed={domain === option} disabled={!tasks && domain !== option} onClick={() => selectDomain(domain, option)}>
             <span>{domainNames[option]}</span>
-            {!tasks ? <small>No tasks yet</small> : score.score === null ? <small>No trials yet</small> : <><b>{percent(score.score)}</b><small>{score.passed}/{score.total} scored</small></>}
+            {!tasks ? <small>No tasks yet</small> : score.score === null ? <small>No trials yet</small> : <><b>{percent(score.score)}</b><small>{score.passed}/{score.total} trials passed</small></>}
           </button>;
         })}
       </div>}
@@ -134,7 +139,7 @@ export function Detail({ selection, data, domain, onSelect }: {
     {trial ? <button className="back-button" onClick={() => onSelect({ ...selection, run: undefined })}><ArrowLeft size={14} />All trials</button>
       : evaluation && fromList && <button className="back-button" onClick={() => onSelect({ agent, mode, pillar })}>
         <ArrowLeft size={14} />{pillar ? names[pillar] : "All pillars"}</button>}
-    {trial ? <RunView trial={trial} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
+    {trial && evaluation ? <RunView trial={trial} trials={trials} reward={evaluation.reward} onRun={(run) => onSelect({ ...selection, run })} /> :
       evaluation ? <EvalView evaluation={evaluation} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
       <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar} domain={domain}
         onEval={(value) => onSelect({ ...selection, evaluation: value, fromList: true })} />}
@@ -205,27 +210,28 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
         <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current tasks. Browse the task catalog below.</p></div>}
       <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on three pillars: Concepts, Build, and Act. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them.</div>
     </section>
-    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task</h2><p>A detailed view of the Leaderboard. See how many trials each agent passed on every task, grouped by pillar.</p></div>
+    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task</h2><p>Task scores for each agent, grouped by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />
       <a className="button" href={`${repo}/blob/main/docs/add-a-task.md`} target="_blank" rel="noreferrer">How to add a task ↗</a></div>
       <div className="matrix-filters"><p className="eyebrow">{matrixRows.reduce((sum, { entries }) => sum + entries.length, 0)} tasks · {modeNames[evalsMode]}</p>
         <DomainFilter taskDomains={pillars.flatMap((pillar) => matrixTable.pillars[pillar].evals.map((entry) => data.evaluations[entry.id].domain))} domain={domain} />
       </div>
       <div className="table-shell"><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Task matrix. Scroll for more tasks and configurations.">
-        <table className="matrix"><caption className="sr-only">Passed trials / scored trials for each task and configuration</caption><thead><tr><th className="row-label" scope="col">Task</th>
+        <table className="matrix"><caption className="sr-only">Score for each task and configuration</caption><thead><tr><th className="row-label" scope="col">Task</th>
           {matrixAgents.map((agent) => <th key={agentKey(agent)} scope="col"><Configuration agent={agent} /></th>)}</tr></thead>
           <tbody>{matrixRows.filter(({ entries }) => entries.length).map(({ pillar, entries }) => <Fragment key={pillar}><tr className="pillar-band"><th scope="colgroup" colSpan={matrixAgents.length + 1}><span className="band-label">{names[pillar]}<small>{entries.length} tasks</small></span></th></tr>
             {entries.map((entry) => <tr key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
               <th scope="row" className="row-label"><span className="eval-title">{data.evaluations[entry.id].title}</span><small>{entry.id}</small></th>
-              {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
+              {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)], evaluation = data.evaluations[entry.id];
+                const partialCredit = evaluation.reward === "partial-credit";
                 return <td key={agentKey(agent)}>{cell.state === "na" || cell.score === null ?
                   <span className="matrix-cell" data-empty title={emptyTrialLabel(cell)}>–</span> :
                   <Hint text={formulas.eval}><button className="matrix-cell" style={heat(cell.score)}
-                    aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} trials passed. Open details.`}
-                    onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{cell.passed}/{cell.total}</button></Hint>}</td>;
+                    aria-label={`${evaluation.title}, ${modelLabel(agent.model)}: ${partialCredit ? `${percent(cell.score)} score` : `${cell.passed} of ${cell.total} trials passed`}. Open details.`}
+                    onClick={() => select({ evaluation, agent, mode: evalsMode })}>{partialCredit ? percent(cell.score) : `${cell.passed}/${cell.total}`}</button></Hint>}</td>;
               })}
             </tr>)}
-          </Fragment>)}</tbody></table></div><div className="table-note">Trials passed per task. Click a scored cell for its instruction and trials. Errors are excluded from counts.</div></div>
+          </Fragment>)}</tbody></table></div><div className="table-note">Trials passed per task, or a percent where a task gives partial credit. Click a scored cell for its instruction and trials. Errors are excluded.</div></div>
     </section>
     <noscript>Enable JavaScript to change modes and open trial details.</noscript>
   </main>

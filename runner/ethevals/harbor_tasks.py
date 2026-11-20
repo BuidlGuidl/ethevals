@@ -1,12 +1,13 @@
 """Lint task folders and prove their solutions through Harbor."""
 from pathlib import Path
+from typing import Literal
 import json
 import os
 import re
 import shutil
 import tomllib
 
-from rewardkit.models import JudgeTomlConfig
+from rewardkit.models import JudgeTomlConfig, RewardTomlConfig
 
 from harbor.models.task.task import Task
 import toml
@@ -54,7 +55,36 @@ def task_host_variables(path: Path) -> list[str]:
     return sorted(names)
 
 
-def lint_task(path: Path, config: JobSettings | None = None) -> None:
+def task_reward(path: Path, judges: dict[Path, JudgeTomlConfig]) -> Literal["all-pass", "partial-credit"]:
+    tests = path / "tests"
+    reward = tests / "reward.toml"
+    document = tomllib.loads(reward.read_text()) if reward.exists() else {}
+    aggregates = [item for item in document.get("reward", []) if item.get("name") == "reward"]
+    if not any(item.get("aggregation") in {"weighted-mean", "weighted_mean"} for item in aggregates):
+        return "all-pass"
+    if judges and all(judge.scoring.aggregation == "all-pass" for judge in judges.values()):
+        return "all-pass"
+
+    scoring = RewardTomlConfig.model_validate(document).scoring
+    if len(judges) != 1 or next(iter(judges)).parent != tests:
+        raise ValueError(f"{reward}: partial credit needs one judge file in tests/")
+    file, judge = next(iter(judges.items()))
+    if judge.scoring.aggregation != "weighted-mean" or not judge.judge.weight > 0:
+        raise ValueError(f"{file}: use weighted-mean scoring and a positive judge weight for partial credit")
+    if judge.judge.guard != "flag":
+        raise ValueError(f"{file}: use guard = 'flag' with partial credit")
+    if any(item.type != "binary" or item.optional or item.negate or item.weight != 1 for item in judge.criterion):
+        raise ValueError(f"{file}: partial credit needs required binary criteria with weight 1 and no negation")
+    if (not scoring or file.stem in scoring or any(spec.aggregation != "all-pass" for spec in scoring.values())
+            or any(item.parent != tests for item in tests.rglob("reward.toml"))):
+        raise ValueError(f"{reward}: declare all-pass scoring for each code check file in tests/")
+    weights = {**dict.fromkeys(scoring, 0), file.stem: 1}
+    if len(aggregates) != 1 or aggregates[0] != {"name": "reward", "aggregation": "weighted-mean", "weights": weights}:
+        raise ValueError(f"{reward}: give the judge weight 1 and every code check file weight 0 in the weighted-mean reward")
+    return "partial-credit"
+
+
+def lint_task(path: Path, config: JobSettings | None = None) -> Literal["all-pass", "partial-credit"]:
     for item in path.rglob("*"):
         if item.is_symlink():
             raise ValueError(f"{item}: symlinks are forbidden in task folders")
@@ -88,6 +118,7 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
                 if native else {config.judge.key_env: "${" + config.judge.key_env + "}"} if judges else {})
     if task.config.verifier.env != expected:
         raise ValueError(f"{path / 'task.toml'}: verifier.env must declare both optional judge credentials for an agent judge")
+    reward_kind = task_reward(path, judges)
     names = set()
     for file, judge in judges.items():
         verifier_files = judge.judge.files and all(
@@ -103,7 +134,7 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
             raise ValueError(f"{file}: the judge must read the ATIF trajectory or only files under /logs/verifier/")
         if judge.judge.guard not in {"flag", "penalize"}:
             raise ValueError(f"{file}: the judge guard must be flag or penalize")
-        if judge.scoring.aggregation != "all-pass" or judge.judge.weight <= 0:
+        if reward_kind == "all-pass" and (judge.scoring.aggregation != "all-pass" or judge.judge.weight <= 0):
             raise ValueError(f"{file}: criteria must count toward all-pass")
         for criterion in judge.criterion:
             if not criterion.name or not criterion.name.strip() or criterion.name in names:
@@ -111,6 +142,8 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
             names.add(criterion.name)
             if criterion.type != "binary" or criterion.optional or criterion.weight <= 0:
                 raise ValueError(f"{file}: criteria must be required binary checks with positive weights")
+        if reward_kind == "partial-credit":
+            continue
         for directory in [file.parent, *file.parent.parents]:
             reward = directory / "reward.toml"
             document = tomllib.loads(reward.read_text()) if reward.exists() else {}
@@ -182,6 +215,7 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
                 kind = "volume" if isinstance(volume, str) else volume.get("type")
                 if kind != "volume" or source not in volumes:
                     raise ValueError(f"{compose}: service {name}: host mounts are forbidden; use a declared named volume")
+    return reward_kind
 
 
 async def free_check(paths: list[Path], output: Path) -> None:

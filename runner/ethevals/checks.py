@@ -48,6 +48,8 @@ def read_reward(verifier: Path, *, details: list[dict] | None = None, judge: dic
                 or any(type(value) not in (int, float) or not math.isfinite(value)
                        for value in rewards.values())):
             raise ValueError("RewardKit must write numeric rewards including reward.")
+        if not 0 <= rewards["reward"] <= 1:
+            raise ValueError("RewardKit must write reward between 0 and 1.")
     except (OSError, ValueError) as error:
         raise ValueError(f"{rewards_path}: {error}") from error
     checks = {}

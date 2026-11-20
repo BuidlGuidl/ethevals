@@ -46,9 +46,10 @@ The 160 Inspect rows have been removed.
 
 ## Scores and trajectories
 
-The task matrix shows passed trials out of scored trials.
+A task's score is the average of its scored trials' rewards: 1 for a pass, 0 for a fail, and a part of 1 on a task that gives partial credit.
+The task matrix shows passed trials out of scored trials, or a percent for a task that gives partial credit.
 Errors stay visible in the drawer and do not enter scores.
-A pillar score averages its task pass rates.
+A pillar score averages its task scores.
 Overall averages scored pillars.
 The mode controls select Internet or Model only. Internet + Skills is marked coming soon.
 Different agents, models, and efforts stay separate.

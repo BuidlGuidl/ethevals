@@ -43,6 +43,7 @@ def test_catalog_hashes_every_real_task_with_harbors_package_digest(tmp_path):
     write_catalog(paths, tmp_path)
     entries = json.loads((tmp_path / "catalog.json").read_text())["tasks"]
     assert len(entries) == len(paths)
+    assert {entry["reward"] for entry in entries} == {"all-pass"}
     assert [entry["hash"] for entry in entries] == [
         "sha256:" + Packager.compute_content_hash(path)[0] for path in paths]
 
@@ -422,7 +423,7 @@ def test_catalog_contains_only_public_task_fields(tmp_path):
         "hash", "instruction_hash", "environment_hash", "checks_hash"}} == {
         "id": "concepts/question", "pillar": "concepts", "area": None, "layer": None,
         "name": "buidlguidl/question", "description": "Check a reply.",
-        "instruction": "Name a unit.\n", "modes": ["internet"]}
+        "instruction": "Name a unit.\n", "modes": ["internet"], "reward": "all-pass"}
     assert entry["hash"] == "sha256:" + Packager.compute_content_hash(task)[0]
 
 

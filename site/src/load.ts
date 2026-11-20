@@ -15,6 +15,7 @@ const catalogSchema = z.object({
     id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
     instruction_hash: z.string().min(1), environment_hash: z.string().min(1), checks_hash: z.string().min(1),
     area: z.string().trim().min(1).nullish(), layer: z.enum(layers).nullish(),
+    reward: z.enum(["all-pass", "partial-credit"]).default("all-pass"),
     description: z.string().min(1), instruction: z.string().min(1),
     modes: z.array(z.enum(["vanilla", "internet", "skills"])).min(1),
   })),
