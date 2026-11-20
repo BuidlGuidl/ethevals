@@ -1,0 +1,1 @@
+In Liquity V2, when BOLD is redeemed against a Trove, who ends up with the redemption fee: the redeemer, LQTY stakers, the protocol, or the redeemed Trove's borrower? Answer with one of those four, then explain in one sentence.

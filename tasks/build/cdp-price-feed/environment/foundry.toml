@@ -1,0 +1,8 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+libs = ["lib"]
+solc = "0.8.30"
+remappings = ["forge-std/=/opt/solidity/lib/forge-std/src/"]
+ffi = false
