@@ -53,6 +53,17 @@ def test_task_helpers_equal_their_named_variant(variant):
             ROOT / 'tasks/build/aave-savings-page/tests/run_reward.py').read_bytes()
 
 
+def test_audit_tasks_share_one_judge_opening():
+    source = ROOT / 'tasks/build/audit-onchainid/tests/judge-prompt.md'
+    tasks = sorted((ROOT / 'tasks/build').glob('audit-*'))
+    assert len(tasks) > 1
+    for task in tasks:
+        file = task / 'tests/judge-prompt.md'
+        assert file.read_bytes() == source.read_bytes(), f'{file}: copy the judge opening from {source}'
+        assert 'prompt_template = "judge-prompt.md"' in (task / 'tests/judge.toml').read_text(), (
+            f'{task}: tests/judge.toml must use the shared judge opening')
+
+
 def test_page_rewardkit_private_calls_have_the_expected_version():
     installed = importlib.metadata.version('harbor-rewardkit')
     assert installed == '0.2.3', (

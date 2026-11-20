@@ -28,7 +28,7 @@ The eight findings spread over the whole protocol, and several only show once th
 The verifier copies `/workspace/findings.md` to `/logs/verifier/findings.md` and gives that file to the judge.
 Each finding counts when one of the report's first 10 findings names the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark, a list of areas to review, or the mechanism placed where it does no harm doesn't count.
-Several findings sit close to others in the review, such as the three front-running findings and the review's lower-severity fee auction and notify findings, so each question says which neighbour does not count.
+Several findings sit close to others in the review, such as the three front-running findings and the review's lower-severity fee auction and notify findings, so the questions for those findings say which neighbour does not count.
 The reward is 1 only when every check passes.
 
 | Check | What it proves | Area |
