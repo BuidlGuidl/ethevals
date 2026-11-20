@@ -12,7 +12,7 @@ const entryChecks = new Set(["compile", "answered", "report_written"]);
 // The runner writes this check alone when a model gave no answer twice; it scores 0 like any failed check.
 const noAnswer = "no_answer";
 
-const isPartial = (task: string) => taskScoring[task]?.partial ?? task.startsWith("build/audit-");
+const isPartial = (task: string) => task in taskScoring ? taskScoring[task].partial === true : task.startsWith("build/audit-");
 
 // Points for each check under a version, or null when the trial scores all or nothing.
 export function checkPoints(task: string, checks: string[], scoring: Scoring): Record<string, number> | null {

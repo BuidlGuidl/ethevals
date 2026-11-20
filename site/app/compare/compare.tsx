@@ -19,7 +19,9 @@ export default function Compare({ data: built }: { data: BoardData }) {
   const mode = readMode(query.get("mode"));
   const table = data.tables[mode];
   const keys = table.agents.map(agentKey);
-  const defaults = [...table.agents].sort((a, b) => (table.summaries[agentKey(b)].scores.overall ?? -1) - (table.summaries[agentKey(a)].scores.overall ?? -1)).slice(0, 3).map(agentKey);
+  // Default picks rank by the live board, so changing the scoring version keeps the same configurations in view.
+  const live = built.tables[mode].summaries;
+  const defaults = [...table.agents].sort((a, b) => (live[agentKey(b)].scores.overall ?? -1) - (live[agentKey(a)].scores.overall ?? -1)).slice(0, 3).map(agentKey);
   const chosen = query.has("pick") ? parseSelection(query.get("pick"), keys) : defaults;
   const selected = chosen.map((key) => table.agents.find((agent) => agentKey(agent) === key)!);
   const metrics: { label: string; formula: string; value: (agent: Agent) => number | null; format: (value: number | null) => string; className?: string }[] = [

@@ -13,15 +13,15 @@ export const modeNames: Record<Mode, string> = { internet: "Internet", skills: "
 // Every string the scoring comparison shows, in one place.
 export const scoringCopy: {
   label: string; names: Record<Scoring, string>; notes: Record<Scoring, string>; examples: Record<Scoring, string>;
-  comparison: string; shared: string; formulas: { pillar: string; eval: string };
+  comparison: string; shared: string; formulas: { pillar: string; eval: string; matrixIntro: string; matrixCaption: string; matrixNote: string };
 } = {
   label: "Scoring",
   names: { "all-or-nothing": "All or nothing", partial: "Partial", mix: "Mixed", weighted: "Weighted" },
   notes: {
     "all-or-nothing": "A trial scores 100% if every check passes, and 0% if any check fails. This matches the live board.",
-    partial: "A trial scores passed checks divided by total checks. Every check counts the same. `compile` (code compiled) and `answered` (reply was not empty) count too, so code that only compiles scores above 0%, and a wrong answer on a two-check Concepts question scores 50%.",
-    mix: "Pages and audits score passed checks divided by total checks, leaving out `compile`. Contracts, backend code, onchain actions, and Concepts questions stay all or nothing. Tasks in the same pillar can follow different rules, depending on how each task is marked.",
-    weighted: "Checks get 0 points for `compile` or `answered`, 1 for what the instruction asks, and 3 for the gotchas it leaves out. A trial scores points earned divided by points possible. Points are chosen per check, so scores depend on which checks get 1 point or 3.",
+    partial: "A trial scores passed checks divided by total checks. Every check counts the same. `compile` (code compiled), `answered` (reply was not empty), and `report_written` (an audit report exists) count too, so code that only compiles scores above 0%, and a wrong answer on a two-check Concepts question scores 50%.",
+    mix: "Pages and audits score passed checks divided by total checks, leaving out `compile` and `report_written`. Contracts, backend code, onchain actions, and Concepts questions stay all or nothing. Tasks in the same pillar can follow different rules, depending on how each task is marked.",
+    weighted: "Checks get 0 points for `compile`, `answered`, or `report_written`, 3 if they test a gotcha the instruction leaves unsaid, and 1 otherwise. A trial scores points earned divided by points possible. Points are chosen per check, so scores depend on which checks get 1 point or 3.",
   },
   // One real trial under each version: token-governor with every check passed except late votes.
   examples: {
@@ -32,10 +32,13 @@ export const scoringCopy: {
   },
   comparison: "Scoring comparison on the same trials. Not the live board.",
   shared: "Each task averages its trial scores. Each pillar averages its task scores. Overall averages the pillar scores.",
-  // Tooltips under the three other versions; all or nothing keeps the live board's.
+  // Tooltips and task matrix text under the three other versions; all or nothing keeps the live board's.
   formulas: {
     pillar: "Pillar score = mean of scored task scores; tasks without scores are skipped.",
     eval: "Task score = mean of trial scores; errors are excluded.",
+    matrixIntro: "A detailed view of the Leaderboard. See each agent's score on every task, grouped by pillar.",
+    matrixCaption: "Mean trial score for each task and configuration",
+    matrixNote: "Mean trial score per task. Tasks with one check show trials passed. Click a scored cell for its instruction and trials. Errors are excluded.",
   },
 };
 

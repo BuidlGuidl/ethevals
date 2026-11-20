@@ -4,7 +4,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Detail, Results } from "../app/board";
 import { agentKey, buildBoard, scoreBoard, type Eval, type Row } from "../src/board";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { siteRoot } from "../src/paths";
 import { checkScoringSettings, scorings, type Scoring } from "../src/scoring";
+import { taskScoring } from "../src/scoring-settings";
 
 const agent = { model: "model-a", agent: "agent-a", effort: "high" };
 const task = (id: string, pillar: Eval["pillar"] = "build"): Eval => ({
@@ -87,14 +91,15 @@ test("the board shows the selected version, its explanation, and percents where 
   for (const query of ["", "scoring=unknown"]) {
     const html = render(query);
     assert.match(html, /aria-checked="true"[^>]*>All or nothing<\/button>/);
-    assert.ok(html.includes("This matches the live board.") && html.includes("Not the live board."));
+    assert.ok(html.includes("This matches the live board.") && html.includes("Not the live board.") && html.includes("Trials passed per task."));
     assert.ok(matrix(html).includes(">0/1</button>") && matrix(html).includes(">1/1</button>"));
     assert.match(html, /href="\/compare\/?\?mode=internet"/);
   }
   const partial = render("scoring=partial");
   assert.match(partial, /aria-checked="true"[^>]*>Partial<\/button>/);
   assert.ok(partial.includes("scores 4 / 5 = 80%"), "The example line follows the version.");
-  assert.ok(partial.includes("<code>compile</code> (code compiled) and <code>answered</code> (reply was not empty) count too"));
+  assert.ok(partial.includes("<code>report_written</code> (an audit report exists) count too"));
+  assert.ok(partial.includes("Mean trial score per task.") && !partial.includes("Trials passed per task."), "The task matrix text follows the version.");
   assert.ok(partial.includes("agent-a / model-a. 90%. Open details."), "Overall averages Build 80% and Concepts 100%.");
   assert.ok(matrix(partial).includes(">80%</button>") && matrix(partial).includes(">1/1</button>"));
   assert.match(partial, /href="\/compare\/?\?mode=internet&amp;scoring=partial"/);
@@ -124,4 +129,8 @@ test("scoring settings fail on a check no current row has, or a row check they d
   const missing = Object.fromEntries(Object.entries(governorChecks).filter(([check]) => check !== "test_lateVotesExtendTheVote"));
   assert.throws(() => checkScoringSettings(governor(missing)), /build\/token-governor.*test_lateVotesExtendTheVote/);
   assert.throws(() => checkScoringSettings(governor({ ...governorChecks, test_typo: pass })), /build\/token-governor.*test_typo/);
+});
+
+test("every task in the scoring settings is a task folder, so a misspelled id cannot fall back to the default rule", () => {
+  for (const task of Object.keys(taskScoring)) assert.ok(existsSync(path.resolve(siteRoot, "../tasks", task, "task.toml")), `${task} is not a task.`);
 });
