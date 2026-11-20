@@ -10,12 +10,13 @@ test("Overall gives scored pillars equal weight and skips missing scores", () =>
 
 test("cost per pass includes failed model spend, excludes errors and judge spend", () => {
   assert.equal(costPerPass([
-    { status: "passed", model_cost_usd: 0.2 }, { status: "passed", model_cost_usd: 0.3 },
-    { status: "failed", model_cost_usd: 0.5 }, { status: "error", model_cost_usd: 50 },
+    { status: "passed", reward: 1, model_cost_usd: 0.2 }, { status: "passed", reward: 1, model_cost_usd: 0.3 },
+    { status: "failed", reward: 0, model_cost_usd: 0.5 }, { status: "error", reward: null, model_cost_usd: 50 },
   ]), 0.5);
-  assert.equal(costPerPass([{ status: "failed", model_cost_usd: 1 }]), null);
-  assert.equal(costPerPass([{ status: "passed", model_cost_usd: null }]), null);
-  assert.equal(costPerPass([{ status: "passed", model_cost_usd: 0 }]), 0);
+  assert.equal(costPerPass([{ status: "failed", reward: 0.5, model_cost_usd: 1 }]), 2);
+  assert.equal(costPerPass([{ status: "failed", reward: 0, model_cost_usd: 1 }]), null);
+  assert.equal(costPerPass([{ status: "passed", reward: 1, model_cost_usd: null }]), null);
+  assert.equal(costPerPass([{ status: "passed", reward: 1, model_cost_usd: 0 }]), 0);
 });
 
 test("lift is the signed skills minus Internet score in percentage points", () => {
@@ -28,13 +29,13 @@ test("lift is the signed skills minus Internet score in percentage points", () =
 
 test("the board publishes summaries, costs and paired lifts for each configuration", () => {
   const evals: Eval[] = [
-    { id: "concepts/a", hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", title: "A", pillar: "concepts", description: "Check A.", instruction: "A?", modes: ["internet", "skills"] },
-    { id: "build/b", hash: "b", instruction_hash: "b", environment_hash: "b", checks_hash: "b", title: "B", pillar: "build", description: "Check B.", instruction: "B?", modes: ["internet", "skills"] },
+    { id: "concepts/a", hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", title: "A", pillar: "concepts", description: "Check A.", instruction: "A?", modes: ["internet", "skills"], reward: "all-pass" },
+    { id: "build/b", hash: "b", instruction_hash: "b", environment_hash: "b", checks_hash: "b", title: "B", pillar: "build", description: "Check B.", instruction: "B?", modes: ["internet", "skills"], reward: "all-pass" },
   ];
   const base: Row = { schema_version: 8, task_id: "concepts/a", task_hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
-    mode: "internet", trial: 1, status: "passed", checks: {}, error_kind: null, error_reason: null, limit: null,
+    mode: "internet", trial: 1, status: "passed", rewards: { reward: 1 }, checks: {}, error_kind: null, error_reason: null, limit: null,
     model_cost_usd: 0.5, judge_cost_usd: 90, total_tokens: 100, total_seconds: 10, working_seconds: 8, paid_by: "api_key", judge: null, judge_paid_by: null, cost_source: "harbor", trajectory_url: null };
-  const board = buildBoard(evals, [base, { ...base, task_id: "build/b", task_hash: "b", instruction_hash: "b", environment_hash: "b", checks_hash: "b", status: "failed" },
+  const board = buildBoard(evals, [base, { ...base, task_id: "build/b", task_hash: "b", instruction_hash: "b", environment_hash: "b", checks_hash: "b", status: "failed", rewards: { reward: 0 } },
     { ...base, mode: "skills", skills_hash: "pack" }, { ...base, mode: "skills", skills_hash: "pack", task_id: "build/b", task_hash: "b", instruction_hash: "b", environment_hash: "b", checks_hash: "b" }]);
   assert.deepEqual(board.tables.internet.summaries['["m","h",null]'], {
     scores: { overall: 0.5, concepts: 1, act: null, build: 0 },
@@ -45,13 +46,13 @@ test("the board publishes summaries, costs and paired lifts for each configurati
 });
 
 test("lift pairs tasks when skills covers a strict subset of Internet results", () => {
-  const evaluation: Eval = { id: "concepts/a", hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", title: "A", pillar: "concepts", description: "Check A.", instruction: "A?", modes: ["internet", "skills"] };
+  const evaluation: Eval = { id: "concepts/a", hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", title: "A", pillar: "concepts", description: "Check A.", instruction: "A?", modes: ["internet", "skills"], reward: "all-pass" };
   const evals: Eval[] = [evaluation, { ...evaluation, id: "concepts/b" }, { ...evaluation, id: "build/c", pillar: "build" }];
   const base: Row = { schema_version: 8, task_id: "concepts/a", task_hash: "a", instruction_hash: "a", environment_hash: "a", checks_hash: "a", skills_hash: null, model: "m", agent: "h", effort: null,
-    mode: "internet", trial: 1, status: "failed", checks: {}, error_kind: null, error_reason: null, limit: null,
+    mode: "internet", trial: 1, status: "failed", rewards: { reward: 0 }, checks: {}, error_kind: null, error_reason: null, limit: null,
     model_cost_usd: 0.5, judge_cost_usd: 0, total_tokens: 100, total_seconds: 10, working_seconds: 8, paid_by: "api_key", judge: null, judge_paid_by: null, cost_source: "harbor", trajectory_url: null };
-  const internet: Row[] = [base, { ...base, task_id: "concepts/b", status: "passed" }, { ...base, task_id: "build/c" }];
-  const board = buildBoard(evals, [...internet, { ...base, mode: "skills" }, { ...base, mode: "skills", task_id: "build/c", status: "passed" }]);
+  const internet: Row[] = [base, { ...base, task_id: "concepts/b", status: "passed", rewards: { reward: 1 } }, { ...base, task_id: "build/c" }];
+  const board = buildBoard(evals, [...internet, { ...base, mode: "skills" }, { ...base, mode: "skills", task_id: "build/c", status: "passed", rewards: { reward: 1 } }]);
   assert.deepEqual(board.lifts['["m","h",null]'], { overall: 50, concepts: 0, act: null, build: 100 });
   assert.deepEqual(buildBoard(evals, internet).lifts['["m","h",null]'], { overall: null, concepts: null, act: null, build: null });
 });

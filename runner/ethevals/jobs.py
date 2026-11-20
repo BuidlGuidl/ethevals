@@ -25,7 +25,7 @@ from .regrade import prepare_regrades, regrade_options, run_regrades
 
 
 def task_entry(path: Path, config: JobSettings | None = None) -> dict:
-    lint_task(path, config)
+    reward = lint_task(path, config)
     task = Task(path)
     metadata = task.config.metadata
     pillar = metadata.get("pillar")
@@ -41,7 +41,7 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
             **task_hashes(path, judge),
             "area": metadata.get("area"), "layer": metadata.get("layer"),
             "name": task.name, "description": task.config.task.description,
-            "instruction": (path / "instruction.md").read_text(), "modes": modes}
+            "instruction": (path / "instruction.md").read_text(), "modes": modes, "reward": reward}
 
 
 def write_catalog(paths: list[Path], output: Path) -> None:
