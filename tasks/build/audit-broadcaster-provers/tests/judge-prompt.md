@@ -9,7 +9,6 @@ How to decide:
 - A finding is found when the report describes the same flaw, in the same code, with the same consequence. Different wording, severity or proof of concept does not matter.
 - It is not found when the report describes a different flaw in the same function or file, makes a generic remark such as "validate inputs", or lists areas to review.
 - One finding in the report can count for two of the auditors' findings only when it gives the root cause of both.
-- The last item in the list, 'guard', is not one of the auditors' findings. Answer it from the whole report.
 
 The auditors' findings:
 
