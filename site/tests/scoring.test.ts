@@ -91,19 +91,23 @@ test("the board shows the selected version, its explanation, and percents where 
   for (const query of ["", "scoring=unknown"]) {
     const html = render(query);
     assert.match(html, /aria-checked="true"[^>]*>All or nothing<\/button>/);
-    assert.ok(html.includes("This matches the live board.") && html.includes("Not the live board.") && html.includes("Trials passed per task."));
+    assert.ok(html.includes("This is how the live board scores.") && html.includes("Not the live board.") && html.includes("1 check failed, so 0%.") && html.includes("Trials passed per task."));
     assert.ok(matrix(html).includes(">0/1</button>") && matrix(html).includes(">1/1</button>"));
     assert.match(html, /href="\/compare\/?\?mode=internet"/);
   }
   const partial = render("scoring=partial");
   assert.match(partial, /aria-checked="true"[^>]*>Partial<\/button>/);
-  assert.ok(partial.includes("scores 4 / 5 = 80%"), "The example line follows the version.");
-  assert.ok(partial.includes("<code>report_written</code> (an audit report exists) count too"));
+  assert.ok(partial.includes("4 of 5 checks passed = 80%."), "The example follows the version.");
+  assert.ok(partial.includes("<code>report_written</code>: an audit report exists."));
   assert.ok(partial.includes("Mean trial score per task.") && !partial.includes("Trials passed per task."), "The task matrix text follows the version.");
   assert.ok(partial.includes("agent-a / model-a. 90%. Open details."), "Overall averages Build 80% and Concepts 100%.");
   assert.ok(matrix(partial).includes(">80%</button>") && matrix(partial).includes(">1/1</button>"));
   assert.match(partial, /href="\/compare\/?\?mode=internet&amp;scoring=partial"/);
-  assert.ok(render("scoring=weighted").includes("A trial scores points earned divided by points possible."));
+  const weighted = render("scoring=weighted");
+  assert.ok(weighted.includes("0 + 1 + 3 + 3 = 7 of 10 points = 70%."), "The example adds up the points the board gives each check.");
+  assert.match(weighted, /Late votes extend the vote<\/td><td class="scoring-points">3 points/);
+  assert.match(weighted, /data-selected="true"><dt>Weighted<\/dt><dd>70%/);
+  assert.ok(render("scoring=mix").includes("so all or nothing: 0%."));
 });
 
 test("the trial drawer shows the trial's score, and each check's points under Weighted", () => {

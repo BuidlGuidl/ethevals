@@ -11,27 +11,65 @@ export const modeHints: Record<Mode, string> = {
 export const modeNames: Record<Mode, string> = { internet: "Internet", skills: "Internet + Skills", vanilla: "Model only" };
 
 // Every string the scoring comparison shows, in one place.
+// The example is one real trial. The page computes its points and scores with the board's own scoring code,
+// and fills {failed}, {passed}, {total}, {sum}, {earned}, {possible} and {score} into `result`.
 export const scoringCopy: {
-  label: string; names: Record<Scoring, string>; notes: Record<Scoring, string>; examples: Record<Scoring, string>;
-  comparison: string; shared: string; formulas: { pillar: string; eval: string; matrixIntro: string; matrixCaption: string; matrixNote: string };
+  label: string; names: Record<Scoring, string>; comparison: string;
+  parts: { rule: string; example: string; caveat: string; then: string; versions: string };
+  rule: Record<Scoring, string>; detail: Partial<Record<Scoring, string[]>>; then: string;
+  caveat: Record<Scoring, { lead: string; list?: string[]; close?: string }>;
+  example: { title: string; task: string; checks: { name: string; label: string; passed: boolean }[]; result: Record<Scoring, string> };
+  formulas: { pillar: string; eval: string; matrixIntro: string; matrixCaption: string; matrixNote: string };
 } = {
   label: "Scoring",
   names: { "all-or-nothing": "All or nothing", partial: "Partial", mix: "Mixed", weighted: "Weighted" },
-  notes: {
-    "all-or-nothing": "A trial scores 100% if every check passes, and 0% if any check fails. This matches the live board.",
-    partial: "A trial scores passed checks divided by total checks. Every check counts the same. `compile` (code compiled), `answered` (reply was not empty), and `report_written` (an audit report exists) count too, so code that only compiles scores above 0%, and a wrong answer on a two-check Concepts question scores 50%.",
-    mix: "Pages and audits score passed checks divided by total checks, leaving out `compile` and `report_written`. Contracts, backend code, onchain actions, and Concepts questions stay all or nothing. Tasks in the same pillar can follow different rules, depending on how each task is marked.",
-    weighted: "Checks get 0 points for `compile`, `answered`, or `report_written`, 3 if they test a gotcha the instruction leaves unsaid, and 1 otherwise. A trial scores points earned divided by points possible. Points are chosen per check, so scores depend on which checks get 1 point or 3.",
+  comparison: "Comparison on the same trials. Not the live board.",
+  parts: { rule: "Rule", example: "Example", caveat: "Keep in mind", then: "Then", versions: "This trial under each version" },
+  rule: {
+    "all-or-nothing": "A trial scores 100% only if every check passes. One failed check makes it 0%. This is how the live board scores.",
+    partial: "Score = passed checks ÷ all checks. Every check counts the same.",
+    mix: "Each task is marked one of two ways.",
+    weighted: "Score = points earned ÷ points possible. Each check is worth 0, 1 or 3 points.",
   },
-  // One real trial under each version: token-governor with every check passed except late votes.
-  examples: {
-    "all-or-nothing": "Example: on `token-governor`, passing 4 of 5 checks (missing late votes) scores 0%.",
-    partial: "Example: on `token-governor`, passing 4 of 5 checks (including `compile`, missing late votes) scores 4 / 5 = 80%.",
-    mix: "Example: the same `token-governor` trial scores 0% because it is a contract. On `aave-savings-page`, passing 8 of 9 checks after `compile` scores 8 / 9 = 89%.",
-    weighted: "Example: on `token-governor`, passing `compile` (0), standard governor (1), quorum (3), and delay (3) while missing late votes (3) scores 7 / 10 = 70%.",
+  detail: {
+    mix: [
+      "Pages and audits: passed checks ÷ all checks, with `compile` and `report_written` left out.",
+      "Contracts, backend code, onchain actions and Concepts questions: all or nothing.",
+    ],
+    weighted: [
+      "0 points: `compile`, `answered`, `report_written`.",
+      "1 point: the instruction asks for it.",
+      "3 points: it tests a gotcha the instruction leaves unsaid.",
+    ],
   },
-  comparison: "Scoring comparison on the same trials. Not the live board.",
-  shared: "Each task averages its trial scores. Each pillar averages its task scores. Overall averages the pillar scores.",
+  caveat: {
+    "all-or-nothing": { lead: "A trial that passes 4 of 5 checks scores the same as one that passes none." },
+    partial: {
+      lead: "Three checks only show that work was handed in:",
+      list: ["`compile`: the code compiled.", "`answered`: the reply was not empty.", "`report_written`: an audit report exists."],
+      close: "They count here like any other check. Code that only compiles still scores, and a wrong answer on a two-check Concepts task scores 50%.",
+    },
+    mix: { lead: "Two tasks in the same pillar can follow different rules." },
+    weighted: { lead: "The points are a judgement call for each check. Move a check from 1 point to 3 and the scores change." },
+  },
+  then: "A task's score is the average of its trials. A pillar's score is the average of its tasks. Overall is the average of the three pillars.",
+  example: {
+    title: "Fable 5.2 on `token-governor`, one trial",
+    task: "build/token-governor",
+    checks: [
+      { name: "compile", label: "Compiles", passed: true },
+      { name: "test_snapshotCanRunIt", label: "Standard governor, works with Snapshot", passed: true },
+      { name: "test_quorumCountsTheWholeSupply", label: "Quorum counts the whole supply", passed: true },
+      { name: "test_theDelayGuardsTheMoney", label: "Two-day delay guards the money", passed: true },
+      { name: "test_lateVotesExtendTheVote", label: "Late votes extend the vote", passed: false },
+    ],
+    result: {
+      "all-or-nothing": "{failed} check failed, so {score}.",
+      partial: "{passed} of {total} checks passed = {score}.",
+      mix: "`token-governor` is a contract, so all or nothing: {score}. A page trial that passes 8 of 9 checks scores 89%.",
+      weighted: "{sum} = {earned} of {possible} points = {score}.",
+    },
+  },
   // Tooltips and task matrix text under the three other versions; all or nothing keeps the live board's.
   formulas: {
     pillar: "Pillar score = mean of scored task scores; tasks without scores are skipped.",
