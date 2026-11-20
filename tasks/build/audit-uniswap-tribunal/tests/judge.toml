@@ -1,0 +1,25 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+prompt_template = "judge-prompt.md"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "h1_settle_or_register_native_balance"
+type = "binary"
+description = """[H-1] High: DoS in settleOrRegister With Non-Native Token batchDeposit*
+Where: Tribunal.settleOrRegister and receive
+settleOrRegister sends the contract's whole native balance, address(this).balance, with every call to The Compact's batchDeposit and batchDepositAndRegisterFor, even when the commitment's token is an ERC-20. The Compact reverts a batch deposit whose first token is not native if any native value comes with it. Tribunal's receive function takes ETH from anyone, so after someone sends it 1 wei, every settleOrRegister call that deposits or registers an ERC-20 reverts. Saying only that stray ETH reaches the wrong party, without the revert, is a different consequence."""
+
+[[criterion]]
+name = "h2_supplemental_curve_check_inverted"
+type = "binary"
+description = """[H-2] High: Incorrect Logic in applySupplementalPriceCurve
+Where: PriceCurveLib.applySupplementalPriceCurve and sharesScalingDirection
+applySupplementalPriceCurve ORs the result of sharesScalingDirection into errorBuffer and reverts with InvalidPriceCurveParameters when errorBuffer is non-zero. But sharesScalingDirection returns true in the valid case, when the two scaling factors point the same way or one of them is 1e18, so the check is inverted. An adjuster's supplemental curve that agrees with the fill's curve makes the fill revert, and one that scales the opposite way is accepted and combined into the price."""

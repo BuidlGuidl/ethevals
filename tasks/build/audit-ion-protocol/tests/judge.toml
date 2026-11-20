@@ -1,0 +1,53 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+prompt_template = "judge-prompt.md"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "c1_reserve_feed_no_access_control"
+type = "binary"
+description = """[C-1] Critical: No Access Control on ReserveFeed Contract
+Where: ReserveFeed.setExchangeRate; ReserveOracle._aggregate
+ReserveFeed.setExchangeRate has no access control and no input checks, so any address can write any exchange rate for any collateral index. The reserve oracles read these feeds as their outside price sources, and liquidations value collateral at the reserve oracle's rate. Anyone can therefore falsify a collateral's price, for example push it down so that healthy vaults can be liquidated."""
+
+[[criterion]]
+name = "c2_zap_repay_pays_twice"
+type = "binary"
+description = """[C-2] Critical: Repaying Debt With IonZapper Will Lock WETH in Contract
+Where: IonZapper.zapRepay; IonPool.repay
+zapRepay wraps the ETH it receives into WETH, then calls IonPool.repay with the caller, not the zapper, as the payer. The pool pulls the repayment from the caller's own WETH balance and allowance and ignores the WETH the zapper holds. A caller who has approved the pool pays twice, and the WETH wrapped from their ETH stays in the zapper, which has no way to send it out."""
+
+[[criterion]]
+name = "h1_full_repayment_reverts"
+type = "binary"
+description = """[H-1] High: repayAndWithdraw Will Frequently Fail for Full Repayments
+Where: IonHandlerBase.repayAndWithdraw and _repayAndWithdraw
+repayAndWithdraw takes the repayment as a WETH amount fixed before the transaction is sent, and _repayAndWithdraw converts it to normalized debt at the rate when it runs. Interest that accrues in between, and rounding, make a full repayment slightly off: too much makes the debt update revert, and too little leaves a dust vault below the minimum, which also reverts. With no way to ask to repay everything, closing a whole position through the handlers usually fails."""
+
+[[criterion]]
+name = "h2_zapper_missing_approvals"
+type = "binary"
+description = """[H-2] High: Lack of ERC-20 Approvals Prevents IonZapper Contract From Functioning as Intended
+Where: IonZapper.zapDepositWstEth
+zapDepositWstEth pulls stETH from the user, wraps it with wstETH.wrap and deposits the result through the wstETH GemJoin's join, but never approves the wstETH contract to take the zapper's stETH or the GemJoin to take its wstETH. Both calls pull tokens from the zapper and need those allowances, so the function always reverts and the stETH deposit route does not work at all."""
+
+[[criterion]]
+name = "h3_reserve_bound_per_call"
+type = "binary"
+description = """[H-3] High: Ineffective Bound of Exchange Rate Change in Reserve Oracle
+Where: ReserveOracle.updateExchangeRate
+updateExchangeRate caps each update at MAX_CHANGE of the stored rate, but the cap holds only per call: anyone can call it any number of times, and nothing limits the change per block or over time. Repeated calls in one transaction move the stored rate as far as the underlying minimum allows, so someone who can move a reserve feed or the staking provider's exchange rate can drop a collateral's value at once and liquidate vaults. Who may write the feeds is a separate finding."""
+
+[[criterion]]
+name = "h4_sweth_twap_history"
+type = "binary"
+description = """[H-4] High: Observation Cardinality Insufficient for Uniswap SwETH Oracle
+Where: SwEthSpotOracle.getPrice
+SwEthSpotOracle prices swETH with a Uniswap v3 time-weighted average from the live swETH/ETH 0.05% pool, and nothing in the oracle checks or raises how many observations that pool stores. When the code was reviewed, the pool stored too few to cover the roughly two-hour window the team intended, so the average would revert for lack of old enough data. Price reads would then fail, and users could not repay or add collateral to avoid liquidation. A report that ties too little pool history to failed price reads and blocked vault changes counts, even if it does not establish the window or the pool's observation count. A remark only that a short window is easy to manipulate is a different flaw."""

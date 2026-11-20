@@ -1,0 +1,28 @@
+schema_version = "1.3"
+artifacts = ["/workspace/findings.md"]
+
+[task]
+name = "buidlguidl/audit-intuition"
+description = "Check whether an agent auditing Intuition's atom and triple vaults finds the fee, share accounting and identifier flaws a professional review found."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "security", "audits", "vaults", "accounting"]
+
+[metadata]
+pillar = "build"
+area = "Audits"
+modes = ["internet"]
+
+[agent]
+timeout_sec = 3600
+
+[verifier]
+environment_mode = "separate"
+user = "root"
+
+[verifier.env]
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
+
+[environment]
+cpus = 1
+memory_mb = 2048

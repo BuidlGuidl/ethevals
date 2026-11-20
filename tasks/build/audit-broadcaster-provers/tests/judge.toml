@@ -1,0 +1,32 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+prompt_template = "judge-prompt.md"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "h1_optimism_anchor_game_slot"
+type = "binary"
+description = """[H-1] High: Incorrect Hardcoded Storage Slot for Anchor Game in Prover
+Where: optimism/ParentToChildProver.verifyTargetStateCommitment and ANCHOR_GAME_SLOT
+The Optimism ParentToChildProver finds the anchor dispute game by proving the AnchorStateRegistry's storage at the hardcoded ANCHOR_GAME_SLOT = 3, where anchorGame sits in registry version 2.2.2, the one its comment links. The registry deployed behind Optimism's proxy is version 3.5.0, which keeps anchorGame in slot 2, so verifyTargetStateCommitment proves the wrong slot, gets no valid game and fails. Routes that must prove OP-chain state from a chain other than Ethereum L1, such as a multi-hop route ending on another L2, cannot verify messages. The Optimism ChildToParentProver's short-lived L1Block proofs are a different finding."""
+
+[[criterion]]
+name = "h2_linea_child_to_parent_mpt"
+type = "binary"
+description = """[H-2] High: Linea ChildToParentProver Verifies Linea State Using Incorrect Proofs and Hashes
+Where: linea/ChildToParentProver.verifyTargetStateCommitment; ProverUtils.getSlotFromBlockHeader
+The Linea ChildToParentProver's verifyTargetStateCommitment, run off Linea, proves an Ethereum block hash kept in the block hash buffer on Linea. It checks the account and storage proofs against the Linea block header with getSlotFromBlockHeader, which assumes Ethereum's Merkle Patricia Trie and keccak256, but Linea's state is a Sparse Merkle Tree hashed with MiMC, as the Linea ParentToChildProver already handles. No real Linea proof can pass, so every multi-hop route that must prove the Linea buffer's storage reverts."""
+
+[[criterion]]
+name = "h3_zksync_returns_publisher"
+type = "binary"
+description = """[H-3] High: verifyStorageSlot Returns Publisher Instead of Broadcaster Address in ZKsync ParentToChildProver
+Where: zksync/ParentToChildProver.verifyStorageSlot; Receiver._readRemoteSlot
+The ZKsync ParentToChildProver's verifyStorageSlot proves that an L2 message was included in a settled batch, but the account it returns is senderAccount, an input address that matches the message's publisher, not proof.message.sender, the broadcaster contract on ZKsync that sent the L2-to-L1 message. The Receiver takes the returned account as the broadcaster's address, so messages proven through this prover are tied to the wrong broadcaster and do not verify as coming from the real one."""

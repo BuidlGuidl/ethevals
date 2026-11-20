@@ -1,0 +1,32 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+prompt_template = "judge-prompt.md"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "tob_aut_5_stale_crl"
+type = "binary"
+description = """[TOB-AUT-5] High: Certificate chain verification allows expired and irrelevant CRLs
+Where: X509ChainBase.verifyCertChain; PCCSRouter.getCrl; PcsDao.upsertPcsCertificates
+verifyCertChain tests each certificate's serial number against a CRL it fetches from the PCCS, but nothing checks that the CRL is still current or comes from the certificate's actual issuer. PCCSRouter checks only that the stored CRL is not empty, and upsertPcsCertificates replaces a CA certificate without clearing the CRL kept for the old one. An expired CRL, or one from an earlier version of the issuer's certificate, can therefore be used, so a certificate Intel has revoked still validates and whoever compromised it keeps producing attestations that pass. Skipping the root CA's CRL altogether is a different finding."""
+
+[[criterion]]
+name = "tob_aut_6_root_crl_early_exit"
+type = "binary"
+description = """[TOB-AUT-6] High: Root CRL checks can be bypassed
+Where: X509ChainBase.verifyCertChain
+verifyCertChain finds the root CA by position, fetching the root CA's CRL only for the certificate at index n - 2 and treating the last entry as the root, and also by key, ending the loop once an issuer's public key hash equals ROOTCA_PUBKEY_HASH. An extra copy of the root certificate appended to the chain ends the loop at the intermediate certificate before index n - 2, so that certificate is never checked against the root CA's CRL. A revoked platform or processor CA certificate can then still sign PCK certificates whose quotes pass. A CRL that is checked but stale or from the wrong issuer is a different finding."""
+
+[[criterion]]
+name = "tob_aut_7_zk_timestamp"
+type = "binary"
+description = """[TOB-AUT-7] High: Risc0- and sp1-based attestation may accept expired certificates
+Where: V3QuoteVerifier.verifyZkOutput; V4QuoteVerifier.verifyZkOutput; QuoteVerifierBase.checkCollateralHashes
+For quotes proven with RISC Zero or SP1, verifyZkOutput only checks that the collateral hashes in the proof's public output match the collateral now in the PCCS. The timestamp the off-chain verification used, just before those hashes in the output, is never compared with the current time or with the collateral's validity. A prover can pick an old time at which an expired, compromised certificate was still valid, after the current CRL has dropped it, and the contract accepts the proof. The gap is in the zero-knowledge path's output check, not the on-chain certificate chain check."""

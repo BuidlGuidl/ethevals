@@ -1,0 +1,46 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+prompt_template = "judge-prompt.md"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "c1_pegged_solve_precision"
+type = "binary"
+description = """[C-1] Critical: Precision Loss in solve() Quadratic Solver Breaks Invariant Protection
+Where: PeggedSwapMath.solve
+solve finds the pegged curve's output reserve with the textbook root w = (sqrt(1 + 4*a*rightSide) - 1) / (2a). When the linearWidth a is small, as the code's guidance suggests for volatile pairs, the discriminant is near 1, so sqrt(D) - 1 subtracts two nearly equal fixed-point numbers, loses most of its precision and gives a wrong reserve. A PeggedSwap order then pays more than its curve allows and the invariant falls, letting a taker take a large part of the pool in one swap or over several. Exact-out rounding or the a == 0 branch is a different finding."""
+
+[[criterion]]
+name = "c2_concentrate_shared_liquidity"
+type = "binary"
+description = """[C-2] Critical: Shared Liquidity Tracking in Multi-Token XYCConcentrate Enables Cyclic Arbitrage
+Where: XYCConcentrate._updateScales and _xycConcentrateGrowLiquidityXD
+XYCConcentrate keeps one liquidity value per order, liquidity[orderHash], and after every swap _updateScales overwrites it with the square root of balanceIn times balanceOut of only the two tokens just traded. _xycConcentrateGrowLiquidityXD lets one order concentrate three or more tokens, so each pair then scales its virtual balances with a value written by whichever pair traded last. A taker trades A to B, B to C and C to A at these skewed rates and ends with more than they started with, draining the maker. A two-token order is not affected."""
+
+[[criterion]]
+name = "c3_pegged_axis_mismatch"
+type = "binary"
+description = """[C-3] Critical: Invariant Violation and Fund Drainage Due to Axis Mismatch in PeggedSwap
+Where: PeggedSwap._peggedSwapGrowPriceRange2D
+_peggedSwapGrowPriceRange2D takes x0 and y0 from balanceIn and balanceOut, which follow the swap direction, but normalizes them by config.x0 and config.y0, which are set by token address order. In a swap from the higher-address token to the lower one, each balance is divided by the other token's capacity; with unequal capacities the invariant comes out far too high and the solver pays out far too much of the output token for a little input, draining the pool. The rate multipliers already follow the direction; the flaw is this normalization."""
+
+[[criterion]]
+name = "h1_concentrate_protocol_fee_out"
+type = "binary"
+description = """[H-1] High: XYCConcentrate Records Incorrect Balances When Protocol Fees Are Extracted
+Where: XYCConcentrate._xycConcentrateGrowLiquidity2D and _updateScales; FeeExperimental._aquaProtocolFeeAmountOutXD and _feeAmountOut; AquaAMM.buildProgram
+In the AquaAMM program, _xycConcentrateGrowLiquidity2D wraps the output-side Aqua protocol fee, whose _feeAmountOut lets the swap compute the gross output, sets ctx.swap.amountOut back to the taker's net amount and pulls the fee from the maker's Aqua balance. _updateScales then records the new liquidity from the net amountOut, leaving out the fee tokens that also left the maker, so after every fee-paying swap the stored liquidity and virtual balances sit above the real reserves and the pool promises swaps it cannot back. The input-side fee missing from the dynamic balances record is a separate finding."""
+
+[[criterion]]
+name = "h2_dynamic_balances_protocol_fee_in"
+type = "binary"
+description = """[H-2] High: Dynamic Balance Tracking Does Not Account for Instantly Transferred Protocol Fees
+Where: Balances._dynamicBalancesXD; Fee._dynamicProtocolFeeAmountInXD and _feeAmountIn
+_dynamicBalancesXD keeps per-order balances and, after the nested instructions run, adds swapAmountIn to the stored tokenIn balance. When it wraps an input-side protocol fee paid out at once, such as _dynamicProtocolFeeAmountInXD, _feeAmountIn restores (exact in) or raises (exact out) ctx.swap.amountIn to the gross amount while the fee goes straight from the maker to the recipient. The stored tokenIn balance grows by the gross amount though the maker kept only the net, so each such swap overstates it by the fee and later prices drift from the real balances. XYCConcentrate's liquidity missing an output-side fee, and a taker paying the fee twice in Aqua's push mode, are separate findings."""

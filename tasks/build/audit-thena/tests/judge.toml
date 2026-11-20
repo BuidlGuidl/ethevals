@@ -1,0 +1,46 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+prompt_template = "judge-prompt.md"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "c1_period_update_erases_rewards"
+type = "binary"
+description = """[C-1] Critical: Gauges Rewards Can Be Erroneously Deleted
+Where: MinterUpgradeable.update_period; VoterV3.notifyRewardAmount and _updateFor
+Anyone can call update_period directly; it starts the new week and, through notifyRewardAmount, raises the voter's global index by the finished week's emissions. VoterV3._updateFor, run by vote, poke and updateFor, reads the new week's vote weight, not the finished week's; that weight is still zero, so it moves a gauge's supplyIndex up to the new index without adding the finished week's share to claimable. An attacker who votes a tiny amount for every gauge, or runs _updateFor on them, before distribute erases that week's emissions for all gauges, and the tokens stay in VoterV3."""
+
+[[criterion]]
+name = "h1_extra_rewarder_past_period"
+type = "binary"
+description = """[H-1] High: GaugeExtraRewarder Accounts for Excessive Rewards
+Where: GaugeExtraRewarder.updatePool, setDistributionRate and onReward
+updatePool accrues rewardPerSecond for all the time since lastRewardTime, even after the period that setDistributionRate funded has ended, and then sets lastRewardTime to the current time instead of the period's end. Rewards keep accruing beyond what the rewarder was funded with, so the first stakers to claim take tokens meant for others. Once the rewarder owes more than it holds, its transfer in onReward reverts, and with it the gauge's deposits, withdrawals and claims."""
+
+[[criterion]]
+name = "h2_killed_gauge_votes_stay_in_total"
+type = "binary"
+description = """[H-2] High: Killing a Gauge Could Result in Stuck Funds
+Where: VoterV3.killGauge, killGaugeTotally and notifyRewardAmount
+killGauge and killGaugeTotally stop a gauge's emissions but leave the votes already cast for it in the week's total weight, totWeightsPerEpoch. notifyRewardAmount divides the weekly emissions by that total to set the index, so the killed gauge's share goes to no gauge and stays stuck in VoterV3. This happens when a gauge that has votes is killed during a week, or between the period update and the finished week's distribution. New votes cast after the kill are a separate finding."""
+
+[[criterion]]
+name = "h3_vote_for_killed_gauge"
+type = "binary"
+description = """[H-3] High: Killed Gauge Can Be Voted For
+Where: VoterV3._vote and killGauge
+_vote checks only isGauge for the pool's gauge, not isAlive, and killGauge sets isAlive to false but leaves isGauge true, so veTHE holders can keep voting for a killed gauge. These new votes count in the week's total weight, but the killed gauge can never receive its share, so the emissions they draw stay locked in VoterV3. Votes the gauge already had when it was killed are a separate finding."""
+
+[[criterion]]
+name = "h4_total_kill_locks_voters"
+type = "binary"
+description = """[H-4] High: Users Can Be Locked From Voting
+Where: VoterV3.killGaugeTotally, _reset and _createGauge
+killGaugeTotally deletes the gauge's internal and external bribe addresses but leaves voters' poolVote and votes entries for its pool, and because it deletes poolForGauge before reading it, gauges[pool] still points at the killed gauge. When a holder later calls vote, poke or reset for a veNFT that still has votes recorded for that pool, _reset finds the old gauge through gauges[pool] and calls _withdraw on its bribe address, now zero, so the call reverts. Those veNFTs can no longer vote or reset, and the pool cannot get a new gauge, since _createGauge requires gauges[pool] to be empty."""

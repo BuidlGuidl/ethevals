@@ -1,0 +1,28 @@
+schema_version = "1.3"
+artifacts = ["/workspace/findings.md"]
+
+[task]
+name = "buidlguidl/audit-balancer-v3-vault"
+description = "Check whether an agent auditing the Balancer V3 Vault finds the three ways to drain it that a professional audit found."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "security", "audits", "amm", "erc4626"]
+
+[metadata]
+pillar = "build"
+area = "Audits"
+modes = ["internet"]
+
+[agent]
+timeout_sec = 3600
+
+[verifier]
+environment_mode = "separate"
+user = "root"
+
+[verifier.env]
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
+
+[environment]
+cpus = 1
+memory_mb = 2048

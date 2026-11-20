@@ -1,0 +1,25 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+prompt_template = "judge-prompt.md"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "c1_reserve_stuck_without_graduation"
+type = "binary"
+description = """[C-1] Critical: reserveSupply Gets Stuck in LBPStrategyBasic if Auction Does Not Graduate
+Where: LBPStrategyBasic.validate and migrate
+LBPStrategyBasic holds reserveSupply, the tokens set aside to seed the Uniswap v4 pool. They leave only through migrate(), which needs the price and amounts validate() stores, and only the auction can call validate(), which the auction does only when it graduates and sweeps its currency to the strategy. If too little of the supply sells, the auction refunds bidders and never calls validate(), and the strategy has no other way to move the reserved tokens, so they are locked for good even when the auction is set up correctly. Unchecked auction recipients are a different finding."""
+
+[[criterion]]
+name = "h1_unchecked_auction_recipients"
+type = "binary"
+description = """[H-1] High: Insufficient Input Validation During Contract Creation Can Break Normal Usage Flow
+Where: LBPStrategyBasic constructor and onTokensReceived; TokenLauncher.distributeToken
+The auction's fundsRecipient, fundsRecipientData and tokensRecipient come from the launch creator's auction parameters, which LBPStrategyBasic stores and passes unread to the auction factory; neither it nor TokenLauncher checks them. The flow only works when fundsRecipient is the strategy and the data calls validate(). With another fundsRecipient, or with empty data, validate() never runs: the raised currency goes to fundsRecipient, no pool can be opened, and the reserved tokens stay stuck even though the auction graduated. If tokensRecipient is the strategy, the unsold tokens sent back to it are locked."""

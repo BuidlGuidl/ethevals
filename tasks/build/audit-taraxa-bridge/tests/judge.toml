@@ -1,0 +1,25 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+prompt_template = "judge-prompt.md"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "tob_tara_4_duplicate_signatures"
+type = "binary"
+description = """[TOB-TARA-4] High: Missing validation allows signatures to be duplicated to finalize any PillarBlock
+Where: TaraClient.finalizeBlocks and getSignaturesWeight
+finalizeBlocks weighs the votes on a batch's last pillar block with getSignaturesWeight, which recovers each signer in lastBlockSigs and adds that validator's vote count but never rejects a signer it has already counted. Anyone can repeat one valid signature until the total passes the threshold of more than half the total weight. A pillar block with far less than the required weight, for example one signed by a single dishonest validator, is then finalized with its bridge root, and the bridge on Ethereum accepts state built on it."""
+
+[[criterion]]
+name = "tob_tara_6_apply_state_reentrancy"
+type = "binary"
+description = """[TOB-TARA-6] High: Reentrancy in applyState can lead to breaking the contract and stealing hook-enabled tokens
+Where: BridgeBase.applyState; ERC20LockingConnectorLogic.applyState
+BridgeBase.applyState, which anyone can call, checks that the state's epoch is appliedEpoch + 1 but increments appliedEpoch only at the end, after the connectors have paid the recipients, with no reentrancy guard. With a token that calls the recipient on transfer, such as an ERC-777 token held by the locking connector, the recipient re-enters applyState with the same arguments and is paid again on every pass, draining that token from the connector. Each nested call also increments appliedEpoch, so the bridge's epoch runs ahead and later valid states are refused."""

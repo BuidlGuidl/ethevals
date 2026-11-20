@@ -1,0 +1,18 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+prompt_template = "judge-prompt.md"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "h1_cross_domain_identity_rebind"
+type = "binary"
+description = """[H-1] High: Agent of One Domain Can Seize Holder Balances of Another Domain Through Shared Identity Storage
+Where: ERC3643IdentityRegistry.registerIdentity and updateIdentity; IdentityRegistryStorage.addIdentityToStorage and modifyStoredIdentity; AccessManagerSetupLib.commissionSuite; Token.identityTransfer
+Suites in different role domains of one TREXAccessManager can share an IdentityRegistryStorage, and commissionSuite gives each suite's registry IRS_WRITER on it. The registry checks only the caller's role on itself, and the storage keeps one binding per wallet without recording which suite wrote it. So an AGENT of token B's domain, with no role in token A, can use B's registry to register a recipient under a token A holder's identity, rebind the holder's wallet to an identity contract it controls, and through it call identityTransfer on token A to take the whole balance with no allowance. The same steps inside one suite, by its own registry agent, are a separate, lower finding."""

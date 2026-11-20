@@ -1,0 +1,28 @@
+schema_version = "1.3"
+artifacts = ["/workspace/findings.md"]
+
+[task]
+name = "buidlguidl/audit-taraxa-bridge"
+description = "Check whether an agent auditing the Taraxa bridge and its light clients finds the finality and reentrancy flaws a professional audit found."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "security", "audits", "bridges", "light-clients"]
+
+[metadata]
+pillar = "build"
+area = "Audits"
+modes = ["internet"]
+
+[agent]
+timeout_sec = 3600
+
+[verifier]
+environment_mode = "separate"
+user = "root"
+
+[verifier.env]
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
+
+[environment]
+cpus = 1
+memory_mb = 2048

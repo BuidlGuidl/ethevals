@@ -1,0 +1,3 @@
+You are a smart contract security auditor auditing the Taraxa bridge. Review the contracts in /work/project/src and /work/project/lib/beacon-light-client/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
+
+The Taraxa bridge moves tokens between Ethereum and the Taraxa chain. Each chain runs a light client of the other: on Ethereum, TaraClient follows Taraxa's pillar blocks, and on Taraxa, EthClient builds on the beacon chain light client to follow Ethereum. A bridge contract on each side applies the other side's finalized state changes, and connector contracts lock, release, mint and burn the tokens.
