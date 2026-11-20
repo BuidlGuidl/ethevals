@@ -16,30 +16,30 @@ export const modeNames: Record<Mode, string> = { internet: "Internet", skills: "
 export const scoringCopy: {
   label: string; names: Record<Scoring, string>; comparison: string;
   parts: { rule: string; example: string; caveat: string; then: string; versions: string };
-  rule: Record<Scoring, string>; detail: Partial<Record<Scoring, string[]>>; then: string;
+  rule: Record<Scoring, string>; detail: Partial<Record<Scoring, string[]>>; then: string[];
   caveat: Record<Scoring, { lead: string; list?: string[]; close?: string }>;
   example: { title: string; task: string; checks: { name: string; label: string; passed: boolean }[]; result: Record<Scoring, string> };
   formulas: { pillar: string; eval: string; matrixIntro: string; matrixCaption: string; matrixNote: string };
 } = {
   label: "Scoring",
   names: { "all-or-nothing": "All or nothing", partial: "Partial", mix: "Mixed", weighted: "Weighted" },
-  comparison: "Comparison on the same trials. Not the live board.",
-  parts: { rule: "Rule", example: "Example", caveat: "Keep in mind", then: "Then", versions: "This trial under each version" },
+  comparison: "Same trials, four scoring rules. Not the live board.",
+  parts: { rule: "Rule", example: "Example", caveat: "Keep in mind", then: "How scores average", versions: "This trial under each rule" },
   rule: {
-    "all-or-nothing": "A trial scores 100% only if every check passes. One failed check makes it 0%. This is how the live board scores.",
-    partial: "Score = passed checks ÷ all checks. Every check counts the same.",
-    mix: "Each task is marked one of two ways.",
-    weighted: "Score = points earned ÷ points possible. Each check is worth 0, 1 or 3 points.",
+    "all-or-nothing": "Trial score = 100% if every check passes, 0% if any check fails. Same rule as the live board.",
+    partial: "Trial score = passed checks ÷ all checks. Every check counts the same.",
+    mix: "Each task uses either Partial or All or nothing.",
+    weighted: "Trial score = points earned ÷ points possible. Each check is worth 0, 1, or 3 points.",
   },
   detail: {
     mix: [
-      "Pages and audits: passed checks ÷ all checks, with `compile` and `report_written` left out.",
-      "Contracts, backend code, onchain actions and Concepts questions: all or nothing.",
+      "Pages and audits: passed checks ÷ all checks, leaving out `compile` and `report_written` (an audit report exists).",
+      "Contracts, backend code, onchain actions, and Concepts questions: 100% if every check passes, else 0%.",
     ],
     weighted: [
-      "0 points: `compile`, `answered`, `report_written`.",
-      "1 point: the instruction asks for it.",
-      "3 points: it tests a gotcha the instruction leaves unsaid.",
+      "0 points: `compile`, `answered` (the reply was not empty), `report_written` (an audit report exists).",
+      "3 points: the check tests a gotcha the instruction leaves out.",
+      "1 point: any other check.",
     ],
   },
   caveat: {
@@ -47,26 +47,26 @@ export const scoringCopy: {
     partial: {
       lead: "Three checks only show that work was handed in:",
       list: ["`compile`: the code compiled.", "`answered`: the reply was not empty.", "`report_written`: an audit report exists."],
-      close: "They count here like any other check. Code that only compiles still scores, and a wrong answer on a two-check Concepts task scores 50%.",
+      close: "They count like any other check. Code that only compiles still scores above 0%, and a wrong answer on a two-check Concepts task scores 50%.",
     },
-    mix: { lead: "Two tasks in the same pillar can follow different rules." },
-    weighted: { lead: "The points are a judgement call for each check. Move a check from 1 point to 3 and the scores change." },
+    mix: { lead: "Tasks in the same pillar can follow different rules, such as pages and contracts in Build." },
+    weighted: { lead: "Points are chosen by hand for each check. Move a check from 1 point to 3 and the scores change." },
   },
-  then: "A task's score is the average of its trials. A pillar's score is the average of its tasks. Overall is the average of the three pillars.",
+  then: ["Task = average of its trials.", "Pillar = average of its tasks.", "Overall = average of the three pillars."],
   example: {
-    title: "Fable 5.2 on `token-governor`, one trial",
+    title: "One trial: Fable 5.2 on `token-governor` (contract)",
     task: "build/token-governor",
     checks: [
       { name: "compile", label: "Compiles", passed: true },
       { name: "test_snapshotCanRunIt", label: "Standard governor, works with Snapshot", passed: true },
-      { name: "test_quorumCountsTheWholeSupply", label: "Quorum counts the whole supply", passed: true },
-      { name: "test_theDelayGuardsTheMoney", label: "Two-day delay guards the money", passed: true },
-      { name: "test_lateVotesExtendTheVote", label: "Late votes extend the vote", passed: false },
+      { name: "test_quorumCountsTheWholeSupply", label: "Quorum uses total supply", passed: true },
+      { name: "test_theDelayGuardsTheMoney", label: "Two-day delay guards funds", passed: true },
+      { name: "test_lateVotesExtendTheVote", label: "Late votes extend voting", passed: false },
     ],
     result: {
       "all-or-nothing": "{failed} check failed, so {score}.",
       partial: "{passed} of {total} checks passed = {score}.",
-      mix: "`token-governor` is a contract, so all or nothing: {score}. A page trial that passes 8 of 9 checks scores 89%.",
+      mix: "`token-governor` is a contract, so All or nothing: {score}. On a page task, 8 of 9 counted checks = 89%.",
       weighted: "{sum} = {earned} of {possible} points = {score}.",
     },
   },

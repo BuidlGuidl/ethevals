@@ -40,7 +40,7 @@ function Example({ scoring }: { scoring: Scoring }) {
   return <div className="scoring-example"><p className="eyebrow">{scoringCopy.parts.example}</p><p>{withCode(example.title)}</p>
     <table><tbody>{example.checks.map((check) => <tr key={check.name}>
       <td className={check.passed ? "positive" : "negative"}>{check.passed ? "✓ pass" : "✗ fail"}</td><td>{check.label}</td>
-      {points && <td className="scoring-points">{points[check.name]} {points[check.name] === 1 ? "point" : "points"}</td>}</tr>)}</tbody></table>
+      {points && <td className="scoring-points" data-zero={points[check.name] === 0 || undefined}>{points[check.name]} {points[check.name] === 1 ? "point" : "points"}</td>}</tr>)}</tbody></table>
     <p className="scoring-result">{withCode(example.result[scoring].replace(/\{(\w+)\}/g, (_, key: string) => String(values[key])))}</p>
     <p className="eyebrow">{scoringCopy.parts.versions}</p>
     <dl className="scoring-versions">{scorings.map((value) => <div key={value} data-selected={value === scoring || undefined}>
@@ -63,7 +63,7 @@ export function ScoringToggle({ scoring }: { scoring: Scoring }) {
       <div><p className="eyebrow">{scoringCopy.parts.caveat}</p><p>{withCode(caveat.lead)}</p>
         {caveat.list && <ul>{caveat.list.map((line) => <li key={line}>{withCode(line)}</li>)}</ul>}
         {caveat.close && <p className="mt-2">{withCode(caveat.close)}</p>}</div>
-      <div><p className="eyebrow">{scoringCopy.parts.then}</p><p className="muted">{scoringCopy.then}</p></div>
+      <div className="scoring-average"><p className="eyebrow">{scoringCopy.parts.then}</p><ul>{scoringCopy.then.map((line) => <li key={line}>{line}</li>)}</ul></div>
     </div>
   </section>;
 }
