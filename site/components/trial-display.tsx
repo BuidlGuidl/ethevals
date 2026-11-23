@@ -4,15 +4,11 @@ import { checkCounts, checkKind, trialScore } from "../src/scoring";
 import type { EvalCell, Trial } from "../src/board";
 import { percent } from "./scores";
 
-export const isAudit = (task: string) => task.startsWith("build/audit-");
-
-const entryLabels: Record<string, [passed: string, failed: string]> = {
-  compile: ["Compiled", "Did not compile"],
-  answered: ["Answered", "No answer"],
-  no_answer: ["Answered", "No answer"],
-  report_written: ["Report written", "No report"],
+const entryLabels: Record<string, string> = {
+  compile: "Did not compile", answered: "No answer", no_answer: "No answer", report_written: "No report",
 };
-export const entryLabel = (name: string, passed: boolean) => entryLabels[name]?.[passed ? 0 : 1] ?? name;
+// An entry check is only named when it fails. A passed one is not shown.
+export const entryLabel = (name: string) => entryLabels[name] ?? name;
 
 export const checkName = (name: string) =>
   name.replace(/^test_/, "").replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ").toLowerCase();
@@ -26,14 +22,13 @@ export function trialSummary(task: string, trial: Trial): TrialSummary {
   if (score === null) return { state: "error", score, note: "Error", stopped: false };
   const failed = Object.entries(trial.checks).filter(([, check]) => !check.passed).map(([name]) => name);
   const entry = failed.find((name) => checkKind(task, name) === "entry");
-  if (entry) return { state: "zero", score, note: entryLabel(entry, false), stopped: true };
+  if (entry) return { state: "zero", score, note: entryLabel(entry), stopped: true };
   const gates = failed.filter((name) => checkKind(task, name) === "gate").map(checkName);
   if (gates.length) {
     return { state: "zero", score, note: `Gate check failed: ${gates[0]}${gates.length > 1 ? ` +${gates.length - 1}` : ""}`, stopped: true };
   }
-  const { counted, judgment } = checkCounts(task, trial.checks);
-  const note = isAudit(task) && judgment.total ? `${judgment.passed} of ${judgment.total} findings`
-    : counted.total ? `${counted.passed} of ${counted.total} passed` : score === 1 ? "Passed" : "Failed";
+  const { counted } = checkCounts(task, trial.checks);
+  const note = counted.total ? `${counted.passed} of ${counted.total} passed` : score === 1 ? "Passed" : "Failed";
   return { state: score === 1 ? "full" : score === 0 ? "zero" : "part", score, note, stopped: false };
 }
 

@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components
 import { TooltipProvider } from "../components/ui/tooltip";
 import { Score, Hint, InfoHint, formulasFor, heat, percent, money } from "../components/scores";
 import { ScoringToggle, scoringParam, useScoredBoard } from "../components/scoring-toggle";
-import { entryLabel, isAudit, taskHint, trialHint, trialScoreText, trialSummary, TrialDot, TrialDots, TrialLegend, TrialNote, TrialScore } from "../components/trial-display";
+import { entryLabel, taskHint, trialHint, trialScoreText, trialSummary, TrialDot, TrialDots, TrialLegend, TrialNote, TrialScore } from "../components/trial-display";
 import { updateQuery, useQuery } from "../components/url-state";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
@@ -119,7 +119,6 @@ function CheckGroup({ label, note, checks }: { label: string; note?: string; che
 const checkNotes = {
   gate: "Did the agent do what the instruction asked for? Any failure sets the trial score to 0%.",
   judgment: "Did the agent make sound Ethereum decisions beyond the instruction? Each check counts toward the trial score.",
-  findings: "Did the agent catch the issues from the public audit report? Each check counts toward the trial score.",
 };
 
 function RunView({ task, pillar, trial, trials, gated, onRun }: {
@@ -148,13 +147,10 @@ function RunView({ task, pillar, trial, trials, gated, onRun }: {
     {trial.limit && <p className="caution">{trial.limit.type} limit: {trial.limit.limit}{trial.limit.reason ? ` · ${trial.limit.reason}` : ""}</p>}
     <section className="verifier-verdict">
       {gated && checks.length > 0 ? <>
-        {entry.map(([name, check]) => <p key={name} className="entry-check"><span className={check.passed ? "positive" : "negative"}>
-          {check.passed ? <Check size={16} aria-hidden="true" /> : <X size={16} aria-hidden="true" />}</span>
-          <b>{entryLabel(name, check.passed)}</b>{!check.passed && <small>{check.reason}</small>}</p>)}
+        {entry.filter(([, check]) => !check.passed).map(([name, check]) => <p key={name} className="entry-check">
+          <span className="negative"><X size={16} aria-hidden="true" /></span><b>{entryLabel(name)}</b><small>{check.reason}</small></p>)}
         {gates.length > 0 && <CheckGroup key={`gate-${trial.trial}`} label="Gate checks" note={checkNotes.gate} checks={gates} />}
-        {others.length > 0 && (isAudit(task)
-          ? <CheckGroup key={`findings-${trial.trial}`} label="Known findings" note={checkNotes.findings} checks={others} />
-          : pillar === "concepts" ? <CheckGroup key={`checks-${trial.trial}`} label="Checks" checks={others} />
+        {others.length > 0 && (pillar === "concepts" ? <CheckGroup key={`checks-${trial.trial}`} label="Checks" checks={others} />
           : <CheckGroup key={`judgment-${trial.trial}`} label="Judgment checks" note={checkNotes.judgment} checks={others} />)}
       </> : <><h3>Verifier checks</h3>
         {checks.length > 0 ? <CheckList checks={checks.sort((a, b) => Number(a[1].passed) - Number(b[1].passed))} />

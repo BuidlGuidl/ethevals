@@ -114,7 +114,7 @@ test("every level shows a trial as a percentage, with one dot and the reason in 
     { evaluation: governor, trial: row(governor.id, governorChecks), state: "part", score: "75%", note: "3 of 4 passed" },
     { evaluation: governor, trial: row(governor.id, gateFailure), state: "zero", score: "0%", note: "Gate check failed: quorum counts the whole supply" },
     { evaluation: governor, trial: row(governor.id, { ...governorChecks, compile: fail }), state: "zero", score: "0%", note: "Did not compile" },
-    { evaluation: audit, trial: row(audit.id, auditChecks), state: "part", score: "40%", note: "2 of 5 findings" },
+    { evaluation: audit, trial: row(audit.id, auditChecks), state: "part", score: "40%", note: "2 of 5 passed" },
     { evaluation: audit, trial: row(audit.id, { no_answer: fail }), state: "zero", score: "0%", note: "No answer" },
     { evaluation: governor, trial: error, state: "error", score: "Error", note: "Error" },
     { evaluation: concepts, trial: row(concepts.id, { answered: pass, target: fail }), state: "zero", score: "0%", note: "0 of 1 passed" },
@@ -154,23 +154,22 @@ test("a matrix cell is the task score and its hint lists each trial", () => {
     [...match[0].matchAll(/data-state="([^"]+)"/g)].map((state) => state[1])), ["zero", "part", "error"]);
 });
 
-test("the trial view puts the entry check on its own line so the groups add up to the score", () => {
+test("the trial view hides a passed hand-in check and names a failed one", () => {
   const trialView = drawerFor(governor, [row(governor.id, governorChecks)])({ evaluation: governor, run: 1 });
   assert.match(trialView, /<dt>Checks<\/dt><dd>3 of 4<\/dd>/);
-  assert.match(trialView, /class="entry-check">.*?<b>Compiled<\/b>/s);
+  assert.doesNotMatch(trialView, /entry-check|Compiled/);
   assert.match(trialView, /Gate checks <span>2 of 2<button type="button" class="info-hint" aria-label="Gate checks: Did the agent do what the instruction asked for\? Any failure sets the trial score to 0%\."/);
   assert.doesNotMatch(trialView, /<p[^>]*>Did the agent/);
   assert.match(trialView, /Judgment checks <span>1 of 2<button.*?<\/span>.*?<code>test_lateVotesExtendTheVote<\/code><p>Failed\.<\/p>.*?<details><summary>Passed \(1\)<\/summary>.*?<code>test_snapshotCanRunIt<\/code>/s);
   assert.doesNotMatch(trialView, /<code>compile<\/code>/);
 
   const auditView = drawerFor(audit, [row(audit.id, auditChecks)])({ evaluation: audit, run: 1 });
-  assert.match(auditView, /<b>Report written<\/b>/);
-  assert.match(auditView, /Known findings <span>2 of 5<button type="button" class="info-hint" aria-label="Known findings: Did the agent catch the issues from the public audit report\? Each check counts toward the trial score\."/);
-  assert.doesNotMatch(auditView, /Gate checks|Judgment checks/);
+  assert.match(auditView, /Judgment checks <span>2 of 5<button/);
+  assert.doesNotMatch(auditView, /Gate checks|Known findings|Report written|entry-check/);
 
   const noAnswer = drawerFor(audit, [row(audit.id, { no_answer: { passed: false, reason: "No answer twice." } })])({ evaluation: audit, run: 1 });
   assert.match(noAnswer, /<b>No answer<\/b><small>No answer twice\.<\/small>/);
-  assert.doesNotMatch(noAnswer, /Known findings/);
+  assert.doesNotMatch(noAnswer, /Judgment checks/);
 
   const conceptsView = drawerFor(concepts, [row(concepts.id, { answered: pass, target: fail })])({ evaluation: concepts, run: 1 });
   assert.match(conceptsView, /<h4>Checks <span>0 of 1<\/span><\/h4>/);
