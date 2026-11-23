@@ -72,7 +72,7 @@ function TrialMark({ mark }: { mark: Mark }) {
 
 export function TrialLegend() {
   return <p className="trial-legend" aria-label="Trial mark legend">
-    <span><TrialMark mark={{ kind: "score", score: 0.7 }} /> Trial score</span>
+    <span><TrialMark mark={{ kind: "score", score: 0.5 }} /> Filled to the trial score</span>
     <span><TrialMark mark={{ kind: "gate-check", score: 0 }} /> Gate check failed</span>
     <span><TrialMark mark={{ kind: "error", score: null }} /> Error</span>
   </p>;
