@@ -14,7 +14,7 @@ export const formulas = {
 };
 export const unscored = (count: number) => `${count} ${count === 1 ? "trial has" : "trials have"} no score yet.`;
 export function Hint({ text, children }: { text: string; children: React.ReactElement }) {
-  return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent className="whitespace-pre-line">{text}</TooltipContent></Tooltip>;
+  return <Tooltip disableHoverableContent><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent className="whitespace-pre-line">{text}</TooltipContent></Tooltip>;
 }
 // Sits in the corner of a score that still has planned trials without a score.
 export function Unscored({ count }: { count: number }) {
