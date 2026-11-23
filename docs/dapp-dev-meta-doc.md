@@ -89,7 +89,7 @@ Where developers learn and build:
 - [ETH Tech Tree](https://github.com/BuidlGuidl/eth-tech-tree-challenges) and [BuidlGuidl CTF](https://ctf.buidlguidl.com)
 - [ethereum.org developer docs](https://ethereum.org/en/developers/docs/)
 
-Libraries, skills, and audits where teams record real gotchas:
+Libraries, skills, and audits where teams record real pitfalls:
 
 - [wagmi](https://wagmi.sh), [viem](https://viem.sh), [Scaffold-ETH 2](https://github.com/scaffold-eth/scaffold-eth-2)
 - [OpenZeppelin](https://github.com/OpenZeppelin/openzeppelin-contracts), [Solady](https://github.com/vectorized/solady), [Permit2](https://github.com/Uniswap/permit2)

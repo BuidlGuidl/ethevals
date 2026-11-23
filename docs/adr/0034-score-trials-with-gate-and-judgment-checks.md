@@ -62,9 +62,6 @@ Had the quorum check failed, the trial score would be 0%.
 - **A row can carry a check name the tags do not know,** because the board keeps a row whose checks hash is behind. That check is left out of the division and is never a failed gate. A tagged check that a row lacks is ignored. When nothing is left to count, the trial is 100% or 0% from its reward.
 - **Harbor's `reward` stays `all-pass`.** The board and a plain Harbor run can now disagree: Harbor says pass or fail, and the board says a percentage. This replaces the line in [ADR 0011](0011-verifiers-use-rewardkit-and-criteria-run-in-the-task.md) that they cannot disagree, and the line in [ADR 0010](0010-run-tasks-on-harbor.md) that the board shows a count.
 
-The tags, the hash rule, and the lint and free-check rules land first.
-The board keeps its count until its own change lands.
-
 ## Considered options
 
 - **Passed checks ÷ all checks, with no gate.** A trial that fails what the instruction asked keeps most of its credit, and the six strongest agents end up within about 4 percentage points.
