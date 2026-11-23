@@ -82,6 +82,13 @@ test("planned trials without a score are counted and marked on the board", () =>
   assert.deepEqual([...page.matchAll(/class="unscored-info" role="img" aria-label="([^"]+)"/g)].map((match) => match[1]),
     ["3 trials have no score yet.", "3 trials have no score yet.", "1 trial has no score yet."]);
   assert.ok(page.includes('title="No trials yet">–</span>'));
+  // The drawer says the same in a banner for the scope it shows, and stays quiet for a single trial.
+  const drawer = (selection: Parameters<typeof Detail>[0]["selection"]) => renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
+  const token = { ...tasks[1], domain: "dapp-development" as const };
+  assert.ok(drawer({ agent, mode: "internet" }).includes('<p class="unscored-banner">3 trials have no score yet.</p><p>75% · 2/3 scored</p>'));
+  assert.ok(!drawer({ agent, mode: "internet", pillar: "concepts" }).includes("unscored-banner"));
+  assert.ok(drawer({ agent, mode: "internet", evaluation: token }).includes('<p class="unscored-banner">1 trial has no score yet.</p>'));
+  assert.ok(!drawer({ agent, mode: "internet", evaluation: token, run: 1 }).includes("unscored-banner"));
 });
 
 test("unsupported, unrun, and failed cells have distinct states", () => {
@@ -254,7 +261,7 @@ test("drawer domain scores average tasks then scored pillars and respect the sel
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, domain: "security", onSelect: () => {} }));
   assert.match(panel, /aria-pressed="false"><span>Dapp development<\/span><b>38%<\/b><small>2\/4 scored<\/small>/);
   assert.match(panel, /aria-pressed="true"><span>Security<\/span><b>25%<\/b><small>1\/3 scored<\/small>/);
-  assert.ok(panel.includes('<p>25% · 3/7 scored · 1 errors excluded</p>'));
+  assert.ok(panel.includes('<p>25% · 3/7 scored</p>'));
   assert.deepEqual([...panel.matchAll(/class="eval-list-title"><b>([^<]+)/g)].map((match) => match[1]), ["Reentrancy", "Overflow"]);
   assert.ok(panel.includes('<h3>Concepts</h3>'));
   assert.ok(!panel.includes('<h3>Build</h3>'));

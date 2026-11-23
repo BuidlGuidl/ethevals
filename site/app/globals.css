@@ -183,6 +183,7 @@
   .detail-body { @apply grid gap-5; overflow-wrap: anywhere; }
   .drawer-header { @apply grid gap-2 border-b border-border pb-5 pr-8; }
   .drawer-header h1 { @apply text-[24px]; }
+  .unscored-banner { @apply border border-amber/30 bg-amber/5 px-3 py-2 text-xs text-amber; }
   .domain-scores { @apply mt-2 grid grid-cols-2 gap-2; }
   .domain-scores button { @apply grid content-start gap-2 border border-border-strong p-3 text-left text-xs transition-colors; }
   .domain-scores button:not(:disabled):hover { @apply border-accent; }
