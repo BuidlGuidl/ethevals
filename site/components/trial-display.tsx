@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, X } from "lucide-react";
+import { X } from "lucide-react";
 import { checkCounts, checkKind, trialScore } from "../src/scoring";
 import type { EvalCell, Trial } from "../src/board";
 import { heat, percent } from "./scores";
@@ -66,7 +66,7 @@ export function trialHint(task: string, trial: Trial, display?: TrialDisplay) {
 function TrialMark({ mark }: { mark: Mark }) {
   return <span className="trial-mark" data-mark={mark.kind} style={heat(mark.score)} aria-hidden="true">
     {mark.kind === "gate-check" && <X size={11} strokeWidth={2.5} />}
-    {mark.kind === "error" && <AlertTriangle size={13} />}
+    {mark.kind === "error" && "!"}
   </span>;
 }
 

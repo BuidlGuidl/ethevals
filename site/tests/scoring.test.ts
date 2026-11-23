@@ -133,7 +133,7 @@ test("the matrix, drawer list, trials table, switcher, and heading show the same
     }
     assert.ok(trialsTable.includes(`<small>${hint}`), hint);
     assert.ok(board.includes(`Trial ${trial.trial} · ${hint}`), hint);
-    assert.match(matrixCell[1].replace(/<[^>]*>/g, ""), /^$/);
+    assert.match(matrixCell[1].replace(/<[^>]*>/g, ""), /^!*$/);
     assert.ok(runHeading?.includes(`>${heading}</span>`));
   }
 });

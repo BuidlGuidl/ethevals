@@ -151,7 +151,7 @@
     background-origin: border-box;
   }
   .trial-mark[data-mark="gate-check"] { @apply border border-red text-red; }
-  .trial-mark[data-mark="error"] { @apply text-amber; }
+  .trial-mark[data-mark="error"] { @apply border border-amber text-[10px] font-bold leading-none text-amber; }
   .scoring-body { @apply grid content-start gap-x-10 gap-y-5 pt-4 md:grid-cols-2; }
   .scoring-average { @apply border-t border-border pt-4 md:col-span-2; }
   .scoring-average ul { @apply md:flex md:flex-wrap md:gap-x-8; }

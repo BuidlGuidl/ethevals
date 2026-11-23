@@ -174,7 +174,9 @@ export function Detail({ selection, data, domain, trialDisplay = defaultTrialDis
     </> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
       {trial && <p>{evaluation!.title}</p>}
       <Configuration agent={agent} /><p className="muted">{modeNames[mode]}</p>
-      {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {display ? `${scope.total} scored trials` : `${scope.passed}/${scope.total} scored`} · {scope.errors} errors excluded</p>}
+      {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {display ? `${scope.total} scored trials` : `${scope.passed}/${scope.total} scored`}{display
+        ? scope.errors > 0 && <> · <span className="caution">{scope.errors} {scope.errors === 1 ? "trial" : "trials"} errored</span></>
+        : ` · ${scope.errors} errors excluded`}</p>}
       {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No tasks yet" : "No trials yet"}</p>}
       {!evaluation && <div className="domain-scores" role="group" aria-label="Filter by domain">
         {domains.map((option) => {
