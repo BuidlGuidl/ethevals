@@ -33,11 +33,11 @@ function Example({ scoring }: { scoring: Scoring }) {
       const kind = checkKind(example.task, check.name);
       return <tr key={check.name}>
         <td className={check.passed ? "positive" : "negative"}>{check.passed ? "✓ pass" : "✗ fail"}</td>
-        <td>{check.label}{gated && <small className="check-kind">{kind === "entry" ? "Gate · entry" : kind === "gate" ? "Gate" : "Judgment check"}</small>}</td>
+        <td>{check.label}{gated && <small className="check-kind">{kind === "judgment check" ? "Judgment check" : "Gate check"}</small>}</td>
       </tr>;
     })}</tbody></table>
     <p className="scoring-result">{gated
-      ? `All gates passed. ${counted.passed} of ${counted.total} counted checks passed. Trial score ${score}.`
+      ? `All gate checks passed. ${counted.passed} of ${counted.total} counted checks passed. Trial score ${score}.`
       : `One check failed. Trial score ${score}.`}</p>
   </div>;
 }

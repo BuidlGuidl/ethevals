@@ -15,9 +15,9 @@ export const scoringCopy = {
   names: { "all-or-nothing": "All or nothing", gated: "Gated" } satisfies Record<Scoring, string>,
   rule: {
     "all-or-nothing": "The trial score is 100% if every check passes and 0% if any check fails.",
-    gated: "If any gate fails, the trial score is 0%. If every gate passes, divide the checks passed by all counted checks.",
+    gated: "If any gate check fails, the trial score is 0%. If every gate check passes, divide the checks passed by all counted checks.",
   },
-  entry: "The entry checks `compile`, `answered`, and `report_written` are gates. Leave them out of the count. Count each other gate and judgment check once.",
+  entry: "The entry checks `compile`, `answered`, and `report_written` are gate checks. Leave them out of the count. Count each other gate check and judgment check once.",
   average: ["Task = mean of scored trials.", "Pillar = mean of scored tasks.", "Overall = mean of scored pillars."],
   example: {
     task: "build/token-governor",

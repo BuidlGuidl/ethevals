@@ -57,19 +57,19 @@ Cost adds agent and judge API prices, even when a plan paid.
 
 The scoring switch above the board defaults to All or nothing.
 Select Gated or open `/?scoring=gated` to score the saved checks.
-If any gate fails, the trial score is 0%.
-If every gate passes, divide the checks passed by all counted checks.
-The entry checks `compile`, `answered`, and `report_written` are gates. Leave them out of the count.
+If any gate check fails, the trial score is 0%.
+If every gate check passes, divide the checks passed by all counted checks.
+The entry checks `compile`, `answered`, and `report_written` are gate checks. Leave them out of the count.
 `src/scoring-settings.ts` labels the other checks. An unlabeled check is a judgment check.
 The leaderboard, task matrix, drawer, and Compare follow the scoring switch.
 
-In Gated, use Prototype · Trial display to compare labels on the same trials.
-The `trial-display` query parameter accepts `a`, `b`, or `c`.
-Version C shows audit finding counts when the counts match the score.
+Gated shows one mark per trial. Hover over a mark to see its checks.
+Use Prototype · Trial display to switch to Numbers, or add `&trial-display=numbers` to the URL.
+Numbers shows audit finding counts when the counts match the score.
 `pnpm exec tsx scripts/scoring-table.ts` prints Internet Overall and pillar scores under both rules.
 
 Each trial drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.
-Failed no-answer trials say "Refused" or "Empty reply".
+No-answer trials say "Refused" or "Empty reply".
 Its trajectory link opens the row's `trajectory_url`.
 Harbor Hub links say "Open full trial on Harbor Hub" and open the public trial page.
 If the Hub upload fails or skips, published rows link to the release's trajectory JSON.

@@ -122,6 +122,8 @@
   .matrix-model { display: none; }
   .matrix-cell { @apply flex min-h-[40px] w-full items-center justify-center px-1 text-center text-[13px]; background: color-mix(in srgb, var(--mx-hi) var(--score), var(--mx-lo)); }
   .matrix-cell[data-empty] { @apply bg-transparent text-dim; }
+  .matrix-cell[data-marks] { @apply bg-transparent; }
+  .matrix-cell[data-marks]:hover { @apply bg-tint; }
   button.matrix-cell:hover { outline: 1px solid var(--color-accent); outline-offset: -1px; }
   .matrix tr[id] { scroll-margin-top: 130px; }
   .matrix tr:target > * { @apply bg-accent/10; box-shadow: inset 0 2px 0 var(--color-accent), inset 0 -2px 0 var(--color-accent); }
@@ -136,6 +138,18 @@
   .scoring-switch { @apply flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-border pb-4; }
   .trial-display { @apply flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1; }
   .trial-display select { @apply max-w-full rounded-none border border-border-strong bg-sheet px-3 py-2 text-xs; }
+  .task-marks, .trial-legend, .trial-legend > span { @apply flex flex-wrap items-center; }
+  .task-marks { @apply justify-center gap-1; }
+  .trial-legend { @apply gap-x-4 gap-y-2 text-[11px] text-muted; }
+  .trial-legend > span { @apply gap-1.5; }
+  .trial-mark { @apply inline-grid size-3.5 shrink-0 place-items-center align-middle; }
+  .trial-mark[data-mark="score"] {
+    border: 1px solid var(--color-green);
+    background: linear-gradient(to right, var(--color-green) var(--score), transparent var(--score));
+    background-origin: border-box;
+  }
+  .trial-mark[data-mark="gate-check"] { @apply border border-red text-red; }
+  .trial-mark[data-mark="error"] { @apply text-amber; }
   .scoring-body { @apply grid content-start gap-x-10 gap-y-5 pt-4 md:grid-cols-2; }
   .scoring-average { @apply border-t border-border pt-4 md:col-span-2; }
   .scoring-average ul { @apply md:flex md:flex-wrap md:gap-x-8; }
@@ -221,10 +235,16 @@
   .verifier-verdict { @apply border border-border bg-sheet; }
   .verifier-verdict h3 { @apply border-b border-border px-4 py-3; }
   .verifier-verdict > p { @apply px-4 py-3; }
-  .check-summary { @apply border-b border-border text-xs text-muted; }
+  .check-group + .check-group { @apply border-t border-border; }
+  .check-group h4, .check-group summary { @apply px-4 py-2; }
+  .check-group h4 { @apply flex flex-wrap items-baseline justify-between gap-2 bg-tint font-semibold; }
+  .check-group h4 span { @apply text-xs font-normal text-muted; }
+  .check-group summary { @apply cursor-pointer border-t border-border text-xs text-muted; }
+  .check-group details[open] summary { @apply border-b border-border; }
   .checks li { @apply flex items-start gap-3 border-b border-border px-4 py-3; }
   .checks li:last-child { border-bottom: 0; }
   .checks p { @apply mt-1 text-xs text-muted; }
+  .checks li, .eval-list-title { overflow-wrap: anywhere; }
   .prompt-disclosure summary { @apply cursor-pointer py-3 font-semibold; }
   .runs-table td { @apply px-3 py-3 text-xs; }
   .runs-table tbody tr { position: relative; cursor: pointer; }
@@ -233,10 +253,13 @@
   .run-open:focus-visible { outline: none; }
   .run-open:focus-visible::after { outline: 2px solid var(--color-accent); outline-offset: -2px; }
   .run-heading { @apply flex flex-wrap items-center gap-3; }
+  .trial-heading-score { @apply inline-flex items-center gap-2 border border-border-strong px-2 py-1 text-xs; }
   .run-switcher { @apply flex min-w-0 flex-wrap gap-px border border-border-strong bg-border-strong; justify-self: start; }
   .run-switcher button { @apply bg-sheet px-3 py-2 text-xs; }
   .run-switcher button:hover { @apply bg-tint; }
   .run-switcher button[aria-pressed="true"] { @apply bg-accent text-page; }
+  .run-switcher button:has(.trial-mark) { @apply inline-flex items-center gap-2; }
+  .run-switcher button[aria-pressed="true"]:has(.trial-mark) { @apply bg-tint text-ink shadow-[inset_0_-2px_var(--color-accent)]; }
   .run-stats { @apply grid grid-cols-4 gap-px border border-border bg-border; }
   .run-stats[data-gated] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .run-stats > div { @apply min-w-0 bg-sheet px-3 py-3; }
@@ -374,6 +397,8 @@
   .page.results-page { padding-bottom: 24px; }
   .results-page #evals { margin-bottom: 0; }
   .matrix-scroll { max-height: clamp(160px, calc(100svh - 340px), 72vh); }
+  .trial-legend { column-gap: 8px; font-size: 10px; }
+  .trial-legend > span { gap: 4px; }
   pre { padding: 16px; }
   .topnav { gap: 12px; padding-inline: 18px; }
   .brand { width: 88px; }
