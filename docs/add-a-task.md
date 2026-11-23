@@ -176,7 +176,7 @@ The recipes below show two real setups.
 `tests/` holds the checks that decide whether the agent got it right.
 Harbor copies it in only after the agent stops, and runs `tests/test.sh`.
 
-A check is one pass-or-fail result with a name and a one-line reason. A trial passes only if every check passes.
+A check is one pass-or-fail result with a name and a one-line reason. The board turns a trial's checks into a trial score, defined in [CONTEXT.md](../CONTEXT.md).
 Check the outcome the instruction asked for, and give every failure a reason that says what went wrong.
 Split separate requirements into separate checks, so a failure tells readers which one broke.
 You pick the checks that fit your task, and you can use more than one kind:

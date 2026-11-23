@@ -80,6 +80,7 @@ function CheckList({ checks }: { checks: Checks }) {
 const checkNotes = {
   gate: "Did the agent do what the instruction asked for? Any failure sets the trial score to 0%.",
   judgment: "Did the agent make sound Ethereum decisions beyond the instruction? Each check counts toward the trial score.",
+  notCounted: "From an older version of this task's checks. It does not count toward the trial score.",
 };
 
 function CheckGroup({ label, note, checks }: { label: string; note?: string; checks: Checks }) {
@@ -98,7 +99,8 @@ function RunView({ evaluation, trial, trials, onRun }: { evaluation: Eval; trial
   const groups = (evaluation.pillar === "concepts"
     ? [{ kind: "concept", label: "Checks", note: undefined }]
     : [{ kind: "gate", label: "Gate checks", note: checkNotes.gate },
-      { kind: "judgment", label: "Judgment checks", note: checkNotes.judgment }])
+      { kind: "judgment", label: "Judgment checks", note: checkNotes.judgment },
+      { kind: undefined, label: "Not counted", note: checkNotes.notCounted }])
     .map((group) => ({ ...group, checks: checks.filter(([name]) => checkKind(evaluation, name) === group.kind) }))
     .filter((group) => group.checks.length > 0);
   const { score } = trial;

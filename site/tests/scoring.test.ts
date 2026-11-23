@@ -43,6 +43,8 @@ test("trial scores count gate and judgment checks after passing the entry and ga
   assert.equal(scoreTrial(audit, row(audit, { report_written: pass, finding_a: pass, finding_b: fail })).value, 0.5);
   assert.equal(scoreTrial(concepts, row(concepts, { answered: pass, answer: pass })).value, 1);
   assert.equal(scoreTrial(concepts, row(concepts, { answered: pass, answer: fail })).value, 0);
+  assert.equal(scoreTrial(concepts, row(concepts, { answered: pass, answer: pass, second: fail })).value, 0);
+  assert.equal(scoreTrial(concepts, row(concepts, { answered: pass, answer: pass, second: pass })).value, 1);
   assert.equal(scoreTrial(governor, row(governor, full, { status: "error" })).value, null);
 });
 
@@ -119,6 +121,12 @@ test("check groups name their kinds, fold passed checks, and show the reason for
   const findings = drawerFor(audit, [row(audit, { report_written: pass, finding_a: fail, finding_b: pass })])(1);
   assert.match(findings, /Judgment checks <span>1 of 2/);
   assert.doesNotMatch(findings, /Gate checks|report_written/);
+  const old = drawerFor(governor, [row(governor, { ...full, old_gate: fail })])(1);
+  assert.match(old, /Not counted <span>0 of 1<button[^>]*aria-label="Not counted: From an older version of this task&#x27;s checks\. It does not count toward the trial score\."/);
+  assert.match(old, /<code>old_gate<\/code><p>Differs\.<\/p>/);
+  assert.doesNotMatch(details, /Not counted/);
+  const twoGates = drawerFor(governor, [row(governor, { ...full, test_quorum: fail, test_delay: fail })])("task");
+  assert.match(twoGates, /Gate check failed: quorum and 1 more/);
   const answer = drawerFor(concepts, [row(concepts, { answered: pass, answer: fail })])(1);
   assert.match(answer, /<h3>Checks <span>0 of 1<\/span><\/h3>/);
   assert.doesNotMatch(answer, /info-hint|entry-check/);

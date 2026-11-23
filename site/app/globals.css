@@ -206,8 +206,13 @@
   .run-dot { @apply inline-block h-2.5 w-2.5 shrink-0; }
   .run-dot[data-state="full"] { @apply bg-green; }
   .run-dot[data-state="part"] { @apply border-2 border-green bg-transparent; }
-  .run-dot[data-state="zero"] { @apply bg-red; }
-  .run-dot[data-state="error"] { @apply bg-amber; }
+  /* Each state has its own shape, so the dots read without colour: square, outline, cross, diamond. */
+  .run-dot[data-state="zero"] {
+    background:
+      linear-gradient(45deg, transparent 40%, var(--color-red) 40% 60%, transparent 60%),
+      linear-gradient(-45deg, transparent 40%, var(--color-red) 40% 60%, transparent 60%);
+  }
+  .run-dot[data-state="error"] { @apply bg-amber; transform: rotate(45deg) scale(.8); }
   .trial-legend, .trial-legend > span { @apply flex items-center; }
   .trial-legend { @apply mb-3 flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted; }
   .trial-legend > span { @apply gap-1; }

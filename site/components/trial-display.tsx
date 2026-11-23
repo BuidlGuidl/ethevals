@@ -20,7 +20,7 @@ export function trialNote({ score }: Trial): string {
   if (score.stop?.kind === "entry") return entryLabels[score.stop.name];
   if (score.stop?.kind === "gate") {
     const { name, more } = score.stop;
-    return `Gate check failed: ${checkName(name)}${more ? ` +${more}` : ""}`;
+    return `Gate check failed: ${checkName(name)}${more ? ` and ${more} more` : ""}`;
   }
   return score.total ? `${score.passed} of ${score.total} passed` : "No checks counted";
 }

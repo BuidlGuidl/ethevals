@@ -7,8 +7,8 @@ export const money = (value: number | null, digits = 2) => value === null ? "–
 export const pp = (value: number | null) => value === null ? "–" : `${Math.round(value) > 0 ? "+" : ""}${Math.round(value)}pp`;
 export const heat = (score: number | null) => score === null ? undefined : { "--score": `${score * 100}%` } as CSSProperties;
 export const formulas = {
-  overall: "Overall averages pillar scores.",
-  pillar: "Pillar score averages task scores.",
+  overall: "Overall averages pillar scores. Pillars without a score are skipped.",
+  pillar: "Pillar score averages task scores. Tasks without a score are skipped.",
   lift: "Lift = mean change over tasks scored in both modes for the same configuration, in percentage points. Overall averages paired pillar lifts.",
 };
 export const unscored = (count: number) => `${count} ${count === 1 ? "trial has" : "trials have"} no score yet.`;
