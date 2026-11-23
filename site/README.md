@@ -48,6 +48,10 @@ The 160 Inspect rows have been removed.
 
 The task matrix shows passed trials out of scored trials.
 Errors stay visible in the drawer and do not enter scores.
+A score with planned trials that have no score yet shows an amber info icon in its corner.
+The icon's tooltip gives the count, such as "18 trials have no score yet."
+It counts errors and trials that have not run, up to the job's `n_attempts` for each task in the selected mode.
+Overall, pillar scores, and task matrix cells carry it. A task without scored trials keeps its "–".
 A pillar score averages its task pass rates.
 Overall averages scored pillars.
 The mode controls select Internet or Model only. Internet + Skills is marked coming soon.

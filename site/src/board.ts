@@ -43,6 +43,8 @@ interface Counts {
   passed: number;
   total: number;
   errors: number;
+  // Planned trials without a score: errors and trials not run yet.
+  missing: number;
 }
 export interface EvalCell extends Counts {
   state: "score" | "na" | "pending";
@@ -69,6 +71,7 @@ export interface ConfigurationSummary {
   passed: number;
   total: number;
   errors: number;
+  missing: number;
 }
 export interface BoardData {
   demo: boolean;
@@ -89,6 +92,7 @@ export function scoreSummary(cells: Counts[]): Counts {
     passed: cells.reduce((sum, cell) => sum + cell.passed, 0),
     total: cells.reduce((sum, cell) => sum + cell.total, 0),
     errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
+    missing: cells.reduce((sum, cell) => sum + cell.missing, 0),
   };
 }
 
@@ -117,13 +121,14 @@ export function agentKey(agent: Agent): string {
   return JSON.stringify([agent.model, agent.agent, agent.effort]);
 }
 
-function evalCell(evaluation: Eval, mode: Mode, rows: Row[]): EvalCell {
+function evalCell(evaluation: Eval, mode: Mode, rows: Row[], attempts: number): EvalCell {
   const scored = rows.filter((row) => row.status !== "error");
   const passed = scored.filter((row) => row.status === "passed").length;
   return {
     state: !evaluation.modes.includes(mode) ? "na" : scored.length ? "score" : "pending",
     score: scored.length ? passed / scored.length : null,
     passed, total: scored.length, errors: rows.length - scored.length,
+    missing: evaluation.modes.includes(mode) ? Math.max(0, attempts - scored.length) : 0,
     trials: rows.sort((a, b) => a.trial - b.trial).map((row) => ({
       trial: row.trial, status: row.status, checks: row.checks, error_kind: row.error_kind,
       error_reason: row.error_reason, total_tokens: row.total_tokens, total_seconds: row.total_seconds,
@@ -150,7 +155,8 @@ function pillarCell(cells: EvalCell[]): PillarCell {
 }
 
 // The loader supplies current, checked rows. Group each row and compute each cell once.
-export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): BoardData {
+// `attempts` is the job's planned trials per task. Zero leaves planned trials uncounted.
+export function buildBoard(evaluations: Eval[], rows: Row[], demo = false, attempts = 0): BoardData {
   const groups = new Map<string, Row[]>();
   const agents: Record<Mode, Map<string, Agent>> = { internet: new Map(), skills: new Map(), vanilla: new Map() };
   for (const row of rows) {
@@ -173,7 +179,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
         id: evaluation.id,
         cells: Object.fromEntries(columns.map((agent) => {
           const key = agentKey(agent);
-          return [key, evalCell(evaluation, mode, groups.get(JSON.stringify([evaluation.id, mode, key])) ?? [])];
+          return [key, evalCell(evaluation, mode, groups.get(JSON.stringify([evaluation.id, mode, key])) ?? [], attempts)];
         })),
       }));
       table.pillars[pillar] = {
@@ -196,7 +202,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false): Boar
       table.summaries[key] = {
         scores, costPerPass: costPerPass(trials),
         medianTokens: median(scored.map((trial) => trial.total_tokens)),
-        passed: summary.passed, total: summary.total, errors: summary.errors,
+        passed: summary.passed, total: summary.total, errors: summary.errors, missing: summary.missing,
       };
     }
     tables[mode] = table;
