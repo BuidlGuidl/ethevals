@@ -10,6 +10,19 @@ from ethevals.stamp_rows import stamp_file, stamp_rows
 from test_jobs import job_config, task_folder
 
 
+def test_check_tags_leave_all_three_hashes_unchanged(tmp_path):
+    from ethevals.task_hashes import task_hashes
+
+    task = task_folder(tmp_path)
+    settings = task / "task.toml"
+    original = settings.read_text()
+    judge = {"program": "claude-code", "model": "test/model", "effort": "high"}
+    before = task_hashes(task, judge)
+    for tag in ("gate", "judgment"):
+        settings.write_text(original + f'\n[metadata.checks]\ncheck = "{tag}"\n')
+        assert task_hashes(task, judge) == before
+
+
 def test_judge_tools_in_checks_leave_agent_hashes_and_shared_pins_unchanged(tmp_path):
     from ethevals.images.tag import BUILD_INPUTS, image_tag
     from ethevals.task_hashes import task_hashes

@@ -12,6 +12,13 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+c1_pegged_solve_precision = "judgment"
+c2_concentrate_shared_liquidity = "judgment"
+c3_pegged_axis_mismatch = "judgment"
+h1_concentrate_protocol_fee_out = "judgment"
+h2_dynamic_balances_protocol_fee_in = "judgment"
+
 [agent]
 timeout_sec = 3600
 

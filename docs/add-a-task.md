@@ -52,6 +52,7 @@ Let's look at each piece:
 | `[metadata].area`             | no                | a non-empty string naming the part of dapp development, such as Lending or Swaps |
 | `[metadata].layer`            | no                | for a Build task, what the agent writes: `contracts`, `frontend`, or `backend` |
 | `[metadata].modes`            | yes               | any of `vanilla`, `internet`, and `skills`                                |
+| `[metadata.checks]`           | Build and Act     | each check name and its tag, except entry checks                           |
 | `[verifier].environment_mode` | no                | `shared` for a task with a chain, `separate` for one without              |
 | `[verifier].user`             | no                | `root` for Forge tests                                                    |
 | `[verifier.env]`              | if it has criteria | the two optional judge credentials, `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` |
@@ -68,6 +69,12 @@ Leave out what the board decides.
 Which agents run, how many trials each gets (`n_attempts`), and how many retries a trial gets after an error all live in the board's [job config](../runner/ethevals/job.yaml).
 The board sets no time limit of its own, so Harbor's defaults apply. The agent has none, and the verifier gets 10 minutes.
 Add `[agent].timeout_sec` or `[verifier].timeout_sec` only when your task needs a different one.
+
+For a Build or Act task, list each check by the name the verifier reports under `[metadata.checks]`.
+Use `"gate"` for a gate check that tests a requirement in the instruction.
+Use `"judgment"` for a judgment check that tests what an experienced Ethereum developer does without being told.
+Leave entry checks out of the table. Their names are `compile`, `answered`, `no_answer`, and `report_written`.
+Leave out the whole table for Concepts tasks.
 
 ### `README.md`
 
@@ -548,6 +555,16 @@ keywords = ["ethereum", "governance", "react", "wagmi", "anvil"]
 pillar = "build"
 modes = ["internet", "skills"]  # (2)
 
+[metadata.checks]
+lists_every_proposal = "gate"
+status_and_tallies_match = "gate"
+quorum_counts_for_only = "judgment"
+end_moves_with_late_quorum = "judgment"
+wrap_then_delegate = "gate"
+votes_at_snapshot = "judgment"
+canceled_status = "gate"
+already_voted = "judgment"
+
 [verifier]
 environment_mode = "shared"  # (3)
 user = "root"  # (4)
@@ -842,6 +859,12 @@ keywords = ["ethereum", "morpho", "vault", "fork"]
 [metadata]
 pillar = "act"
 modes = ["internet", "skills"]  # (1)
+
+[metadata.checks]
+test_vaultIsOutForGood = "gate"
+test_strangerCannotReopenIt = "gate"
+test_depositorsStillServed = "gate"
+test_nothingElseChanged = "gate"
 
 [verifier]
 environment_mode = "shared"  # (2)
@@ -1220,6 +1243,12 @@ keywords = ["ethereum", "solidity", "governance"]
 [metadata]
 pillar = "build"
 modes = ["internet", "skills"]
+
+[metadata.checks]
+test_quorumCountsTheWholeSupply = "gate"
+test_theDelayGuardsTheMoney = "gate"
+test_lateVotesExtendTheVote = "judgment"
+test_snapshotCanRunIt = "judgment"
 
 [verifier]
 environment_mode = "separate"  # (2)

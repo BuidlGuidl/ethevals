@@ -11,6 +11,21 @@ keywords = ["ethereum", "signatures", "safe", "smart-wallets", "typescript"]
 pillar = "build"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+eoa_vote = "gate"
+tampered_vote = "gate"
+wrong_signer = "gate"
+other_proposal = "gate"
+other_chain = "judgment"
+safe_vote = "gate"
+safe_one_owner = "gate"
+safe_late_vote = "gate"
+safe_onchain_approval = "judgment"
+safe_onchain_unapproved = "judgment"
+smart_wallet_new = "judgment"
+smart_wallet_new_reused = "judgment"
+smart_wallet_deployed = "gate"
+
 [verifier]
 environment_mode = "shared"
 user = "root"

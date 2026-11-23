@@ -12,6 +12,10 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+c1_transfer_and_call_refund = "judgment"
+h1_vesting_released_overflow = "judgment"
+
 [agent]
 timeout_sec = 3600
 

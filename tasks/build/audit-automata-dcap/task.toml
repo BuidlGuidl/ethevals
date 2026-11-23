@@ -12,6 +12,11 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+tob_aut_5_stale_crl = "judgment"
+tob_aut_6_root_crl_early_exit = "judgment"
+tob_aut_7_zk_timestamp = "judgment"
+
 [agent]
 timeout_sec = 3600
 

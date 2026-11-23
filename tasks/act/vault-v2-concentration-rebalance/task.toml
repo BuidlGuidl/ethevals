@@ -10,6 +10,12 @@ keywords = ["ethereum", "morpho", "vault", "fork"]
 pillar = "act"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+test_concentrationWithinPolicy = "gate"
+test_withdrawalsStillServed = "gate"
+test_fundsStayInvested = "gate"
+test_nothingElseChanged = "gate"
+
 [verifier]
 environment_mode = "shared"
 user = "root"

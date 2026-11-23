@@ -95,7 +95,7 @@ def test_browser_judge_only_changes_use_the_workspace_kind_when_available(tmp_pa
         task = page
         settings = task / "task.toml"
         settings.write_text('artifacts = [{source = "/workspace"}]\n' + settings.read_text().replace(
-            'pillar = "concepts"', 'pillar = "build"'))
+            'pillar = "concepts"', 'pillar = "build"') + '\n[metadata.checks]\nexplained = "judgment"\n')
     before = task_entry(task, config)
     judge = task / "tests/judge.toml"
     judge.write_text(judge.read_text().replace("unit explained?", "unit explained correctly?"))

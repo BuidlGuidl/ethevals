@@ -12,6 +12,9 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+h1_cross_domain_identity_rebind = "judgment"
+
 [agent]
 timeout_sec = 3600
 

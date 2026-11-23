@@ -35,7 +35,7 @@ def task_hashes(path: Path, judge: dict | None = None) -> dict:
     if not info:
         document.pop("task", None)
     metadata = document.get("metadata", {})
-    for key in ("pillar", "area", "layer", "modes"):
+    for key in ("pillar", "area", "layer", "modes", "checks"):
         metadata.pop(key, None)
     if not metadata:
         document.pop("metadata", None)

@@ -12,6 +12,16 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+tob_cap_12_vault_adapter_rate = "judgment"
+tob_cap_13_fee_auction_zero_assets = "judgment"
+tob_cap_14_health_vs_slashable = "judgment"
+tob_cap_15_reward_delegation_snapshot = "judgment"
+tob_cap_17_staked_cap_decimals = "judgment"
+tob_cap_19_oracle_sandwich = "judgment"
+tob_cap_4_notify_timer_reset = "judgment"
+tob_cap_5_balance_tracking = "judgment"
+
 [agent]
 timeout_sec = 3600
 

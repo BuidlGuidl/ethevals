@@ -11,6 +11,18 @@ keywords = ["ethereum", "solidity", "uniswap", "bonding-curve", "launchpad", "re
 pillar = "build"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+test_opensAtCurvePrice = "gate"
+test_wethSyncedIntoPair = "judgment"
+test_tokensSyncedIntoPair = "judgment"
+test_strangerCannotSetOpeningPrice = "judgment"
+test_curveStopsAfterGraduation = "judgment"
+test_lpIsBurned = "gate"
+test_creatorEarnsFees = "gate"
+test_everyoneCanSellBack = "gate"
+test_curvesAreSeparate = "judgment"
+test_graduationSpendsOnlyItsCurve = "judgment"
+
 [verifier]
 environment_mode = "separate"
 user = "root"

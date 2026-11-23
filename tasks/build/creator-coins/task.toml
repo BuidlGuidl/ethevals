@@ -11,6 +11,15 @@ keywords = ["ethereum", "solidity", "uniswap-v3", "creator-coins", "liquidity", 
 pillar = "build"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+test_everyCoinOpensAtTenEth = "gate"
+test_strangerCreatedPoolFirst = "judgment"
+test_feesAreThisCoins = "judgment"
+test_coinSideFeesPaidOut = "judgment"
+test_liquidityStaysPut = "gate"
+test_onlyCreatorRedirects = "gate"
+test_strangerCollectGetsNothing = "judgment"
+
 [verifier]
 environment_mode = "separate"
 user = "root"

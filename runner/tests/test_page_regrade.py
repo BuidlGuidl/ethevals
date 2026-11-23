@@ -16,13 +16,10 @@ from test_task_judges import add_judge
 
 
 def saved_page(tmp_path):
-    original = task_folder(tmp_path)
-    task = tmp_path / "tasks/build/question"
-    task.parent.mkdir()
-    original.rename(task)
+    task = task_folder(tmp_path, pillar="build")
     settings = task / "task.toml"
     settings.write_text('artifacts = [{source = "/workspace", exclude = ["node_modules", "dist", ".git", "chain_context.json"]}]\n'
-                        + settings.read_text().replace('pillar = "concepts"', 'pillar = "build"'))
+                        + settings.read_text())
     config = load_job(job_config(tmp_path, "free"))
     item, = plan([task], config, [], n_attempts=1)["missing"]
     folder = tmp_path / "saved"
@@ -75,6 +72,8 @@ def test_page_judge_changes_keep_the_judge_only_regrade(tmp_path):
     from ethevals.jobs import task_entry
     from ethevals.regrade import regrade_options
     task, config, row = saved_page(tmp_path)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text() + 'explained = "judgment"\n')
     add_judge(task)
     old = task_entry(task, config)
     row.update(**{key: old[key] for key in ("checks_hash", "checks_inputs")}, judge={"model": "saved"})

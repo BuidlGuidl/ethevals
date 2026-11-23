@@ -3,6 +3,8 @@ import json
 import math
 from pathlib import Path
 
+ENTRY_CHECKS = frozenset({"compile", "answered", "no_answer", "report_written"})
+
 
 def validate_checks(checks: object) -> dict:
     if not isinstance(checks, dict) or not checks or any(

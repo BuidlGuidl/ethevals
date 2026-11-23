@@ -12,6 +12,10 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+tob_tara_4_duplicate_signatures = "judgment"
+tob_tara_6_apply_state_reentrancy = "judgment"
+
 [agent]
 timeout_sec = 3600
 

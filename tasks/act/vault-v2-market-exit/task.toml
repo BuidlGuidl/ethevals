@@ -10,6 +10,12 @@ keywords = ["ethereum", "morpho", "vault", "fork"]
 pillar = "act"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+test_vaultIsOutForGood = "gate"
+test_strangerCannotReopenIt = "gate"
+test_depositorsStillServed = "gate"
+test_nothingElseChanged = "gate"
+
 [verifier]
 environment_mode = "shared"
 user = "root"

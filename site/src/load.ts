@@ -14,13 +14,14 @@ const catalogSchema = z.object({
   tasks: z.array(z.object({
     id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
     instruction_hash: z.string().min(1), environment_hash: z.string().min(1), checks_hash: z.string().min(1),
+    checks: z.record(z.string().refine((name) => name.trim().length > 0), z.enum(["gate", "judgment"])).optional(),
     area: z.string().trim().min(1).nullish(), layer: z.enum(layers).nullish(),
     description: z.string().min(1), instruction: z.string().min(1),
     modes: z.array(z.enum(["vanilla", "internet", "skills"])).min(1),
   })),
 });
 
-export function loadCatalog(filename: string): { evals: Eval[]; skills_hash: string; models: string[]; n_attempts: number } {
+export function loadCatalog(filename: string) {
   try {
     const catalog = catalogSchema.parse(JSON.parse(readFileSync(filename, "utf8")));
     return {

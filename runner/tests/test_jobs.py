@@ -20,14 +20,15 @@ def job_config(tmp_path, paid_by="plan"):
     return path
 
 
-def task_folder(tmp_path):
-    task = tmp_path / "tasks/concepts/question"
+def task_folder(tmp_path, pillar="concepts"):
+    task = tmp_path / "tasks" / pillar / "question"
     for name in ["environment", "tests", "solution"]:
         (task / name).mkdir(parents=True)
     (task / "task.toml").write_text(
         'schema_version = "1.3"\n[task]\nname = "buidlguidl/question"\n'
-        'description = "Check a reply."\n[metadata]\npillar = "concepts"\n'
-        'modes = ["internet"]\n')
+        f'description = "Check a reply."\n[metadata]\npillar = "{pillar}"\n'
+        'modes = ["internet"]\n'
+        + ('\n[metadata.checks]\n' if pillar in {"build", "act"} else ""))
     (task / "instruction.md").write_text("Name a unit.\n")
     (task / "environment/Dockerfile").write_text("FROM debian:bookworm-slim\n")
     (task / "tests/test.sh").write_text("#!/bin/sh\nexit 0\n")
@@ -438,13 +439,10 @@ def test_catalog_carries_the_task_area(tmp_path):
 
 
 def build_task_folder(tmp_path, layer):
-    task = task_folder(tmp_path)
-    build = task.parent.parent / "build/question"
-    build.parent.mkdir()
-    task.rename(build)
-    settings = build / "task.toml"
-    settings.write_text(settings.read_text().replace('pillar = "concepts"', f'pillar = "build"\nlayer = {layer}'))
-    return build
+    task = task_folder(tmp_path, pillar="build")
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace('pillar = "build"', f'pillar = "build"\nlayer = {layer}'))
+    return task
 
 
 def test_catalog_carries_a_build_tasks_layer(tmp_path):
@@ -454,6 +452,21 @@ def test_catalog_carries_a_build_tasks_layer(tmp_path):
     assert result.returncode == 0, result.stderr
     entry = json.loads((output / "catalog.json").read_text())["tasks"][0]
     assert (entry["id"], entry["layer"]) == ("build/question", "frontend")
+
+
+def test_catalog_carries_check_tags(tmp_path):
+    from ethevals.jobs import write_catalog
+
+    task = task_folder(tmp_path, pillar="act")
+    (task / "tests/Transfer.t.sol").write_text("function test_send() public {}\nfunction test_rounding() public {}\n")
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text() + 'test_send = "gate"\ntest_rounding = "judgment"\n')
+    output = tmp_path / "catalog"
+
+    write_catalog([task], output)
+
+    entry, = json.loads((output / "catalog.json").read_text())["tasks"]
+    assert entry["checks"] == {"test_send": "gate", "test_rounding": "judgment"}
 
 
 @pytest.mark.parametrize("layer", ['"pages"', '""', '["contracts"]'])

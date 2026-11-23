@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
-import { loadBoard, parseRows } from "../src/load";
+import { loadBoard, loadCatalog, parseRows } from "../src/load";
 import { siteRoot } from "../src/paths";
 import type { Row } from "../src/rows";
 
@@ -19,7 +19,7 @@ const paid: Row = {
   total_seconds: 8, working_seconds: 7, trajectory_url: null, limit: null,
 };
 
-function fixture(t: TestContext) {
+function fixture(t: TestContext, tasks: unknown[] = [evaluation]) {
   const scratch = path.join(siteRoot, ".test-tmp");
   mkdirSync(scratch, { recursive: true });
   const root = mkdtempSync(path.join(scratch, "loader-"));
@@ -28,13 +28,27 @@ function fixture(t: TestContext) {
   mkdirSync(path.join(site, ".catalog"), { recursive: true });
   mkdirSync(path.join(root, "tasks"));
   mkdirSync(path.join(root, "results"));
-  writeFileSync(path.join(site, ".catalog/catalog.json"), JSON.stringify({ skills_hash: "current-pack", n_attempts: 3, models: ["model-a"], tasks: [evaluation] }));
+  const catalog = path.join(site, ".catalog/catalog.json");
+  writeFileSync(catalog, JSON.stringify({ skills_hash: "current-pack", n_attempts: 3, models: ["model-a"], tasks }));
   const rows = path.join(root, "results/rows.jsonl");
-  return { root, site, rows, write: (values: Partial<Row>[]) => {
+  return { root, site, rows, catalog, write: (values: Partial<Row>[]) => {
     writeFileSync(rows, "\n" + values.map((value) => JSON.stringify({ ...paid,
       skills_hash: value.mode === "skills" ? "current-pack" : null, ...value })).join("\n"));
   } };
 }
+
+test("the catalog preserves Build check tags and accepts Concepts without tags", (t) => {
+  const checks = { test_transfer: "gate", test_rounding: "judgment" };
+  const f = fixture(t, [evaluation, { ...evaluation, id: "build/token", pillar: "build", checks }]);
+  const [concepts, build] = loadCatalog(f.catalog).evals;
+  assert.equal(concepts.checks, undefined);
+  assert.deepEqual(build.checks, checks);
+});
+
+test("the catalog rejects unknown check tag values", (t) => {
+  const f = fixture(t, [{ ...evaluation, id: "act/send-token", pillar: "act", checks: { transfer: "bonus" } }]);
+  assert.throws(() => loadCatalog(f.catalog), /cannot load task catalog/);
+});
 
 for (const [name, change, message] of [
   ["undeclared mode", { mode: "vanilla", agent: null }, "does not declare this mode"],

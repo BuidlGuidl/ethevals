@@ -11,6 +11,12 @@ keywords = ["ethereum", "solidity", "governance"]
 pillar = "build"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+test_quorumCountsTheWholeSupply = "gate"
+test_theDelayGuardsTheMoney = "gate"
+test_lateVotesExtendTheVote = "judgment"
+test_snapshotCanRunIt = "judgment"
+
 [verifier]
 environment_mode = "separate"
 user = "root"

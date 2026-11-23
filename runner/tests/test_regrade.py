@@ -350,12 +350,7 @@ def test_changed_artifacts_plan_a_rerun_because_saved_work_lacks_them(tmp_path):
 
 
 def test_changed_browser_or_chain_checks_plan_fresh_trials(tmp_path):
-    task = task_folder(tmp_path)
-    settings = task / "task.toml"
-    settings.write_text(settings.read_text().replace('pillar = "concepts"', 'pillar = "build"'))
-    destination = tmp_path / "tasks/build/question"
-    destination.parent.mkdir()
-    task.rename(destination)
+    destination = task_folder(tmp_path, pillar="build")
     config = load_job(job_config(tmp_path, "api_key"))
     old, = plan([destination], config, [], n_attempts=1)["missing"]
     (destination / "tests/browser.mjs").write_text("Changed browser checks.\n")

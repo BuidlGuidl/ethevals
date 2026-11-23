@@ -12,6 +12,14 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+c1_reserve_feed_no_access_control = "judgment"
+c2_zap_repay_pays_twice = "judgment"
+h1_full_repayment_reverts = "judgment"
+h2_zapper_missing_approvals = "judgment"
+h3_reserve_bound_per_call = "judgment"
+h4_sweth_twap_history = "judgment"
+
 [agent]
 timeout_sec = 3600
 

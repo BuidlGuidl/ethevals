@@ -11,6 +11,14 @@ keywords = ["ethereum", "solidity", "lending"]
 pillar = "build"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+test_marketWorksAndBooksBalance = "judgment"
+test_interestChargedBeforeTheAction = "judgment"
+test_strayTokensChangeNothing = "judgment"
+test_roundingFavoursMarket = "judgment"
+test_liquidationFinishes = "gate"
+test_badDebtWrittenOffAgainstLenders = "judgment"
+
 [verifier]
 environment_mode = "separate"
 user = "root"

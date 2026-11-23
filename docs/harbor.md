@@ -126,6 +126,9 @@ RewardKit alone writes `reward.json` and `reward-details.json` under `/logs/veri
 Rows and free checks read those files; additional reward dimensions remain available.
 The free check requires every oracle check to pass and at least one nop check to fail.
 Both runs must report the same check names.
+For Build and Act tasks, each reported check needs a tag in `[metadata.checks]`, except entry checks.
+Lint checks names from judge criteria. The free check skips the criteria themselves.
+If a host variable is unset, the free check skips both runs for that task.
 Missing records, execution errors, or rewards that disagree with checks fail the command.
 
 Concepts task verifiers read the last assistant message in `/logs/agent/trajectory.json`, using Harbor's ATIF format.

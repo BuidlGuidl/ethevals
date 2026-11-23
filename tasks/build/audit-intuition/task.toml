@@ -12,6 +12,13 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+tob_intuition_10_triple_hash_collision = "judgment"
+tob_intuition_12_atom_equity_base = "judgment"
+tob_intuition_13_atom_equity_protocol_fee = "judgment"
+tob_intuition_20_min_share_assets = "judgment"
+tob_intuition_6_create_atom_protocol_fee = "judgment"
+
 [agent]
 timeout_sec = 3600
 
