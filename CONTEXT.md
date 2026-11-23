@@ -138,6 +138,17 @@ The wall-clock time an agent or verifier gets. Harbor's default applies unless a
 **Check**:
 One named pass-or-fail result about a trial, with a one-line reason. A test check takes its test function's name, and a criteria check takes its criterion's name.
 
+**Gate check**:
+A check the trial has to pass. If a gate check fails, the trial scores 0%. A check is a gate check when the instruction asks for what it tests.
+_Avoid_: asked check
+
+**Judgment check**:
+A check on something an experienced Ethereum developer gets right without being told, because getting it wrong loses money, locks users out, or ships a worse product. Each one is backed by a real incident, an audit finding, or what the standard library or the protocol's own app does. On an audit task, each known finding is a judgment check.
+_Avoid_: optional check
+
+**Entry check**:
+A check that only shows something was handed in: `compile`, `answered`, `no_answer`, or `report_written`. A failed one makes the trial score 0%, and a passed one stays out of the count. Authors don't tag it.
+
 **Reward**:
 Harbor's result for a trial, written by RewardKit. `reward` is 1 only when every check passes. A task can add other reward keys.
 
