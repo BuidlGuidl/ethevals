@@ -230,8 +230,9 @@
   .check-group + .check-group { @apply border-t border-border; }
   .check-group h4, .check-group summary { @apply px-4 py-2; }
   .check-group h4 { @apply flex flex-wrap items-baseline justify-between gap-2 bg-tint font-semibold; }
-  .check-group h4 span { @apply text-xs font-normal text-muted; }
-  .check-group-note { @apply border-t border-border px-4 py-2 text-xs text-muted; }
+  .check-group h4 span { @apply inline-flex items-center gap-2 text-xs font-normal text-muted; }
+  .info-hint { @apply inline-grid size-5 place-items-center text-muted; }
+  .info-hint:hover, .info-hint:focus-visible { @apply text-ink; }
   .entry-check { @apply flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2; }
   .entry-check small { @apply text-xs text-muted; }
   .check-group summary { @apply cursor-pointer border-t border-border text-xs text-muted; }
@@ -253,8 +254,8 @@
   .run-switcher button { @apply bg-sheet px-3 py-2 text-xs; }
   .run-switcher button:hover { @apply bg-tint; }
   .run-switcher button[aria-pressed="true"] { @apply bg-accent text-page; }
-  .run-switcher button:has(.trial-score) { @apply inline-flex items-center gap-2; }
-  .run-switcher button[aria-pressed="true"]:has(.trial-score) { @apply bg-tint text-ink shadow-[inset_0_-2px_var(--color-accent)]; }
+  .run-switcher button:has(.run-dot) { @apply inline-flex items-center gap-2; }
+  .run-switcher button[aria-pressed="true"]:has(.run-dot) { @apply bg-tint text-ink shadow-[inset_0_-2px_var(--color-accent)]; }
   .run-stats { @apply grid grid-cols-4 gap-px border border-border bg-border; }
   .run-stats > div { @apply min-w-0 bg-sheet px-3 py-3; }
   .run-stats dt { @apply text-[10px] uppercase tracking-[.06em] text-muted; }

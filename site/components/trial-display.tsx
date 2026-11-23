@@ -63,6 +63,8 @@ export function TrialLegend() {
   </p>;
 }
 
+export const trialScoreText = (task: string, trial: Trial) => scoreText(trialSummary(task, trial));
+
 export function TrialScore({ task, trial }: { task: string; trial: Trial }) {
   const summary = trialSummary(task, trial);
   return <span className="trial-score"><TrialDot state={summary.state} /><span>{scoreText(summary)}</span></span>;

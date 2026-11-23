@@ -130,8 +130,11 @@ test("every level shows a trial as a percentage, with one dot and the reason in 
     assert.ok(trialsTable.includes(`${dot}<span>${score}</span>`), note);
     assert.ok(trialsTable.includes(`>${note}</span></td>`), note);
     const heading = detail.match(/<h1[^>]*class="run-heading">(.*?)<\/h1>/s)?.[1];
-    assert.ok(heading?.includes(`${dot}<span>${score}</span>`), note);
-    assert.ok(detail.split('class="run-switcher"')[1].includes(`${dot}<span>${score}</span>`), note);
+    assert.ok(heading?.includes(`<span class="trial-heading-score">${score}</span>`), note);
+    assert.ok(!heading?.includes("run-dot"), note);
+    const switcher = detail.split('class="run-switcher"')[1].split("</div>")[0];
+    assert.ok(switcher.includes(dot), note);
+    assert.doesNotMatch(switcher.replace(/<[^>]*>/g, ""), /%|Error/, note);
     assert.doesNotMatch(taskList + trialsTable + detail, / found/);
   }
 });
@@ -155,13 +158,14 @@ test("the trial view puts the entry check on its own line so the groups add up t
   const trialView = drawerFor(governor, [row(governor.id, governorChecks)])({ evaluation: governor, run: 1 });
   assert.match(trialView, /<dt>Checks<\/dt><dd>3 of 4<\/dd>/);
   assert.match(trialView, /class="entry-check">.*?<b>Compiled<\/b>/s);
-  assert.match(trialView, /Gate checks <span>2 of 2<\/span><\/h4><p class="check-group-note">Did the agent do what the instruction asked for\? Any failure sets the trial score to 0%\.<\/p>/);
-  assert.match(trialView, /Judgment checks <span>1 of 2<\/span>.*?<code>test_lateVotesExtendTheVote<\/code><p>Failed\.<\/p>.*?<details><summary>Passed \(1\)<\/summary>.*?<code>test_snapshotCanRunIt<\/code>/s);
+  assert.match(trialView, /Gate checks <span>2 of 2<button type="button" class="info-hint" aria-label="Gate checks: Did the agent do what the instruction asked for\? Any failure sets the trial score to 0%\."/);
+  assert.doesNotMatch(trialView, /<p[^>]*>Did the agent/);
+  assert.match(trialView, /Judgment checks <span>1 of 2<button.*?<\/span>.*?<code>test_lateVotesExtendTheVote<\/code><p>Failed\.<\/p>.*?<details><summary>Passed \(1\)<\/summary>.*?<code>test_snapshotCanRunIt<\/code>/s);
   assert.doesNotMatch(trialView, /<code>compile<\/code>/);
 
   const auditView = drawerFor(audit, [row(audit.id, auditChecks)])({ evaluation: audit, run: 1 });
   assert.match(auditView, /<b>Report written<\/b>/);
-  assert.match(auditView, /Known findings <span>2 of 5<\/span><\/h4><p class="check-group-note">Did the agent catch the issues from the public audit report\? Each check counts toward the trial score\.<\/p>/);
+  assert.match(auditView, /Known findings <span>2 of 5<button type="button" class="info-hint" aria-label="Known findings: Did the agent catch the issues from the public audit report\? Each check counts toward the trial score\."/);
   assert.doesNotMatch(auditView, /Gate checks|Judgment checks/);
 
   const noAnswer = drawerFor(audit, [row(audit.id, { no_answer: { passed: false, reason: "No answer twice." } })])({ evaluation: audit, run: 1 });
@@ -170,5 +174,5 @@ test("the trial view puts the entry check on its own line so the groups add up t
 
   const conceptsView = drawerFor(concepts, [row(concepts.id, { answered: pass, target: fail })])({ evaluation: concepts, run: 1 });
   assert.match(conceptsView, /<h4>Checks <span>0 of 1<\/span><\/h4>/);
-  assert.doesNotMatch(conceptsView, /check-group-note/);
+  assert.doesNotMatch(conceptsView, /info-hint/);
 });

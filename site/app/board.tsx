@@ -13,9 +13,9 @@ import { Logo } from "../components/logo";
 import { ModeToggle } from "../components/mode-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { TooltipProvider } from "../components/ui/tooltip";
-import { Score, Hint, formulasFor, heat, percent, money } from "../components/scores";
+import { Score, Hint, InfoHint, formulasFor, heat, percent, money } from "../components/scores";
 import { ScoringToggle, scoringParam, useScoredBoard } from "../components/scoring-toggle";
-import { entryLabel, isAudit, taskHint, trialHint, TrialDots, TrialLegend, TrialNote, TrialScore } from "../components/trial-display";
+import { entryLabel, isAudit, taskHint, trialHint, trialScoreText, trialSummary, TrialDot, TrialDots, TrialLegend, TrialNote, TrialScore } from "../components/trial-display";
 import { updateQuery, useQuery } from "../components/url-state";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
@@ -110,8 +110,7 @@ function CheckGroup({ label, note, checks }: { label: string; note?: string; che
   const failed = checks.filter(([, check]) => !check.passed);
   const passed = checks.filter(([, check]) => check.passed);
   return <section className="check-group">
-    <h4>{label} <span>{passed.length} of {checks.length}</span></h4>
-    {note && <p className="check-group-note">{note}</p>}
+    <h4>{label} <span>{passed.length} of {checks.length}{note && <InfoHint label={label} text={note} />}</span></h4>
     {failed.length > 0 && <CheckList checks={failed} />}
     {passed.length > 0 && <details><summary>Passed ({passed.length})</summary><CheckList checks={passed} /></details>}
   </section>;
@@ -133,7 +132,7 @@ function RunView({ task, pillar, trial, trials, gated, onRun }: {
   return <>
     <div className="run-switcher" role="group" aria-label="Trials">{trials.map((run) => gated ? <button key={run.trial}
       aria-pressed={run.trial === trial.trial} title={trialHint(task, run)} onClick={() => onRun(run.trial)}>
-      Trial {run.trial} <TrialScore task={task} trial={run} /></button> : <button key={run.trial}
+      Trial {run.trial} <TrialDot state={trialSummary(task, run).state} /></button> : <button key={run.trial}
       className={run.status === "passed" ? "positive" : run.status === "failed" ? "negative" : "caution"}
       aria-pressed={run.trial === trial.trial} aria-label={`Trial ${run.trial}: ${run.status}`} title={missedHint(run)} onClick={() => onRun(run.trial)}>
       Trial {run.trial} {run.status === "passed" ? "✓" : run.status === "failed" ? "✗" : "!"}</button>)}</div>
@@ -182,7 +181,7 @@ export function Detail({ selection, data, domain, onSelect }: {
   const scope = pillar ? table.pillars[pillar].cells[key] : summary;
   return <div className="detail-body">
     <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial && evaluation ? <>
-      Trial {trial.trial} of {trials.length} {gated ? <span className="trial-heading-score"><TrialScore task={evaluation.id} trial={trial} /></span> : <Verdict trial={trial} />}
+      Trial {trial.trial} of {trials.length} {gated ? <span className="trial-heading-score">{trialScoreText(evaluation.id, trial)}</span> : <Verdict trial={trial} />}
     </> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
       {trial && <p>{evaluation!.title}</p>}
       <Configuration agent={agent} /><p className="muted">{modeNames[mode]}</p>
