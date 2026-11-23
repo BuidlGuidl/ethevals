@@ -110,6 +110,11 @@
   .score-cell:hover { box-shadow: inset 0 0 0 2px var(--color-accent); }
   .score-cell small { @apply absolute bottom-1 right-2 text-[10px] font-medium; }
   .score-cell[data-empty="true"] { @apply bg-transparent text-dim; }
+  .score-wrap { @apply relative; }
+  .unscored-info { @apply absolute right-1.5 top-1.5 flex text-amber; cursor: help; }
+  .unscored-info svg { @apply h-5 w-5; }
+  .matrix .unscored-info { @apply right-1 top-1; }
+  .matrix .unscored-info svg { @apply h-3.5 w-3.5; }
   .table-note { @apply border-t border-border px-4 py-3 text-[11px] text-muted; }
   .read-note { @apply max-w-[1100px] border-t border-border pt-4 text-muted; }
   .read-note b { @apply text-ink; }

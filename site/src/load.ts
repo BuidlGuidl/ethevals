@@ -108,5 +108,5 @@ export function loadBoard(env: Record<string, string | undefined> = process.env,
   const rows = exists ? parseRows(readFileSync(filename, "utf8"), filename, evaluations) : [];
   const shown = currentRows(rows, catalog);
   console.log(`${filename}${exists ? "" : " (missing; empty board)"}: ${rows.length} read, ${shown.length} current, ${rows.length - shown.length} stale.`);
-  return buildBoard(evaluations, shown, demo);
+  return buildBoard(evaluations, shown, demo, catalog.n_attempts);
 }

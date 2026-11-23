@@ -13,7 +13,7 @@ import { Logo } from "../components/logo";
 import { ModeToggle } from "../components/mode-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { TooltipProvider } from "../components/ui/tooltip";
-import { Score, Hint, formulas, heat, percent, money } from "../components/scores";
+import { Score, Hint, Unscored, unscored, formulas, heat, percent, money } from "../components/scores";
 import { updateQuery, useQuery } from "../components/url-state";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
@@ -200,6 +200,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
                   formula={key === "overall" ? formulas.overall : formulas.pillar}
                   label={`${key === "overall" ? "Overall" : names[key]}, ${agentLabel(agent)}`}
                   empty={key !== "overall" && table.pillars[key].cells[agentKey(agent)].state === "empty" ? "No tasks yet" : "No trials yet"}
+                  missing={key === "overall" ? table.summaries[agentKey(agent)].missing : table.pillars[key].cells[agentKey(agent)].missing}
                   onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} /></td>)}
             </tr>)}</tbody></table></div>{mode === "skills" && <div className="table-note">+pp is the change over Internet.</div>}</div> :
         <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current tasks. Browse the task catalog below.</p></div>}
@@ -220,9 +221,9 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
                 return <td key={agentKey(agent)}>{cell.state === "na" || cell.score === null ?
                   <span className="matrix-cell" data-empty title={emptyTrialLabel(cell)}>–</span> :
-                  <Hint text={formulas.eval}><button className="matrix-cell" style={heat(cell.score)}
-                    aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} trials passed. Open details.`}
-                    onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{cell.passed}/{cell.total}</button></Hint>}</td>;
+                  <div className="score-wrap"><Hint text={formulas.eval}><button className="matrix-cell" style={heat(cell.score)}
+                    aria-label={`${data.evaluations[entry.id].title}, ${modelLabel(agent.model)}: ${cell.passed} of ${cell.total} trials passed.${cell.missing ? ` ${unscored(cell.missing)}` : ""} Open details.`}
+                    onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{cell.passed}/{cell.total}</button></Hint>{cell.missing > 0 && <Unscored count={cell.missing} />}</div>}</td>;
               })}
             </tr>)}
           </Fragment>)}</tbody></table></div><div className="table-note">Trials passed per task. Click a scored cell for its instruction and trials. Errors are excluded from counts.</div></div>

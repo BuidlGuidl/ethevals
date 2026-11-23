@@ -66,6 +66,24 @@ test("a score counts passed trials and excludes errors, while retaining their de
   assert.equal(cell.trials[3].error_reason, "Sandbox stopped.");
 });
 
+test("planned trials without a score are counted and marked on the board", () => {
+  const tasks: Eval[] = [evaluation, { ...evaluation, id: "build/token", title: "Token", pillar: "build" },
+    { ...evaluation, id: "build/page", title: "Page", pillar: "build" }, { ...evaluation, id: "act/swap", title: "Swap", pillar: "act", modes: ["vanilla"] }];
+  const data = buildBoard(tasks, [row(), row({ trial: 2, ...failure }),
+    row({ task_id: "build/token" }), row({ task_id: "build/token", trial: 2, ...error })], false, 2);
+  const table = data.tables.internet, key = agentKey(agent);
+  const cells = (pillar: "concepts" | "build" | "act") => table.pillars[pillar].evals.map((entry) => entry.cells[key].missing);
+  // An error and a trial that never ran both count. A mode the task does not declare plans nothing.
+  assert.deepEqual([cells("concepts"), cells("build"), cells("act")], [[0], [1, 2], [0]]);
+  assert.deepEqual([table.pillars.concepts.cells[key].missing, table.pillars.build.cells[key].missing, table.summaries[key].missing], [0, 3, 3]);
+  assert.equal(buildBoard(tasks, [row()]).tables.internet.summaries[key].missing, 0);
+  const page = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }));
+  // Overall, Build, and the one scored Build task carry the icon. The unrun task keeps its dash.
+  assert.deepEqual([...page.matchAll(/class="unscored-info" role="img" aria-label="([^"]+)"/g)].map((match) => match[1]),
+    ["3 trials have no score yet.", "3 trials have no score yet.", "1 trial has no score yet."]);
+  assert.ok(page.includes('title="No trials yet">–</span>'));
+});
+
 test("unsupported, unrun, and failed cells have distinct states", () => {
   const naBoard = buildBoard([{ ...evaluation, modes: ["vanilla"] }, { ...evaluation, id: "concepts/b" }], [row({ task_id: "concepts/b" })]);
   const na = naBoard.tables.internet.pillars.concepts.evals[0].cells[agentKey(agent)];
@@ -117,14 +135,14 @@ test("the knowledge table and its panel data include only declared vanilla tasks
     [row({ mode: "vanilla", agent: null })]);
   assert.deepEqual(board.tables.vanilla.pillars.concepts.evals.map((entry) => entry.id), ["concepts/units"]);
   assert.deepEqual(board.tables.vanilla.pillars.build.cells['["model-a",null,"high"]'],
-    { state: "empty", score: null, passed: 0, total: 0, errors: 0, scoredEvals: 0 });
+    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, scoredEvals: 0 });
   assert.equal(board.tables.internet.pillars.build.evals[0].id, "build/token");
 });
 
 test("a pillar with no declared tasks for a mode differs from an unsupported task", () => {
   const board = buildBoard([evaluation, { ...evaluation, id: "build/check", pillar: "build", modes: ["vanilla"] }], [row()]);
   assert.deepEqual(board.tables.internet.pillars.act.cells[agentKey(agent)],
-    { state: "empty", score: null, passed: 0, total: 0, errors: 0, scoredEvals: 0 });
+    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, scoredEvals: 0 });
   assert.equal(board.tables.internet.pillars.build.cells[agentKey(agent)].state, "empty");
   assert.equal(board.tables.internet.pillars.build.evals[0].cells[agentKey(agent)].state, "na");
   assert.equal(board.tables.internet.pillars.concepts.cells[agentKey(agent)].score, 1);
