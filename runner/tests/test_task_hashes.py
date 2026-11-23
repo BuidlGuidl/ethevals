@@ -21,6 +21,10 @@ def test_check_tags_leave_all_three_hashes_unchanged(tmp_path):
     for tag in ("gate", "judgment"):
         settings.write_text(original + f'\n[metadata.checks]\ncheck = "{tag}"\n')
         assert task_hashes(task, judge) == before
+    settings.write_text(original + '\n[metadata.scoring]\ncheck = "gate"\n')
+    changed = task_hashes(task, judge)
+    assert changed["environment_hash"] != before["environment_hash"]
+    assert (changed["instruction_hash"], changed["checks_hash"]) == (before["instruction_hash"], before["checks_hash"])
 
 
 def test_judge_tools_in_checks_leave_agent_hashes_and_shared_pins_unchanged(tmp_path):

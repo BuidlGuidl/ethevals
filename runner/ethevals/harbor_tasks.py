@@ -238,6 +238,7 @@ async def free_check(paths: list[Path], output: Path) -> None:
         return
     originals = {}
     tags = {}
+    criteria = {}
     for path in available:
         staged = output / "tasks" / path.parent.name / path.name
         shutil.copytree(path, staged)
@@ -245,6 +246,8 @@ async def free_check(paths: list[Path], output: Path) -> None:
         if path.parent.name in {"build", "act"}:
             tags[path] = Task(staged).config.metadata["checks"]
         judges = task_judges(staged)
+        # Criteria never run here, so remember their names before the judge files go.
+        criteria[path] = {item.name for judge in judges.values() for item in judge.criterion}
         if judges:
             print(f"{path}: criteria skipped in the free check; the judge needs a model call.", flush=True)
             for file in judges:
@@ -280,6 +283,8 @@ async def free_check(paths: list[Path], output: Path) -> None:
             path = originals[Path(result["config"]["task"]["path"]).resolve()]
             if path in tags and (missing := checks.keys() - ENTRY_CHECKS - tags[path].keys()):
                 raise ValueError(f"{checks_path}: {path}: missing check tags: {', '.join(sorted(missing))}")
+            if path in tags and (unknown := tags[path].keys() - checks.keys() - criteria[path]):
+                raise ValueError(f"{checks_path}: {path}: unknown check tags: {', '.join(sorted(unknown))}")
             if expected:
                 names[path] = set(checks)
             elif set(checks) != names.get(path):

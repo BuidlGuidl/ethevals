@@ -50,9 +50,9 @@ Had the quorum check failed, the trial score would be 0%.
 - **Each task tags its own checks** in `task.toml`, under `[metadata.checks]`, as `check name = "gate"` or `check name = "judgment"`.
 - **Every Build and Act check has a tag.** An untagged check has no default. Concepts tasks have no table.
 - **The tags stay out of the instruction, environment, and checks hashes.** A tag never changes whether a check passed. It only changes how the saved results add up, so no saved result goes stale. [ADR 0030](0030-regrade-from-saved-check-output.md) kept its statement inside `tests/` because that statement is about what the checks decide. A tag is not.
-- **Later scoring settings go under `metadata.checks` too,** so the one exemption covers them. Any other new key in `task.toml` changes the environment hash and reruns the task.
+- **Only this one table is exempt.** Any other new key in `task.toml` changes the environment hash and reruns the task, so a later scoring setting needs its own decision.
 - **Lint checks the tags.** It reads Forge test names and judge criteria from the task's files. It fails on a missing tag, a tag on an entry check, and a table on a Concepts task. Where those files name every check, it also fails on a tag for a check the task does not have.
-- **The free check covers the names lint cannot read.** A custom verifier's check names only appear when it runs, so the free check fails when a run reports an untagged check.
+- **The free check covers the names lint cannot read.** A custom verifier's check names only appear when it runs. The free check fails when a run reports an untagged check, and when a tag matches no reported check and no criterion.
 - **Entry checks are a fixed list of names in shared code.** The tools that write them are not changed.
 
 ## Where the score is worked out
@@ -80,5 +80,4 @@ The board keeps its count until its own change lands.
 - Harbor Hub shows pass or fail for a trial the board scores as a percentage.
 - Editing a tag changes old scores with no new result row. Only the task's history shows it.
 - Check names are written twice, in the tests and in `task.toml`.
-- For a custom verifier, a tag for a check that no run reports can pass lint and the free check.
-- The free check skips a task whose host variables are unset, so its custom check names are only checked where those variables are set.
+- The free check skips a task whose host variables are unset. For those tasks a custom verifier's check names, and a tag for a check that no longer exists, are only checked where the variables are set.

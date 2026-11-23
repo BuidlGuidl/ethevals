@@ -139,7 +139,7 @@ The wall-clock time an agent or verifier gets. Harbor's default applies unless a
 One named pass-or-fail result about a trial, with a one-line reason. A test check takes its test function's name, and a criteria check takes its criterion's name.
 
 **Gate check**:
-A check the trial has to pass. If a gate check fails, the trial scores 0%. A check is a gate check when the instruction asks for what it tests.
+A check on something the instruction asks for. The trial has to pass it: if a gate check fails, the trial scores 0%.
 _Avoid_: asked check
 
 **Judgment check**:

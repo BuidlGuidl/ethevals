@@ -239,16 +239,19 @@ def test_export_card_explains_the_required_judge_key(tmp_path):
     assert (output / "tasks/concepts--question/tests/judge.toml").read_bytes() == (task / "tests/judge.toml").read_bytes()
 
 
-@pytest.mark.parametrize("tag_observed_check", [True, False])
-def test_free_check_skips_nested_judges_and_requires_tags_for_reported_checks(tmp_path, monkeypatch, tag_observed_check):
+@pytest.mark.parametrize("tags,error", [
+    ('answer = "gate"\n', None),
+    ("", "missing check tags: answer"),
+    ('answer = "gate"\nunseen = "gate"\n', "unknown check tags: unseen"),
+])
+def test_free_check_skips_nested_judges_and_matches_tags_to_reported_checks(tmp_path, monkeypatch, tags, error):
     from harbor.job import Job
     from rewardkit.runner import run as run_rewardkit
     from ethevals.harbor_tasks import free_check
 
     task = task_folder(tmp_path, pillar="build")
     settings = task / "task.toml"
-    settings.write_text(settings.read_text() + 'explained = "judgment"\n'
-                        + ('answer = "gate"\n' if tag_observed_check else 'unseen = "gate"\n'))
+    settings.write_text(settings.read_text() + 'explained = "judgment"\n' + tags)
     add_judge(task, key_env="CLAUDE_CODE_OAUTH_TOKEN")
     group = task / "tests/judgment"
     group.mkdir()
@@ -281,8 +284,8 @@ def test_free_check_skips_nested_judges_and_requires_tags_for_reported_checks(tm
 
     monkeypatch.setattr(Job, "create", create)
     lint_task(task)
-    if not tag_observed_check:
-        with pytest.raises(ValueError, match="missing check tags: answer"):
+    if error:
+        with pytest.raises(ValueError, match=error):
             asyncio.run(free_check([task], tmp_path / "out"))
         return
     asyncio.run(free_check([task], tmp_path / "out"))
