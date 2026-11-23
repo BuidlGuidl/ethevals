@@ -311,7 +311,7 @@ test("trial details show the selected trial, failed reasons first, and a switche
   assert.ok(passed.includes('<code>answer</code>') && passed.includes("The answer matches."));
   const errored = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: 3 }, onSelect: () => {} }));
   assert.match(errored, /<h1[^>]*>Trial 3 of 3[\s\S]*?>ERROR<\/span><\/h1>/);
-  assert.ok(errored.includes("Sandbox stopped.") && errored.includes("No checks completed.") && errored.includes("This error does not enter the score."));
+  assert.ok(!errored.includes("Sandbox stopped.") && errored.includes("No checks completed.") && errored.includes("Not scored"));
   const allRuns = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: undefined }, onSelect: () => {} }));
   assert.ok(allRuns.includes('<table class="runs-table">') && allRuns.includes('prompt-disclosure'));
   assert.match(allRuns, /class="back-button"[\s\S]*?<\/svg>All pillars/);
@@ -416,4 +416,15 @@ test("the board keeps a listed model and drops a retired model with a current ta
   const html = renderToStaticMarkup(createElement(Board, { data }));
   assert.ok(html.includes("agent-a / model-a. 100%. Open details."));
   assert.equal(html.includes("retired-model"), false);
+});
+
+test("an errored trial says it is not scored and hides the runner's text", () => {
+  const reason = 'Command failed (exit 1): claude --print stdout: {"api_error":"model_requires_usage_credits"}';
+  const data = buildBoard([evaluation], [row(), row({ trial: 2, status: "error", checks: {}, error_kind: "NonZeroAgentExitCodeError", error_reason: reason })]);
+  const drawer = (run: number) => renderToStaticMarkup(createElement(Detail, {
+    data, selection: { evaluation: data.evaluations[evaluation.id], agent, mode: "internet", run }, onSelect: () => {},
+  }));
+  assert.match(drawer(2), /class="trial-error"><h3>.*?Not scored<\/h3><p>This trial ended in an error, so it is left out of the score\.<\/p><\/section>/s);
+  assert.doesNotMatch(drawer(2), /Command failed|NonZeroAgentExitCodeError|class="issue"/);
+  assert.doesNotMatch(drawer(1), /trial-error/);
 });

@@ -140,8 +140,10 @@ function RunView({ task, pillar, trial, trials, gated, onRun }: {
       ["Checks", gated ? counted.total ? `${counted.passed} of ${counted.total}` : "–" : `${checks.filter(([, check]) => check.passed).length} / ${checks.length}`],
       ["Tokens", tokens(trial.total_tokens)], ["Cost", money(trial.cost, 4)], ["Time", duration(trial)],
     ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-    {trial.issue && <p className="issue">{trial.error_kind ?? trial.limit?.type ?? "Trial"}: {trial.issue}</p>}
-    {trial.status === "error" && <p className="caution">This error does not enter the score.</p>}
+    {trial.status === "error" ? <section className="trial-error">
+      <h3><AlertTriangle size={14} aria-hidden="true" />Not scored</h3>
+      <p>This trial ended in an error, so it is left out of the score.</p>
+    </section> : trial.issue && <p className="issue">{trial.error_kind ?? trial.limit?.type ?? "Trial"}: {trial.issue}</p>}
     {trial.status === "failed" && trial.no_answer?.length === 2 && <p className="negative">{trial.no_answer[1].kind === "refused" ? "Refused" : "Empty reply"}</p>}
     {trial.limit && <p className="caution">{trial.limit.type} limit: {trial.limit.limit}{trial.limit.reason ? ` · ${trial.limit.reason}` : ""}</p>}
     <section className="verifier-verdict">

@@ -72,6 +72,7 @@ On audit tasks the second group is Known findings.
 
 Each trial drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.
 No-answer trials say "Refused" or "Empty reply".
+A trial that ended in an error says "Not scored" and that it is left out of the score. The runner's error text is not shown.
 Its trajectory link opens the row's `trajectory_url`.
 Harbor Hub links say "Open full trial on Harbor Hub" and open the public trial page.
 If the Hub upload fails or skips, published rows link to the release's trajectory JSON.
