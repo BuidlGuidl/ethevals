@@ -47,7 +47,8 @@ function EvalList({ table, evaluations, agent, pillar, domain, display, onEval }
     value, entries: table.pillars[value].evals.filter((entry) => entry.cells[key].state !== "na"
       && (!domain || evaluations[entry.id].domain === domain)),
   }));
-  return <div className="eval-list">{groups.filter(({ entries }) => !domain || entries.length).map(({ value, entries }) =>
+  return <div className="eval-list">{display === "marks" && <div className="eval-list-note"><TrialLegend />
+    <p>Open a task to see what each trial missed.</p></div>}{groups.filter(({ entries }) => !domain || entries.length).map(({ value, entries }) =>
     <section key={value} className={`pillar-${value}`}>{!pillar && <h3>{names[value]}</h3>}
       {entries.map((entry) => {
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
@@ -55,7 +56,8 @@ function EvalList({ table, evaluations, agent, pillar, domain, display, onEval }
         const hint = marks ? taskHint(cell, marks) : undefined;
         const row = <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
-          <span className="eval-list-result">{marks ? <><TaskMarks details={marks} /><span className="sr-only">{hint}</span></> : <>
+          <span className="eval-list-result">{marks ? <><TaskMarks details={marks} /><span className="sr-only">{hint}</span>
+            <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)}>{percent(cell.score)}</span></> : <>
           {!display && <span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${trial.status}`).join(", ")}>
             {cell.trials.map((trial) => <span key={trial.trial} className={`run-dot ${trial.status}`} />)}</span>}
           <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cellText(entry.id, cell, display)}</span>

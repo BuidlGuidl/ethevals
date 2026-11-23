@@ -224,6 +224,7 @@
   .eval-list-row { @apply flex min-h-11 w-full items-center gap-3 border-b border-border py-3 text-left; }
   .eval-list-row:hover { @apply bg-tint; }
   .eval-list-result { @apply ml-auto flex items-center gap-3; }
+  .eval-list-note { @apply mb-4 grid gap-2 text-[11px] text-muted; }
   .eval-list-title { @apply grid grow gap-1 text-left; }
   .eval-list-title, .checks li > div { min-width: 0; }
   .eval-list-title small { @apply text-[10px] text-muted; }
