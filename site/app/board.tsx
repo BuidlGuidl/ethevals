@@ -88,8 +88,7 @@ function CheckGroup({ label, note, checks }: { label: string; note?: string; che
   const passed = checks.filter(([, check]) => check.passed);
   return <section className="check-group">
     <h3>{label} <span>{passed.length} of {checks.length}{note && <InfoHint label={label} text={note} />}</span></h3>
-    {failed.length > 0 && <CheckList checks={failed} />}
-    {passed.length > 0 && <details><summary>Passed ({passed.length})</summary><CheckList checks={passed} /></details>}
+    <CheckList checks={[...failed, ...passed]} />
   </section>;
 }
 

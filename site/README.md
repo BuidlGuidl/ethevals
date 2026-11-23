@@ -71,7 +71,7 @@ Cost adds agent and judge API prices, even when a plan paid.
 The drawer task list shows one dot per trial for 100%, some checks missed, 0%, or error.
 The trials table shows the trial score, followed by the check count or the reason a gate check or entry check stopped the trial score at 0%.
 The trial view groups Gate checks and Judgment checks under headings with counts and info notes. Concepts has one Checks group.
-Failed checks show their reasons. Expand the passed checks to read their reasons.
+Each group lists failed checks first, then passed checks, each with its reason.
 A failed entry check appears above the groups. Passed entry checks stay out of the view.
 The trial view also shows cost, payment source, tokens, and elapsed time.
 An errored trial says "Not scored" and explains why it stays out of the score.

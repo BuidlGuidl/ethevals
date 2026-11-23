@@ -21,7 +21,7 @@ export function InfoHint({ label, text }: { label: string; text: string }) {
   return <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent><TooltipTrigger asChild>
     <button type="button" className="info-hint" aria-label={`${label}: ${text}`}
       onClick={(event) => { event.preventDefault(); setOpen(true); }}><Info size={14} aria-hidden="true" /></button>
-  </TooltipTrigger><TooltipContent className="max-w-[min(90vw,900px)]">{text}</TooltipContent></Tooltip>;
+  </TooltipTrigger><TooltipContent className="max-w-80">{text}</TooltipContent></Tooltip>;
 }
 // Sits in the corner of a score that still has planned trials without a score.
 export function Unscored({ count }: { count: number }) {

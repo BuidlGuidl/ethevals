@@ -106,11 +106,12 @@ test("drawer uses all four trial dots, a percentage heading, and a dot-only scor
   assert.doesNotMatch(error, /Provider stopped|class="verifier-verdict"/);
 });
 
-test("check groups name their kinds, fold passed checks, and show the reason for a failed entry", () => {
+test("check groups name their kinds, list failed checks first, and show the reason for a failed entry", () => {
   const details = drawerFor(governor, [row(governor, mixed)])(1);
   assert.match(details, /Gate checks <span>2 of 2<button[^>]*aria-label="Gate checks: Did the agent do what the instruction asked for\? Any failure sets the trial score to 0%\."/);
   assert.match(details, /Judgment checks <span>1 of 2<button[^>]*aria-label="Judgment checks: Did the agent make sound Ethereum decisions beyond the instruction\? Each check counts toward the trial score\."/);
-  assert.match(details, /<code>late_votes<\/code><p>Differs\.<\/p>.*<details><summary>Passed \(1\)<\/summary>.*<code>snapshot<\/code>/s);
+  assert.match(details, /Judgment checks.*<code>late_votes<\/code><p>Differs\.<\/p>.*<code>snapshot<\/code><p>Matches\.<\/p>/s);
+  assert.doesNotMatch(details, /<details|Passed \(/);
   assert.doesNotMatch(details, /<code>compile<\/code>|class="entry-check"/);
   for (const [name, label] of [["compile", "Did not compile"], ["answered", "No answer"],
     ["no_answer", "No answer"], ["report_written", "No report"]]) {

@@ -221,15 +221,13 @@
   .verifier-verdict { @apply border border-border bg-sheet; }
   .verifier-verdict > p { @apply px-4 py-2; }
   .check-group + .check-group { @apply border-t border-border; }
-  .check-group h3, .check-group summary { @apply px-4 py-2; }
+  .check-group h3 { @apply px-4 py-2; }
   .check-group h3 { @apply flex flex-wrap items-baseline justify-between gap-2 bg-tint font-semibold; }
   .check-group h3 span { @apply inline-flex items-center gap-2 text-xs font-normal text-muted; }
   .info-hint { @apply inline-grid size-6 place-items-center text-muted; }
   .info-hint:hover, .info-hint:focus-visible { @apply text-ink; }
   .entry-check { @apply flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border; }
   .entry-check small { @apply text-xs text-muted; }
-  .check-group summary { @apply cursor-pointer border-t border-border text-xs text-muted; }
-  .check-group details[open] summary { @apply border-b border-border; }
   .checks li { @apply flex items-start gap-3 border-b border-border px-4 py-3; }
   .checks li:last-child { border-bottom: 0; }
   .checks p { @apply mt-1 text-xs text-muted; }
