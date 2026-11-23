@@ -1,123 +1,74 @@
 "use client";
 
-import { AlertTriangle, X } from "lucide-react";
 import { checkCounts, checkKind, trialScore } from "../src/scoring";
 import type { EvalCell, Trial } from "../src/board";
-import { heat, percent } from "./scores";
-import { updateQuery } from "./url-state";
+import { percent } from "./scores";
 
-export type TrialDisplay = "marks" | "numbers";
-export const defaultTrialDisplay: TrialDisplay = "marks";
-export const readTrialDisplay = (value: string | null): TrialDisplay =>
-  value === "numbers" || value === "c" ? "numbers" : defaultTrialDisplay;
-export const trialDisplayParam = (display: TrialDisplay) => display === "numbers" ? "&trial-display=numbers" : "";
+export const isAudit = (task: string) => task.startsWith("build/audit-");
 
-export function TrialDisplayControl({ display }: { display: TrialDisplay }) {
-  return <label className="trial-display"><span className="eyebrow">Prototype · Trial display</span>
-    <select value={display} onChange={(event) => {
-      const value = readTrialDisplay(event.target.value);
-      updateQuery({ "trial-display": value === defaultTrialDisplay ? null : value });
-    }}>
-      <option value="marks">Marks</option>
-      <option value="numbers">Numbers</option>
-    </select>
-  </label>;
-}
+const entryLabels: Record<string, [passed: string, failed: string]> = {
+  compile: ["Compiled", "Did not compile"],
+  answered: ["Answered", "No answer"],
+  no_answer: ["Answered", "No answer"],
+  report_written: ["Report written", "No report"],
+};
+export const entryLabel = (name: string, passed: boolean) => entryLabels[name]?.[passed ? 0 : 1] ?? name;
 
-type Mark = { kind: "score"; score: number } | { kind: "gate-check"; score: 0 } | { kind: "error"; score: null };
-
-function trialMark(task: string, trial: Trial): Mark {
-  const score = trialScore(task, trial, "gated");
-  if (score === null) return { kind: "error", score };
-  const { gates } = checkCounts(task, trial.checks);
-  return gates.passed < gates.total ? { kind: "gate-check", score: 0 } : { kind: "score", score };
-}
-
-const checkName = (name: string) =>
+export const checkName = (name: string) =>
   name.replace(/^test_/, "").replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ").toLowerCase();
 
-function markHint(task: string, trial: Trial, mark: Mark) {
-  const label = `Trial ${trial.trial}`;
-  if (mark.kind === "error") return `${label} · Error`;
+type State = "full" | "part" | "zero" | "error";
+export type TrialSummary = { state: State; score: number | null; note: string; stopped: boolean };
 
-  const missed = Object.entries(trial.checks)
-    .filter(([name, check]) => !check.passed && (mark.kind !== "gate-check" || checkKind(task, name) !== "judgment check"))
-    .map(([name]) => checkName(name));
-  const first = missed[0];
-  const names = first && `${first.length > 46 ? first.slice(0, 45) + "…" : first}${missed.length > 1 ? ` +${missed.length - 1}` : ""}`;
-  if (mark.kind === "gate-check") return `${label} · A gate check failed: ${names}`;
-
+// One trial in words: its score, and why when the score is 0%.
+export function trialSummary(task: string, trial: Trial): TrialSummary {
+  const score = trialScore(task, trial, "gated");
+  if (score === null) return { state: "error", score, note: "Error", stopped: false };
+  const failed = Object.entries(trial.checks).filter(([, check]) => !check.passed).map(([name]) => name);
+  const entry = failed.find((name) => checkKind(task, name) === "entry");
+  if (entry) return { state: "zero", score, note: entryLabel(entry, false), stopped: true };
+  const gates = failed.filter((name) => checkKind(task, name) === "gate").map(checkName);
+  if (gates.length) {
+    return { state: "zero", score, note: `Gate check failed: ${gates[0]}${gates.length > 1 ? ` +${gates.length - 1}` : ""}`, stopped: true };
+  }
   const { counted, judgment } = checkCounts(task, trial.checks);
-  if (task.startsWith("build/audit-") && judgment.total) return `${label} · Found ${judgment.passed} of ${judgment.total}`;
-  return `${label} · ${counted.total ? `${counted.passed} of ${counted.total} checks` : percent(mark.score)}${names ? ` · missed ${names}` : ""}`;
+  const note = isAudit(task) && judgment.total ? `${judgment.passed} of ${judgment.total} findings`
+    : counted.total ? `${counted.passed} of ${counted.total} passed` : score === 1 ? "Passed" : "Failed";
+  return { state: score === 1 ? "full" : score === 0 ? "zero" : "part", score, note, stopped: false };
 }
 
-export function trialHint(task: string, trial: Trial, display?: TrialDisplay) {
-  if (display) return markHint(task, trial, trialMark(task, trial));
-  if (trial.status === "error") return "Trial ended in an error";
-  const missed = Object.entries(trial.checks).filter(([, check]) => !check.passed);
-  if (!missed.length) return "No checks missed";
-  const first = checkName(missed[0][0]);
-  return missed.length === 1 && first.length <= 32 ? `Missed ${first}` : `Missed ${missed.length} checks`;
+const scoreText = (summary: TrialSummary) => summary.score === null ? "Error" : percent(summary.score);
+export const trialHint = (task: string, trial: Trial) => {
+  const summary = trialSummary(task, trial);
+  return `Trial ${trial.trial} · ${summary.score === null ? "" : `${scoreText(summary)} · `}${summary.note}`;
+};
+export const taskHint = (task: string, cell: EvalCell) =>
+  [cell.score === null ? "No task score" : `Task score ${percent(cell.score)}`, ...cell.trials.map((trial) => trialHint(task, trial))].join("\n");
+
+export function TrialDot({ state }: { state: State }) {
+  return <span className="run-dot" data-state={state} aria-hidden="true" />;
 }
 
-function TrialMark({ mark, hint }: { mark: Mark; hint?: string }) {
-  return <span className="trial-mark" data-mark={mark.kind} style={heat(mark.score)} title={hint} aria-hidden="true">
-    {mark.kind === "gate-check" && <X size={11} strokeWidth={2.5} />}
-    {mark.kind === "error" && <AlertTriangle size={13} />}
-  </span>;
+export function TrialDots({ task, cell }: { task: string; cell: EvalCell }) {
+  return <span className="run-dots" aria-label={cell.trials.map((trial) => trialHint(task, trial)).join(", ")}>
+    {cell.trials.map((trial) => <TrialDot key={trial.trial} state={trialSummary(task, trial).state} />)}</span>;
 }
 
 export function TrialLegend() {
-  return <p className="trial-legend" aria-label="Trial mark legend">
-    <span><TrialMark mark={{ kind: "score", score: 0.7 }} /> Trial score</span>
-    <span><TrialMark mark={{ kind: "gate-check", score: 0 }} /> Gate check failed</span>
-    <span><TrialMark mark={{ kind: "error", score: null }} /> Error</span>
+  return <p className="trial-legend" aria-label="Trial dot legend">
+    <span><TrialDot state="full" /> 100%</span>
+    <span><TrialDot state="part" /> Some checks missed</span>
+    <span><TrialDot state="zero" /> 0%</span>
+    <span><TrialDot state="error" /> Error</span>
   </p>;
 }
 
-export function taskMarkDetails(task: string, cell: EvalCell) {
-  return cell.trials.map((trial) => ({ trial, mark: trialMark(task, trial) })).sort((a, b) =>
-    (b.mark.score ?? -1) - (a.mark.score ?? -1) ||
-    Number(a.mark.kind === "gate-check") - Number(b.mark.kind === "gate-check") ||
-    a.trial.trial - b.trial.trial,
-  ).map(({ trial, mark }) => ({ number: trial.trial, mark, hint: markHint(task, trial, mark) }));
+export function TrialScore({ task, trial }: { task: string; trial: Trial }) {
+  const summary = trialSummary(task, trial);
+  return <span className="trial-score"><TrialDot state={summary.state} /><span>{scoreText(summary)}</span></span>;
 }
 
-export function TaskMarks({ details }: { details: ReturnType<typeof taskMarkDetails> }) {
-  return <span className="task-marks">{details.map(({ number, mark, hint }) =>
-    <TrialMark key={number} mark={mark} hint={hint} />)}</span>;
-}
-
-function numberText(task: string, score: number, counts: ReturnType<typeof checkCounts>[]) {
-  const findingsPerTrial = counts[0]?.judgment.total ?? 0;
-  if (task.startsWith("build/audit-") && findingsPerTrial > 0 &&
-      counts.every(({ gates, judgment }) => gates.passed === gates.total && judgment.total === findingsPerTrial)) {
-    const found = counts.reduce((sum, { judgment }) => sum + judgment.passed, 0);
-    return `${found} of ${counts.length * findingsPerTrial} found`;
-  }
-  return percent(score);
-}
-
-export function cellText(task: string, cell: EvalCell, display?: TrialDisplay) {
-  if (cell.score === null) return "–";
-  if (display !== "numbers") return display ? percent(cell.score) : `${cell.passed}/${cell.total}`;
-  const counts = cell.trials.filter((trial) => trial.status !== "error").map((trial) => checkCounts(task, trial.checks));
-  return numberText(task, cell.score, counts);
-}
-
-export function GatedTrialScore({ task, trial, display, heading }: {
-  task: string; trial: Trial; display: TrialDisplay; heading?: boolean;
-}) {
-  const mark = trialMark(task, trial);
-  if (display === "numbers") {
-    const text = mark.score === null ? "Error" : numberText(task, mark.score, [checkCounts(task, trial.checks)]);
-    return <span className="trial-score" data-error={mark.score === null || undefined} style={heat(mark.score)}>{text}</span>;
-  }
-  const hint = markHint(task, trial, mark);
-  return <span className={heading ? "trial-heading-score" : undefined}>
-    <TrialMark mark={mark} hint={hint} />
-    {heading ? <span>{mark.score === null ? "Error" : percent(mark.score)}</span> : <span className="sr-only">{hint}</span>}
-    {heading && mark.kind === "gate-check" && <span className="sr-only">Gate check failed</span>}
-  </span>;
+export function TrialNote({ task, trial }: { task: string; trial: Trial }) {
+  const summary = trialSummary(task, trial);
+  return <span className={summary.stopped ? "negative" : summary.state === "error" ? "caution" : undefined}>{summary.note}</span>;
 }

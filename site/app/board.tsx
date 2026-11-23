@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle } from "lucide-react";
 import { agentLabel, modelLabel, modeHints, names, modeNames, unwrapPrompt } from "../src/labels";
-import { pillars, agentKey, scoreSummary, emptyTrialLabel, type BoardData, type Table, type DisplayEval as Eval, type EvalCell, type Pillar, type Mode, type Trial, type Agent } from "../src/board";
+import { pillars, agentKey, scoreSummary, emptyTrialLabel, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Trial, type Agent } from "../src/board";
 import { domains, domainNames, type Domain } from "../src/areas";
 import { DomainFilter, selectDomain } from "../components/domain-filter";
 import { decodeSelection, encodeSelection, type Selection } from "../src/selection";
@@ -15,11 +15,11 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components
 import { TooltipProvider } from "../components/ui/tooltip";
 import { Score, Hint, formulasFor, heat, percent, money } from "../components/scores";
 import { ScoringToggle, scoringParam, useScoredBoard } from "../components/scoring-toggle";
-import { cellText, defaultTrialDisplay, GatedTrialScore, readTrialDisplay, taskMarkDetails, TaskMarks, trialDisplayParam, trialHint, TrialDisplayControl, TrialLegend, type TrialDisplay } from "../components/trial-display";
+import { entryLabel, isAudit, taskHint, trialHint, TrialDots, TrialLegend, TrialNote, TrialScore } from "../components/trial-display";
 import { updateQuery, useQuery } from "../components/url-state";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
-import { checkKind } from "../src/scoring";
+import { checkCounts, checkKind } from "../src/scoring";
 
 type Sort = "overall" | Pillar;
 const verdictLabels = { passed: "PASS", failed: "FAIL", error: "ERROR" };
@@ -34,40 +34,40 @@ const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFr
 const tokens = (value: number) => tokenFormat.format(value).toLowerCase();
 const duration = (trial: Trial) => trial.total_seconds === null ? "–" : `${trial.total_seconds.toFixed(1)}s`;
 
-function taskHint(cell: EvalCell, marks: ReturnType<typeof taskMarkDetails>) {
-  return [cell.score === null ? "No task score" : `Task score ${percent(cell.score)}`, ...marks.map(({ hint }) => hint)].join("\n");
-}
+const missedHint = (trial: Trial) => {
+  if (trial.status === "error") return "Trial ended in an error";
+  const missed = Object.keys(trial.checks).filter((name) => !trial.checks[name].passed);
+  return missed.length ? `Missed ${missed.length} ${missed.length === 1 ? "check" : "checks"}` : "No checks missed";
+};
 
-function EvalList({ table, evaluations, agent, pillar, domain, display, onEval }: {
+function EvalList({ table, evaluations, agent, pillar, domain, gated, onEval }: {
   table: Table; evaluations: BoardData["evaluations"]; agent: Agent; pillar?: Pillar; domain?: Domain;
-  display?: TrialDisplay; onEval: (evaluation: Eval) => void;
+  gated: boolean; onEval: (evaluation: Eval) => void;
 }) {
   const key = agentKey(agent);
   const groups = pillars.filter((value) => !pillar || pillar === value).map((value) => ({
     value, entries: table.pillars[value].evals.filter((entry) => entry.cells[key].state !== "na"
       && (!domain || evaluations[entry.id].domain === domain)),
   }));
-  return <div className="eval-list">{groups.filter(({ entries }) => !domain || entries.length).map(({ value, entries }) =>
+  return <div className="eval-list">{gated && <TrialLegend />}{groups.filter(({ entries }) => !domain || entries.length).map(({ value, entries }) =>
     <section key={value} className={`pillar-${value}`}>{!pillar && <h3>{names[value]}</h3>}
       {entries.map((entry) => {
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
-        const marks = display === "marks" && cell.trials.length ? taskMarkDetails(entry.id, cell) : null;
-        const hint = marks ? taskHint(cell, marks) : undefined;
-        return <button key={entry.id} className="eval-list-row" title={hint} onClick={() => onEval(evaluation)}>
+        return <button key={entry.id} className="eval-list-row" title={gated && cell.trials.length ? taskHint(entry.id, cell) : undefined} onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
-          <span className="eval-list-result">{marks ? <><TaskMarks details={marks} /><span className="sr-only">{hint}</span></> : <>
-          {!display && <span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${trial.status}`).join(", ")}>
+          <span className="eval-list-result">
+          {gated ? <TrialDots task={entry.id} cell={cell} /> : <span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${trial.status}`).join(", ")}>
             {cell.trials.map((trial) => <span key={trial.trial} className={`run-dot ${trial.status}`} />)}</span>}
-          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cellText(entry.id, cell, display)}</span>
-          </>}</span>
+          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cell.score === null ? "–" : gated ? percent(cell.score) : `${cell.passed}/${cell.total}`}</span>
+          </span>
         </button>;
       })}
       {table.pillars[value].cells[key].state === "empty" && <p className="muted">No tasks yet for this mode.</p>}
     </section>)}{domain && !groups.some(({ entries }) => entries.length) && <p className="muted">No tasks yet for this domain and mode.</p>}</div>;
 }
 
-function EvalView({ evaluation, trials, display, onRun }: {
-  evaluation: Eval; trials: Trial[]; display?: TrialDisplay; onRun: (run: number) => void;
+function EvalView({ evaluation, trials, gated, onRun }: {
+  evaluation: Eval; trials: Trial[]; gated: boolean; onRun: (run: number) => void;
 }) {
   const metrics = ["Time", "Tokens", "Cost"];
   return <>
@@ -77,18 +77,18 @@ function EvalView({ evaluation, trials, display, onRun }: {
     <section className="detail-section"><h3>Trials</h3>{trials.length ?
       <div className="table-shell">
         <table className="runs-table"><caption className="sr-only">Trials for this task and configuration. Open a row for checks and trajectories.</caption>
-          <thead><tr><th scope="col">Trial</th><th scope="col">{display ? "Trial score" : "Result"}</th>
-            {!display && <th scope="col">Checks</th>}
+          <thead><tr><th scope="col">Trial</th><th scope="col">{gated ? "Trial score" : "Result"}</th>
+            <th scope="col">Checks</th>
             {metrics.map((label) => <th scope="col" key={label}>{label}</th>)}
             <th scope="col"><span className="sr-only">Open trial</span></th></tr></thead>
           <tbody>{trials.map((trial) => {
             const checks = Object.values(trial.checks), passed = checks.filter((check) => check.passed).length;
-            const hint = trialHint(evaluation.id, trial, display);
-            const label = display ? hint : `Trial ${trial.trial}, ${verdictLabels[trial.status]}, ${passed} of ${checks.length} checks passed`;
+            const hint = gated ? trialHint(evaluation.id, trial) : missedHint(trial);
+            const label = gated ? hint : `Trial ${trial.trial}, ${verdictLabels[trial.status]}, ${passed} of ${checks.length} checks passed`;
             return <tr key={trial.trial}><td><button className="run-open" onClick={() => onRun(trial.trial)}
               title={hint} aria-label={`${label}, ${duration(trial)}, ${tokens(trial.total_tokens)} tokens, ${money(trial.cost, 4)}. Open trial.`}>Trial {trial.trial}</button></td>
-              <td>{display ? <GatedTrialScore task={evaluation.id} trial={trial} display={display} /> : <Verdict trial={trial} />}</td>
-              {!display && <td>{passed}/{checks.length}</td>}
+              <td>{gated ? <TrialScore task={evaluation.id} trial={trial} /> : <Verdict trial={trial} />}</td>
+              <td>{gated ? <TrialNote task={evaluation.id} trial={trial} /> : `${passed}/${checks.length}`}</td>
               <td>{duration(trial)}</td><td>{tokens(trial.total_tokens)}</td><td>{money(trial.cost, 4)}</td>
               <td aria-hidden="true">›</td></tr>;
           })}</tbody></table>
@@ -106,29 +106,39 @@ function CheckList({ checks }: { checks: Checks }) {
     </span><div><code>{name}</code><p>{check.reason}</p></div></li>)}</ul>;
 }
 
-function CheckGroup({ label, checks }: { label: string; checks: Checks }) {
+function CheckGroup({ label, note, checks }: { label: string; note?: string; checks: Checks }) {
   const failed = checks.filter(([, check]) => !check.passed);
   const passed = checks.filter(([, check]) => check.passed);
   return <section className="check-group">
     <h4>{label} <span>{passed.length} of {checks.length}</span></h4>
+    {note && <p className="check-group-note">{note}</p>}
     {failed.length > 0 && <CheckList checks={failed} />}
     {passed.length > 0 && <details><summary>Passed ({passed.length})</summary><CheckList checks={passed} /></details>}
   </section>;
 }
 
-function RunView({ task, trial, trials, display, onRun }: {
-  task: string; trial: Trial; trials: Trial[]; display?: TrialDisplay; onRun: (run: number) => void;
+const checkNotes = {
+  gate: "What the instruction asked for. Miss one and the trial scores 0%.",
+  judgment: "What an experienced Ethereum developer does without being told.",
+  findings: "Findings from the public audit report of this code.",
+};
+
+function RunView({ task, pillar, trial, trials, gated, onRun }: {
+  task: string; pillar: Pillar; trial: Trial; trials: Trial[]; gated: boolean; onRun: (run: number) => void;
 }) {
   const checks = Object.entries(trial.checks);
+  const ofKind = (kind: ReturnType<typeof checkKind>) => checks.filter(([name]) => checkKind(task, name) === kind);
+  const entry = ofKind("entry"), gates = ofKind("gate"), others = ofKind("judgment check");
+  const { counted } = checkCounts(task, trial.checks);
   return <>
-    <div className="run-switcher" role="group" aria-label="Trials">{trials.map((run) => display ? <button key={run.trial}
-      aria-pressed={run.trial === trial.trial} title={trialHint(task, run, display)} onClick={() => onRun(run.trial)}>
-      Trial {run.trial} <GatedTrialScore task={task} trial={run} display={display} /></button> : <button key={run.trial}
+    <div className="run-switcher" role="group" aria-label="Trials">{trials.map((run) => gated ? <button key={run.trial}
+      aria-pressed={run.trial === trial.trial} title={trialHint(task, run)} onClick={() => onRun(run.trial)}>
+      Trial {run.trial} <TrialScore task={task} trial={run} /></button> : <button key={run.trial}
       className={run.status === "passed" ? "positive" : run.status === "failed" ? "negative" : "caution"}
-      aria-pressed={run.trial === trial.trial} aria-label={`Trial ${run.trial}: ${run.status}`} title={trialHint(task, run)} onClick={() => onRun(run.trial)}>
+      aria-pressed={run.trial === trial.trial} aria-label={`Trial ${run.trial}: ${run.status}`} title={missedHint(run)} onClick={() => onRun(run.trial)}>
       Trial {run.trial} {run.status === "passed" ? "✓" : run.status === "failed" ? "✗" : "!"}</button>)}</div>
-    <dl className="run-stats" data-gated={display ? true : undefined}>{[
-      ...(!display ? [["Checks", `${checks.filter(([, check]) => check.passed).length} / ${checks.length}`]] : []),
+    <dl className="run-stats">{[
+      ["Checks", gated ? counted.total ? `${counted.passed} of ${counted.total}` : "–" : `${checks.filter(([, check]) => check.passed).length} / ${checks.length}`],
       ["Tokens", tokens(trial.total_tokens)], ["Cost", money(trial.cost, 4)], ["Time", duration(trial)],
     ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {trial.issue && <p className="issue">{trial.error_kind ?? trial.limit?.type ?? "Trial"}: {trial.issue}</p>}
@@ -136,9 +146,15 @@ function RunView({ task, trial, trials, display, onRun }: {
     {trial.status === "failed" && trial.no_answer?.length === 2 && <p className="negative">{trial.no_answer[1].kind === "refused" ? "Refused" : "Empty reply"}</p>}
     {trial.limit && <p className="caution">{trial.limit.type} limit: {trial.limit.limit}{trial.limit.reason ? ` · ${trial.limit.reason}` : ""}</p>}
     <section className="verifier-verdict">
-      {display && checks.length > 0 ? <>
-        <CheckGroup key={`gate-${trial.trial}`} label="Gate checks" checks={checks.filter(([name]) => checkKind(task, name) !== "judgment check")} />
-        <CheckGroup key={`judgment-${trial.trial}`} label="Judgment checks" checks={checks.filter(([name]) => checkKind(task, name) === "judgment check")} />
+      {gated && checks.length > 0 ? <>
+        {entry.map(([name, check]) => <p key={name} className="entry-check"><span className={check.passed ? "positive" : "negative"}>
+          {check.passed ? <Check size={16} aria-hidden="true" /> : <X size={16} aria-hidden="true" />}</span>
+          <b>{entryLabel(name, check.passed)}</b>{!check.passed && <small>{check.reason}</small>}</p>)}
+        {gates.length > 0 && <CheckGroup key={`gate-${trial.trial}`} label="Gate checks" note={checkNotes.gate} checks={gates} />}
+        {others.length > 0 && (isAudit(task)
+          ? <CheckGroup key={`findings-${trial.trial}`} label="Known findings" note={checkNotes.findings} checks={others} />
+          : pillar === "concepts" ? <CheckGroup key={`checks-${trial.trial}`} label="Checks" checks={others} />
+          : <CheckGroup key={`judgment-${trial.trial}`} label="Judgment checks" note={checkNotes.judgment} checks={others} />)}
       </> : <><h3>Verifier checks</h3>
         {checks.length > 0 ? <CheckList checks={checks.sort((a, b) => Number(a[1].passed) - Number(b[1].passed))} />
           : <p className="muted">No checks completed.</p>}
@@ -149,11 +165,11 @@ function RunView({ task, trial, trials, display, onRun }: {
   </>;
 }
 
-export function Detail({ selection, data, domain, trialDisplay = defaultTrialDisplay, onSelect }: {
-  selection: Selection; data: BoardData; domain?: Domain; trialDisplay?: TrialDisplay; onSelect: (selection: Selection) => void;
+export function Detail({ selection, data, domain, onSelect }: {
+  selection: Selection; data: BoardData; domain?: Domain; onSelect: (selection: Selection) => void;
 }) {
   const { evaluation, pillar, agent, mode, fromList } = selection;
-  const display = data.scoring === "gated" ? trialDisplay : undefined;
+  const gated = data.scoring === "gated";
   const table = data.tables[mode], key = agentKey(agent), summary = table.summaries[key];
   const cell = evaluation ? table.pillars[evaluation.pillar].evals.find((entry) => entry.id === evaluation.id)?.cells[key] : undefined;
   const trials = cell?.trials ?? [], trial = trials.find((value) => value.trial === selection.run);
@@ -166,11 +182,11 @@ export function Detail({ selection, data, domain, trialDisplay = defaultTrialDis
   const scope = pillar ? table.pillars[pillar].cells[key] : summary;
   return <div className="detail-body">
     <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial && evaluation ? <>
-      Trial {trial.trial} of {trials.length} {display ? <GatedTrialScore task={evaluation.id} trial={trial} display={display} heading /> : <Verdict trial={trial} />}
+      Trial {trial.trial} of {trials.length} {gated ? <span className="trial-heading-score"><TrialScore task={evaluation.id} trial={trial} /></span> : <Verdict trial={trial} />}
     </> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
       {trial && <p>{evaluation!.title}</p>}
       <Configuration agent={agent} /><p className="muted">{modeNames[mode]}</p>
-      {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {display ? `${scope.total} scored trials` : `${scope.passed}/${scope.total} scored`} · {scope.errors} errors excluded</p>}
+      {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {gated ? `${scope.total} scored trials` : `${scope.passed}/${scope.total} scored`} · {scope.errors} errors excluded</p>}
       {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No tasks yet" : "No trials yet"}</p>}
       {!evaluation && <div className="domain-scores" role="group" aria-label="Filter by domain">
         {domains.map((option) => {
@@ -179,7 +195,7 @@ export function Detail({ selection, data, domain, trialDisplay = defaultTrialDis
           const tasks = cells.flat().length, score = scoreSummary(cells.map(scoreSummary));
           return <button type="button" key={option} aria-pressed={domain === option} disabled={!tasks && domain !== option} onClick={() => selectDomain(domain, option)}>
             <span>{domainNames[option]}</span>
-            {!tasks ? <small>No tasks yet</small> : score.score === null ? <small>No trials yet</small> : <><b>{percent(score.score)}</b><small>{display ? `${score.total} scored trials` : `${score.passed}/${score.total} scored`}</small></>}
+            {!tasks ? <small>No tasks yet</small> : score.score === null ? <small>No trials yet</small> : <><b>{percent(score.score)}</b><small>{gated ? `${score.total} scored trials` : `${score.passed}/${score.total} scored`}</small></>}
           </button>;
         })}
       </div>}
@@ -187,9 +203,9 @@ export function Detail({ selection, data, domain, trialDisplay = defaultTrialDis
     {trial ? <button className="back-button" onClick={() => onSelect({ ...selection, run: undefined })}><ArrowLeft size={14} />All trials</button>
       : evaluation && fromList && <button className="back-button" onClick={() => onSelect({ agent, mode, pillar })}>
         <ArrowLeft size={14} />{pillar ? names[pillar] : "All pillars"}</button>}
-    {trial && evaluation ? <RunView task={evaluation.id} trial={trial} trials={trials} display={display} onRun={(run) => onSelect({ ...selection, run })} /> :
-      evaluation ? <EvalView evaluation={evaluation} trials={trials} display={display} onRun={(run) => onSelect({ ...selection, run })} /> :
-      <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar} domain={domain} display={display}
+    {trial && evaluation ? <RunView task={evaluation.id} pillar={evaluation.pillar} trial={trial} trials={trials} gated={gated} onRun={(run) => onSelect({ ...selection, run })} /> :
+      evaluation ? <EvalView evaluation={evaluation} trials={trials} gated={gated} onRun={(run) => onSelect({ ...selection, run })} /> :
+      <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar} domain={domain} gated={gated}
         onEval={(value) => onSelect({ ...selection, evaluation: value, fromList: true })} />}
   </div>;
 }
@@ -201,8 +217,7 @@ export default function Board({ data }: { data: BoardData }) {
 
 export function Results({ data: built, query }: { data: BoardData; query: URLSearchParams }) {
   const data = useScoredBoard(built, query);
-  const trialDisplay = readTrialDisplay(query.get("trial-display"));
-  const display = data.scoring === "gated" ? trialDisplay : undefined;
+  const gated = data.scoring === "gated";
   const formulas = formulasFor(data.scoring);
   const mode = readMode(query.get("mode"));
   const evalsMode = readMode(query.get("evals"));
@@ -236,7 +251,7 @@ export function Results({ data: built, query }: { data: BoardData; query: URLSea
     (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(a)].scores.overall ?? -1));
   return <TooltipProvider delayDuration={200}><main id="main" className="page results-page">
     {data.demo && <aside className="banner"><strong>Demo data</strong> · Invented results for a board preview.</aside>}
-    <ScoringToggle scoring={data.scoring} prototypeControl={display && <TrialDisplayControl display={display} />} />
+    <ScoringToggle scoring={data.scoring} />
     <header className="hero"><div className="hero-brand"><h1 id="hero-logo" aria-label="ETH Evals"><Logo id="hero-gradient" /></h1>
       <p className="hero-plate"><span><b>{data.counts.evals}</b> tasks</span><span><b>{data.counts.agents}</b> agents</span><span><b>{data.counts.runs.toLocaleString("en")}</b> trials</span></p></div>
       <p className="hero-tag">The Open Benchmark for AI on Ethereum</p>
@@ -244,7 +259,7 @@ export function Results({ data: built, query }: { data: BoardData; query: URLSea
       <p className="hero-desc">We evaluate <Link href="/how-it-works/#hw-pillars">three pillars</Link>: <b>Concepts</b>, <b>Build</b>, and <b>Act</b>.</p>
     </header>
     <section id="leaderboard" className="results-section"><div className="section-head"><div><h2>Results</h2><p>The same work, with and without Ethereum skills.</p></div>
-      <Link className="text-link" href={`/compare/?mode=${mode}${scoringParam(data.scoring)}${trialDisplayParam(trialDisplay)}`}>Compare configurations →</Link></div>
+      <Link className="text-link" href={`/compare/?mode=${mode}${scoringParam(data.scoring)}`}>Compare configurations →</Link></div>
       <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} /><p className="mode-note">{modeHints[mode]}</p></div>
       {agents.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Leaderboard">
         <table className="leaderboard"><caption className="sr-only">Configuration scores, sorted by {sort.key} {sort.ascending ? "ascending" : "descending"}</caption>
@@ -263,15 +278,14 @@ export function Results({ data: built, query }: { data: BoardData; query: URLSea
         <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current tasks. Browse the task catalog below.</p></div>}
       <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on three pillars: Concepts, Build, and Act. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them.</div>
     </section>
-    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task</h2><p>{display === "marks" ? "One mark per trial, grouped by task and configuration." : formulas.matrixIntro}</p></div>
+    <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task</h2><p>{formulas.matrixIntro}</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />
       <a className="button" href={`${repo}/blob/main/docs/add-a-task.md`} target="_blank" rel="noreferrer">How to add a task ↗</a></div>
       <div className="matrix-filters"><p className="eyebrow">{matrixRows.reduce((sum, { entries }) => sum + entries.length, 0)} tasks · {modeNames[evalsMode]}</p>
         <DomainFilter taskDomains={pillars.flatMap((pillar) => matrixTable.pillars[pillar].evals.map((entry) => data.evaluations[entry.id].domain))} domain={domain} />
       </div>
-      {display === "marks" && <TrialLegend />}
       <div className="table-shell"><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Task matrix">
-        <table className="matrix"><caption className="sr-only">{display === "marks" ? "Trials for each task and configuration" : formulas.matrixCaption}</caption><thead><tr><th className="row-label" scope="col">Task</th>
+        <table className="matrix"><caption className="sr-only">{formulas.matrixCaption}</caption><thead><tr><th className="row-label" scope="col">Task</th>
           {matrixAgents.map((agent) => <th key={agentKey(agent)} scope="col"><Configuration agent={agent} /></th>)}</tr></thead>
           <tbody>{matrixRows.filter(({ entries }) => entries.length).map(({ pillar, entries }) => <Fragment key={pillar}><tr className="pillar-band"><th scope="colgroup" colSpan={matrixAgents.length + 1}><span className="band-label">{names[pillar]}<small>{entries.length} tasks</small></span></th></tr>
             {entries.map((entry) => <tr key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
@@ -279,30 +293,22 @@ export function Results({ data: built, query }: { data: BoardData; query: URLSea
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
                 const label = data.evaluations[entry.id].title, model = modelLabel(agent.model);
                 const open = () => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode });
-                const marks = display === "marks" && cell.trials.length ? taskMarkDetails(entry.id, cell) : null;
-                if (marks) {
-                  const hint = taskHint(cell, marks);
-                  return <td key={agentKey(agent)}><span className="matrix-model" aria-hidden="true">{model}</span>
-                    <button className="matrix-cell" data-marks title={hint} aria-label={`${label}, ${model}. ${hint}. Open details.`} onClick={open}>
-                      <TaskMarks details={marks} />
-                    </button></td>;
-                }
-                const text = cellText(entry.id, cell, display);
+                const text = cell.score === null ? "–" : gated ? percent(cell.score) : `${cell.passed}/${cell.total}`;
                 return <td key={agentKey(agent)}><span className="matrix-model" aria-hidden="true">{model}</span>{cell.state === "na" || cell.score === null ?
                   <span className="matrix-cell" data-empty title={emptyTrialLabel(cell)}>–</span> :
-                  <Hint text={display === "numbers" ? taskHint(cell, taskMarkDetails(entry.id, cell)) : formulas.eval}><button className="matrix-cell" style={heat(cell.score)}
-                    aria-label={`${label}, ${model}: ${display ? `task score ${text}` : `${cell.passed} of ${cell.total} trials passed`}. Open details.`}
+                  <Hint text={gated ? taskHint(entry.id, cell) : formulas.eval}><button className="matrix-cell" style={heat(cell.score)}
+                    aria-label={`${label}, ${model}: ${gated ? `task score ${text}` : `${cell.passed} of ${cell.total} trials passed`}. Open details.`}
                     onClick={open}>{text}</button></Hint>}</td>;
               })}
             </tr>)}
-          </Fragment>)}</tbody></table></div><div className="table-note">{display === "marks" ? "Open a cell to see the instruction and trials. Errors stay out of the task score." : formulas.matrixNote}</div></div>
+          </Fragment>)}</tbody></table></div><div className="table-note">{formulas.matrixNote}</div></div>
     </section>
     <noscript>Enable JavaScript to change modes and open trial details.</noscript>
   </main>
     <Sheet open={selection !== null} onOpenChange={(open) => { if (!open) close(); }}>
       {selection && <SheetContent>
         <SheetTitle className="sr-only">Task and trial details</SheetTitle><SheetDescription className="sr-only">Scores, instructions, checks, costs and trajectories.</SheetDescription>
-        <Detail selection={selection} data={data} domain={domain} trialDisplay={trialDisplay} onSelect={select} /></SheetContent>}
+        <Detail selection={selection} data={data} domain={domain} onSelect={select} /></SheetContent>}
     </Sheet>
   </TooltipProvider>;
 }

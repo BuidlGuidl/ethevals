@@ -59,13 +59,15 @@ The scoring switch above the board defaults to All or nothing.
 Select Gated or open `/?scoring=gated` to score the saved checks.
 If any gate check fails, the trial score is 0%.
 If every gate check passes, divide the checks passed by all counted checks.
-The entry checks `compile`, `answered`, and `report_written` are gate checks. Leave them out of the count.
+The entry checks `compile`, `answered`, `no_answer`, and `report_written` are gate checks. Leave them out of the count.
 `src/scoring-settings.ts` labels the other checks. An unlabeled check is a judgment check.
 The leaderboard, task matrix, drawer, and Compare follow the scoring switch.
 
-Gated shows one mark per trial. Hover over a mark to see its checks.
-Use Prototype · Trial display to switch to Numbers, or add `&trial-display=numbers` to the URL.
-Numbers shows audit finding counts when the counts match the score.
+Under Gated every score is a percentage. A count such as "3 of 4 passed" sits next to a trial score and never replaces it.
+The task list shows one dot per trial next to the task score: 100%, some checks missed, 0%, or error.
+A trial at 0% says why: "Gate check failed", "No answer", "No report" or "Did not compile".
+The trial drawer lists the entry check on its own line, then Gate checks and Judgment checks, each with a one-line note.
+On audit tasks the second group is Known findings.
 `pnpm exec tsx scripts/scoring-table.ts` prints Internet Overall and pillar scores under both rules.
 
 Each trial drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.

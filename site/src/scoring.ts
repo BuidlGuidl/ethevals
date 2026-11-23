@@ -6,7 +6,7 @@ export type Scoring = (typeof scorings)[number];
 export const defaultScoring: Scoring = "all-or-nothing";
 export const readScoring = (value: string | null): Scoring => value === "gated" ? value : defaultScoring;
 
-const entryChecks = new Set(["compile", "answered", "report_written"]);
+const entryChecks = new Set(["compile", "answered", "no_answer", "report_written"]);
 export function checkKind(task: string, name: string): "entry" | "gate" | "judgment check" {
   return entryChecks.has(name) ? "entry" : checkLabels.get(`${task}|${name}`) ?? "judgment check";
 }

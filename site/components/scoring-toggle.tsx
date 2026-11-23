@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, type ReactNode } from "react";
+import { Fragment, useMemo } from "react";
 import { scoreBoard, type BoardData } from "../src/board";
 import { scoringCopy } from "../src/labels";
 import { checkCounts, checkKind, defaultScoring, readScoring, scorings, trialScore, type Scoring } from "../src/scoring";
@@ -42,13 +42,13 @@ function Example({ scoring }: { scoring: Scoring }) {
   </div>;
 }
 
-export function ScoringToggle({ scoring, prototypeControl }: { scoring: Scoring; prototypeControl?: ReactNode }) {
+export function ScoringToggle({ scoring }: { scoring: Scoring }) {
   return <section className="scoring-panel" aria-label="How scores are calculated">
     <div className="scoring-switch"><span className="eyebrow">{scoringCopy.label}</span>
       <ToggleGroup type="single" value={scoring} aria-label={scoringCopy.label} className="[&>*+*]:border-l [&>*+*]:border-border-strong"
         onValueChange={(value) => { if (value) updateQuery({ scoring: value === defaultScoring ? null : value }); }}>
         {scorings.map((value) => <ToggleGroupItem key={value} value={value}>{scoringCopy.names[value]}</ToggleGroupItem>)}
-      </ToggleGroup>{prototypeControl}</div>
+      </ToggleGroup></div>
     <div className="scoring-body">
       <div><p className="eyebrow">Rule</p><p className="scoring-rule">{scoringCopy.rule[scoring]}</p>
         {scoring === "gated" && <p className="mt-2 text-muted">{withCode(scoringCopy.entry)}</p>}</div>

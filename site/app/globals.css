@@ -122,8 +122,6 @@
   .matrix-model { display: none; }
   .matrix-cell { @apply flex min-h-[40px] w-full items-center justify-center px-1 text-center text-[13px]; background: color-mix(in srgb, var(--mx-hi) var(--score), var(--mx-lo)); }
   .matrix-cell[data-empty] { @apply bg-transparent text-dim; }
-  .matrix-cell[data-marks] { @apply bg-transparent; }
-  .matrix-cell[data-marks]:hover { @apply bg-tint; }
   button.matrix-cell:hover { outline: 1px solid var(--color-accent); outline-offset: -1px; }
   .matrix tr[id] { scroll-margin-top: 130px; }
   .matrix tr:target > * { @apply bg-accent/10; box-shadow: inset 0 2px 0 var(--color-accent), inset 0 -2px 0 var(--color-accent); }
@@ -136,20 +134,9 @@
   .banner { @apply mb-8 border border-amber/30 bg-amber/5 p-3 text-xs text-amber; }
   .scoring-panel { @apply mb-10 border border-border-strong bg-sheet p-4 text-sm; }
   .scoring-switch { @apply flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-border pb-4; }
-  .trial-display { @apply flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1; }
-  .trial-display select { @apply max-w-full rounded-none border border-border-strong bg-sheet px-3 py-2 text-xs; }
-  .task-marks, .trial-legend, .trial-legend > span { @apply flex flex-wrap items-center; }
-  .task-marks { @apply justify-center gap-1; }
+  .trial-legend, .trial-legend > span { @apply flex flex-wrap items-center; }
   .trial-legend { @apply gap-x-4 gap-y-2 text-[11px] text-muted; }
   .trial-legend > span { @apply gap-1.5; }
-  .trial-mark { @apply inline-grid size-3.5 shrink-0 place-items-center align-middle; }
-  .trial-mark[data-mark="score"] {
-    border: 1px solid var(--color-green);
-    background: linear-gradient(to right, var(--color-green) var(--score), transparent var(--score));
-    background-origin: border-box;
-  }
-  .trial-mark[data-mark="gate-check"] { @apply border border-red text-red; }
-  .trial-mark[data-mark="error"] { @apply text-amber; }
   .scoring-body { @apply grid content-start gap-x-10 gap-y-5 pt-4 md:grid-cols-2; }
   .scoring-average { @apply border-t border-border pt-4 md:col-span-2; }
   .scoring-average ul { @apply md:flex md:flex-wrap md:gap-x-8; }
@@ -230,6 +217,11 @@
   .run-dot.passed { @apply bg-green; }
   .run-dot.failed { @apply bg-red; }
   .run-dot.error { @apply border border-amber bg-transparent; }
+  .run-dot { @apply shrink-0; }
+  .run-dot[data-state="full"] { @apply bg-green; }
+  .run-dot[data-state="part"] { @apply border-2 border-green bg-transparent; }
+  .run-dot[data-state="zero"] { @apply bg-red; }
+  .run-dot[data-state="error"] { @apply bg-amber; }
   .heat-chip { @apply grid min-w-20 gap-1 px-3 py-2 text-center text-[16px] font-semibold; background: color-mix(in srgb, var(--heat-hi) var(--score), var(--heat-lo)); }
   .heat-chip[data-empty="true"] { @apply bg-transparent text-dim; }
   .verifier-verdict { @apply border border-border bg-sheet; }
@@ -239,6 +231,9 @@
   .check-group h4, .check-group summary { @apply px-4 py-2; }
   .check-group h4 { @apply flex flex-wrap items-baseline justify-between gap-2 bg-tint font-semibold; }
   .check-group h4 span { @apply text-xs font-normal text-muted; }
+  .check-group-note { @apply border-t border-border px-4 py-2 text-xs text-muted; }
+  .entry-check { @apply flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2; }
+  .entry-check small { @apply text-xs text-muted; }
   .check-group summary { @apply cursor-pointer border-t border-border text-xs text-muted; }
   .check-group details[open] summary { @apply border-b border-border; }
   .checks li { @apply flex items-start gap-3 border-b border-border px-4 py-3; }
@@ -258,16 +253,14 @@
   .run-switcher button { @apply bg-sheet px-3 py-2 text-xs; }
   .run-switcher button:hover { @apply bg-tint; }
   .run-switcher button[aria-pressed="true"] { @apply bg-accent text-page; }
-  .run-switcher button:has(.trial-mark) { @apply inline-flex items-center gap-2; }
-  .run-switcher button[aria-pressed="true"]:has(.trial-mark) { @apply bg-tint text-ink shadow-[inset_0_-2px_var(--color-accent)]; }
+  .run-switcher button:has(.trial-score) { @apply inline-flex items-center gap-2; }
+  .run-switcher button[aria-pressed="true"]:has(.trial-score) { @apply bg-tint text-ink shadow-[inset_0_-2px_var(--color-accent)]; }
   .run-stats { @apply grid grid-cols-4 gap-px border border-border bg-border; }
-  .run-stats[data-gated] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .run-stats > div { @apply min-w-0 bg-sheet px-3 py-3; }
   .run-stats dt { @apply text-[10px] uppercase tracking-[.06em] text-muted; }
   .run-stats dd { @apply mt-1 text-[17px] font-semibold; }
   .verdict { @apply inline-flex items-center gap-1.5 border border-current px-2 py-0.5 text-[10px] font-semibold; }
-  .trial-score { @apply inline-block px-2 py-0.5 text-xs font-semibold text-ink; background: color-mix(in srgb, var(--mx-hi) var(--score), var(--mx-lo)); }
-  .trial-score[data-error] { @apply bg-tint text-amber; }
+  .trial-score { @apply inline-flex items-center gap-2 font-semibold; }
   .issue { @apply border border-amber/30 bg-amber/5 p-3; overflow-wrap: anywhere; }
   .trajectory-links { @apply flex flex-wrap items-center gap-4; }
   .compare-page { @apply grid gap-6; }
