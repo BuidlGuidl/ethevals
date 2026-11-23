@@ -129,8 +129,10 @@ test("the matrix, drawer list, trials table, switcher, and heading show the same
       assert.ok(html, hint);
       assert.ok(html.includes(`data-mark="${mark}"`), hint);
       if (fill) assert.ok(html.includes(`style="--score:${fill}"`), hint);
-      assert.ok(html.includes(`title="Trial ${trial.trial} · ${hint}`), hint);
+      assert.ok(!html.includes('title="Trial'), hint);
     }
+    assert.ok(trialsTable.includes(`<small>${hint}`), hint);
+    assert.ok(board.includes(`Trial ${trial.trial} · ${hint}`), hint);
     assert.match(matrixCell[1].replace(/<[^>]*>/g, ""), /^$/);
     assert.ok(runHeading?.includes(`>${heading}</span>`));
   }
@@ -148,7 +150,7 @@ test("task marks sort by score, then gate checks and errors", () => {
   }));
   const cell = html.match(/<button class="matrix-cell" data-marks="true".*?<\/button>/s)?.[0];
   assert.ok(cell);
-  assert.match(cell, /title="Task score 58%\nTrial 4[^\n]+\nTrial 2[^\n]+\nTrial 1[^\n]+\nTrial 3 · Error"/);
+  assert.match(cell, /Task score 58%\nTrial 4[^\n]+\nTrial 2[^\n]+\nTrial 1[^\n]+\nTrial 3 · Error\. Open details\."/);
   assert.deepEqual([...cell.matchAll(/data-mark="([^"]+)"/g)].map((match) => match[1]), ["score", "score", "gate-check", "error"]);
 });
 

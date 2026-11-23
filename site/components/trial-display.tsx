@@ -36,21 +36,23 @@ function trialMark(task: string, trial: Trial): Mark {
 const checkName = (name: string) =>
   name.replace(/^test_/, "").replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ").toLowerCase();
 
-function markHint(task: string, trial: Trial, mark: Mark) {
-  const label = `Trial ${trial.trial}`;
-  if (mark.kind === "error") return `${label} · Error`;
+function markLine(task: string, trial: Trial, mark: Mark) {
+  if (mark.kind === "error") return "Error";
 
   const missed = Object.entries(trial.checks)
     .filter(([name, check]) => !check.passed && (mark.kind !== "gate-check" || checkKind(task, name) !== "judgment check"))
     .map(([name]) => checkName(name));
   const first = missed[0];
   const names = first && `${first.length > 46 ? first.slice(0, 45) + "…" : first}${missed.length > 1 ? ` +${missed.length - 1}` : ""}`;
-  if (mark.kind === "gate-check") return `${label} · A gate check failed: ${names}`;
+  if (mark.kind === "gate-check") return `A gate check failed: ${names}`;
 
   const { counted, judgment } = checkCounts(task, trial.checks);
-  if (task.startsWith("build/audit-") && judgment.total) return `${label} · Found ${judgment.passed} of ${judgment.total}`;
-  return `${label} · ${counted.total ? `${counted.passed} of ${counted.total} checks` : percent(mark.score)}${names ? ` · missed ${names}` : ""}`;
+  if (task.startsWith("build/audit-") && judgment.total) return `Found ${judgment.passed} of ${judgment.total}`;
+  return `${counted.total ? `${counted.passed} of ${counted.total} checks` : percent(mark.score)}${names ? ` · missed ${names}` : ""}`;
 }
+
+const markHint = (task: string, trial: Trial, mark: Mark) => `Trial ${trial.trial} · ${markLine(task, trial, mark)}`;
+export const trialLine = (task: string, trial: Trial) => markLine(task, trial, trialMark(task, trial));
 
 export function trialHint(task: string, trial: Trial, display?: TrialDisplay) {
   if (display) return markHint(task, trial, trialMark(task, trial));
@@ -61,8 +63,8 @@ export function trialHint(task: string, trial: Trial, display?: TrialDisplay) {
   return missed.length === 1 && first.length <= 32 ? `Missed ${first}` : `Missed ${missed.length} checks`;
 }
 
-function TrialMark({ mark, hint }: { mark: Mark; hint?: string }) {
-  return <span className="trial-mark" data-mark={mark.kind} style={heat(mark.score)} title={hint} aria-hidden="true">
+function TrialMark({ mark }: { mark: Mark }) {
+  return <span className="trial-mark" data-mark={mark.kind} style={heat(mark.score)} aria-hidden="true">
     {mark.kind === "gate-check" && <X size={11} strokeWidth={2.5} />}
     {mark.kind === "error" && <AlertTriangle size={13} />}
   </span>;
@@ -85,8 +87,8 @@ export function taskMarkDetails(task: string, cell: EvalCell) {
 }
 
 export function TaskMarks({ details }: { details: ReturnType<typeof taskMarkDetails> }) {
-  return <span className="task-marks">{details.map(({ number, mark, hint }) =>
-    <TrialMark key={number} mark={mark} hint={hint} />)}</span>;
+  return <span className="task-marks">{details.map(({ number, mark }) =>
+    <TrialMark key={number} mark={mark} />)}</span>;
 }
 
 function numberText(task: string, score: number, counts: ReturnType<typeof checkCounts>[]) {
@@ -116,7 +118,7 @@ export function GatedTrialScore({ task, trial, display, heading }: {
   }
   const hint = markHint(task, trial, mark);
   return <span className={heading ? "trial-heading-score" : undefined}>
-    <TrialMark mark={mark} hint={hint} />
+    <TrialMark mark={mark} />
     {heading ? <span>{mark.score === null ? "Error" : percent(mark.score)}</span> : <span className="sr-only">{hint}</span>}
     {heading && mark.kind === "gate-check" && <span className="sr-only">Gate check failed</span>}
   </span>;

@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components
 import { TooltipProvider } from "../components/ui/tooltip";
 import { Score, Hint, formulasFor, heat, percent, money } from "../components/scores";
 import { ScoringToggle, scoringParam, useScoredBoard } from "../components/scoring-toggle";
-import { cellText, defaultTrialDisplay, GatedTrialScore, readTrialDisplay, taskMarkDetails, TaskMarks, trialDisplayParam, trialHint, TrialDisplayControl, TrialLegend, type TrialDisplay } from "../components/trial-display";
+import { cellText, defaultTrialDisplay, GatedTrialScore, readTrialDisplay, taskMarkDetails, TaskMarks, trialDisplayParam, trialHint, TrialDisplayControl, TrialLegend, trialLine, type TrialDisplay } from "../components/trial-display";
 import { updateQuery, useQuery } from "../components/url-state";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
@@ -53,7 +53,7 @@ function EvalList({ table, evaluations, agent, pillar, domain, display, onEval }
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
         const marks = display === "marks" && cell.trials.length ? taskMarkDetails(entry.id, cell) : null;
         const hint = marks ? taskHint(cell, marks) : undefined;
-        return <button key={entry.id} className="eval-list-row" title={hint} onClick={() => onEval(evaluation)}>
+        const row = <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
           <span className="eval-list-result">{marks ? <><TaskMarks details={marks} /><span className="sr-only">{hint}</span></> : <>
           {!display && <span className="run-dots" aria-label={cell.trials.map((trial) => `Trial ${trial.trial}: ${trial.status}`).join(", ")}>
@@ -61,6 +61,7 @@ function EvalList({ table, evaluations, agent, pillar, domain, display, onEval }
           <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyTrialLabel(cell) : undefined}>{cellText(entry.id, cell, display)}</span>
           </>}</span>
         </button>;
+        return hint ? <Hint key={entry.id} text={hint}>{row}</Hint> : row;
       })}
       {table.pillars[value].cells[key].state === "empty" && <p className="muted">No tasks yet for this mode.</p>}
     </section>)}{domain && !groups.some(({ entries }) => entries.length) && <p className="muted">No tasks yet for this domain and mode.</p>}</div>;
@@ -86,8 +87,9 @@ function EvalView({ evaluation, trials, display, onRun }: {
             const hint = trialHint(evaluation.id, trial, display);
             const label = display ? hint : `Trial ${trial.trial}, ${verdictLabels[trial.status]}, ${passed} of ${checks.length} checks passed`;
             return <tr key={trial.trial}><td><button className="run-open" onClick={() => onRun(trial.trial)}
-              title={hint} aria-label={`${label}, ${duration(trial)}, ${tokens(trial.total_tokens)} tokens, ${money(trial.cost, 4)}. Open trial.`}>Trial {trial.trial}</button></td>
-              <td>{display ? <GatedTrialScore task={evaluation.id} trial={trial} display={display} /> : <Verdict trial={trial} />}</td>
+              title={display ? undefined : hint} aria-label={`${label}, ${duration(trial)}, ${tokens(trial.total_tokens)} tokens, ${money(trial.cost, 4)}. Open trial.`}>Trial {trial.trial}</button></td>
+              <td>{display ? <span className="trial-result"><GatedTrialScore task={evaluation.id} trial={trial} display={display} />
+                {display === "marks" && <small>{trialLine(evaluation.id, trial)}</small>}</span> : <Verdict trial={trial} />}</td>
               {!display && <td>{passed}/{checks.length}</td>}
               <td>{duration(trial)}</td><td>{tokens(trial.total_tokens)}</td><td>{money(trial.cost, 4)}</td>
               <td aria-hidden="true">›</td></tr>;
@@ -121,9 +123,9 @@ function RunView({ task, trial, trials, display, onRun }: {
 }) {
   const checks = Object.entries(trial.checks);
   return <>
-    <div className="run-switcher" role="group" aria-label="Trials">{trials.map((run) => display ? <button key={run.trial}
-      aria-pressed={run.trial === trial.trial} title={trialHint(task, run, display)} onClick={() => onRun(run.trial)}>
-      Trial {run.trial} <GatedTrialScore task={task} trial={run} display={display} /></button> : <button key={run.trial}
+    <div className="run-switcher" role="group" aria-label="Trials">{trials.map((run) => display ? <Hint key={run.trial} text={trialHint(task, run, display)}><button
+      aria-pressed={run.trial === trial.trial} onClick={() => onRun(run.trial)}>
+      Trial {run.trial} <GatedTrialScore task={task} trial={run} display={display} /></button></Hint> : <button key={run.trial}
       className={run.status === "passed" ? "positive" : run.status === "failed" ? "negative" : "caution"}
       aria-pressed={run.trial === trial.trial} aria-label={`Trial ${run.trial}: ${run.status}`} title={trialHint(task, run)} onClick={() => onRun(run.trial)}>
       Trial {run.trial} {run.status === "passed" ? "✓" : run.status === "failed" ? "✗" : "!"}</button>)}</div>
@@ -164,7 +166,7 @@ export function Detail({ selection, data, domain, trialDisplay = defaultTrialDis
     heading.current?.focus({ preventScroll: true });
   }, [evaluation?.id, runLevel]);
   const scope = pillar ? table.pillars[pillar].cells[key] : summary;
-  return <div className="detail-body">
+  return <TooltipProvider delayDuration={200}><div className="detail-body">
     <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial && evaluation ? <>
       Trial {trial.trial} of {trials.length} {display ? <GatedTrialScore task={evaluation.id} trial={trial} display={display} heading /> : <Verdict trial={trial} />}
     </> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
@@ -191,7 +193,7 @@ export function Detail({ selection, data, domain, trialDisplay = defaultTrialDis
       evaluation ? <EvalView evaluation={evaluation} trials={trials} display={display} onRun={(run) => onSelect({ ...selection, run })} /> :
       <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar} domain={domain} display={display}
         onEval={(value) => onSelect({ ...selection, evaluation: value, fromList: true })} />}
-  </div>;
+  </div></TooltipProvider>;
 }
 
 export default function Board({ data }: { data: BoardData }) {
@@ -283,9 +285,9 @@ export function Results({ data: built, query }: { data: BoardData; query: URLSea
                 if (marks) {
                   const hint = taskHint(cell, marks);
                   return <td key={agentKey(agent)}><span className="matrix-model" aria-hidden="true">{model}</span>
-                    <button className="matrix-cell" data-marks title={hint} aria-label={`${label}, ${model}. ${hint}. Open details.`} onClick={open}>
+                    <Hint text={hint}><button className="matrix-cell" data-marks aria-label={`${label}, ${model}. ${hint}. Open details.`} onClick={open}>
                       <TaskMarks details={marks} />
-                    </button></td>;
+                    </button></Hint></td>;
                 }
                 const text = cellText(entry.id, cell, display);
                 return <td key={agentKey(agent)}><span className="matrix-model" aria-hidden="true">{model}</span>{cell.state === "na" || cell.score === null ?

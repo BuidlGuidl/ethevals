@@ -143,6 +143,8 @@
   .trial-legend { @apply gap-x-4 gap-y-2 text-[11px] text-muted; }
   .trial-legend > span { @apply gap-1.5; }
   .trial-mark { @apply inline-grid size-3.5 shrink-0 place-items-center align-middle; }
+  .trial-result { @apply flex items-center gap-2; }
+  .trial-result small { @apply text-[11px] leading-snug text-muted; }
   .trial-mark[data-mark="score"] {
     border: 1px solid var(--color-green);
     background: linear-gradient(to right, var(--color-green) var(--score), transparent var(--score));
