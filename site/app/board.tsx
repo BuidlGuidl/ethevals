@@ -118,9 +118,9 @@ function CheckGroup({ label, note, checks }: { label: string; note?: string; che
 }
 
 const checkNotes = {
-  gate: "What the instruction asked for. Miss one and the trial scores 0%.",
-  judgment: "What an experienced Ethereum developer does without being told.",
-  findings: "Findings from the public audit report of this code.",
+  gate: "Did the agent do what the instruction asked for? Any failure sets the trial score to 0%.",
+  judgment: "Did the agent make sound Ethereum decisions beyond the instruction? Each check counts toward the trial score.",
+  findings: "Did the agent catch the issues from the public audit report? Each check counts toward the trial score.",
 };
 
 function RunView({ task, pillar, trial, trials, gated, onRun }: {
