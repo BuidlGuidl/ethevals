@@ -1,5 +1,6 @@
 import type { Row } from "./rows";
 import { taskDomain, type Domain } from "./areas";
+import { scoreTrial, type CheckTags, type TrialScore } from "./scoring";
 export type { Row } from "./rows";
 
 export const pillars = ["concepts", "build", "act"] as const;
@@ -14,6 +15,7 @@ export interface Eval {
   instruction_hash: string;
   environment_hash: string;
   checks_hash: string;
+  checks?: CheckTags;
   title: string;
   pillar: Pillar;
   area?: string | null;
@@ -30,10 +32,11 @@ export interface Agent {
   effort: string | null;
 }
 
-export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind" | "error_reason"
+export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind"
   | "total_tokens" | "total_seconds" | "model_cost_usd" | "judge_cost_usd"
   | "cost_source" | "limit" | "paid_by" | "no_answer"> & {
   cost: number | null;
+  score: TrialScore;
   issue: string;
   trajectoryUrl: string | null;
 };
@@ -97,7 +100,7 @@ export function scoreSummary(cells: Counts[]): Counts {
 }
 
 export function emptyTrialLabel(cell: EvalCell): string {
-  return cell.state === "na" ? "Not applicable" : cell.errors ? `${cell.errors} errors; no scored trials` : "No trials yet";
+  return cell.state === "na" ? "Not applicable" : cell.errors ? `${cell.errors} ${cell.errors === 1 ? "error" : "errors"}. No scored trials.` : "No trials yet";
 }
 
 export function costPerPass(trials: Pick<Trial, "status" | "model_cost_usd">[]): number | null {
@@ -124,24 +127,30 @@ export function agentKey(agent: Agent): string {
 function evalCell(evaluation: Eval, mode: Mode, rows: Row[], attempts: number): EvalCell {
   const scored = rows.filter((row) => row.status !== "error");
   const passed = scored.filter((row) => row.status === "passed").length;
-  return {
-    state: !evaluation.modes.includes(mode) ? "na" : scored.length ? "score" : "pending",
-    score: scored.length ? passed / scored.length : null,
-    passed, total: scored.length, errors: rows.length - scored.length,
-    missing: evaluation.modes.includes(mode) ? Math.max(0, attempts - scored.length) : 0,
-    trials: rows.sort((a, b) => a.trial - b.trial).map((row) => ({
-      trial: row.trial, status: row.status, checks: row.checks, error_kind: row.error_kind,
-      error_reason: row.error_reason, total_tokens: row.total_tokens, total_seconds: row.total_seconds,
+  const trials = rows.sort((a, b) => a.trial - b.trial).map((row): Trial => {
+    const score = scoreTrial(evaluation, row);
+    const errored = score.value === null;
+    return {
+      trial: row.trial, status: row.status, score,
+      checks: errored ? {} : row.checks, error_kind: errored ? null : row.error_kind,
+      total_tokens: row.total_tokens, total_seconds: row.total_seconds,
       model_cost_usd: row.model_cost_usd, judge_cost_usd: row.judge_cost_usd,
       cost_source: row.cost_source,
       paid_by: row.paid_by,
-      no_answer: row.no_answer,
-      limit: row.limit,
-      cost: trialCost(row), issue: row.error_reason ?? (row.limit
+      no_answer: errored ? undefined : row.no_answer,
+      limit: errored ? null : row.limit,
+      cost: trialCost(row), issue: errored ? "" : (row.error_reason ?? (row.limit
         ? [...new Set(Object.values(row.checks).filter((check) => !check.passed).map((check) => check.reason))].join(" ")
-        : ""),
+        : "")),
       trajectoryUrl: row.trajectory_url,
-    })),
+    };
+  });
+  return {
+    state: !evaluation.modes.includes(mode) ? "na" : scored.length ? "score" : "pending",
+    score: overallScore(trials.map((trial) => trial.score.value)),
+    passed, total: scored.length, errors: rows.length - scored.length,
+    missing: evaluation.modes.includes(mode) ? Math.max(0, attempts - scored.length) : 0,
+    trials,
   };
 }
 
@@ -224,6 +233,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false, attem
     evaluations: Object.fromEntries(evaluations.map((evaluation) => [evaluation.id, {
       id: evaluation.id, title: evaluation.title, pillar: evaluation.pillar, domain: taskDomain(evaluation),
       description: evaluation.description, instruction: evaluation.instruction, modes: evaluation.modes,
+      ...(evaluation.checks && { checks: evaluation.checks }),
     }])),
   };
 }

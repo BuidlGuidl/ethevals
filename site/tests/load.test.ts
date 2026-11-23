@@ -50,6 +50,24 @@ test("the catalog rejects unknown check tag values", (t) => {
   assert.throws(() => loadCatalog(f.catalog), /cannot load task catalog/);
 });
 
+for (const pillar of ["build", "act"]) {
+  test(`the board rejects current ${pillar} rows with untagged checks and accepts older rows`, (t) => {
+    const id = `${pillar}/token`;
+    const f = fixture(t, [{ ...evaluation, id, pillar, checks: { acceptance: "gate", missing: "judgment" } }]);
+    const pass = { passed: true, reason: "Matches." };
+    const checks = { compile: pass, acceptance: pass, renamed: { passed: false, reason: "Differs." } };
+    f.write([{ task_id: id, status: "failed", checks }]);
+    assert.throws(() => loadBoard({}, f.site), {
+      message: `${f.rows}:2: Missing check tags for ${id}: renamed.`,
+    });
+    f.write([{ task_id: id, status: "failed", checks, checks_hash: "old" }]);
+    const data = loadBoard({}, f.site);
+    assert.equal(data.tables.internet.summaries['["model-a","agent-a","high"]'].scores.overall, 1);
+    f.write([{ task_id: id, checks: { compile: pass, acceptance: pass } }]);
+    assert.equal(loadBoard({}, f.site).tables.internet.summaries['["model-a","agent-a","high"]'].scores.overall, 1);
+  });
+}
+
 for (const [name, change, message] of [
   ["undeclared mode", { mode: "vanilla", agent: null }, "does not declare this mode"],
   ["internet without agent", { agent: null }, "require an agent"],
@@ -217,5 +235,6 @@ test("committed errors remain visible without unpublished release links", (t) =>
   assert.deepEqual([cell.passed, cell.total, cell.errors], [1, 1, 1]);
   assert.equal(cell.trials[0].trajectoryUrl, "https://github.com/example/ethevals/releases/download/results-1/trial.json");
   assert.equal(cell.trials[1].trajectoryUrl, null);
-  assert.equal(cell.trials[1].error_reason, "Provider unavailable.");
+  assert.equal(cell.trials[1].score.value, null);
+  assert.doesNotMatch(JSON.stringify(cell.trials[1]), /Provider unavailable\./);
 });

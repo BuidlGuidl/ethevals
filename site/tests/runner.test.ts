@@ -87,7 +87,7 @@ write_rows(output / "rows.jsonl", [results_row(trial, metadata,
   const cell = data.tables.internet.pillars.concepts.evals[0].cells[agentKey(agent)];
   assert.deepEqual([cell.passed, cell.total], [1, 1]);
   const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }));
-  assert.ok(html.includes("1 of 1 trials passed"));
+  assert.ok(html.includes("Task score 100%. Open details."));
   const drawer = renderToStaticMarkup(createElement(Detail, {
     data, selection: { agent, evaluation: data.evaluations["concepts/question"], mode: "internet", run: 1 }, onSelect: () => {},
   }));

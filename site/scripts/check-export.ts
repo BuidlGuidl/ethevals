@@ -48,7 +48,7 @@ if (expected === "demo") {
   assert.ok(tasks.includes("Implement the token described in the environment."));
   assert.ok(html.includes("<strong>Demo data</strong>"), "The demo banner must be visible.");
   assert.ok(html.includes("Demo model A"));
-  assert.ok(html.includes("2 of 3 trials passed"));
+  assert.ok(html.includes("Task score 67%. Open details."));
   assert.ok(html.includes('aria-label="Concepts, Demo agent A / Demo model A. 83%.'), "The concepts pillar must show the rounded mean of 2/3 and 1/1.");
   assert.ok(!html.includes("$ / pass"));
   const comparison = readFileSync("out/compare/index.html", "utf8");
