@@ -4,11 +4,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Detail, Results } from "../app/board";
 import { agentKey, buildBoard, scoreBoard, type Eval, type Row } from "../src/board";
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { siteRoot } from "../src/paths";
-import { checkScoringSettings, scorings, type Scoring } from "../src/scoring";
-import { taskScoring } from "../src/scoring-settings";
+import { checkCounts, scorings, trialScore } from "../src/scoring";
+import type { TrialDisplay } from "../components/trial-display";
 
 const agent = { model: "model-a", agent: "agent-a", effort: "high" };
 const task = (id: string, pillar: Eval["pillar"] = "build"): Eval => ({
@@ -30,111 +27,112 @@ const governorChecks = {
   compile: pass, test_snapshotCanRunIt: pass, test_quorumCountsTheWholeSupply: pass,
   test_theDelayGuardsTheMoney: pass, test_lateVotesExtendTheVote: fail,
 };
-const taskScores = (evals: Eval[], rows: Row[], scoring: Scoring) => {
-  const board = scoreBoard(buildBoard(evals, rows), scoring);
-  return Object.fromEntries(evals.map((evaluation) => [evaluation.id, board.tables.internet.pillars[evaluation.pillar].evals
-    .find((entry) => entry.id === evaluation.id)!.cells[agentKey(agent)].score]));
-};
-const near = (actual: number | null, expected: number) => assert.ok(actual !== null && Math.abs(actual - expected) < 1e-9, `${actual} is not ${expected}`);
+const governor = task("build/token-governor");
+const audit = task("build/audit-example");
+const concepts = task("concepts/answer", "concepts");
+const gateFailure = { ...governorChecks, test_quorumCountsTheWholeSupply: fail, test_lateVotesExtendTheVote: pass };
+const auditChecks = { report_written: pass, finding_a: pass, finding_b: pass, finding_c: fail, finding_d: fail, finding_e: fail };
+const error = row(governor.id, {}, { trial: 3, status: "error", error_kind: "execution", error_reason: "Stopped." });
 
-test("a token-governor trial scores 0, 0.8, 0 and 0.7, and 0.75 under Mix on a task flagged partial", () => {
-  const evals = [task("build/token-governor"), task("build/swap-page")];
-  const rows = [row("build/token-governor", governorChecks), row("build/swap-page", governorChecks)];
-  const expected: Record<Scoring, number> = { "all-or-nothing": 0, partial: 0.8, mix: 0, weighted: 0.7 };
-  for (const scoring of scorings) near(taskScores(evals, rows, scoring)["build/token-governor"], expected[scoring]);
-  near(taskScores(evals, rows, "mix")["build/swap-page"], 0.75);
+test("the token-governor trial counts both gates and one judgment check", () => {
+  const trial = row(governor.id, governorChecks);
+  assert.equal(trialScore(governor.id, trial, "all-or-nothing"), 0);
+  assert.equal(trialScore(governor.id, trial, "gated"), 0.75);
+  assert.deepEqual(checkCounts(governor.id, trial.checks), {
+    gates: { passed: 3, total: 3 },
+    judgment: { passed: 1, total: 2 },
+    counted: { passed: 3, total: 4 },
+  });
 });
 
-test("one-check tasks, no-answer rows and entry-only trials score the same under every version", () => {
-  const evals = [task("concepts/one", "concepts"), task("concepts/two", "concepts"), task("build/entry-only")];
-  const rows = [
-    row("concepts/one", { answer: pass }), row("concepts/one", { answer: fail }, { trial: 2 }),
-    row("concepts/two", { no_answer: { passed: false, reason: "No answer twice." } }),
-    row("build/entry-only", { compile: pass }), row("build/entry-only", { compile: fail }, { trial: 2 }),
-  ];
-  for (const scoring of scorings) {
-    assert.deepEqual(taskScores(evals, rows, scoring), { "concepts/one": 0.5, "concepts/two": 0, "build/entry-only": 0.5 }, scoring);
+test("any failed gate sets the trial score to zero", () => {
+  for (const checks of [gateFailure, { ...governorChecks, compile: fail }, { ...auditChecks, report_written: fail }]) {
+    const evaluation = "report_written" in checks ? audit : governor;
+    assert.equal(trialScore(evaluation.id, row(evaluation.id, checks), "gated"), 0);
   }
 });
 
-test("unlisted tasks: Mix keeps them all or nothing unless they are audits, Weighted gives entry checks 0", () => {
-  const checks = { report_written: pass, finding_a: pass, finding_b: fail };
-  const evals = [task("build/audit-new"), task("build/unlisted"), task("concepts/q", "concepts")];
-  const rows = [row("build/audit-new", checks), row("build/unlisted", checks), row("concepts/q", { answered: pass, target: fail })];
-  assert.deepEqual(taskScores(evals, rows, "mix"), { "build/audit-new": 0.5, "build/unlisted": 0, "concepts/q": 0 });
-  assert.deepEqual(taskScores(evals, rows, "weighted"), { "build/audit-new": 0.5, "build/unlisted": 0.5, "concepts/q": 0 });
-  assert.deepEqual(taskScores(evals, rows, "partial"), { "build/audit-new": 2 / 3, "build/unlisted": 2 / 3, "concepts/q": 0.5 });
+test("the audit counts each finding after its report gate passes", () => {
+  const trial = row(audit.id, auditChecks);
+  assert.deepEqual(checkCounts(audit.id, trial.checks).gates, { passed: 1, total: 1 });
+  assert.equal(trialScore(audit.id, trial, "gated"), 0.4);
+  assert.equal(trialScore(audit.id, trial, "all-or-nothing"), 0);
 });
 
-test("a task averages its scored trials, a pillar its tasks, Overall its pillars; cost per pass stays on passes", () => {
-  const evals = [task("build/token-governor"), task("concepts/q", "concepts")];
+test("a Concepts answer scores 100% or 0% under either rule", () => {
+  for (const scoring of scorings) {
+    assert.equal(trialScore(concepts.id, row(concepts.id, { answered: pass, target: pass }), scoring), 1);
+    assert.equal(trialScore(concepts.id, row(concepts.id, { answered: pass, target: fail }), scoring), 0);
+    assert.equal(trialScore(concepts.id, row(concepts.id, { no_answer: fail }), scoring), 0);
+  }
+});
+
+test("errors stay out of scores and each roll-up averages its scored entries", () => {
   const rows = [
-    row("build/token-governor", governorChecks),
-    row("build/token-governor", { ...governorChecks, test_lateVotesExtendTheVote: pass }, { trial: 2 }),
-    row("build/token-governor", {}, { trial: 3, status: "error", error_kind: "execution", error_reason: "Stopped." }),
-    row("concepts/q", { target: fail }),
+    row(governor.id, governorChecks),
+    row(governor.id, { ...governorChecks, test_lateVotesExtendTheVote: pass }, { trial: 2 }),
+    error,
+    row(audit.id, auditChecks),
+    row(concepts.id, { target: fail }),
   ];
-  const summary = scoreBoard(buildBoard(evals, rows), "weighted").tables.internet.summaries[agentKey(agent)];
-  near(summary.scores.build!, 0.85);
+  for (const scoring of scorings) assert.equal(trialScore(governor.id, error, scoring), null);
+  const table = scoreBoard(buildBoard([governor, audit, concepts], rows), "gated").tables.internet;
+  assert.equal(table.pillars.build.evals[0].cells[agentKey(agent)].score, 0.875);
+  const summary = table.summaries[agentKey(agent)];
+  assert.equal(summary.scores.build, (0.875 + 0.4) / 2);
   assert.equal(summary.scores.concepts, 0);
-  near(summary.scores.overall!, 0.425);
-  assert.equal(summary.costPerPass, 3);
+  assert.equal(summary.scores.overall, (0.875 + 0.4) / 4);
+  assert.equal(summary.errors, 1);
+  assert.equal(summary.costPerPass, 4);
 });
 
-test("the board shows the selected version, its explanation, and percents where passed/total would mislead", () => {
-  const evals = [task("build/token-governor"), task("concepts/q", "concepts")];
-  const rows = [row("build/token-governor", governorChecks), row("concepts/q", { target: pass })];
-  const data = buildBoard(evals, rows);
+test("the board keeps its default and explains Gated with the counted checks", () => {
+  const data = buildBoard([governor], [row(governor.id, governorChecks)]);
   const render = (query: string) => renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams(query) }));
-  const matrix = (html: string) => html.slice(html.indexOf('id="evals"'));
-
   for (const query of ["", "scoring=unknown"]) {
     const html = render(query);
     assert.match(html, /aria-checked="true"[^>]*>All or nothing<\/button>/);
-    assert.ok(html.includes("Same rule as the live board.") && html.includes("Not the live board.") && html.includes("1 check failed, so 0%.") && html.includes("Trials passed per task."));
-    assert.ok(matrix(html).includes(">0/1</button>") && matrix(html).includes(">1/1</button>"));
-    assert.match(html, /href="\/compare\/?\?mode=internet"/);
+    assert.match(html, />0\/1<\/button>/);
   }
-  const partial = render("scoring=partial");
-  assert.match(partial, /aria-checked="true"[^>]*>Partial<\/button>/);
-  assert.ok(partial.includes("4 of 5 checks passed = 80%."), "The example follows the version.");
-  assert.ok(partial.includes("<code>report_written</code>: an audit report exists."));
-  assert.ok(partial.includes("Mean trial score per task.") && !partial.includes("Trials passed per task."), "The task matrix text follows the version.");
-  assert.ok(partial.includes("agent-a / model-a. 90%. Open details."), "Overall averages Build 80% and Concepts 100%.");
-  assert.ok(matrix(partial).includes(">80%</button>") && matrix(partial).includes(">1/1</button>"));
-  assert.match(partial, /href="\/compare\/?\?mode=internet&amp;scoring=partial"/);
-  const weighted = render("scoring=weighted");
-  assert.ok(weighted.includes("0 + 1 + 3 + 3 = 7 of 10 points = 70%."), "The example adds up the points the board gives each check.");
-  assert.match(weighted, /Late votes extend voting<\/td><td class="scoring-points">3 points/);
-  assert.match(weighted, /data-selected="true"><dt>Weighted<\/dt><dd>70%/);
-  assert.ok(render("scoring=mix").includes("so All or nothing: 0%."));
+  const gated = render("scoring=gated&trial-display=b");
+  assert.match(gated, /aria-checked="true"[^>]*>Gated<\/button>/);
+  assert.match(gated, /Prototype · Trial display/);
+  assert.match(gated, /All gates passed\. 3 of 4 counted checks passed\. Trial score 75%\./);
+  assert.ok(/href="\/compare\/?\?mode=internet&amp;scoring=gated&amp;trial-display=b"/.test(gated));
 });
 
-test("the trial drawer shows the trial's score, and each check's points under Weighted", () => {
-  const evaluation = { ...task("build/token-governor"), domain: "dapp-development" as const };
-  const built = buildBoard([evaluation], [row("build/token-governor", governorChecks)]);
-  const drawer = (scoring: Scoring) => renderToStaticMarkup(createElement(Detail, {
-    data: scoreBoard(built, scoring), selection: { evaluation, agent, mode: "internet", run: 1 }, onSelect: () => {},
-  }));
-  assert.ok(!drawer("all-or-nothing").includes("<dt>Score</dt>") && !drawer("all-or-nothing").includes("point"));
-  assert.ok(drawer("partial").includes("<dt>Score</dt><dd>80%</dd>") && !drawer("partial").includes("point"));
-  const weighted = drawer("weighted");
-  assert.ok(weighted.includes("<dt>Score</dt><dd>70%</dd>"));
-  for (const [check, points] of [["compile", "0 points"], ["test_snapshotCanRunIt", "1 point"], ["test_lateVotesExtendTheVote", "3 points"]]) {
-    assert.match(weighted, new RegExp(`<code>${check}</code><small class="check-points">${points}</small>`));
+test("the labels agree across the task cell, trial tile, and drawer", () => {
+  const cases = [
+    { evaluation: governor, checks: { ...governorChecks, test_lateVotesExtendTheVote: pass }, labels: ["passed", "passed 100%", "100%"] },
+    { evaluation: governor, checks: governorChecks, labels: ["75%", "passed 75%", "75%"] },
+    { evaluation: governor, checks: { ...governorChecks, test_snapshotCanRunIt: fail }, labels: ["50%", "passed 50%", "50%"] },
+    { evaluation: governor, checks: gateFailure, labels: ["failed", "failed", "0%"] },
+    { evaluation: audit, checks: auditChecks, labels: ["40%", "passed 40%", "2 of 5 found"] },
+  ];
+  const displays: TrialDisplay[] = ["a", "b", "c"];
+  for (const { evaluation, checks, labels } of cases) {
+    const data = buildBoard([evaluation], [row(evaluation.id, checks)]);
+    for (const [index, display] of displays.entries()) {
+      const board = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams(`scoring=gated&trial-display=${display}`) }));
+      assert.ok(board.includes(`task score ${labels[index]}. Open details.`));
+      const drawer = (run?: number) => renderToStaticMarkup(createElement(Detail, {
+        data: scoreBoard(data, "gated"), selection: { evaluation: data.evaluations[evaluation.id], agent, mode: "internet", run },
+        trialDisplay: display, onSelect: () => {},
+      }));
+      assert.ok(drawer().includes(`>${labels[index]}</span></td>`));
+      assert.ok(drawer(1).includes(`>${labels[index]}</span></h1>`));
+    }
   }
 });
 
-test("scoring settings fail on a check no current row has, or a row check they do not list", () => {
-  const governor = (checks: Row["checks"]) => [row("build/token-governor", checks)];
-  assert.doesNotThrow(() => checkScoringSettings(governor(governorChecks)));
-  assert.doesNotThrow(() => checkScoringSettings([...governor(governorChecks), row("build/token-governor", { no_answer: fail }, { trial: 2 })]));
-  assert.doesNotThrow(() => checkScoringSettings([row("build/unlisted", { anything: pass })]));
-  const missing = Object.fromEntries(Object.entries(governorChecks).filter(([check]) => check !== "test_lateVotesExtendTheVote"));
-  assert.throws(() => checkScoringSettings(governor(missing)), /build\/token-governor.*test_lateVotesExtendTheVote/);
-  assert.throws(() => checkScoringSettings(governor({ ...governorChecks, test_typo: pass })), /build\/token-governor.*test_typo/);
-});
-
-test("every task in the scoring settings is a task folder, so a misspelled id cannot fall back to the default rule", () => {
-  for (const task of Object.keys(taskScoring)) assert.ok(existsSync(path.resolve(siteRoot, "../tasks", task, "task.toml")), `${task} is not a task.`);
+test("the trial tile names a missed check and the drawer shows each check's kind", () => {
+  const data = scoreBoard(buildBoard([governor], [row(governor.id, governorChecks)]), "gated");
+  const selection = { evaluation: data.evaluations[governor.id], agent, mode: "internet" as const };
+  const taskView = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
+  assert.match(taskView, /title="Missed late votes extend the vote"/);
+  const trialView = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: 1 }, onSelect: () => {} }));
+  assert.match(trialView, /Gates 3 of 3 · Judgment 1 of 2/);
+  for (const [check, kind] of [["compile", "Gate · entry"], ["test_quorumCountsTheWholeSupply", "Gate"], ["test_lateVotesExtendTheVote", "Judgment check"]]) {
+    assert.ok(trialView.includes(`<code>${check}</code><small class="check-kind">${kind}</small>`));
+  }
 });

@@ -1,7 +1,6 @@
 "use client";
 import type { CSSProperties } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import type { EvalCell } from "../src/board";
 import { scoringCopy } from "../src/labels";
 import { defaultScoring, type Scoring } from "../src/scoring";
 export const percent = (score: number | null) => score === null ? "–" : `${Math.round(score * 100)}%`;
@@ -18,8 +17,6 @@ export const formulas = {
   lift: "Lift = mean change over tasks scored in both modes for the same configuration, in percentage points. Overall averages paired pillar lifts.",
 };
 export const formulasFor = (scoring: Scoring) => scoring === defaultScoring ? formulas : { ...formulas, ...scoringCopy.formulas };
-// A task cell shows passed/total, or its score when trials score between 0 and 1.
-export const cellText = (cell: EvalCell) => cell.percent ? percent(cell.score) : `${cell.passed}/${cell.total}`;
 export function Hint({ text, children }: { text: string; children: React.ReactElement }) {
   return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent className="whitespace-pre-line">{text}</TooltipContent></Tooltip>;
 }

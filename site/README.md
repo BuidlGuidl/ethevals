@@ -46,23 +46,27 @@ The 160 Inspect rows have been removed.
 
 ## Scores and trajectories
 
-The task matrix shows passed trials out of scored trials.
+The task matrix shows each configuration's task score.
 Errors stay visible in the drawer and do not enter scores.
-A pillar score averages its task pass rates.
+A pillar score averages its scored tasks.
 Overall averages scored pillars.
 The mode controls select Internet or Model only. Internet + Skills is marked coming soon.
 Different agents, models, and efforts stay separate.
 Compare shows Overall and pillar scores for up to five configurations.
 Cost adds agent and judge API prices, even when a plan paid.
 
-This comparison build adds a scoring switch above the board, kept in the `scoring` query parameter.
-All or nothing is the default and the live board. Partial, Mixed, and Weighted score a trial from 0 to 1 from its saved checks.
-Unknown values fall back to all or nothing, and links between Results and Compare keep the parameter.
-The leaderboard, task matrix, drawer, and Compare follow the switch. Cost per pass does not change.
-`src/scoring-settings.ts` holds each task's Mixed flag and Weighted points, beside `src/areas.ts` for the same reason.
-The build fails when it names a check no current row has, or a listed task's row has a check it does not list.
-`src/labels.ts` keeps the switch's copy in `scoringCopy`.
-`pnpm exec tsx scripts/scoring-table.ts` prints Internet Overall and pillar scores under all four versions.
+The scoring switch above the board defaults to All or nothing.
+Select Gated or open `/?scoring=gated` to score the saved checks.
+If any gate fails, the trial score is 0%.
+If every gate passes, divide the checks passed by all counted checks.
+The entry checks `compile`, `answered`, and `report_written` are gates. Leave them out of the count.
+`src/scoring-settings.ts` labels the other checks. An unlabeled check is a judgment check.
+The leaderboard, task matrix, drawer, and Compare follow the scoring switch.
+
+In Gated, use Prototype · Trial display to compare labels on the same trials.
+The `trial-display` query parameter accepts `a`, `b`, or `c`.
+Version C shows audit finding counts when the counts match the score.
+`pnpm exec tsx scripts/scoring-table.ts` prints Internet Overall and pillar scores under both rules.
 
 Each trial drawer shows checks with reasons, cost, payment source, tokens, elapsed time, and errors.
 Failed no-answer trials say "Refused" or "Empty reply".

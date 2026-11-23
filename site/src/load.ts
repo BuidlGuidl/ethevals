@@ -5,7 +5,6 @@ import { buildBoard, layers, pillars, agentKey, type BoardData, type Eval } from
 import { rowSchema, type Row } from "./rows";
 import { siteRoot } from "./paths";
 import { taskTags } from "./areas";
-import { checkScoringSettings } from "./scoring";
 
 // This checks the JSON transport. The runner owns task declarations and hashes.
 const catalogSchema = z.object({
@@ -108,7 +107,6 @@ export function loadBoard(env: Record<string, string | undefined> = process.env,
   if ((demo || env.ETHEVALS_ROWS) && !exists) throw new Error(`${filename}: results file does not exist.`);
   const rows = exists ? parseRows(readFileSync(filename, "utf8"), filename, evaluations) : [];
   const shown = currentRows(rows, catalog);
-  checkScoringSettings(shown);
   console.log(`${filename}${exists ? "" : " (missing; empty board)"}: ${rows.length} read, ${shown.length} current, ${rows.length - shown.length} stale.`);
   return buildBoard(evaluations, shown, demo);
 }

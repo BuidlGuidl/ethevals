@@ -8,6 +8,7 @@ import { modeHints, names } from "../../src/labels";
 import { ModeToggle } from "../../components/mode-toggle";
 import { Hint, formulasFor, percent, pp } from "../../components/scores";
 import { ScoringToggle, scoringParam, useScoredBoard } from "../../components/scoring-toggle";
+import { readTrialDisplay, trialDisplayParam } from "../../components/trial-display";
 import { TooltipProvider } from "../../components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "../../components/ui/toggle-group";
 import { updateQuery, useQuery } from "../../components/url-state";
@@ -32,7 +33,7 @@ export default function Compare({ data: built }: { data: BoardData }) {
   return <TooltipProvider delayDuration={200}><main id="main" className="page compare-page">
     {data.demo && <aside className="banner"><strong>Demo data</strong> · Invented results for a board preview.</aside>}
     <ScoringToggle scoring={data.scoring} />
-    <div className="section-head"><h1>Compare configurations</h1><Link className="text-link" href={`/?mode=${mode}${scoringParam(data.scoring)}`}>← Back to results</Link></div>
+    <div className="section-head"><h1>Compare configurations</h1><Link className="text-link" href={`/?mode=${mode}${scoringParam(data.scoring)}${trialDisplayParam(readTrialDisplay(query.get("trial-display")))}`}>← Back to results</Link></div>
     <div className="toolbar"><ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: JSON.stringify(chosen) })} />
       <p className="muted">{modeHints[mode]}</p></div>
     {table.agents.length > 0 && <details className="compare-picker" open><summary>Change configurations <span>{chosen.length} of 5 selected</span></summary>

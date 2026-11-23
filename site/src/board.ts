@@ -1,6 +1,6 @@
 import type { Row } from "./rows";
 import { taskDomain, type Domain } from "./areas";
-import { checkPoints, defaultScoring, trialScore, type Scoring } from "./scoring";
+import { defaultScoring, trialScore, type Scoring } from "./scoring";
 export type { Row } from "./rows";
 
 export const pillars = ["concepts", "build", "act"] as const;
@@ -37,9 +37,6 @@ export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind" | "er
   cost: number | null;
   issue: string;
   trajectoryUrl: string | null;
-  // Set only when a version other than all or nothing is selected.
-  score?: number;
-  points?: Record<string, number>;
 };
 
 interface Counts {
@@ -51,8 +48,6 @@ interface Counts {
 export interface EvalCell extends Counts {
   state: "score" | "na" | "pending";
   trials: Trial[];
-  // A multi-check task under a version other than all or nothing shows its score, not passed/total.
-  percent?: true;
 }
 export interface PillarCell extends Counts {
   state: "score" | "empty" | "pending";
@@ -198,18 +193,13 @@ function lifts(tables: BoardData["tables"], keys: string[]): BoardData["lifts"] 
   }));
 }
 
-// Scores a board built under all or nothing with another version. A task's score is the mean of its trial scores.
+// A task's score is the mean of its scored trials.
 export function scoreBoard(data: BoardData, scoring: Scoring): BoardData {
   if (scoring === data.scoring) return data;
-  const rescore = (id: string, cells: Record<string, EvalCell>) => {
-    const percent = Object.values(cells).some((cell) => cell.trials.some((trial) => Object.keys(trial.checks).length > 1));
-    return Object.fromEntries(Object.entries(cells).map(([key, cell]) => {
-      const trials = cell.trials.map((trial) => ({ ...trial, score: trialScore(id, trial, scoring),
-        ...(scoring === "weighted" && { points: checkPoints(id, Object.keys(trial.checks), scoring)! }) }));
-      const scores = trials.filter((trial) => trial.status !== "error").map((trial) => trial.score);
-      return [key, { ...cell, trials, score: overallScore(scores), ...(percent && { percent: true as const }) }];
-    }));
-  };
+  const rescore = (id: string, cells: Record<string, EvalCell>) => Object.fromEntries(
+    Object.entries(cells).map(([key, cell]) => [
+      key, { ...cell, score: overallScore(cell.trials.map((trial) => trialScore(id, trial, scoring))) },
+    ]));
   const tables = Object.fromEntries(Object.entries(data.tables).map(([mode, table]) => [mode, summarize({ ...table,
     pillars: Object.fromEntries(pillars.map((pillar) => [pillar, { cells: {},
       evals: table.pillars[pillar].evals.map(({ id, cells }) => ({ id, cells: rescore(id, cells) })) }])) as Table["pillars"] })])) as BoardData["tables"];
