@@ -143,15 +143,13 @@
   .trial-legend { @apply gap-x-4 gap-y-2 text-[11px] text-muted; }
   .trial-legend > span { @apply gap-1.5; }
   .trial-mark { @apply inline-grid size-3.5 shrink-0 place-items-center align-middle; }
-  .trial-result { @apply flex items-center gap-2; }
-  .trial-result small { @apply text-[11px] leading-snug text-muted; }
   .trial-mark[data-mark="score"] {
     border: 1px solid var(--color-green);
     background: linear-gradient(to right, var(--color-green) var(--score), transparent var(--score));
     background-origin: border-box;
   }
   .trial-mark[data-mark="gate-check"] { @apply border border-red text-red; }
-  .trial-mark[data-mark="error"] { @apply border border-amber text-[10px] font-bold leading-none text-amber; }
+  .trial-mark[data-mark="error"] { @apply text-amber; }
   .scoring-body { @apply grid content-start gap-x-10 gap-y-5 pt-4 md:grid-cols-2; }
   .scoring-average { @apply border-t border-border pt-4 md:col-span-2; }
   .scoring-average ul { @apply md:flex md:flex-wrap md:gap-x-8; }
@@ -224,7 +222,6 @@
   .eval-list-row { @apply flex min-h-11 w-full items-center gap-3 border-b border-border py-3 text-left; }
   .eval-list-row:hover { @apply bg-tint; }
   .eval-list-result { @apply ml-auto flex items-center gap-3; }
-  .eval-list-note { @apply mb-4 grid gap-2 text-[11px] text-muted; }
   .eval-list-title { @apply grid grow gap-1 text-left; }
   .eval-list-title, .checks li > div { min-width: 0; }
   .eval-list-title small { @apply text-[10px] text-muted; }

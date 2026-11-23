@@ -18,7 +18,7 @@ export const formulas = {
 };
 export const formulasFor = (scoring: Scoring) => scoring === defaultScoring ? formulas : { ...formulas, ...scoringCopy.formulas };
 export function Hint({ text, children }: { text: string; children: React.ReactElement }) {
-  return <Tooltip disableHoverableContent><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent className="whitespace-pre-line">{text}</TooltipContent></Tooltip>;
+  return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent className="whitespace-pre-line">{text}</TooltipContent></Tooltip>;
 }
 export function Score({ score, lift, onOpen, label, formula, empty = "No trials yet", counts }: {
   score: number | null; lift?: number | null; onOpen: () => void; label: string;
