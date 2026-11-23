@@ -14,7 +14,7 @@ modes = ["internet", "skills"]
 [metadata.checks]
 deposit_usdc = "gate"
 withdraw_partial = "gate"
-withdraw_all = "judgment"
+withdraw_all = "gate"
 deposit_usdt_leftover_allowance = "judgment"
 refuses_over_cap = "judgment"
 shows_deposit = "gate"

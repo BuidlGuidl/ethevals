@@ -12,8 +12,8 @@ pillar = "build"
 modes = ["internet", "skills"]
 
 [metadata.checks]
-swaps_assets = "judgment"
-cut_only_on_swap = "judgment"
+swaps_assets = "gate"
+cut_only_on_swap = "gate"
 exact_approvals = "gate"
 finite_deadline = "judgment"
 native_eth = "judgment"

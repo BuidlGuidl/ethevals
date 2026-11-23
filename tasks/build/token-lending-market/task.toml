@@ -12,7 +12,7 @@ pillar = "build"
 modes = ["internet", "skills"]
 
 [metadata.checks]
-test_marketWorksAndBooksBalance = "judgment"
+test_marketWorksAndBooksBalance = "gate"
 test_interestChargedBeforeTheAction = "judgment"
 test_strayTokensChangeNothing = "judgment"
 test_roundingFavoursMarket = "judgment"

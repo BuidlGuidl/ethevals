@@ -1248,7 +1248,7 @@ modes = ["internet", "skills"]
 test_quorumCountsTheWholeSupply = "gate"
 test_theDelayGuardsTheMoney = "gate"
 test_lateVotesExtendTheVote = "judgment"
-test_snapshotCanRunIt = "judgment"
+test_snapshotCanRunIt = "gate"
 
 [verifier]
 environment_mode = "separate"  # (2)

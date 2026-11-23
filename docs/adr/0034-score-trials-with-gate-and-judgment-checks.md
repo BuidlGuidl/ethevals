@@ -33,10 +33,10 @@ One `token-governor` trial:
 | --- | --- | --- |
 | quorum counts the whole supply | gate | pass |
 | the delay guards the money | gate | pass |
-| snapshot can run it | judgment | pass |
+| snapshot can run it | gate | pass |
 | late votes extend the vote | judgment | fail |
 
-Both gate checks pass, so the trial score is 3 of 4, 75%.
+All three gate checks pass, so the trial score is 3 of 4, 75%.
 Had the quorum check failed, the trial score would be 0%.
 
 - **Entry checks only show that something was handed in.** They are `compile`, `answered`, `no_answer`, and `report_written`. A failed entry check makes the trial score 0%. A passed one earns nothing and stays out of the division.
@@ -69,6 +69,7 @@ The board keeps its count until its own change lands.
 - **Passed checks ÷ all checks, with no gate.** A trial that fails what the instruction asked keeps most of its credit, and the six strongest agents end up within about 4 percentage points.
 - **Weights per kind of check.** The weights are numbers picked by hand.
 - **A gate check is one that is unsafe to miss.** Whether the instruction asks for something can be read off the instruction. Whether a miss is unsafe is a fresh call for every check.
+- **A check that mixes an asked part with an unasked detail is a judgment check.** A trial that fails the asked part would then keep credit. Such a check is a gate check.
 - **Tag only gate checks and treat the rest as judgment checks.** A forgotten tag would turn a 0% into credit without any warning.
 - **Tags in a site file.** A new task would need a second edit far from the task, and a renamed check would lose its tag silently.
 - **Tags inside `tests/`.** The checks hash changes, and a regrade asks the judge again on every task that has one, even with `tests/regrade-from.json`.
