@@ -122,8 +122,8 @@
   .refusal-inline-mark svg { @apply h-4 w-4; }
   .score-sub { @apply mt-0.5 inline-flex items-center gap-1 text-[11px] font-normal leading-none text-muted; }
   .refusal-text { @apply text-refusal; }
-  .refusal-banner, .refusal-note { @apply flex items-start gap-2 border border-refusal/30 bg-refusal/5 px-3 py-2 text-xs text-refusal; }
-  .refusal-banner svg, .refusal-note svg { @apply mt-0.5 shrink-0; }
+  .refusal-banner, .refusal-note { @apply flex items-center gap-2 border border-refusal/30 bg-refusal/5 px-3 py-2 text-xs text-refusal; }
+  .refusal-banner svg, .refusal-note svg { @apply shrink-0; }
   .refusal-strip { @apply flex items-center gap-2 border border-refusal/25 bg-refusal/5 px-3 py-1.5 text-[11px] text-muted; }
   .refusal-strip svg { @apply h-3.5 w-3.5 shrink-0 text-refusal; }
   /* The switch and its info icon sit at the right end of the toolbar. */
@@ -221,20 +221,13 @@
   .eval-list-title { @apply grid grow gap-1 text-left; }
   .eval-list-title, .checks li > div { min-width: 0; }
   .eval-list-title small { @apply text-[10px] text-muted; }
-  .run-dots { @apply inline-flex flex-wrap gap-1; max-width: 110px; }
-  .run-dot { @apply inline-block h-2.5 w-2.5 shrink-0; }
+  .run-dots { @apply inline-flex flex-wrap items-center gap-1; max-width: 110px; }
+  /* Squares for scores, the board's icons for stops: filled, outline, red, warning triangle, shield. */
+  .run-dot { @apply inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center; }
   .run-dot[data-state="full"] { @apply bg-green; }
   .run-dot[data-state="part"] { @apply border-2 border-green bg-transparent; }
-  /* Each state has its own shape, so the dots read without colour: square, outline, cross, diamond. */
-  .run-dot[data-state="zero"] {
-    background:
-      linear-gradient(45deg, transparent 40%, var(--color-red) 40% 60%, transparent 60%),
-      linear-gradient(-45deg, transparent 40%, var(--color-red) 40% 60%, transparent 60%);
-  }
-  .run-dot[data-state="error"] { @apply bg-amber; transform: rotate(45deg) scale(.8); }
-  /* A ring with a slash, like a no-entry sign. */
-  .run-dot[data-state="refused"] { border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--color-refusal);
-    background: linear-gradient(45deg, transparent 43%, var(--color-refusal) 43% 57%, transparent 57%); }
+  .run-dot[data-state="zero"] { @apply bg-red; }
+  .run-dot[data-state="error"], .run-dot[data-state="refused"] { @apply h-[13px] w-[13px]; }
   .run-dot[data-ignored] { opacity: .5; }
   .trial-legend, .trial-legend > span { @apply flex items-center; }
   .trial-legend { @apply mb-3 flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted; }

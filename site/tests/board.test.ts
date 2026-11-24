@@ -65,10 +65,10 @@ test("refused trials get their own label and dot, and say when they are ignored"
   const task = (data: ReturnType<typeof buildBoard>) => renderToStaticMarkup(createElement(Detail, {
     data, selection: { evaluation, agent, mode: "internet" }, onSelect: () => {} }));
   const counted = task(buildBoard([evaluation], rows));
-  assert.match(counted, /data-state="refused"[^>]*><\/span>0%<\/span><\/td><td class="refusal-text">Safety refusal<\/td>/);
+  assert.match(counted, /data-state="refused"[^>]*><svg[^>]*lucide-shield-ban[^>]*>.*?<\/svg><\/span>0%<\/span><\/td><td class="refusal-text">Safety refusal<\/td>/);
   assert.match(counted, /class="refusal-banner">.*1 refused trial \(scored as 0%\)\./);
   const ignored = task(ignoreRefusals(buildBoard([evaluation], rows)));
-  assert.match(ignored, /data-state="refused" data-ignored="true"[^>]*><\/span>Ignored<\/span><\/td><td class="refusal-text">Refused \(ignored\)<\/td>/);
+  assert.match(ignored, /data-state="refused" data-ignored="true"[^>]*><svg[^>]*lucide-shield-ban[^>]*>.*?<\/svg><\/span>Ignored<\/span><\/td><td class="refusal-text">Refused \(ignored\)<\/td>/);
   assert.match(ignored, /class="refusal-banner">.*1 refused trial ignored\./);
   assert.doesNotMatch(task(buildBoard([evaluation], [row({ trial: 2 })])), /refusal|data-state="refused"/);
 });
@@ -327,7 +327,7 @@ test("task details open the instruction and list one button per trial with compa
   for (const label of ["Trial", "Trial score", "Checks", "Time", "Tokens", "Cost"]) assert.ok(panel.includes(`<th scope="col">${label}</th>`));
   assert.equal((panel.match(/class="run-open"/g) ?? []).length, 3);
   assert.ok(panel.includes('aria-label="Trial 2 · 0% · 1 of 2 passed. Open trial."'));
-  assert.match(panel, /data-state="full"[^>]*><\/span>100%.*data-state="zero"[^>]*><\/span>0%.*data-state="error"[^>]*><\/span>Not scored/s);
+  assert.match(panel, /data-state="full"[^>]*><\/span>100%.*data-state="zero"[^>]*><\/span>0%.*data-state="error"[^>]*><svg[^>]*lucide-triangle-alert[^>]*>.*?<\/svg><\/span>Not scored/s);
   assert.ok(panel.includes('<td>1 of 2 passed</td>') && panel.includes('<td>7k</td>') && panel.includes('aria-hidden="true">›</td>'));
   assert.equal((panel.match(/open=""/g) ?? []).length, 1);
   assert.ok(!panel.includes('<ul class="checks">') && !panel.includes('class="run-row"'));

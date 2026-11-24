@@ -1,3 +1,4 @@
+import { AlertTriangle, ShieldBan } from "lucide-react";
 import type { EvalCell, Trial } from "../src/board";
 import { isRefusedTrial } from "../src/refusals";
 import { percent } from "./scores";
@@ -37,7 +38,10 @@ export const taskHint = (cell: EvalCell) =>
   [`Task score ${percent(cell.score)}`, ...cell.trials.map(trialHint)].join("\n");
 
 export function TrialDot({ state, ignored }: { state: State; ignored?: boolean }) {
-  return <span className="run-dot" data-state={state} data-ignored={ignored || undefined} aria-hidden="true" />;
+  return <span className="run-dot" data-state={state} data-ignored={ignored || undefined} aria-hidden="true">
+    {state === "error" && <AlertTriangle size={13} strokeWidth={2.2} className="text-amber" />}
+    {state === "refused" && <ShieldBan size={13} strokeWidth={2.2} className="text-refusal" />}
+  </span>;
 }
 
 export function TrialDots({ trials }: { trials: Trial[] }) {

@@ -53,7 +53,7 @@ test("with refusals ignored, affected scores show the counted score under them a
 
 test("the switch and its info icon end the toolbar, and stay while refusals are ignored", () => {
   const toolbar = (html: string) => html.split('class="toolbar"')[1].split('class="table-shell"')[0];
-  assert.match(toolbar(page("")), /class="mode-note">.*role="switch" aria-checked="false"[^>]*>.*Ignore refusals<\/button>.*aria-label="Why ignore refusals: Some providers stop trials mid-task with a safety filter\. By default, two refusals in a row score 0%\. Turn this on to leave refused trials out of the averages\."/s);
+  assert.match(toolbar(page("")), /class="mode-note">.*role="switch" aria-checked="false"[^>]*>.*Ignore refusals<\/button>.*aria-label="Why ignore refusals: Some providers stop trials mid-task with a safety filter\. By default, refused trials score 0%\. Turn this on to leave refused trials out of the averages\."/s);
   assert.match(page("refusals=ignore"), /role="switch" aria-checked="true"/);
   // A mode with no refusals hides the switch, unless refusals are being ignored, so it can be turned off.
   assert.doesNotMatch(page("mode=vanilla"), /Ignore refusals/);

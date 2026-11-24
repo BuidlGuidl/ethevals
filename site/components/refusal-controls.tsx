@@ -5,7 +5,7 @@ import { setIgnoringRefusals } from "./url-state";
 
 const why = [
   "Some providers stop trials mid-task with a safety filter.",
-  "By default, two refusals in a row score 0%.",
+  "By default, refused trials score 0%.",
   "Turn this on to leave refused trials out of the averages.",
 ];
 
