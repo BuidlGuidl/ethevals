@@ -11,6 +11,18 @@ keywords = ["ethereum", "governance", "react", "wagmi", "anvil"]
 pillar = "build"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+# Reported only in the free check, where no judge runs.
+free_submission_changed = "gate"
+lists_every_proposal = "gate"
+status_and_tallies_match = "gate"
+quorum_counts_for_only = "judgment"
+end_moves_with_late_quorum = "judgment"
+wrap_then_delegate = "gate"
+votes_at_snapshot = "judgment"
+canceled_status = "gate"
+already_voted = "judgment"
+
 [verifier]
 environment_mode = "shared"
 user = "root"

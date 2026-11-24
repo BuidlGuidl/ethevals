@@ -11,6 +11,17 @@ keywords = ["ethereum", "aave", "react", "wagmi", "fork"]
 pillar = "build"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+deposit_usdc = "gate"
+withdraw_partial = "gate"
+withdraw_all = "gate"
+deposit_usdt_leftover_allowance = "judgment"
+refuses_over_cap = "judgment"
+shows_deposit = "gate"
+shows_apy = "gate"
+explains_supply_cap = "judgment"
+switches_and_continues = "judgment"
+
 [verifier]
 environment_mode = "shared"
 user = "root"

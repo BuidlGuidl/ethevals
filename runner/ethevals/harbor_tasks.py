@@ -12,13 +12,16 @@ from harbor.models.task.task import Task
 import toml
 import yaml
 
-from .checks import read_reward
+from .checks import ENTRY_CHECKS, read_reward
 from .images.tag import BUILD_INPUTS, image_tag
 from .job_config import JobSettings, load_job
+from .task_hashes import UNHASHED_METADATA
 
 AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)
 SERVICE_KEYS = {"image", "build", "init", "command", "entrypoint", "working_dir", "user",
                 "environment", "networks", "volumes", "depends_on", "healthcheck", "mem_limit", "cpus"}
+# Match the names that images/forge_checks.py writes when compilation fails.
+FORGE_TEST_NAME = re.compile(r"\bfunction\s+(test\w*)\s*\(")
 
 
 def task_judges(path: Path) -> dict[Path, JudgeTomlConfig]:
@@ -54,6 +57,40 @@ def task_host_variables(path: Path) -> list[str]:
     return sorted(names)
 
 
+def lint_check_tags(path: Path, metadata: dict, criteria: set[str]) -> None:
+    settings = path / "task.toml"
+    if path.parent.name == "concepts":
+        if "checks" in metadata:
+            raise ValueError(f"{settings}: Concepts tasks cannot declare metadata.checks")
+        return
+    if path.parent.name not in {"build", "act"}:
+        return
+
+    tags = metadata.get("checks")
+    if not isinstance(tags, dict):
+        raise ValueError(f"{settings}: Build and Act tasks must declare a metadata.checks table")
+    for name, tag in tags.items():
+        if not name.strip():
+            raise ValueError(f"{settings}: metadata.checks needs nonempty check names")
+        if name in ENTRY_CHECKS:
+            raise ValueError(f"{settings}: entry check {name!r} cannot have a tag")
+        if tag not in ("gate", "judgment"):
+            raise ValueError(f"{settings}: check {name!r} must be tagged gate or judgment")
+
+    tests = path / "tests"
+    files = [file for file in tests.rglob("*") if file.is_file()]
+    forge = {name for file in files if file.name.endswith(".t.sol")
+             for name in FORGE_TEST_NAME.findall(file.read_text())}
+    known = (criteria | forge) - ENTRY_CHECKS
+    if missing := known - tags.keys():
+        raise ValueError(f"{settings}: missing check tags: {', '.join(sorted(missing))}")
+
+    # Only require an exact match for tasks that use just Forge tests or judge criteria.
+    extra = tags.keys() - known
+    if extra and known and all(file == tests / "test.sh" or file.suffix in {".sol", ".toml"} for file in files):
+        raise ValueError(f"{settings}: unknown check tags: {', '.join(sorted(extra))}")
+
+
 def lint_task(path: Path, config: JobSettings | None = None) -> None:
     for item in path.rglob("*"):
         if item.is_symlink():
@@ -70,6 +107,8 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         raise ValueError(f"{path / 'task.toml'}: [task].description must be a nonempty line")
     if task.config.metadata.get("pillar") != path.parent.name:
         raise ValueError(f"{path / 'task.toml'}: metadata.pillar must match the parent folder {path.parent.name!r}")
+    if unknown := task.config.metadata.keys() - set(UNHASHED_METADATA):
+        raise ValueError(f"{path / 'task.toml'}: unknown metadata keys: {', '.join(sorted(unknown))}")
     if "area" in task.config.metadata:
         area = task.config.metadata["area"]
         if not isinstance(area, str) or not area.strip():
@@ -122,6 +161,7 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
                 raise ValueError(f"{reward}: judge criteria and tests must contribute to all-pass reward")
             if root:
                 break
+    lint_check_tags(path, task.config.metadata, names)
     visible = [path / "instruction.md", *(path / "environment").rglob("*")]
     for item in visible:
         if not item.is_file():
@@ -200,11 +240,17 @@ async def free_check(paths: list[Path], output: Path) -> None:
     if not available:
         return
     originals = {}
+    tags = {}
+    criteria = {}
     for path in available:
         staged = output / "tasks" / path.parent.name / path.name
         shutil.copytree(path, staged)
         originals[staged.resolve()] = path
+        if path.parent.name in {"build", "act"}:
+            tags[path] = Task(staged).config.metadata["checks"]
         judges = task_judges(staged)
+        # Criteria never run here, so remember their names before the judge files go.
+        criteria[path] = {item.name for judge in judges.values() for item in judge.criterion}
         if judges:
             print(f"{path}: criteria skipped in the free check; the judge needs a model call.", flush=True)
             for file in judges:
@@ -238,6 +284,10 @@ async def free_check(paths: list[Path], output: Path) -> None:
             rewards, checks = read_reward(result_path.parent / "verifier")
             checks_path = result_path.parent / "verifier/reward-details.json"
             path = originals[Path(result["config"]["task"]["path"]).resolve()]
+            if path in tags and (missing := checks.keys() - ENTRY_CHECKS - tags[path].keys()):
+                raise ValueError(f"{checks_path}: {path}: missing check tags: {', '.join(sorted(missing))}")
+            if path in tags and (unknown := tags[path].keys() - checks.keys() - criteria[path]):
+                raise ValueError(f"{checks_path}: {path}: unknown check tags: {', '.join(sorted(unknown))}")
             if expected:
                 names[path] = set(checks)
             elif set(checks) != names.get(path):
@@ -246,4 +296,8 @@ async def free_check(paths: list[Path], output: Path) -> None:
             saved = (result.get("verifier_result") or {}).get("rewards")
             if saved != rewards or rewards["reward"] != int(expected) or passed != expected:
                 raise ValueError(f"{result_path}: {agent} run must give reward {int(expected)} with matching checks")
+            if not expected and path in tags and not any(
+                    not check["passed"] and (name in ENTRY_CHECKS or tags[path].get(name) == "gate")
+                    for name, check in checks.items()):
+                raise ValueError(f"{checks_path}: {path}: the nop run must fail a gate check or an entry check")
             print(f"{path}: {agent} reward {int(expected)}; checks: {checks_path}")

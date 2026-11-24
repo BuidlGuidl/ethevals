@@ -60,6 +60,24 @@ def test_lint_enforces_judge_rules(tmp_path, before, after, message):
         lint_task(task, load_job(job_config(tmp_path)))
 
 
+@pytest.mark.parametrize("tags,error", [
+    ("", "missing check tags: explained"),
+    ('explained = "gate"\nother = "judgment"\n', "unknown check tags: other"),
+    ('explained = "judgment"\n', None),
+])
+def test_lint_matches_tags_to_judge_criteria(tmp_path, tags, error):
+    task = task_folder(tmp_path, pillar="build")
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text() + tags)
+    add_judge(task)
+    config = load_job(job_config(tmp_path))
+    if error:
+        with pytest.raises(ValueError, match=error):
+            lint_task(task, config)
+    else:
+        lint_task(task, config)
+
+
 def test_lint_accepts_a_quiz_judge_that_reads_only_the_final_reply(tmp_path):
     task = task_folder(tmp_path)
     add_judge(task)
@@ -221,12 +239,20 @@ def test_export_card_explains_the_required_judge_key(tmp_path):
     assert (output / "tasks/concepts--question/tests/judge.toml").read_bytes() == (task / "tests/judge.toml").read_bytes()
 
 
-def test_free_check_skips_nested_judges_and_preserves_programmatic_checks(tmp_path, monkeypatch):
+@pytest.mark.parametrize("tags,error", [
+    ('answer = "gate"\n', None),
+    ("", "missing check tags: answer"),
+    ('answer = "gate"\nunseen = "gate"\n', "unknown check tags: unseen"),
+    ('answer = "judgment"\n', "the nop run must fail a gate check or an entry check"),
+])
+def test_free_check_skips_nested_judges_and_matches_tags_to_reported_checks(tmp_path, monkeypatch, tags, error):
     from harbor.job import Job
     from rewardkit.runner import run as run_rewardkit
     from ethevals.harbor_tasks import free_check
 
-    task = task_folder(tmp_path)
+    task = task_folder(tmp_path, pillar="build")
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text() + 'explained = "judgment"\n' + tags)
     add_judge(task, key_env="CLAUDE_CODE_OAUTH_TOKEN")
     group = task / "tests/judgment"
     group.mkdir()
@@ -234,7 +260,8 @@ def test_free_check_skips_nested_judges_and_preserves_programmatic_checks(tmp_pa
     (group / "reward.toml").write_text('[[reward]]\naggregation = "all-pass"\nweights = {judge = 1}\n')
     (task / "tests/reward.toml").write_text(
         '[[reward]]\nname = "reward"\naggregation = "all-pass"\nweights = {judgment = 1, output = 1}\n')
-    (task / "tests/output.py").write_text('import rewardkit as rk\nrk.file_exists("answer.txt", name="answer")\n')
+    (task / "tests/output.py").write_text('import rewardkit as rk\nrk.file_exists("answer.txt", name="answer")\n'
+                                          'rk.file_exists("report.txt", name="report_written")\n')
     before = {file.relative_to(task): file.read_bytes() for file in task.rglob("*") if file.is_file()}
 
     class SavedJob:
@@ -244,6 +271,7 @@ def test_free_check_skips_nested_judges_and_preserves_programmatic_checks(tmp_pa
         async def run(self):
             folder = tmp_path / "out" / self.config.job_name / "trial"
             (folder / "verifier").mkdir(parents=True)
+            (folder / "report.txt").write_text("An empty report.")
             if self.config.job_name == "oracle":
                 (folder / "answer.txt").write_text("metre")
             staged = self.config.tasks[0].path
@@ -258,6 +286,10 @@ def test_free_check_skips_nested_judges_and_preserves_programmatic_checks(tmp_pa
 
     monkeypatch.setattr(Job, "create", create)
     lint_task(task)
+    if error:
+        with pytest.raises(ValueError, match=error):
+            asyncio.run(free_check([task], tmp_path / "out"))
+        return
     asyncio.run(free_check([task], tmp_path / "out"))
     assert {file.relative_to(task): file.read_bytes() for file in task.rglob("*") if file.is_file()} == before
     for agent, expected in (("oracle", 1), ("nop", 0)):

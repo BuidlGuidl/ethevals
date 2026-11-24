@@ -12,6 +12,14 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+c1_deposit_queue_gas_lock = "judgment"
+c2_processed_deposits_double_count = "judgment"
+c3_withdraw_rounds_shares_down = "judgment"
+h1_withdraw_blocks_end_round = "judgment"
+h2_base_deposit_reentrancy = "judgment"
+h3_processing_rounds_shares_up = "judgment"
+
 [agent]
 timeout_sec = 3600
 

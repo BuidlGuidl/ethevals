@@ -12,6 +12,10 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+c1_reserve_stuck_without_graduation = "judgment"
+h1_unchecked_auction_recipients = "judgment"
+
 [agent]
 timeout_sec = 3600
 

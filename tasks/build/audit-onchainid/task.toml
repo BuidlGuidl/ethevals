@@ -12,6 +12,11 @@ pillar = "build"
 area = "Audits"
 modes = ["internet"]
 
+[metadata.checks]
+c1_batch_calldata_targets = "judgment"
+h1_queued_factory_call = "judgment"
+h2_key_registry_target = "judgment"
+
 [agent]
 timeout_sec = 3600
 

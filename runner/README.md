@@ -12,6 +12,16 @@ Concepts holds questions, Build holds builds, and Act holds tasks where the agen
 Each folder has `task.toml`, `instruction.md`, `environment/`, `tests/`, and `solution/`.
 Copy a task with similar needs, then run the [free check](../docs/harbor.md#free-checks).
 
+`ethevals lint` requires a `[metadata.checks]` table on Build and Act tasks.
+The table maps each check name to `gate` for a gate check or `judgment` for a judgment check.
+Lint rejects tags for entry checks and rejects the table on Concepts tasks.
+Lint reads names from judge criteria and Forge tests and requires a tag for each of them.
+When those files supply all the check names, lint also rejects unknown names.
+Custom verifiers can report names that lint cannot read. The free check requires tags for the names those verifiers report.
+It also rejects a tag that matches no reported check and no criterion.
+The nop run must fail a gate check or an entry check.
+Lint rejects any `[metadata]` key other than `pillar`, `area`, `layer`, `modes`, and `checks`. Any other key would change the environment hash.
+
 ## Verifiers
 
 Each task's `tests/test.sh` runs RewardKit, which writes the reward and named check details.
@@ -67,6 +77,8 @@ Environment files and agent settings supply the environment hash.
 Tests, criteria, verifier settings, artifact declarations, and the job's judge program, model, and effort supply the checks hash.
 The task README, solutions, descriptions, authors, keywords, and task versions change no trial identity or checks hash.
 Known display fields and mode declarations also stay outside the hashes.
+The `[metadata.checks]` table stays outside the instruction, environment, and checks hashes.
+It counts toward Harbor's whole-folder task hash.
 Unknown files and settings count as environment inputs.
 A changed instruction or environment hash reruns every selected mode.
 A changed checks hash plans a regrade, or a rerun when the saved work cannot support the changed checks.

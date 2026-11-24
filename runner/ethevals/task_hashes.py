@@ -8,6 +8,10 @@ from harbor.publisher.packager import DEFAULT_IGNORES
 import pathspec
 
 
+# Metadata keys that stay out of every hash. Lint allows no others.
+UNHASHED_METADATA = ("pillar", "area", "layer", "modes", "checks")
+
+
 def digest(value) -> str:
     return "sha256:" + hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -35,7 +39,7 @@ def task_hashes(path: Path, judge: dict | None = None) -> dict:
     if not info:
         document.pop("task", None)
     metadata = document.get("metadata", {})
-    for key in ("pillar", "area", "layer", "modes"):
+    for key in UNHASHED_METADATA:
         metadata.pop(key, None)
     if not metadata:
         document.pop("metadata", None)

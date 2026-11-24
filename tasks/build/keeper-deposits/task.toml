@@ -18,6 +18,14 @@ keywords = ["ethereum", "eip3009", "erc4626", "signatures", "fork"]
 pillar = "build"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+deposit_lands = "gate"
+signature_used_first = "judgment"
+two_pending = "gate"
+safe_depositor = "gate"
+no_replay = "judgment"
+forged_deposit = "judgment"
+
 [verifier]
 environment_mode = "shared"
 user = "root"

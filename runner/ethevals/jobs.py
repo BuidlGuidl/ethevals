@@ -40,6 +40,7 @@ def task_entry(path: Path, config: JobSettings | None = None) -> dict:
     return {"id": f"{pillar}/{path.name}", "hash": "sha256:" + digest, "pillar": pillar,
             **task_hashes(path, judge),
             "area": metadata.get("area"), "layer": metadata.get("layer"),
+            **({"checks": metadata["checks"]} if "checks" in metadata else {}),
             "name": task.name, "description": task.config.task.description,
             "instruction": (path / "instruction.md").read_text(), "modes": modes}
 

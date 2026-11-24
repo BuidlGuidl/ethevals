@@ -52,6 +52,7 @@ Let's look at each piece:
 | `[metadata].area`             | no                | a non-empty string naming the part of dapp development, such as Lending or Swaps |
 | `[metadata].layer`            | no                | for a Build task, what the agent writes: `contracts`, `frontend`, or `backend` |
 | `[metadata].modes`            | yes               | any of `vanilla`, `internet`, and `skills`                                |
+| `[metadata.checks]`           | Build and Act     | each check name and its tag, except entry checks                           |
 | `[verifier].environment_mode` | no                | `shared` for a task with a chain, `separate` for one without              |
 | `[verifier].user`             | no                | `root` for Forge tests                                                    |
 | `[verifier.env]`              | if it has criteria | the two optional judge credentials, `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` |
@@ -69,6 +70,14 @@ Which agents run, how many trials each gets (`n_attempts`), and how many retries
 The board sets no time limit of its own, so Harbor's defaults apply. The agent has none, and the verifier gets 10 minutes.
 Add `[agent].timeout_sec` or `[verifier].timeout_sec` only when your task needs a different one.
 
+For a Build or Act task, list each check by the name the verifier reports under `[metadata.checks]`.
+Use `"gate"` for a gate check that tests a requirement in the instruction.
+Use `"judgment"` for a judgment check that tests what an experienced Ethereum developer does without being told.
+Leave entry checks out of the table. Their names are `compile`, `answered`, `no_answer`, and `report_written`.
+Leave out the whole table for Concepts tasks.
+A trial that does nothing must score 0%, so the starting files have to fail a gate check or an entry check. The free check tests this.
+Add no other key under `[metadata]`. Lint rejects it.
+
 ### `README.md`
 
 `README.md` tells people why the task exists and what it catches.
@@ -79,15 +88,15 @@ Use these sections, in this order:
 | --------------------- | ----------------------------------------------------------------------------- |
 | `# <title>`           | two or three sentences on what the user asks and what the task checks        |
 | `## The instruction`  | `instruction.md`, word for word, as a blockquote so it wraps on GitHub: every line starts with `> `, and a `>` line separates paragraphs |
-| `## What it touches`  | the areas the task touches, and the gotchas in each that the instruction leaves out |
+| `## What it touches`  | the areas the task touches, and what the instruction leaves out in each |
 | `## The checks`       | a table with every check by name, what it proves, and its area                |
-| `## Why it matters`   | where the same gotchas hurt real projects, with links                         |
+| `## Why it matters`   | where the same mistakes hurt real projects, with links                         |
 | `## Notes`            | optional caveats, such as a known contract that passes every check            |
 
 In the blockquote, start every line with `> ` and put a lone `>` line between paragraphs.
 A unit test fails the pull request if a section is missing, if the quoted instruction differs from `instruction.md`, or if the table leaves out a check.
 Write the README before the tests.
-If you can't name a gotcha that the instruction leaves out, the task probably won't tell agents apart.
+If you can't name something that the instruction leaves out, the task probably won't tell agents apart.
 The [token governor README](../tasks/build/token-governor/README.md) is a full example.
 
 ### `instruction.md`
@@ -167,7 +176,7 @@ The recipes below show two real setups.
 `tests/` holds the checks that decide whether the agent got it right.
 Harbor copies it in only after the agent stops, and runs `tests/test.sh`.
 
-A check is one pass-or-fail result with a name and a one-line reason. A trial passes only if every check passes.
+A check is one pass-or-fail result with a name and a one-line reason. The board turns a trial's checks into a trial score, defined in [CONTEXT.md](../CONTEXT.md).
 Check the outcome the instruction asked for, and give every failure a reason that says what went wrong.
 Split separate requirements into separate checks, so a failure tells readers which one broke.
 You pick the checks that fit your task, and you can use more than one kind:
@@ -548,6 +557,16 @@ keywords = ["ethereum", "governance", "react", "wagmi", "anvil"]
 pillar = "build"
 modes = ["internet", "skills"]  # (2)
 
+[metadata.checks]
+lists_every_proposal = "gate"
+status_and_tallies_match = "gate"
+quorum_counts_for_only = "judgment"
+end_moves_with_late_quorum = "judgment"
+wrap_then_delegate = "gate"
+votes_at_snapshot = "judgment"
+canceled_status = "gate"
+already_voted = "judgment"
+
 [verifier]
 environment_mode = "shared"  # (3)
 user = "root"  # (4)
@@ -842,6 +861,12 @@ keywords = ["ethereum", "morpho", "vault", "fork"]
 [metadata]
 pillar = "act"
 modes = ["internet", "skills"]  # (1)
+
+[metadata.checks]
+test_vaultIsOutForGood = "gate"
+test_strangerCannotReopenIt = "gate"
+test_depositorsStillServed = "gate"
+test_nothingElseChanged = "gate"
 
 [verifier]
 environment_mode = "shared"  # (2)
@@ -1220,6 +1245,12 @@ keywords = ["ethereum", "solidity", "governance"]
 [metadata]
 pillar = "build"
 modes = ["internet", "skills"]
+
+[metadata.checks]
+test_quorumCountsTheWholeSupply = "gate"
+test_theDelayGuardsTheMoney = "gate"
+test_lateVotesExtendTheVote = "judgment"
+test_snapshotCanRunIt = "gate"
 
 [verifier]
 environment_mode = "separate"  # (2)

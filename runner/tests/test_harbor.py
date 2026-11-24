@@ -332,15 +332,20 @@ def test_task_lint_rejects_test_words_in_agent_text(harbor_task, name):
     assert f"{name}: agent-visible text contains forbidden word 'eval'" in result.stderr
 
 
-def test_free_check_validates_and_skips_a_task_without_compose_host_variable(harbor_task, tmp_path, monkeypatch, capsys):
+def test_free_check_validates_and_skips_a_task_without_compose_host_variable(tmp_path, monkeypatch, capsys):
     from ethevals.cli import main
     from harbor.job import Job
+    from test_jobs import task_folder
 
+    harbor_task = task_folder(tmp_path, pillar="act")
     def refuse_job(*args, **kwargs):
         raise AssertionError("A skipped task cannot start a job.")
 
     monkeypatch.setattr(Job, "create", refuse_job)
     monkeypatch.delenv("ARCHIVE_RPC_URL", raising=False)
+    settings = harbor_task / "task.toml"
+    settings.write_text(settings.read_text() + 'observed = "gate"\n')
+    (harbor_task / "tests/observe.py").write_text('import rewardkit as rk\nrk.file_exists("answer.txt", name="observed")\n')
     (harbor_task / "environment/docker-compose.yaml").write_text(
         "services:\n  browser:\n    environment:\n      URL: ${ARCHIVE_RPC_URL:?Set ARCHIVE_RPC_URL}\n")
     output = tmp_path / "job"

@@ -11,6 +11,11 @@ pillar = "act"
 area = "Tokens"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+test_recipient_balance = "gate"
+test_sender_balance = "gate"
+verified_transfer = "gate"
+
 [verifier]
 environment_mode = "shared"
 user = "root"

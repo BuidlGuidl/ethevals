@@ -89,7 +89,7 @@ One line on why the task exists, kept in the `[task]` table.
 _Avoid_: motivation, notes
 
 **README**:
-The task's `README.md`, written for people. It quotes the instruction, names the areas the task touches and the gotchas the instruction leaves out, says what each check proves, and says why it matters beyond the task. The agent never sees it.
+The task's `README.md`, written for people. It quotes the instruction, names the areas the task touches and what the instruction leaves out in each, says what each check proves, and says why it matters beyond the task. The agent never sees it.
 _Avoid_: motivation, notes
 
 **Builder story**:
@@ -99,11 +99,11 @@ _Avoid_: scenario, user story
 ## How tasks are run and checked
 
 **Trial**:
-One agent on a model, or one bare model in the vanilla mode, on one task in one mode at one effort, executed once. The trial number counts repeats. A trial passes when its reward is 1.
+One agent on a model, or one bare model in the vanilla mode, on one task in one mode at one effort, executed once. The trial number counts repeats. A trial that is checked gets a trial score.
 _Avoid_: epoch, run
 
 **Fail**:
-A trial that was checked and did not pass. It counts in the score.
+A trial that was checked and did not pass every check. It still gets a trial score and counts in the score.
 _Avoid_: miss
 
 **Error**:
@@ -138,15 +138,29 @@ The wall-clock time an agent or verifier gets. Harbor's default applies unless a
 **Check**:
 One named pass-or-fail result about a trial, with a one-line reason. A test check takes its test function's name, and a criteria check takes its criterion's name.
 
+**Gate check**:
+A check on something the instruction asks for. The trial has to pass it: if a gate check fails, the trial scores 0%.
+_Avoid_: asked check
+
+**Judgment check**:
+A check on something an experienced Ethereum developer gets right without being told, because getting it wrong loses money, locks users out, or ships a worse product. Each one is backed by a real incident, an audit finding, or what the standard library or the protocol's own app does. On an audit task, each known finding is a judgment check.
+_Avoid_: optional check, gotcha
+
+**Entry check**:
+A check that only shows something was handed in: `compile`, `answered`, `no_answer`, or `report_written`. A failed one makes the trial score 0%, and a passed one stays out of the count. Authors don't tag it.
+
 **Reward**:
-Harbor's result for a trial, written by RewardKit. `reward` is 1 only when every check passes. A task can add other reward keys.
+Harbor's result for a trial, written by RewardKit. `reward` is 1 only when every check passes. A task can add other reward keys. The board shows the trial score, not the reward.
 
 **Compile**:
 The check that the tests, and the agent code they import, compile. A task has one, shared by every test tool. If it fails, every test fails with it.
 
+**Trial score**:
+The percentage one trial earns. A failed gate check or entry check makes it 0%. Otherwise it is the checks passed out of all its gate checks and judgment checks. An error has no trial score.
+
 **Score**:
-How many of an agent's scored trials passed, shown as a count such as 3 of 5. Errors don't count.
-_Avoid_: partial score
+A trial score, or an average of them. A task score is the mean of its trial scores, a pillar score is the mean of its task scores, and Overall is the mean of the pillar scores. Errors don't count.
+_Avoid_: partial score, pass rate
 
 **Cost**:
 The API price of a trial's model calls, recorded the same way whether a plan or an API key paid.

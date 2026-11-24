@@ -10,6 +10,16 @@ keywords = ["ethereum", "uniswap", "treasury", "fork", "scripts"]
 pillar = "act"
 modes = ["internet", "skills"]
 
+[metadata.checks]
+fair_price = "judgment"
+report_matches_chain = "gate"
+nothing_left_behind = "gate"
+once_per_quarter = "judgment"
+checks_receipt_status = "judgment"
+refusal_checks_price = "judgment"
+swap_has_minimum = "judgment"
+swap_has_deadline = "judgment"
+
 [verifier]
 environment_mode = "shared"
 user = "root"
