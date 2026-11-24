@@ -13,6 +13,7 @@
   --color-green: #5ee69a;
   --color-amber: #f2bf4f;
   --color-red: #ff7b7b;
+  --color-refusal: #c39bff;
   --color-concepts: #8fa0ff;
   --color-build: #67c8f0;
   --color-act: #f09ad0;
@@ -106,15 +107,39 @@
   .sort-button { @apply inline-flex items-center gap-1.5; }
   .sort-button:hover { @apply text-ink; }
   th[aria-sort="ascending"], th[aria-sort="descending"] { box-shadow: inset 0 -2px 0 var(--color-accent); @apply text-ink; }
-  .score-cell { @apply relative flex min-h-[64px] w-full items-center justify-center text-[22px] font-semibold; background: color-mix(in srgb, var(--heat-hi) var(--score), var(--heat-lo)); }
+  .score-cell { @apply relative flex min-h-[64px] w-full flex-col items-center justify-center text-[22px] font-semibold; background: color-mix(in srgb, var(--heat-hi) var(--score), var(--heat-lo)); }
   .score-cell:hover { box-shadow: inset 0 0 0 2px var(--color-accent); }
   .score-cell small { @apply absolute bottom-1 right-2 text-[10px] font-medium; }
   .score-cell[data-empty="true"] { @apply bg-transparent text-dim; }
   .score-wrap { @apply relative; }
-  .unscored-info { @apply absolute right-1.5 top-1.5 flex text-amber; cursor: help; }
-  .unscored-info svg { @apply h-5 w-5; }
-  .matrix .unscored-info { @apply right-1 top-1; }
-  .matrix .unscored-info svg { @apply h-3.5 w-3.5; }
+  .corner-marks { @apply absolute right-1.5 top-1.5 flex items-center gap-1; }
+  .unscored-info { @apply flex text-amber; cursor: help; }
+  .refusal-info { @apply flex text-refusal; cursor: help; }
+  .unscored-info svg, .refusal-info svg { @apply h-5 w-5; }
+  .matrix .corner-marks { @apply right-1 top-1 gap-0.5; }
+  .matrix .unscored-info svg, .matrix .refusal-info svg { @apply h-3.5 w-3.5; }
+  .refusal-inline-mark { @apply ml-1.5 inline-flex align-[-3px]; }
+  .refusal-inline-mark svg { @apply h-4 w-4; }
+  .score-sub { @apply mt-0.5 inline-flex items-center gap-1 text-[11px] font-normal leading-none text-muted; }
+  .refusal-sub { color: color-mix(in srgb, var(--color-refusal) 80%, var(--color-muted)); }
+  .refusal-sub svg { @apply h-3 w-3; }
+  .refusal-text { @apply text-refusal; }
+  .refusal-banner, .refusal-note { @apply flex items-start gap-2 border border-refusal/30 bg-refusal/5 px-3 py-2 text-xs text-refusal; }
+  .refusal-banner svg, .refusal-note svg { @apply mt-0.5 shrink-0; }
+  .refusal-strip { @apply flex items-center gap-2 border border-refusal/25 bg-refusal/5 px-3 py-1.5 text-[11px] text-muted; }
+  .refusal-strip svg { @apply h-3.5 w-3.5 shrink-0 text-refusal; }
+  .refusal-switch { @apply inline-flex min-h-[34px] items-center gap-2 text-xs text-muted; }
+  .refusal-switch:hover, .refusal-switch[aria-checked="true"] { @apply text-ink; }
+  .refusal-switch-track { @apply relative inline-block h-4 w-7 shrink-0 border border-border-strong bg-tint transition-colors; }
+  .refusal-switch-track span { @apply absolute left-0.5 top-0.5 h-2.5 w-2.5 bg-muted transition-transform; }
+  .refusal-switch[aria-checked="true"] .refusal-switch-track { @apply border-refusal bg-refusal/20; }
+  .refusal-switch[aria-checked="true"] .refusal-switch-track span { @apply translate-x-3 bg-refusal; }
+  .refusal-segment { @apply gap-2; }
+  .refusal-segment-label { @apply text-[11px] text-muted; }
+  .variant-picker { @apply fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 border border-ink bg-ink p-1 text-xs font-semibold text-sheet shadow-lg; }
+  .variant-picker span { @apply px-2 whitespace-nowrap; }
+  .variant-picker button { @apply grid size-7 place-items-center; }
+  .variant-picker button:hover { @apply bg-sheet text-ink; }
   .table-note { @apply border-t border-border px-4 py-3 text-[11px] text-muted; }
   .read-note { @apply max-w-[1100px] border-t border-border pt-4 text-muted; }
   .read-note b { @apply text-ink; }
@@ -213,6 +238,10 @@
       linear-gradient(-45deg, transparent 40%, var(--color-red) 40% 60%, transparent 60%);
   }
   .run-dot[data-state="error"] { @apply bg-amber; transform: rotate(45deg) scale(.8); }
+  /* A ring with a slash, like a no-entry sign. */
+  .run-dot[data-state="refused"] { border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--color-refusal);
+    background: linear-gradient(45deg, transparent 43%, var(--color-refusal) 43% 57%, transparent 57%); }
+  .run-dot[data-ignored] { opacity: .5; }
   .trial-legend, .trial-legend > span { @apply flex items-center; }
   .trial-legend { @apply mb-3 flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted; }
   .trial-legend > span { @apply gap-1; }

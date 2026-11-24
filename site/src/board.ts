@@ -37,6 +37,8 @@ export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind"
   | "cost_source" | "limit" | "paid_by" | "no_answer"> & {
   cost: number | null;
   score: TrialScore;
+  // Set on a refused trial while the board ignores refusals. It stays listed but leaves the averages.
+  ignored?: true;
   issue: string;
   trajectoryUrl: string | null;
 };
@@ -154,12 +156,25 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[], attempts: number): 
   };
 }
 
-function pillarCell(cells: EvalCell[]): PillarCell {
+export function pillarCell(cells: EvalCell[]): PillarCell {
   const scored = cells.filter((cell) => cell.score !== null);
   return {
     state: !cells.some((cell) => cell.state !== "na") ? "empty" : scored.length ? "score" : "pending",
     ...scoreSummary(cells),
     scoredEvals: scored.length,
+  };
+}
+
+export function configurationSummary(rows: Table["pillars"], key: string): ConfigurationSummary {
+  const summary = scoreSummary(pillars.map((pillar) => rows[pillar].cells[key]));
+  const trials = pillars.flatMap((pillar) => rows[pillar].evals.flatMap((entry) => entry.cells[key].trials));
+  const scored = trials.filter((trial) => trial.status !== "error");
+  const scores: ConfigurationSummary["scores"] = { overall: summary.score, concepts: null, build: null, act: null };
+  for (const pillar of pillars) scores[pillar] = rows[pillar].cells[key].score;
+  return {
+    scores, costPerPass: costPerPass(trials),
+    medianTokens: median(scored.map((trial) => trial.total_tokens)),
+    passed: summary.passed, total: summary.total, errors: summary.errors, missing: summary.missing,
   };
 }
 
@@ -199,21 +214,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false, attem
         })),
       };
     }
-    for (const agent of columns) {
-      const key = agentKey(agent);
-      const cells = pillars.map((pillar) => table.pillars[pillar].cells[key]);
-      const summary = scoreSummary(cells);
-      const trials = pillars.flatMap((pillar) => table.pillars[pillar].evals.flatMap((entry) => entry.cells[key].trials));
-      const scored = trials.filter((trial) => trial.status !== "error");
-      const scores: ConfigurationSummary["scores"] = { overall: null, concepts: null, build: null, act: null };
-      for (const pillar of pillars) scores[pillar] = table.pillars[pillar].cells[key].score;
-      scores.overall = summary.score;
-      table.summaries[key] = {
-        scores, costPerPass: costPerPass(trials),
-        medianTokens: median(scored.map((trial) => trial.total_tokens)),
-        passed: summary.passed, total: summary.total, errors: summary.errors, missing: summary.missing,
-      };
-    }
+    for (const agent of columns) table.summaries[agentKey(agent)] = configurationSummary(table.pillars, agentKey(agent));
     tables[mode] = table;
   }
   const lifts: BoardData["lifts"] = {};
