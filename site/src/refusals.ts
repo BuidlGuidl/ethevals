@@ -81,21 +81,22 @@ export function refusals(table: Table, key: string, scope: Pillar | "overall"): 
 
 export const precise = (score: number | null) => score === null ? "–" : `${(score * 100).toFixed(1)}%`;
 const trials = (count: number) => `${count} refused ${count === 1 ? "trial" : "trials"}`;
-const coverageText = ({ coverage }: Refusals) =>
-  coverage.map(({ pillar, scored, tasks }) => `${scored} of ${tasks} ${names[pillar]} tasks`).join(" and ");
-
-// One sentence for a leaderboard or Compare score.
-export function refusalText(info: Refusals, ignoring: boolean): string {
-  return ignoring ? `${trials(info.refused)} ignored. ${coverageText(info)} scored.`
-    : `${trials(info.refused)} scored as 0%. Without refusals: ${precise(info.without)}, with ${coverageText(info)} scored.`;
+// Short lines for a leaderboard or Compare score, one fact each, shown as bullets.
+export function refusalLines(info: Refusals, ignoring: boolean): string[] {
+  const coverage = info.coverage.map(({ pillar, scored, tasks }) => `${scored} of ${tasks} ${names[pillar]} tasks scored`);
+  return ignoring ? [`${trials(info.refused)} ignored`, ...coverage]
+    : [`${trials(info.refused)} (scored as 0%)`, `Without refusals: ${precise(info.without)}`, ...coverage];
 }
 
-// One sentence for a task score.
-export function taskRefusalText(cell: EvalCell, ignoring: boolean): string {
+// Short lines for a task score.
+export function taskRefusalLines(cell: EvalCell, ignoring: boolean): string[] {
   const count = cell.trials.filter(isRefusedTrial).length;
-  if (!ignoring) return `${trials(count)} scored as 0%.`;
-  return `${trials(count)} ignored.${cell.score === null ? " No scored trials left." : ""}`;
+  if (!ignoring) return [`${trials(count)} (scored as 0%)`];
+  return [`${trials(count)} ignored`, ...(cell.score === null ? ["No scored trials left"] : [])];
 }
+
+// Lines read as plain sentences, for screen readers and banners.
+export const sentences = (lines: string[]) => lines.map((line) => `${line}.`).join(" ");
 
 export function refusalStrip(table: Table): string {
   const counts = table.agents.map((agent) => refusals(table, agentKey(agent), "overall").refused).filter(Boolean);

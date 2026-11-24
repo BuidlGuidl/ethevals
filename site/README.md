@@ -63,6 +63,10 @@ The icon's tooltip gives the count, such as "18 trials have no score yet."
 It counts errors and trials that have not run, up to the job's `n_attempts` for each task in the selected mode.
 Overall, pillar scores, and task matrix cells carry it. A task without scored trials keeps its "–".
 The drawer shows the same sentence in an amber banner under the configuration, for the scores or the task it shows.
+A score with trials stopped by a safety refusal on both tries shows a purple shield, apart from the amber icon. The drawer gives those trials their own dot and a purple banner.
+The "Ignore refusals" switch at the right of the toolbar (`?refusals=ignore`) leaves those trials out of task, pillar, and Overall averages and re-sorts the leaderboard.
+While it is on, an affected score shows the score with refusals counted and, for a pillar, how many tasks still have a score.
+A trial that answered on the retry after a safety refusal keeps its score; only its trial view notes the refusal.
 The mode controls select Internet or Model only. Internet + Skills is marked coming soon.
 Different agents, models, and efforts stay separate.
 Compare shows Overall and pillar scores for up to five configurations.

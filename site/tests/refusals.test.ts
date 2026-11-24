@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Results } from "../app/board";
 import Compare from "../app/compare/compare";
 import { buildBoard, type Eval, type Row } from "../src/board";
+import { TipBody, formulas } from "../components/scores";
 
 const careful = { model: "careful", agent: "agent-a", effort: null }, steady = { model: "steady", agent: "agent-a", effort: null };
 const task = (id: string): Eval => ({
@@ -40,36 +41,47 @@ test("Ignore refusals recomputes scores and re-sorts the leaderboard", () => {
   assert.match(firstRow(ignored), /aria-label="Overall, agent-a \/ careful\. 100%\. 1 refused trial ignored\. 1 of 2 Build tasks scored\./);
 });
 
-test("the refusal toggle shows only for a mode with refused trials", () => {
-  assert.match(page(""), /role="switch" aria-checked="false"[^>]*>.*Ignore refusals/);
+test("with refusals ignored, affected scores show the counted score under them and a strip sits above the table", () => {
+  const ignored = page("refusals=ignore");
+  // Build was 50% with the refusal counted, and 1 of 2 Build tasks still has a score.
+  assert.match(leaderboard(ignored), /class="score-sub">was 50% · 1\/2<\/span>/);
+  // Overall spans pillars, so it shows the counted score alone.
+  assert.match(leaderboard(ignored), /class="score-sub">was 50%<\/span>/);
+  assert.match(ignored, /class="refusal-strip">.*Ignoring 1 safety-refused trial across 1 agent\./);
+  assert.doesNotMatch(page(""), /refusal-strip|score-sub/);
+});
+
+test("the switch and its info icon end the toolbar, and stay while refusals are ignored", () => {
+  const toolbar = (html: string) => html.split('class="toolbar"')[1].split('class="table-shell"')[0];
+  assert.match(toolbar(page("")), /class="mode-note">.*role="switch" aria-checked="false"[^>]*>.*Ignore refusals<\/button>.*aria-label="Why ignore refusals: Some providers stop trials mid-task with a safety filter\. By default, two refusals in a row score 0%\. Turn this on to leave refused trials out of the averages\."/s);
   assert.match(page("refusals=ignore"), /role="switch" aria-checked="true"/);
+  // A mode with no refusals hides the switch, unless refusals are being ignored, so it can be turned off.
   assert.doesNotMatch(page("mode=vanilla"), /Ignore refusals/);
+  assert.match(page("mode=vanilla&refusals=ignore"), /role="switch" aria-checked="true"/);
   assert.doesNotMatch(leaderboard(page("mode=vanilla")), /refusal-info/);
+  assert.doesNotMatch(page(""), /variant/i);
 });
 
 test("refusal marks stay apart from unscored marks and say what is counted", () => {
   const html = page("");
-  assert.match(leaderboard(html), /class="refusal-info" role="img" aria-label="1 refused trial scored as 0%\. Without refusals: 100\.0%, with 1 of 2 Build tasks scored\."/);
+  assert.match(leaderboard(html), /class="refusal-info" role="img" aria-label="1 refused trial \(scored as 0%\)\. Without refusals: 100\.0%\. 1 of 2 Build tasks scored\."/);
   assert.doesNotMatch(leaderboard(html), /unscored-info/);
   const matrix = html.split('class="matrix"')[1];
-  assert.match(matrix, /class="refusal-info" role="img" aria-label="1 refused trial scored as 0%\."/);
+  assert.match(matrix, /class="refusal-info" role="img" aria-label="1 refused trial \(scored as 0%\)\."/);
   assert.match(page("refusals=ignore").split('class="matrix"')[1], />–<\/button>.*aria-label="1 refused trial ignored\. No scored trials left\."/s);
 });
 
-test("each prototype variant shows refusals its own way", () => {
-  const b = leaderboard(page("variant=b")), c = page("variant=c&refusals=ignore");
-  assert.match(b, /class="score-sub refusal-sub">.*1 refused<\/span>/);
-  assert.doesNotMatch(b, /refusal-info/);
-  assert.match(leaderboard(page("variant=b&refusals=ignore")), /1 ignored<\/span>/);
-  assert.match(leaderboard(c), /class="score-sub">was 50% · 1\/2<\/span>/);
-  assert.match(c, /class="refusal-strip">.*Ignoring 1 safety-refused trial across 1 agent\./);
-  assert.doesNotMatch(page("variant=c"), /refusal-strip|was 50%/);
-  assert.match(page("variant=b"), /Refusals.*Count as 0%.*Ignore/s);
+test("a score tooltip puts each formula sentence on its own line, then refusal facts as bullets", () => {
+  const tip = renderToStaticMarkup(createElement(TipBody, { text: formulas.pillar, bullets: ["1 refused trial (scored as 0%)", "Without refusals: 100.0%"] }));
+  assert.equal(tip, '<span class="tip-lines"><span>Pillar scores average task scores.</span><span>Tasks without a score are skipped.</span></span>'
+    + '<ul class="tip-bullets"><li>1 refused trial (scored as 0%)</li><li>Without refusals: 100.0%</li></ul>');
+  assert.equal(renderToStaticMarkup(createElement(TipBody, { text: "Task score 50%\nTrial 1 · 0%" })),
+    '<span class="tip-lines"><span>Task score 50%</span><span>Trial 1 · 0%</span></span>');
 });
 
 test("Compare honors Ignore refusals and marks affected scores", () => {
   // Compare reads the URL in the browser; on the server it renders the default counted view.
   const html = renderToStaticMarkup(createElement(Compare, { data }));
-  assert.match(html, /role="switch" aria-checked="false"/);
-  assert.match(html, /class="refusal-info refusal-inline-mark" role="img" aria-label="1 refused trial scored as 0%\./);
+  assert.match(html, /class="toolbar">.*<p class="muted">.*role="switch" aria-checked="false"/s);
+  assert.match(html, /class="refusal-info refusal-inline-mark" role="img" aria-label="1 refused trial \(scored as 0%\)\./);
 });

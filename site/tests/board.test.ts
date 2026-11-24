@@ -66,7 +66,7 @@ test("refused trials get their own label and dot, and say when they are ignored"
     data, selection: { evaluation, agent, mode: "internet" }, onSelect: () => {} }));
   const counted = task(buildBoard([evaluation], rows));
   assert.match(counted, /data-state="refused"[^>]*><\/span>0%<\/span><\/td><td class="refusal-text">Safety refusal<\/td>/);
-  assert.match(counted, /class="refusal-banner">.*1 refused trial scored as 0%\./);
+  assert.match(counted, /class="refusal-banner">.*1 refused trial \(scored as 0%\)\./);
   const ignored = task(ignoreRefusals(buildBoard([evaluation], rows)));
   assert.match(ignored, /data-state="refused" data-ignored="true"[^>]*><\/span>Ignored<\/span><\/td><td class="refusal-text">Refused \(ignored\)<\/td>/);
   assert.match(ignored, /class="refusal-banner">.*1 refused trial ignored\./);

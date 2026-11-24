@@ -16,8 +16,8 @@ import { TooltipProvider } from "../components/ui/tooltip";
 import { Score, Hint, InfoHint, CornerMarks, unscored, formulas, heat, percent, money } from "../components/scores";
 import { entryLabels, TrialDot, TrialDots, TrialLegend, taskHint, trialHint, trialNote, trialScoreText, trialState } from "../components/trial-display";
 import { ignoringRefusals, updateQuery, useQuery } from "../components/url-state";
-import { ignoreRefusals, ignoresRefusals, isRefusedTrial, refusals, refusalStrip, refusalText, refusedCount, retryRefusals, tableHasRefusals, taskRefusalText } from "../src/refusals";
-import { readVariant, RefusalStrip, RefusalToggle, scoreExtras, VariantPicker } from "../components/refusal-prototype/variants";
+import { ignoreRefusals, ignoresRefusals, isRefusedTrial, refusalLines, refusals, refusalStrip, refusedCount, retryRefusals, sentences, tableHasRefusals, taskRefusalLines } from "../src/refusals";
+import { RefusalStrip, RefusalSwitch } from "../components/refusal-controls";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
 import { checkKind } from "../src/scoring";
@@ -151,8 +151,8 @@ export function Detail({ selection, data, domain, onSelect }: {
   const missing = trial ? 0 : evaluation ? cell?.missing ?? 0 : scope.missing;
   const ignoring = ignoresRefusals(table);
   const info = refusals(table, key, pillar ?? "overall");
-  const refusalBanner = trial ? undefined : evaluation ? cell && refusedCount([cell]) > 0 ? taskRefusalText(cell, ignoring) : undefined
-    : !info.refused ? undefined : ignoring ? refusalText(info, true) : `${info.refused} refused ${info.refused === 1 ? "trial" : "trials"} scored as 0%.`;
+  const refusalBanner = trial ? undefined : evaluation ? cell && refusedCount([cell]) > 0 ? sentences(taskRefusalLines(cell, ignoring)) : undefined
+    : !info.refused ? undefined : sentences(ignoring ? refusalLines(info, true) : refusalLines(info, false).slice(0, 1));
   return <TooltipProvider delayDuration={200}><div className="detail-body">
     <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial ? <>
       Trial {trial.trial} of {trials.length} <span className="trial-heading-score">{trialScoreText(trial)}</span>
@@ -185,7 +185,7 @@ export function Detail({ selection, data, domain, onSelect }: {
   </div></TooltipProvider>;
 }
 
-const emptyLabel = (cell: Parameters<typeof emptyTrialLabel>[0]) => refusedCount([cell]) ? taskRefusalText(cell, true) : emptyTrialLabel(cell);
+const emptyLabel = (cell: Parameters<typeof emptyTrialLabel>[0]) => refusedCount([cell]) ? sentences(taskRefusalLines(cell, true)) : emptyTrialLabel(cell);
 const scoredTrials = (count: number) => `${count} scored ${count === 1 ? "trial" : "trials"}`;
 
 export default function Board({ data }: { data: BoardData }) {
@@ -197,7 +197,6 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
   const ignored = useMemo(() => ignoreRefusals(base), [base]);
   const ignoring = ignoringRefusals(query);
   const data = ignoring ? ignored : base;
-  const variant = readVariant(query.get("variant"));
   const mode = readMode(query.get("mode"));
   const evalsMode = readMode(query.get("evals"));
   const domain = domains.find((value) => value === query.get("domain"));
@@ -224,7 +223,12 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
   const refusal = (agent: Agent, key: Sort) => {
     const info = refusals(ignored.tables[mode], agentKey(agent), key);
     if (!info.refused) return {};
-    return { refusal: refusalText(info, ignoring), ...scoreExtras(variant, info, ignoring, base.tables[mode].summaries[agentKey(agent)].scores[key], key === "overall") };
+    if (!ignoring) return { refusal: refusalLines(info, false) };
+    // Under the new score: the score with refusals counted, and for a pillar the tasks still scored.
+    // Overall spans pillars, so a bare task count there would not say which pillar it counts.
+    const coverage = key !== "overall" && info.coverage.length === 1 ? ` · ${info.coverage[0].scored}/${info.coverage[0].tasks}` : "";
+    return { refusal: refusalLines(info, true),
+      sub: <span className="score-sub">was {percent(base.tables[mode].summaries[agentKey(agent)].scores[key])}{coverage}</span> };
   };
   const agents = [...table.agents].sort((a, b) => {
     const x = value(a, sort.key), y = value(b, sort.key);
@@ -244,8 +248,9 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
     </header>
     <section id="leaderboard" className="results-section"><div className="section-head"><div><h2>Results</h2><p>The same work, with and without Ethereum skills.</p></div>
       <Link className="text-link" href={`/compare/?mode=${mode}${ignoring ? "&refusals=ignore" : ""}`}>Compare configurations →</Link></div>
-      <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} />{showRefusals && <RefusalToggle variant={variant} ignoring={ignoring} />}<p className="mode-note">{modeHints[mode]}</p></div>
-      {variant === "c" && ignoring && showRefusals && <RefusalStrip text={refusalStrip(ignored.tables[mode])} />}
+      <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} /><p className="mode-note">{modeHints[mode]}</p>
+        {(showRefusals || ignoring) && <RefusalSwitch ignoring={ignoring} />}</div>
+      {ignoring && showRefusals && <RefusalStrip text={refusalStrip(ignored.tables[mode])} />}
       {agents.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Leaderboard. Scroll horizontally for all columns.">
         <table className="leaderboard"><caption className="sr-only">Configuration scores, sorted by {sort.key} {sort.ascending ? "ascending" : "descending"}</caption>
           <colgroup><col className="config-col" />{columns.map(([key]) => <col key={key} className="score-col" />)}</colgroup>
@@ -279,10 +284,10 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
                 return <td key={agentKey(agent)} role="cell"><span className="matrix-configuration" aria-hidden="true"><Configuration agent={agent} /></span>
                   {(() => {
-                    const refusal = refusedCount([cell]) > 0 ? taskRefusalText(cell, ignoring) : undefined;
+                    const refusal = refusedCount([cell]) > 0 ? taskRefusalLines(cell, ignoring) : undefined;
                     if (cell.state === "na" || (cell.score === null && !refusal)) return <span className="matrix-cell" data-empty title={[emptyTrialLabel(cell), ...cell.trials.map(trialHint)].join("\n")}>–</span>;
-                    return <div className="score-wrap"><Hint text={[taskHint(cell), refusal].filter(Boolean).join("\n")}><button className="matrix-cell" style={heat(cell.score)} data-empty={cell.score === null || undefined}
-                      aria-label={`${data.evaluations[entry.id].title}, ${agentLabel(agent)}. Task score ${percent(cell.score)}.${cell.missing ? ` ${unscored(cell.missing)}` : ""}${refusal ? ` ${refusal}` : ""} Open details.`}
+                    return <div className="score-wrap"><Hint text={taskHint(cell)} bullets={refusal}><button className="matrix-cell" style={heat(cell.score)} data-empty={cell.score === null || undefined}
+                      aria-label={`${data.evaluations[entry.id].title}, ${agentLabel(agent)}. Task score ${percent(cell.score)}.${cell.missing ? ` ${unscored(cell.missing)}` : ""}${refusal ? ` ${sentences(refusal)}` : ""} Open details.`}
                       onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{percent(cell.score)}</button></Hint>
                       <CornerMarks missing={cell.score === null ? 0 : cell.missing} refusal={refusal} /></div>;
                   })()}</td>;
@@ -292,7 +297,6 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
     </section>
     <noscript>Enable JavaScript to change modes and open trial details.</noscript>
   </main>
-    <VariantPicker variant={variant} />
     <Sheet open={selection !== null} onOpenChange={(open) => { if (!open) close(); }}>
       {selection && <SheetContent>
         <SheetTitle className="sr-only">Task and trial details</SheetTitle><SheetDescription className="sr-only">Scores, instructions, checks, costs and trajectories.</SheetDescription>

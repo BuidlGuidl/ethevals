@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { agentKey, buildBoard, type Eval, type Row } from "./board";
-import { ignoreRefusals, refusals, refusalStrip, refusalText, tableHasRefusals, taskRefusalText } from "./refusals";
+import { ignoreRefusals, refusalLines, refusals, refusalStrip, tableHasRefusals, taskRefusalLines } from "./refusals";
 
 const agent = { model: "model-a", agent: "agent-a", effort: null };
 const key = agentKey(agent);
@@ -40,17 +40,18 @@ test("ignoring refusals drops refused trials, then recomputes task, pillar and O
   assert.equal(ignored.pillars.build.cells[key].scoredEvals, 2);
 });
 
-test("refusal sentences give the count, the score without refusals, and the tasks still scored", () => {
+test("refusal lines give the count, the score without refusals, and the tasks still scored, one fact per line", () => {
   const ignored = ignoreRefusals(board).tables.internet;
   const buildInfo = refusals(ignored, key, "build");
   assert.deepEqual(buildInfo, { refused: 3, without: 0.75, coverage: [{ pillar: "build", scored: 2, tasks: 3 }] });
-  assert.equal(refusalText(buildInfo, false), "3 refused trials scored as 0%. Without refusals: 75.0%, with 2 of 3 Build tasks scored.");
-  assert.equal(refusalText(buildInfo, true), "3 refused trials ignored. 2 of 3 Build tasks scored.");
+  assert.deepEqual(refusalLines(buildInfo, false), ["3 refused trials (scored as 0%)", "Without refusals: 75.0%", "2 of 3 Build tasks scored"]);
+  assert.deepEqual(refusalLines(buildInfo, true), ["3 refused trials ignored", "2 of 3 Build tasks scored"]);
   assert.equal(refusals(ignored, key, "overall").without, 0.875);
   assert.equal(refusals(ignored, key, "concepts").refused, 0);
-  const y = ignored.pillars.build.evals[1].cells[key];
-  assert.equal(taskRefusalText(board.tables.internet.pillars.build.evals[1].cells[key], false), "2 refused trials scored as 0%.");
-  assert.equal(taskRefusalText(y, true), "2 refused trials ignored. No scored trials left.");
+  const [xIgnored, yIgnored] = ignored.pillars.build.evals.map((entry) => entry.cells[key]);
+  assert.deepEqual(taskRefusalLines(board.tables.internet.pillars.build.evals[1].cells[key], false), ["2 refused trials (scored as 0%)"]);
+  assert.deepEqual(taskRefusalLines(yIgnored, true), ["2 refused trials ignored", "No scored trials left"]);
+  assert.deepEqual(taskRefusalLines(xIgnored, true), ["1 refused trial ignored"]);
   assert.equal(refusalStrip(ignored), "Ignoring 3 safety-refused trials across 1 agent. Tasks left without a scored trial are left out of averages.");
 });
 
