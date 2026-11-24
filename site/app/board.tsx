@@ -16,7 +16,7 @@ import { TooltipProvider } from "../components/ui/tooltip";
 import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money } from "../components/scores";
 import { entryLabels, TrialDot, TrialDots, TrialLegend, taskHint, trialHint, trialNote, trialScoreText, trialState } from "../components/trial-display";
 import { ignoringRefusals, updateQuery, useQuery } from "../components/url-state";
-import { ignoreRefusals, ignoresRefusals, isRefusedTrial, refusalLines, refusals, refusalStrip, refusedCount, retryRefusals, sentences, tableHasRefusals, taskRefusalLines } from "../src/refusals";
+import { drawerRefusalBanner, ignoreRefusals, ignoresRefusals, isRefusedTrial, refusalLines, refusals, refusalStrip, refusedCount, retryRefusals, sentences, tableHasRefusals, taskRefusalLines } from "../src/refusals";
 import { RefusalStrip, RefusalSwitch } from "../components/refusal-controls";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
@@ -154,7 +154,7 @@ export function Detail({ selection, data, domain, onSelect }: {
   const ignoring = ignoresRefusals(table);
   const info = refusals(table, key, pillar ?? "overall");
   const refusalBanner = trial ? undefined : evaluation ? cell && refusedCount([cell]) > 0 ? sentences(taskRefusalLines(cell, ignoring)) : undefined
-    : !info.refused ? undefined : sentences(ignoring ? refusalLines(info, true) : refusalLines(info, false).slice(0, 1));
+    : !info.refused ? undefined : drawerRefusalBanner(info, ignoring);
   return <TooltipProvider delayDuration={200}><div className="detail-body">
     <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial ? <>
       Trial {trial.trial} of {trials.length} <span className="trial-heading-score">{trialScoreText(trial)}</span>

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { agentKey, buildBoard, type Eval, type Row } from "./board";
-import { ignoreRefusals, refusalLines, refusals, refusalStrip, tableHasRefusals, taskRefusalLines } from "./refusals";
+import { drawerRefusalBanner, ignoreRefusals, refusalLines, refusals, refusalStrip, tableHasRefusals, taskRefusalLines } from "./refusals";
 
 const agent = { model: "model-a", agent: "agent-a", effort: null };
 const key = agentKey(agent);
@@ -40,12 +40,18 @@ test("ignoring refusals drops refused trials, then recomputes task, pillar and O
   assert.equal(ignored.pillars.build.cells[key].scoredEvals, 2);
 });
 
-test("refusal lines give the count, the score without refusals, and the tasks still scored, one fact per line", () => {
+test("refusal lines state skipped tasks without raw trial counts, while drawer banners keep trial counts", () => {
   const ignored = ignoreRefusals(board).tables.internet;
   const buildInfo = refusals(ignored, key, "build");
   assert.deepEqual(buildInfo, { refused: 3, without: 0.75, coverage: [{ pillar: "build", scored: 2, tasks: 3 }] });
-  assert.deepEqual(refusalLines(buildInfo, false), ["3 refused trials (scored as 0%)", "Without refusals: 75.0%", "2 of 3 Build tasks scored"]);
-  assert.deepEqual(refusalLines(buildInfo, true), ["3 refused trials ignored", "2 of 3 Build tasks scored"]);
+  assert.deepEqual(refusalLines(buildInfo, false), ["Safety refusals scored as 0%", "Without refusals: 75.0% (1 of 3 Build tasks skipped)"]);
+  assert.deepEqual(refusalLines(buildInfo, true), ["Safety refusals ignored", "1 of 3 Build tasks skipped"]);
+  assert.deepEqual(refusalLines({ refused: 1, without: 0.9, coverage: [{ pillar: "build", scored: 3, tasks: 3 }] }, false),
+    ["Safety refusals scored as 0%", "Without refusals: 90.0% (all 3 Build tasks still scored)"]);
+  assert.deepEqual(refusalLines({ refused: 1, without: 0.9, coverage: [{ pillar: "build", scored: 3, tasks: 3 }] }, true),
+    ["Safety refusals ignored", "All 3 Build tasks still scored"]);
+  assert.equal(drawerRefusalBanner(buildInfo, false), "3 refused trials (scored as 0%).");
+  assert.equal(drawerRefusalBanner(buildInfo, true), "3 refused trials ignored. 1 of 3 Build tasks skipped.");
   assert.equal(refusals(ignored, key, "overall").without, 0.875);
   assert.equal(refusals(ignored, key, "concepts").refused, 0);
   const [xIgnored, yIgnored] = ignored.pillars.build.evals.map((entry) => entry.cells[key]);

@@ -81,11 +81,23 @@ export function refusals(table: Table, key: string, scope: Pillar | "overall"): 
 
 export const precise = (score: number | null) => score === null ? "–" : `${(score * 100).toFixed(1)}%`;
 const trials = (count: number) => `${count} refused ${count === 1 ? "trial" : "trials"}`;
-// Short lines for a leaderboard or Compare score, one fact each, shown as bullets.
+const skippedLine = ({ pillar, scored, tasks }: Refusals["coverage"][number], capitalize = false) => {
+  const skipped = tasks - scored;
+  if (skipped > 0) return `${skipped} of ${tasks} ${names[pillar]} tasks skipped`;
+  return `${capitalize ? "All" : "all"} ${tasks} ${names[pillar]} tasks still scored`;
+};
+
+// Short lines for a leaderboard or Compare shield tooltip. Keeps trial counts out of the top table.
 export function refusalLines(info: Refusals, ignoring: boolean): string[] {
-  const coverage = info.coverage.map(({ pillar, scored, tasks }) => `${scored} of ${tasks} ${names[pillar]} tasks scored`);
-  return ignoring ? [`${trials(info.refused)} ignored`, ...coverage]
-    : [`${trials(info.refused)} (scored as 0%)`, `Without refusals: ${precise(info.without)}`, ...coverage];
+  if (ignoring) return ["Safety refusals ignored", ...info.coverage.map((entry) => skippedLine(entry, true))];
+  const detail = info.coverage.map((entry) => skippedLine(entry)).join(", ");
+  return ["Safety refusals scored as 0%", `Without refusals: ${precise(info.without)} (${detail})`];
+}
+
+// Drawer header banner, where individual trials are listed below.
+export function drawerRefusalBanner(info: Refusals, ignoring: boolean): string {
+  if (!ignoring) return `${trials(info.refused)} (scored as 0%).`;
+  return sentences([`${trials(info.refused)} ignored`, ...info.coverage.map((entry) => skippedLine(entry, true))]);
 }
 
 // Short lines for a task score.

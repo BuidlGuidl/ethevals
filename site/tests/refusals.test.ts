@@ -38,7 +38,7 @@ test("Ignore refusals recomputes scores and re-sorts the leaderboard", () => {
   assert.match(firstRow(page("")), /steady/);
   assert.match(firstRow(page("")), /aria-label="Overall, agent-a \/ steady\. 75%\./);
   const ignored = page("refusals=ignore");
-  assert.match(firstRow(ignored), /aria-label="Overall, agent-a \/ careful\. 100%\. 1 refused trial ignored\. 1 of 2 Build tasks scored\./);
+  assert.match(firstRow(ignored), /aria-label="Overall, agent-a \/ careful\. 100%\. Safety refusals ignored\. 1 of 2 Build tasks skipped\./);
 });
 
 test("with refusals ignored, affected scores show the counted score under them and a strip sits above the table", () => {
@@ -64,7 +64,7 @@ test("the switch and its info icon end the toolbar, and stay while refusals are 
 
 test("refusal marks stay apart from unscored marks and say what is counted", () => {
   const html = page("");
-  assert.match(leaderboard(html), /class="refusal-info" role="img" aria-label="1 refused trial \(scored as 0%\)\. Without refusals: 100\.0%\. 1 of 2 Build tasks scored\."/);
+  assert.match(leaderboard(html), /class="refusal-info" role="img" aria-label="Safety refusals scored as 0%\. Without refusals: 100\.0% \(1 of 2 Build tasks skipped\)\."/);
   assert.doesNotMatch(leaderboard(html), /unscored-info/);
   const matrix = html.split('class="matrix"')[1];
   assert.match(matrix, /class="refusal-info" role="img" aria-label="1 refused trial \(scored as 0%\)\."/);
@@ -84,5 +84,5 @@ test("Compare honors Ignore refusals and marks affected scores", () => {
   // Compare reads the URL in the browser; on the server it renders the default counted view.
   const html = renderToStaticMarkup(createElement(Compare, { data }));
   assert.match(html, /class="toolbar">.*<p class="muted">.*role="switch" aria-checked="false"/s);
-  assert.match(html, /class="refusal-info refusal-inline-mark" role="img" aria-label="1 refused trial \(scored as 0%\)\./);
+  assert.match(html, /class="refusal-info refusal-inline-mark" role="img" aria-label="Safety refusals scored as 0%\./);
 });
