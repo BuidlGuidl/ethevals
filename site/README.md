@@ -58,7 +58,7 @@ If no checks count and no entry check failed, the saved trial status gives 100% 
 A task score averages its trial scores. Errors stay visible in the drawer and stay out of the average.
 A pillar score averages its task scores. Overall averages its pillar scores.
 The task matrix tooltip lists the trials behind each task score.
-Tile color shows how far a score is from the best score in its leaderboard column or task row. Leaderboard and drawer leaders use a mint numeral, and a 0% score is never shown as best.
+Tile color shows how far a score is from the best score in its leaderboard column or task row. Leaderboard and drawer leaders use a richer green fill with bold white text, and a 0% score is never shown as best.
 A score with planned trials that have no score yet shows an amber info icon in its corner.
 The icon's tooltip gives the count, such as "18 trials have no score yet."
 It counts errors and trials that have not run, up to the job's `n_attempts` for each task in the selected mode.
