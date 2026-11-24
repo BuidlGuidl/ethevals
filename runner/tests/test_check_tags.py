@@ -62,3 +62,13 @@ def test_lint_rejects_check_tags_on_concepts_tasks(tmp_path):
 
     with pytest.raises(ValueError, match="Concepts tasks cannot declare metadata.checks"):
         lint_task(task)
+
+
+@pytest.mark.parametrize("pillar", ["concepts", "build"])
+def test_lint_rejects_an_unknown_metadata_key(tmp_path, pillar):
+    task = task_folder(tmp_path, pillar=pillar)
+    settings = task / "task.toml"
+    settings.write_text(settings.read_text().replace("[metadata]\n", '[metadata]\ndifficulty = "hard"\n'))
+
+    with pytest.raises(ValueError, match="unknown metadata keys: difficulty"):
+        lint_task(task)

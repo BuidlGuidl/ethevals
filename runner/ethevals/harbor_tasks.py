@@ -15,6 +15,7 @@ import yaml
 from .checks import ENTRY_CHECKS, read_reward
 from .images.tag import BUILD_INPUTS, image_tag
 from .job_config import JobSettings, load_job
+from .task_hashes import UNHASHED_METADATA
 
 AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)
 SERVICE_KEYS = {"image", "build", "init", "command", "entrypoint", "working_dir", "user",
@@ -106,6 +107,8 @@ def lint_task(path: Path, config: JobSettings | None = None) -> None:
         raise ValueError(f"{path / 'task.toml'}: [task].description must be a nonempty line")
     if task.config.metadata.get("pillar") != path.parent.name:
         raise ValueError(f"{path / 'task.toml'}: metadata.pillar must match the parent folder {path.parent.name!r}")
+    if unknown := task.config.metadata.keys() - set(UNHASHED_METADATA):
+        raise ValueError(f"{path / 'task.toml'}: unknown metadata keys: {', '.join(sorted(unknown))}")
     if "area" in task.config.metadata:
         area = task.config.metadata["area"]
         if not isinstance(area, str) or not area.strip():
@@ -293,4 +296,8 @@ async def free_check(paths: list[Path], output: Path) -> None:
             saved = (result.get("verifier_result") or {}).get("rewards")
             if saved != rewards or rewards["reward"] != int(expected) or passed != expected:
                 raise ValueError(f"{result_path}: {agent} run must give reward {int(expected)} with matching checks")
+            if not expected and path in tags and not any(
+                    not check["passed"] and (name in ENTRY_CHECKS or tags[path].get(name) == "gate")
+                    for name, check in checks.items()):
+                raise ValueError(f"{checks_path}: {path}: the nop run must fail a gate check or an entry check")
             print(f"{path}: {agent} reward {int(expected)}; checks: {checks_path}")

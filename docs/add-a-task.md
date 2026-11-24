@@ -75,6 +75,8 @@ Use `"gate"` for a gate check that tests a requirement in the instruction.
 Use `"judgment"` for a judgment check that tests what an experienced Ethereum developer does without being told.
 Leave entry checks out of the table. Their names are `compile`, `answered`, `no_answer`, and `report_written`.
 Leave out the whole table for Concepts tasks.
+A trial that does nothing must score 0%, so the starting files have to fail a gate check or an entry check. The free check tests this.
+Add no other key under `[metadata]`. Lint rejects it.
 
 ### `README.md`
 

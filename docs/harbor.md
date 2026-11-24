@@ -129,6 +129,7 @@ Both runs must report the same check names.
 For Build and Act tasks, each reported check needs a tag in `[metadata.checks]`, except entry checks.
 The free check removes criteria, so it checks only the names other tools report. Lint checks the criteria names.
 A tag that matches no reported check and no criterion fails the free check.
+On a Build or Act task, the nop run must fail a gate check or an entry check, so a trial that does nothing scores 0%.
 If a host variable is unset, the free check skips both runs for that task.
 Missing records, execution errors, or rewards that disagree with checks fail the command.
 

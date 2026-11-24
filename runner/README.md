@@ -19,6 +19,8 @@ Lint reads names from judge criteria and Forge tests and requires a tag for each
 When those files supply all the check names, lint also rejects unknown names.
 Custom verifiers can report names that lint cannot read. The free check requires tags for the names those verifiers report.
 It also rejects a tag that matches no reported check and no criterion.
+The nop run must fail a gate check or an entry check.
+Lint rejects any `[metadata]` key other than `pillar`, `area`, `layer`, `modes`, and `checks`. Any other key would change the environment hash.
 
 ## Verifiers
 

@@ -243,6 +243,7 @@ def test_export_card_explains_the_required_judge_key(tmp_path):
     ('answer = "gate"\n', None),
     ("", "missing check tags: answer"),
     ('answer = "gate"\nunseen = "gate"\n', "unknown check tags: unseen"),
+    ('answer = "judgment"\n', "the nop run must fail a gate check or an entry check"),
 ])
 def test_free_check_skips_nested_judges_and_matches_tags_to_reported_checks(tmp_path, monkeypatch, tags, error):
     from harbor.job import Job
@@ -260,7 +261,7 @@ def test_free_check_skips_nested_judges_and_matches_tags_to_reported_checks(tmp_
     (task / "tests/reward.toml").write_text(
         '[[reward]]\nname = "reward"\naggregation = "all-pass"\nweights = {judgment = 1, output = 1}\n')
     (task / "tests/output.py").write_text('import rewardkit as rk\nrk.file_exists("answer.txt", name="answer")\n'
-                                          'rk.file_exists("answer.txt", name="report_written")\n')
+                                          'rk.file_exists("report.txt", name="report_written")\n')
     before = {file.relative_to(task): file.read_bytes() for file in task.rglob("*") if file.is_file()}
 
     class SavedJob:
@@ -270,6 +271,7 @@ def test_free_check_skips_nested_judges_and_matches_tags_to_reported_checks(tmp_
         async def run(self):
             folder = tmp_path / "out" / self.config.job_name / "trial"
             (folder / "verifier").mkdir(parents=True)
+            (folder / "report.txt").write_text("An empty report.")
             if self.config.job_name == "oracle":
                 (folder / "answer.txt").write_text("metre")
             staged = self.config.tasks[0].path

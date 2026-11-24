@@ -50,9 +50,10 @@ Had the quorum check failed, the trial score would be 0%.
 - **Each task tags its own checks** in `task.toml`, under `[metadata.checks]`, as `check name = "gate"` or `check name = "judgment"`.
 - **Every Build and Act check has a tag.** An untagged check has no default. Concepts tasks have no table.
 - **The tags stay out of the instruction, environment, and checks hashes.** A tag never changes whether a check passed. It only changes how the saved results add up, so no saved result goes stale. [ADR 0030](0030-regrade-from-saved-check-output.md) kept its statement inside `tests/` because that statement is about what the checks decide. A tag is not.
-- **Only this one table is exempt.** Any other new key in `task.toml` changes the environment hash and reruns the task, so a later scoring setting needs its own decision.
+- **Only this one table is exempt.** Any other new key in `task.toml` changes the environment hash and reruns the task, so a later scoring setting needs its own decision. Lint rejects a `[metadata]` key it does not know.
 - **Lint checks the tags.** It reads Forge test names and judge criteria from the task's files. It fails on a missing tag, a tag on an entry check, and a table on a Concepts task. Where those files name every check, it also fails on a tag for a check the task does not have.
 - **The free check covers the names lint cannot read.** A custom verifier's check names only appear when it runs. The free check fails when a run reports an untagged check, and when a tag matches no reported check and no criterion.
+- **A trial that does nothing scores 0%.** The free check's nop run must fail a gate check or an entry check. Failing only a judgment check is not enough, because the trial would keep credit for the checks it passed.
 - **Entry checks are a fixed list of names in shared code.** The tools that write them are not changed.
 
 ## Where the score is worked out
