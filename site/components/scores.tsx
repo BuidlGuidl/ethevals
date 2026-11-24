@@ -1,6 +1,6 @@
 "use client";
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { Info, ShieldBan } from "lucide-react";
+import { AlertTriangle, Info, ShieldBan } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { sentences } from "../src/refusals";
 export const percent = (score: number | null) => score === null ? "–" : `${Math.round(score * 100)}%`;
@@ -58,7 +58,7 @@ export function InfoHint({ label, text, align }: { label: string; text: Lines; a
 }
 // Sits in the corner of a score that still has planned trials without a score.
 export function Unscored({ count }: { count: number }) {
-  return <Hint text={unscored(count)}><span className="unscored-info" role="img" aria-label={unscored(count)}><Info aria-hidden="true" /></span></Hint>;
+  return <Hint text={unscored(count)}><span className="unscored-info" role="img" aria-label={unscored(count)}><AlertTriangle aria-hidden="true" /></span></Hint>;
 }
 // Marks a score that has trials ended by a safety refusal. Kept apart from the amber unscored icon.
 export function RefusalMark({ lines, inline = false }: { lines: string[]; inline?: boolean }) {

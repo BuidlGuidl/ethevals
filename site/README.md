@@ -59,12 +59,12 @@ A task score averages its trial scores. Errors stay visible in the drawer and st
 A pillar score averages its task scores. Overall averages its pillar scores.
 The task matrix tooltip lists the trials behind each task score.
 Tile color shows how far a score is from the best score in its leaderboard column or task row. Leaderboard and drawer leaders use a richer green fill with bold white text, and a 0% score is never shown as best.
-A score with planned trials that have no score yet shows an amber info icon in its corner.
+A score with planned trials that have no score yet shows an amber warning triangle in its corner.
 The icon's tooltip gives the count, such as "18 trials have no score yet."
 It counts errors and trials that have not run, up to the job's `n_attempts` for each task in the selected mode.
 Overall, pillar scores, and task matrix cells carry it. A task without scored trials keeps its "–".
 The drawer shows the same sentence in an amber banner under the configuration, for the scores or the task it shows.
-A score with trials stopped by a safety refusal on both tries shows a purple shield, apart from the amber icon. The drawer gives those trials their own dot and a purple banner.
+A score with trials stopped by a safety refusal on both tries shows a purple shield, apart from the amber warning triangle. The drawer gives those trials their own dot and a purple banner.
 The "Ignore refusals" switch at the right of the toolbar (`?refusals=ignore`) leaves those trials out of task, pillar, and Overall averages and re-sorts the leaderboard.
 While it is on, an affected score shows the score with refusals counted and, for a pillar, how many tasks still have a score.
 A trial that answered on the retry after a safety refusal keeps its score; only its trial view notes the refusal.
