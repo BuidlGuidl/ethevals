@@ -39,8 +39,8 @@ export const taskHint = (cell: EvalCell) =>
 
 export function TrialDot({ state, ignored }: { state: State; ignored?: boolean }) {
   return <span className="run-dot" data-state={state} data-ignored={ignored || undefined} aria-hidden="true">
-    {state === "error" && <AlertTriangle size={13} strokeWidth={2.2} className="text-amber" />}
-    {state === "refused" && <ShieldBan size={13} strokeWidth={2.2} className="text-refusal" />}
+    {state === "error" && <AlertTriangle size={12} strokeWidth={2.2} className="text-amber" />}
+    {state === "refused" && <ShieldBan size={12} strokeWidth={2.2} className="text-refusal" />}
   </span>;
 }
 

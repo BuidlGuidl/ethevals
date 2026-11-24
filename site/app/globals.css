@@ -227,11 +227,12 @@
   .run-dot[data-state="full"] { @apply bg-green; }
   .run-dot[data-state="part"] { @apply border-2 border-green bg-transparent; }
   .run-dot[data-state="zero"] { @apply bg-red; }
-  .run-dot[data-state="error"], .run-dot[data-state="refused"] { @apply h-[13px] w-[13px]; }
+  .run-dot[data-state="error"], .run-dot[data-state="refused"] { @apply h-3 w-3; }
   .run-dot[data-ignored] { opacity: .5; }
   .trial-legend, .trial-legend > span { @apply flex items-center; }
-  .trial-legend { @apply mb-3 flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted; }
-  .trial-legend > span { @apply gap-1; }
+  .trial-legend { @apply mb-3 flex-wrap gap-x-4 gap-y-1.5 text-[11px] leading-none text-muted; }
+  .trial-legend > span { @apply gap-1.5; }
+  .trial-legend .run-dot[data-state="error"], .trial-legend .run-dot[data-state="refused"] { transform: translateY(-0.5px); }
   .heat-chip { @apply grid min-w-20 gap-1 px-3 py-2 text-center text-[16px] font-semibold; background: color-mix(in srgb, var(--heat-hi) var(--score), var(--heat-lo)); }
   .heat-chip[data-empty="true"] { @apply bg-transparent text-dim; }
   .verifier-verdict { @apply border border-border bg-sheet; }

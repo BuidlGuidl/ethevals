@@ -15,7 +15,7 @@ export function RefusalSwitch({ ignoring }: { ignoring: boolean }) {
     <button type="button" role="switch" aria-checked={ignoring} className="refusal-switch" onClick={() => setIgnoringRefusals(!ignoring)}>
       <span className="refusal-switch-track" aria-hidden="true"><span /></span>Ignore refusals
     </button>
-    <InfoHint label="Why ignore refusals" text={why} />
+    <InfoHint label="Why ignore refusals" text={why} align="end" />
   </div>;
 }
 

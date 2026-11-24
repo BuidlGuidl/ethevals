@@ -26,12 +26,12 @@ export function Hint({ text, bullets, children }: { text?: Lines; bullets?: stri
   return <Tooltip disableHoverableContent><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent className="tip max-w-[min(90vw,480px)]"><TipBody text={text} bullets={bullets} /></TooltipContent></Tooltip>;
 }
 
-export function InfoHint({ label, text }: { label: string; text: Lines }) {
+export function InfoHint({ label, text, align }: { label: string; text: Lines; align?: "start" | "center" | "end" }) {
   const [open, setOpen] = useState(false);
   return <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent><TooltipTrigger asChild>
     <button type="button" className="info-hint" aria-label={`${label}: ${toLines(text).join(" ")}`}
       onClick={(event) => { event.preventDefault(); setOpen(true); }}><Info size={14} aria-hidden="true" /></button>
-  </TooltipTrigger><TooltipContent className="tip max-w-[min(90vw,480px)]"><TipBody text={text} /></TooltipContent></Tooltip>;
+  </TooltipTrigger><TooltipContent align={align} className="tip max-w-[min(90vw,480px)]"><TipBody text={text} /></TooltipContent></Tooltip>;
 }
 // Sits in the corner of a score that still has planned trials without a score.
 export function Unscored({ count }: { count: number }) {
