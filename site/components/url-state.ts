@@ -18,3 +18,6 @@ export function updateQuery(values: Record<string, string | null>, push = false)
   window.history[push ? "pushState" : "replaceState"](null, "", url);
   window.dispatchEvent(new Event("board-url"));
 }
+// Board-wide: leave refused-twice trials out of every average.
+export const ignoringRefusals = (query: URLSearchParams) => query.get("refusals") === "ignore";
+export const setIgnoringRefusals = (on: boolean) => updateQuery({ refusals: on ? "ignore" : null });

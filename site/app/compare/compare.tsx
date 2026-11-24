@@ -1,34 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { agentKey, pillars, type BoardData, type Agent } from "../../src/board";
+import { useMemo } from "react";
+import { agentKey, pillars, type BoardData, type Agent, type Pillar } from "../../src/board";
 import { readMode } from "../../src/modes";
 import { Configuration } from "../../components/configuration";
 import { modeHints, names } from "../../src/labels";
 import { ModeToggle } from "../../components/mode-toggle";
-import { Hint, formulas, percent, pp } from "../../components/scores";
+import { Hint, RefusalMark, formulas, percent, pp } from "../../components/scores";
+import { ignoreRefusals, refusalLines, refusals, tableHasRefusals } from "../../src/refusals";
+import { RefusalSwitch } from "../../components/refusal-controls";
 import { TooltipProvider } from "../../components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "../../components/ui/toggle-group";
-import { updateQuery, useQuery } from "../../components/url-state";
+import { ignoringRefusals, updateQuery, useQuery } from "../../components/url-state";
 
-export default function Compare({ data }: { data: BoardData }) {
+export default function Compare({ data: base }: { data: BoardData }) {
   const query = useQuery();
+  const ignored = useMemo(() => ignoreRefusals(base), [base]);
+  const ignoring = ignoringRefusals(query);
+  const data = ignoring ? ignored : base;
   const mode = readMode(query.get("mode"));
   const table = data.tables[mode];
+  const refusal = (agent: Agent, scope: "overall" | Pillar) => {
+    const info = refusals(ignored.tables[mode], agentKey(agent), scope);
+    return info.refused ? refusalLines(info, ignoring) : undefined;
+  };
   const keys = table.agents.map(agentKey);
   const defaults = [...table.agents].sort((a, b) => (table.summaries[agentKey(b)].scores.overall ?? -1) - (table.summaries[agentKey(a)].scores.overall ?? -1)).slice(0, 3).map(agentKey);
   const chosen = query.has("pick") ? parseSelection(query.get("pick"), keys) : defaults;
   const selected = chosen.map((key) => table.agents.find((agent) => agentKey(agent) === key)!);
-  const metrics: { label: string; formula: string; value: (agent: Agent) => number | null; format: (value: number | null) => string; className?: string }[] = [
-    { label: "Overall", formula: formulas.overall, value: (agent) => table.summaries[agentKey(agent)].scores.overall, format: percent },
-    ...pillars.map((pillar) => ({ label: names[pillar], formula: formulas.pillar, value: (agent: Agent) => table.summaries[agentKey(agent)].scores[pillar], format: percent, className: `pillar-${pillar}` })),
+  const metrics: { label: string; formula: string[]; value: (agent: Agent) => number | null; format: (value: number | null) => string; className?: string; scope?: "overall" | Pillar }[] = [
+    { label: "Overall", formula: formulas.overall, value: (agent) => table.summaries[agentKey(agent)].scores.overall, format: percent, scope: "overall" },
+    ...pillars.map((pillar) => ({ label: names[pillar], formula: formulas.pillar, value: (agent: Agent) => table.summaries[agentKey(agent)].scores[pillar], format: percent, className: `pillar-${pillar}`, scope: pillar })),
     ...(mode === "skills" ? [{ label: "Lift from skills", formula: formulas.lift, value: (agent: Agent) => data.lifts[agentKey(agent)]?.overall ?? null, format: pp }] : []),
   ];
   return <TooltipProvider delayDuration={200}><main id="main" className="page compare-page">
     {data.demo && <aside className="banner"><strong>Demo data</strong> · Invented results for a board preview.</aside>}
-    <div className="section-head"><h1>Compare configurations</h1><Link className="text-link" href={`/?mode=${mode}`}>← Back to results</Link></div>
+    <div className="section-head"><h1>Compare configurations</h1><Link className="text-link" href={`/?mode=${mode}${ignoring ? "&refusals=ignore" : ""}`}>← Back to results</Link></div>
     <div className="toolbar"><ModeToggle mode={mode} onChange={(value) => updateQuery({ mode: value, pick: JSON.stringify(chosen) })} />
-      <p className="muted">{modeHints[mode]}</p></div>
+
+      <p className="muted">{modeHints[mode]}</p>{(tableHasRefusals(base.tables[mode]) || ignoring) && <RefusalSwitch ignoring={ignoring} />}</div>
     {table.agents.length > 0 && <details className="compare-picker" open><summary>Change configurations <span>{chosen.length} of 5 selected</span></summary>
       <ToggleGroup type="multiple" className="configuration-picks grid border-0" value={chosen}
       onValueChange={(values) => { if (values.length <= 5) updateQuery({ pick: JSON.stringify(values) }); }} aria-label="Configurations to compare">
@@ -41,8 +52,11 @@ export default function Compare({ data }: { data: BoardData }) {
         <tbody>{metrics.map((metric) => {
           const values = selected.map(metric.value), scored = values.filter((value): value is number => value !== null);
           const best = Math.max(...scored);
-          return <tr key={metric.label} className={metric.className}><th scope="row">{metric.label}</th>{values.map((value, index) => <td key={agentKey(selected[index])} className={scored.length > 1 && value !== null && value === best ? "best" : ""}>
-            <Hint text={metric.formula}><span tabIndex={0}>{metric.format(value)}</span></Hint></td>)}</tr>;
+          return <tr key={metric.label} className={metric.className}><th scope="row">{metric.label}</th>{values.map((value, index) => {
+            const note = metric.scope && refusal(selected[index], metric.scope);
+            return <td key={agentKey(selected[index])} className={scored.length > 1 && value !== null && value === best ? "best" : ""}>
+              <Hint text={metric.formula}><span tabIndex={0}>{metric.format(value)}</span></Hint>{note && <RefusalMark lines={note} inline />}</td>;
+          })}</tr>;
         })}</tbody></table></div><div className="table-note">Highest scores are highlighted when at least two configurations have scores. Missing scores show –.</div></div> :
       <div className="empty"><h3>{table.agents.length ? "Select configurations to compare" : "No configurations yet"}</h3><p>{table.agents.length ? 'Open "Change configurations" to choose whose scores to compare.' : "Scores will appear when results are published."}</p></div>}
   </main></TooltipProvider>;

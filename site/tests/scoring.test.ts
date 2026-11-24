@@ -93,6 +93,8 @@ test("drawer uses all four trial dots, a percentage heading, and a dot-only scor
     row(governor, gateFailure, { trial: 3 }), row(governor, {}, { trial: 4, status: "error", error_reason: "Provider stopped." })]);
   const list = drawer("list"), table = drawer("task"), details = drawer(2);
   assert.match(list, /class="trial-legend".*100%.*Some checks missed.*0%.*Error/s);
+  // Stops use the board's icons, so the error mark is the warning triangle, not a square.
+  assert.match(list, /class="trial-legend".*data-state="error"[^>]*><svg[^>]*lucide-triangle-alert[^>]*>.*?<\/svg><\/span> Error/s);
   assert.match(list, /class="heat-chip"[^>]*><span>58%<\/span>/);
   assert.deepEqual([...list.split('class="run-dots"')[1].matchAll(/data-state="([^"]+)"/g)].map((match) => match[1]),
     ["full", "part", "zero", "error"]);

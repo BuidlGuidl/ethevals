@@ -13,6 +13,7 @@
   --color-green: #5ee69a;
   --color-amber: #f2bf4f;
   --color-red: #ff7b7b;
+  --color-refusal: #c39bff;
   --color-concepts: #8fa0ff;
   --color-build: #67c8f0;
   --color-act: #f09ad0;
@@ -113,14 +114,32 @@
   :is(.score-cell, .matrix-cell, .heat-chip)[data-tone="far"] { color: var(--color-muted); }
   :is(.score-cell, .heat-chip)[data-tone="leader"] { color: #fff; font-weight: 700; }
   :is(.score-cell, .matrix-cell, .heat-chip)[data-empty="true"] { @apply bg-transparent text-dim; }
-  .score-cell { @apply relative flex min-h-[64px] w-full items-center justify-center text-[22px] font-semibold; }
+  .score-cell { @apply relative flex min-h-[64px] w-full flex-col items-center justify-center text-[22px] font-semibold; }
   .score-cell:hover { box-shadow: inset 0 0 0 2px var(--color-accent); }
   .score-cell small { @apply absolute bottom-1 right-2 text-[10px] font-medium; }
   .score-wrap { @apply relative; }
-  .unscored-info { @apply absolute right-1.5 top-1.5 flex text-amber; cursor: help; }
-  .unscored-info svg { @apply h-5 w-5; }
-  .matrix .unscored-info { @apply right-1 top-1; }
-  .matrix .unscored-info svg { @apply h-3.5 w-3.5; }
+  .corner-marks { @apply absolute right-1.5 top-1.5 flex items-center gap-1; }
+  .unscored-info { @apply flex text-amber; cursor: help; }
+  .refusal-info { @apply flex text-refusal; cursor: help; }
+  .unscored-info svg, .refusal-info svg { @apply h-5 w-5; }
+  .matrix .corner-marks { @apply right-1 top-1 gap-0.5; }
+  .matrix .unscored-info svg, .matrix .refusal-info svg { @apply h-3.5 w-3.5; }
+  .refusal-inline-mark { @apply ml-1.5 inline-flex align-[-3px]; }
+  .refusal-inline-mark svg { @apply h-4 w-4; }
+  .score-sub { @apply mt-0.5 inline-flex items-center gap-1 text-[11px] font-normal leading-none text-muted; }
+  .refusal-text { @apply text-refusal; }
+  .refusal-banner, .refusal-note { @apply flex items-center gap-2 border border-refusal/30 bg-refusal/5 px-3 py-2 text-xs text-refusal; }
+  .refusal-banner svg, .refusal-note svg { @apply shrink-0; }
+  .refusal-strip { @apply flex items-center gap-2 border border-refusal/25 bg-refusal/5 px-3 py-1.5 text-[11px] text-muted; }
+  .refusal-strip svg { @apply h-3.5 w-3.5 shrink-0 text-refusal; }
+  /* The switch and its info icon sit at the right end of the toolbar. */
+  .refusal-controls { @apply ml-auto inline-flex items-center gap-0.5; }
+  .refusal-switch { @apply inline-flex min-h-[34px] items-center gap-2 text-xs text-muted; }
+  .refusal-switch:hover, .refusal-switch[aria-checked="true"] { @apply text-ink; }
+  .refusal-switch-track { @apply relative inline-block h-4 w-7 shrink-0 border border-border-strong bg-tint transition-colors; }
+  .refusal-switch-track span { @apply absolute left-0.5 top-0.5 h-2.5 w-2.5 bg-muted transition-transform; }
+  .refusal-switch[aria-checked="true"] .refusal-switch-track { @apply border-refusal bg-refusal/20; }
+  .refusal-switch[aria-checked="true"] .refusal-switch-track span { @apply translate-x-3 bg-refusal; }
   .table-note { @apply border-t border-border px-4 py-3 text-[11px] text-muted; }
   .read-note { @apply max-w-[1100px] border-t border-border pt-4 text-muted; }
   .read-note b { @apply text-ink; }
@@ -207,20 +226,18 @@
   .eval-list-title { @apply grid grow gap-1 text-left; }
   .eval-list-title, .checks li > div { min-width: 0; }
   .eval-list-title small { @apply text-[10px] text-muted; }
-  .run-dots { @apply inline-flex flex-wrap gap-1; max-width: 110px; }
-  .run-dot { @apply inline-block h-2.5 w-2.5 shrink-0; }
+  .run-dots { @apply inline-flex flex-wrap items-center gap-1; max-width: 110px; }
+  /* Squares for scores, the board's icons for stops: filled, outline, red, warning triangle, shield. */
+  .run-dot { @apply inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center; }
   .run-dot[data-state="full"] { @apply bg-green; }
   .run-dot[data-state="part"] { @apply border-2 border-green bg-transparent; }
-  /* Each state has its own shape, so the dots read without colour: square, outline, cross, diamond. */
-  .run-dot[data-state="zero"] {
-    background:
-      linear-gradient(45deg, transparent 40%, var(--color-red) 40% 60%, transparent 60%),
-      linear-gradient(-45deg, transparent 40%, var(--color-red) 40% 60%, transparent 60%);
-  }
-  .run-dot[data-state="error"] { @apply bg-amber; transform: rotate(45deg) scale(.8); }
+  .run-dot[data-state="zero"] { @apply bg-red; }
+  .run-dot[data-state="error"], .run-dot[data-state="refused"] { @apply h-3 w-3; }
+  .run-dot[data-ignored] { opacity: .5; }
   .trial-legend, .trial-legend > span { @apply flex items-center; }
-  .trial-legend { @apply mb-3 flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted; }
-  .trial-legend > span { @apply gap-1; }
+  .trial-legend { @apply mb-3 flex-wrap gap-x-4 gap-y-1.5 text-[11px] leading-none text-muted; }
+  .trial-legend > span { @apply gap-1.5; }
+  .trial-legend .run-dot[data-state="error"], .trial-legend .run-dot[data-state="refused"] { transform: translateY(-0.5px); }
   .heat-chip { @apply grid min-w-[84px] gap-0.5 px-3 py-1.5 text-center text-[15px] font-semibold; }
   .heat-best { font-size: 10px; font-weight: 400; line-height: 1.1; color: var(--color-muted); }
   .heat-chip[data-tone="leader"] .heat-best { color: var(--color-green); }
@@ -230,6 +247,12 @@
   .check-group h3 { @apply px-4 py-2; }
   .check-group h3 { @apply flex flex-wrap items-baseline justify-between gap-2 bg-tint font-semibold; }
   .check-group h3 span { @apply inline-flex items-center gap-2 text-xs font-normal text-muted; }
+  /* Tooltip body: one sentence per row, then refusal bullets below a rule. */
+  .tip { @apply grid gap-1.5 break-words leading-snug; text-wrap: pretty; }
+  .tip-lines, .tip-bullets { @apply grid gap-0.5; }
+  .tip-lines + .tip-bullets { @apply border-t border-border-strong pt-1.5; }
+  .tip-bullets li { @apply flex gap-1.5; }
+  .tip-bullets li::before { content: "•"; @apply text-refusal; }
   .info-hint { @apply inline-grid size-6 place-items-center text-muted; }
   .info-hint:hover, .info-hint:focus-visible { @apply text-ink; }
   .entry-check { @apply flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border; }
@@ -371,6 +394,8 @@
   .matrix-configuration .configuration b { font-size: 11px; }
 }
 @media (max-width: 760px) {
+  /* On narrow screens the toolbar wraps; the switch starts its own row on the left like the rest. */
+  .refusal-controls { margin-left: 0; }
   .task-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-totals .task-number { font-size: 48px; }
   .task-row summary { flex-wrap: wrap; gap: 10px; }

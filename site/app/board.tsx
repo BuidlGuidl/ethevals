@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle, ShieldBan } from "lucide-react";
 import { agentLabel, modeHints, names, modeNames, unwrapPrompt } from "../src/labels";
 import { pillars, agentKey, scoreSummary, emptyTrialLabel, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Trial, type Agent } from "../src/board";
 import { domains, domainNames, type Domain } from "../src/areas";
@@ -13,9 +13,11 @@ import { Logo } from "../components/logo";
 import { ModeToggle } from "../components/mode-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { TooltipProvider } from "../components/ui/tooltip";
-import { Score, Hint, InfoHint, Unscored, unscored, peers, tile, percent, money } from "../components/scores";
+import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money } from "../components/scores";
 import { entryLabels, TrialDot, TrialDots, TrialLegend, taskHint, trialHint, trialNote, trialScoreText, trialState } from "../components/trial-display";
-import { updateQuery, useQuery } from "../components/url-state";
+import { ignoringRefusals, updateQuery, useQuery } from "../components/url-state";
+import { drawerRefusalBanner, ignoreRefusals, ignoresRefusals, isRefusedTrial, refusalLines, refusals, refusalStrip, refusedCount, retryRefusals, sentences, tableHasRefusals, taskRefusalLines } from "../src/refusals";
+import { RefusalStrip, RefusalSwitch } from "../components/refusal-controls";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
 import { checkKind } from "../src/scoring";
@@ -34,7 +36,8 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
     value, entries: table.pillars[value].evals.filter((entry) => entry.cells[key].state !== "na"
       && (!domain || evaluations[entry.id].domain === domain)),
   }));
-  return <div className="eval-list"><TrialLegend />{groups.filter(({ entries }) => !domain || entries.length).map(({ value, entries }) =>
+  const refused = groups.some(({ entries }) => refusedCount(entries.map((entry) => entry.cells[key])) > 0);
+  return <div className="eval-list"><TrialLegend refused={refused} />{groups.filter(({ entries }) => !domain || entries.length).map(({ value, entries }) =>
     <section key={value} className={`pillar-${value}`}>{!pillar && <h3>{names[value]}</h3>}
       {entries.map((entry) => {
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
@@ -42,7 +45,7 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
           <span className="eval-list-result">{cell.trials.length > 0 && <TrialDots trials={cell.trials} />}
-          <span className="heat-chip" {...chip} title={cell.score === null ? emptyTrialLabel(cell) : undefined}><span>{percent(cell.score)}</span>
+          <span className="heat-chip" {...chip} title={cell.score === null ? emptyLabel(cell) : undefined}><span>{percent(cell.score)}</span>
             {cell.score !== null && row.top !== null && <small className="heat-best">{chip["data-tone"] === "leader" ? "best" : `best ${row.top}%`}</small>}</span></span>
         </button>;
       })}
@@ -61,8 +64,8 @@ function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Tri
           <thead><tr>{["Trial", "Trial score", "Checks", "Time", "Tokens", "Cost"].map((label) => <th scope="col" key={label}>{label}</th>)}<th scope="col"><span className="sr-only">Open trial</span></th></tr></thead>
           <tbody>{trials.map((trial) => <tr key={trial.trial}><td><button className="run-open" onClick={() => onRun(trial.trial)}
             aria-label={`${trialHint(trial)}. Open trial.`}>Trial {trial.trial}</button></td>
-            <td><span className="trial-score"><TrialDot state={trialState(trial)} />{trialScoreText(trial)}</span></td>
-            <td className={trial.score.value !== null && trial.score.stop ? "negative" : undefined}>{trial.score.value === null ? "–" : trialNote(trial)}</td>
+            <td><span className="trial-score"><TrialDot state={trialState(trial)} ignored={trial.ignored} />{trialScoreText(trial)}</span></td>
+            <td className={isRefusedTrial(trial) ? "refusal-text" : trial.score.value !== null && trial.score.stop ? "negative" : undefined}>{trial.score.value === null ? "–" : trialNote(trial)}</td>
             <td>{duration(trial)}</td><td>{tokens(trial.total_tokens)}</td><td>{money(trial.cost, 4)}</td><td aria-hidden="true">›</td></tr>)}</tbody></table>
       </div></div> : <p>No trials yet.</p>}
     </section>
@@ -108,7 +111,7 @@ function RunView({ evaluation, trial, trials, onRun }: { evaluation: Eval; trial
   return <>
     <div className="run-switcher" role="group" aria-label="Trials">{trials.map((run) => <button key={run.trial}
       aria-pressed={run.trial === trial.trial} aria-label={trialHint(run)} onClick={() => onRun(run.trial)}>
-      Trial {run.trial} <TrialDot state={trialState(run)} /></button>)}</div>
+      Trial {run.trial} <TrialDot state={trialState(run)} ignored={run.ignored} /></button>)}</div>
     <dl className="run-stats">{[
       ["Checks", score.value !== null && score.total ? `${score.passed} of ${score.total}` : "–"],
       ["Tokens", tokens(trial.total_tokens)], ["Cost", money(trial.cost, 4)], ["Time", duration(trial)],
@@ -116,7 +119,11 @@ function RunView({ evaluation, trial, trials, onRun }: { evaluation: Eval; trial
     {score.value === null ? <p className="trial-error">
       <AlertTriangle size={14} aria-hidden="true" />This trial ended in an error, so it is left out of the score.
     </p> : trial.issue && <p className="issue">{trial.error_kind ?? trial.limit?.type ?? "Trial"}: {trial.issue}</p>}
-    {trial.status === "failed" && trial.no_answer?.length === 2 && <p className="negative">{trial.no_answer[1].kind === "refused" ? "Refused" : "Empty reply"}</p>}
+    {isRefusedTrial(trial) ? <p className="refusal-note"><ShieldBan size={14} aria-hidden="true" />{trial.ignored
+      ? "Safety refusal on both tries. Left out of the score while refusals are ignored."
+      : "Safety refusal on both tries, so this trial scores 0%."}</p>
+      : trial.status === "failed" && trial.no_answer?.length === 2 && <p className="negative">Empty reply</p>}
+    {retryRefusals(trial) > 0 && <p className="muted">Answered on retry after {retryRefusals(trial)} safety {retryRefusals(trial) === 1 ? "refusal" : "refusals"}.</p>}
     {trial.limit && <p className="caution">{trial.limit.type} limit: {trial.limit.limit}{trial.limit.reason ? ` · ${trial.limit.reason}` : ""}</p>}
     {score.value !== null && <div className="verifier-verdict">
       {failedEntries.map(([name, check]) => <p key={name} className="entry-check"><X size={16} className="negative" aria-hidden="true" />
@@ -144,6 +151,10 @@ export function Detail({ selection, data, domain, onSelect }: {
   }, [evaluation?.id, runLevel]);
   const scope = pillar ? table.pillars[pillar].cells[key] : summary;
   const missing = trial ? 0 : evaluation ? cell?.missing ?? 0 : scope.missing;
+  const ignoring = ignoresRefusals(table);
+  const info = refusals(table, key, pillar ?? "overall");
+  const refusalBanner = trial ? undefined : evaluation ? cell && refusedCount([cell]) > 0 ? sentences(taskRefusalLines(cell, ignoring)) : undefined
+    : !info.refused ? undefined : drawerRefusalBanner(info, ignoring);
   return <TooltipProvider delayDuration={200}><div className="detail-body">
     <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial ? <>
       Trial {trial.trial} of {trials.length} <span className="trial-heading-score">{trialScoreText(trial)}</span>
@@ -151,6 +162,7 @@ export function Detail({ selection, data, domain, onSelect }: {
       {trial && <p>{evaluation!.title}</p>}
       <Configuration agent={agent} /><p className="muted">{modeNames[mode]}</p>
       {missing > 0 && <p className="unscored-banner">{unscored(missing)}</p>}
+      {refusalBanner && <p className="refusal-banner"><ShieldBan size={14} aria-hidden="true" />{refusalBanner}</p>}
       {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scoredTrials(scope.total)}</p>}
       {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No tasks yet" : "No trials yet"}</p>}
       {!evaluation && <div className="domain-scores" role="group" aria-label="Filter by domain">
@@ -175,6 +187,7 @@ export function Detail({ selection, data, domain, onSelect }: {
   </div></TooltipProvider>;
 }
 
+const emptyLabel = (cell: Parameters<typeof emptyTrialLabel>[0]) => refusedCount([cell]) ? sentences(taskRefusalLines(cell, true)) : emptyTrialLabel(cell);
 const scoredTrials = (count: number) => `${count} scored ${count === 1 ? "trial" : "trials"}`;
 
 export default function Board({ data }: { data: BoardData }) {
@@ -182,7 +195,10 @@ export default function Board({ data }: { data: BoardData }) {
   return <Results data={data} query={query} />;
 }
 
-export function Results({ data, query }: { data: BoardData; query: URLSearchParams }) {
+export function Results({ data: base, query }: { data: BoardData; query: URLSearchParams }) {
+  const ignored = useMemo(() => ignoreRefusals(base), [base]);
+  const ignoring = ignoringRefusals(query);
+  const data = ignoring ? ignored : base;
   const mode = readMode(query.get("mode"));
   const evalsMode = readMode(query.get("evals"));
   const domain = domains.find((value) => value === query.get("domain"));
@@ -205,6 +221,17 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
     else updateQuery({ d: null });
   };
   const value = (agent: Agent, key: Sort) => table.summaries[agentKey(agent)].scores[key];
+  const showRefusals = tableHasRefusals(base.tables[mode]);
+  const refusal = (agent: Agent, key: Sort) => {
+    const info = refusals(ignored.tables[mode], agentKey(agent), key);
+    if (!info.refused) return {};
+    if (!ignoring) return { refusal: refusalLines(info, false) };
+    // Under the new score: the score with refusals counted, and for a pillar the tasks still scored.
+    // Overall spans pillars, so a bare task count there would not say which pillar it counts.
+    const coverage = key !== "overall" && info.coverage.length === 1 ? ` · ${info.coverage[0].scored}/${info.coverage[0].tasks}` : "";
+    return { refusal: refusalLines(info, true),
+      sub: <span className="score-sub">was {percent(base.tables[mode].summaries[agentKey(agent)].scores[key])}{coverage}</span> };
+  };
   const agents = [...table.agents].sort((a, b) => {
     const x = value(a, sort.key), y = value(b, sort.key);
     return x === null ? y === null ? agentKey(a).localeCompare(agentKey(b)) : 1 : y === null ? -1 : (sort.ascending ? 1 : -1) * (x - y) || agentKey(a).localeCompare(agentKey(b));
@@ -223,8 +250,10 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
       <p className="hero-desc">We evaluate <Link href="/how-it-works/#hw-pillars">three pillars</Link>: <b>Concepts</b>, <b>Build</b>, and <b>Act</b>.</p>
     </header>
     <section id="leaderboard" className="results-section"><div className="section-head"><div><h2>Results</h2><p>The same work, with and without Ethereum skills.</p></div>
-      <Link className="text-link" href={`/compare/?mode=${mode}`}>Compare configurations →</Link></div>
-      <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} /><p className="mode-note">{modeHints[mode]}</p></div>
+      <Link className="text-link" href={`/compare/?mode=${mode}${ignoring ? "&refusals=ignore" : ""}`}>Compare configurations →</Link></div>
+      <div className="toolbar"><ModeToggle mode={mode} onChange={changeMode} /><p className="mode-note">{modeHints[mode]}</p>
+        {(showRefusals || ignoring) && <RefusalSwitch ignoring={ignoring} />}</div>
+      {ignoring && showRefusals && <RefusalStrip text={refusalStrip(ignored.tables[mode])} />}
       {agents.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Leaderboard. Scroll horizontally for all columns.">
         <table className="leaderboard"><caption className="sr-only">Configuration scores, sorted by {sort.key} {sort.ascending ? "ascending" : "descending"}</caption>
           <colgroup><col className="config-col" />{columns.map(([key]) => <col key={key} className="score-col" />)}</colgroup>
@@ -240,7 +269,7 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
                     label={`${key === "overall" ? "Overall" : names[key]}, ${agentLabel(agent)}`}
                     empty={key !== "overall" && table.pillars[key].cells[agentKey(agent)].state === "empty" ? "No tasks yet" : summary.errors ? "No scored trials" : "No trials yet"}
                     missing={summary.missing}
-                    onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} /></td>;
+                    onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} {...refusal(agent, key)} /></td>;
               })}
             </tr>)}</tbody></table></div>{mode === "skills" && <div className="table-note">+pp is the change over Internet.</div>}</div> :
         <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current tasks. Browse the task catalog below.</p></div>}
@@ -261,11 +290,14 @@ export function Results({ data, query }: { data: BoardData; query: URLSearchPara
               <th scope="row" className="row-label" role="rowheader"><span className="eval-title">{data.evaluations[entry.id].title}</span><small>{entry.id}</small></th>
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
                 return <td key={agentKey(agent)} role="cell"><span className="matrix-configuration" aria-hidden="true"><Configuration agent={agent} /></span>
-                  {cell.state === "na" || cell.score === null ?
-                    <span className="matrix-cell" data-empty title={[emptyTrialLabel(cell), ...cell.trials.map(trialHint)].join("\n")}>–</span> :
-                    <div className="score-wrap"><Hint text={taskHint(cell, row)}><button className="matrix-cell" {...tile(cell.score, row)}
-                      aria-label={`${data.evaluations[entry.id].title}, ${agentLabel(agent)}. Task score ${percent(cell.score)}.${cell.missing ? ` ${unscored(cell.missing)}` : ""} Open details.`}
-                      onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{percent(cell.score)}</button></Hint>{cell.missing > 0 && <Unscored count={cell.missing} />}</div>}</td>;
+                  {(() => {
+                    const refusal = refusedCount([cell]) > 0 ? taskRefusalLines(cell, ignoring) : undefined;
+                    if (cell.state === "na" || (cell.score === null && !refusal)) return <span className="matrix-cell" data-empty title={[emptyTrialLabel(cell), ...cell.trials.map(trialHint)].join("\n")}>–</span>;
+                    return <div className="score-wrap"><Hint text={taskHint(cell, row)}><button className="matrix-cell" {...tile(cell.score, row)}
+                      aria-label={`${data.evaluations[entry.id].title}, ${agentLabel(agent)}. Task score ${percent(cell.score)}.${cell.missing ? ` ${unscored(cell.missing)}` : ""}${refusal ? ` ${sentences(refusal)}` : ""} Open details.`}
+                      onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{percent(cell.score)}</button></Hint>
+                      <CornerMarks missing={cell.score === null ? 0 : cell.missing} refusal={refusal} /></div>;
+                  })()}</td>;
               })}
             </tr>; })}
           </Fragment>)}</tbody></table></div><div className="table-note">Task scores average trial scores. Tile color compares each score to the best on that task. Click a task score to see the instruction and trials.</div></div>
