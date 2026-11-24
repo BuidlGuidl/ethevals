@@ -1,5 +1,5 @@
 import type { EvalCell, Trial } from "../src/board";
-import { percent } from "./scores";
+import { percent, standing, type Peers } from "./scores";
 
 export const entryLabels: Readonly<Record<string, string>> = {
   compile: "Did not compile", answered: "No answer", no_answer: "No answer", report_written: "No report",
@@ -28,8 +28,8 @@ export function trialNote({ score }: Trial): string {
 export const trialScoreText = ({ score }: Trial) => score.value === null ? "Not scored" : percent(score.value);
 export const trialHint = (trial: Trial) =>
   `Trial ${trial.trial} · ${trial.score.value === null ? "" : `${trialScoreText(trial)} · `}${trialNote(trial)}`;
-export const taskHint = (cell: EvalCell) =>
-  [`Task score ${percent(cell.score)}`, ...cell.trials.map(trialHint)].join("\n");
+export const taskHint = (cell: EvalCell, peers: Peers) =>
+  [...cell.score === null ? [] : [standing(cell.score, peers, "Best on this task")], ...cell.trials.map(trialHint)].join("\n");
 
 export function TrialDot({ state }: { state: State }) {
   return <span className="run-dot" data-state={state} aria-hidden="true" />;
