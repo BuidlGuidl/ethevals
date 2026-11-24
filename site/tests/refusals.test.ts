@@ -71,10 +71,11 @@ test("refusal marks stay apart from unscored marks and say what is counted", () 
   assert.match(page("refusals=ignore").split('class="matrix"')[1], />–<\/button>.*aria-label="1 refused trial ignored\. No scored trials left\."/s);
 });
 
-test("a score tooltip puts each formula sentence on its own line, then refusal facts as bullets", () => {
-  const tip = renderToStaticMarkup(createElement(TipBody, { text: formulas.pillar, bullets: ["1 refused trial (scored as 0%)", "Without refusals: 100.0%"] }));
-  assert.equal(tip, '<span class="tip-lines"><span>Pillar scores average task scores.</span><span>Tasks without a score are skipped.</span></span>'
-    + '<ul class="tip-bullets"><li>1 refused trial (scored as 0%)</li><li>Without refusals: 100.0%</li></ul>');
+test("tooltips put each formula sentence on its own line and render refusal facts as bullets", () => {
+  assert.equal(renderToStaticMarkup(createElement(TipBody, { text: formulas.pillar })),
+    '<span class="tip-lines"><span>Pillar scores average task scores.</span><span>Tasks without a score are skipped.</span></span>');
+  assert.equal(renderToStaticMarkup(createElement(TipBody, { bullets: ["1 refused trial (scored as 0%)", "Without refusals: 100.0%"] })),
+    '<ul class="tip-bullets"><li>1 refused trial (scored as 0%)</li><li>Without refusals: 100.0%</li></ul>');
   assert.equal(renderToStaticMarkup(createElement(TipBody, { text: "Task score 50%\nTrial 1 · 0%" })),
     '<span class="tip-lines"><span>Task score 50%</span><span>Trial 1 · 0%</span></span>');
 });

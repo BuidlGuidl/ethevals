@@ -286,7 +286,7 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
                   {(() => {
                     const refusal = refusedCount([cell]) > 0 ? taskRefusalLines(cell, ignoring) : undefined;
                     if (cell.state === "na" || (cell.score === null && !refusal)) return <span className="matrix-cell" data-empty title={[emptyTrialLabel(cell), ...cell.trials.map(trialHint)].join("\n")}>–</span>;
-                    return <div className="score-wrap"><Hint text={taskHint(cell)} bullets={refusal}><button className="matrix-cell" style={heat(cell.score)} data-empty={cell.score === null || undefined}
+                    return <div className="score-wrap"><Hint text={taskHint(cell)}><button className="matrix-cell" style={heat(cell.score)} data-empty={cell.score === null || undefined}
                       aria-label={`${data.evaluations[entry.id].title}, ${agentLabel(agent)}. Task score ${percent(cell.score)}.${cell.missing ? ` ${unscored(cell.missing)}` : ""}${refusal ? ` ${sentences(refusal)}` : ""} Open details.`}
                       onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{percent(cell.score)}</button></Hint>
                       <CornerMarks missing={cell.score === null ? 0 : cell.missing} refusal={refusal} /></div>;

@@ -49,12 +49,12 @@ export function CornerMarks({ missing = 0, refusal }: { missing?: number; refusa
 export function Score({ score, lift, onOpen, label, formula, empty = "No trials yet", missing = 0, refusal, sub }: {
   score: number | null; lift?: number | null; onOpen: () => void; label: string;
   formula: string[]; empty?: string; missing?: number;
-  // Refusal lines show as bullets under the formula; `sub` adds a line under the score.
+  // Refusal lines show on the shield icon tooltip; `sub` adds a line under the score.
   refusal?: string[]; sub?: ReactNode;
 }) {
   const note = score !== null && missing > 0 ? unscored(missing) : "";
   const hasLift = lift !== undefined && lift !== null;
-  return <div className="score-wrap"><Hint text={[...formula, ...(hasLift ? formulas.lift : [])]} bullets={refusal}>
+  return <div className="score-wrap"><Hint text={[...formula, ...(hasLift ? formulas.lift : [])]}>
     <button className="score-cell" data-empty={score === null} style={heat(score)} onClick={onOpen}
       aria-label={`${label}. ${score === null ? empty : percent(score)}.${note && ` ${note}`}${refusal ? ` ${sentences(refusal)}` : ""} Open details.`}>
       <span>{percent(score)}</span>{sub}{hasLift && <small className={lift < 0 ? "negative" : "lift"}>{pp(lift)}</small>}
