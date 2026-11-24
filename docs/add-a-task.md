@@ -88,15 +88,15 @@ Use these sections, in this order:
 | --------------------- | ----------------------------------------------------------------------------- |
 | `# <title>`           | two or three sentences on what the user asks and what the task checks        |
 | `## The instruction`  | `instruction.md`, word for word, as a blockquote so it wraps on GitHub: every line starts with `> `, and a `>` line separates paragraphs |
-| `## What it touches`  | the areas the task touches, and the gotchas in each that the instruction leaves out |
+| `## What it touches`  | the areas the task touches, and what the instruction leaves out in each |
 | `## The checks`       | a table with every check by name, what it proves, and its area                |
-| `## Why it matters`   | where the same gotchas hurt real projects, with links                         |
+| `## Why it matters`   | where the same mistakes hurt real projects, with links                         |
 | `## Notes`            | optional caveats, such as a known contract that passes every check            |
 
 In the blockquote, start every line with `> ` and put a lone `>` line between paragraphs.
 A unit test fails the pull request if a section is missing, if the quoted instruction differs from `instruction.md`, or if the table leaves out a check.
 Write the README before the tests.
-If you can't name a gotcha that the instruction leaves out, the task probably won't tell agents apart.
+If you can't name something that the instruction leaves out, the task probably won't tell agents apart.
 The [token governor README](../tasks/build/token-governor/README.md) is a full example.
 
 ### `instruction.md`
@@ -176,7 +176,7 @@ The recipes below show two real setups.
 `tests/` holds the checks that decide whether the agent got it right.
 Harbor copies it in only after the agent stops, and runs `tests/test.sh`.
 
-A check is one pass-or-fail result with a name and a one-line reason. A trial passes only if every check passes.
+A check is one pass-or-fail result with a name and a one-line reason. The board turns a trial's checks into a trial score, defined in [CONTEXT.md](../CONTEXT.md).
 Check the outcome the instruction asked for, and give every failure a reason that says what went wrong.
 Split separate requirements into separate checks, so a failure tells readers which one broke.
 You pick the checks that fit your task, and you can use more than one kind:

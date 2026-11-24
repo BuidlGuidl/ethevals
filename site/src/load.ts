@@ -5,6 +5,7 @@ import { buildBoard, layers, pillars, agentKey, type BoardData, type Eval } from
 import { rowSchema, type Row } from "./rows";
 import { siteRoot } from "./paths";
 import { taskTags } from "./areas";
+import { checkKind, checkKinds } from "./scoring";
 
 // This checks the JSON transport. The runner owns task declarations and hashes.
 const catalogSchema = z.object({
@@ -14,7 +15,7 @@ const catalogSchema = z.object({
   tasks: z.array(z.object({
     id: z.string().min(1), hash: z.string().min(1), pillar: z.enum(pillars),
     instruction_hash: z.string().min(1), environment_hash: z.string().min(1), checks_hash: z.string().min(1),
-    checks: z.record(z.string().refine((name) => name.trim().length > 0), z.enum(["gate", "judgment"])).optional(),
+    checks: z.record(z.string().refine((name) => name.trim().length > 0), z.enum(checkKinds)).optional(),
     area: z.string().trim().min(1).nullish(), layer: z.enum(layers).nullish(),
     description: z.string().min(1), instruction: z.string().min(1),
     modes: z.array(z.enum(["vanilla", "internet", "skills"])).min(1),
@@ -60,6 +61,10 @@ export function parseRows(contents: string, filename: string, evaluations: Eval[
       if (row.mode !== "vanilla" && !row.agent) throw new Error("Agent rows require an agent.");
       if (row.mode === "vanilla" && row.agent !== null) throw new Error("Vanilla rows cannot have an agent.");
       const evaluation = current.get(row.task_id);
+      if (evaluation && evaluation.checks_hash === row.checks_hash) {
+        const untagged = Object.keys(row.checks).filter((name) => checkKind(evaluation, name) === undefined);
+        if (untagged.length) throw new Error(`Missing check tags for ${row.task_id}: ${untagged.join(", ")}.`);
+      }
       if (evaluation?.instruction_hash === row.instruction_hash && evaluation.environment_hash === row.environment_hash) {
         if (!evaluation.modes.includes(row.mode)) throw new Error("The task does not declare this mode.");
       }

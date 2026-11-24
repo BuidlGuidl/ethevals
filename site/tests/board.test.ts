@@ -59,11 +59,12 @@ test("the drawer names a refusal or empty reply after two no-answer tries", () =
 });
 const error = { status: "error", checks: {}, error_kind: "execution", error_reason: "Sandbox stopped." } as const;
 
-test("a score counts passed trials and excludes errors, while retaining their details", () => {
+test("a Concepts task score averages its trial scores and excludes errors", () => {
   const cell = getCell(evaluation, agent, "internet", [row(), row({ trial: 2 }), row({ trial: 3, ...failure }), row({ trial: 4, ...error })]);
   assert.deepEqual({ state: cell.state, score: cell.score, passed: cell.passed, total: cell.total, errors: cell.errors },
     { state: "score", score: 2 / 3, passed: 2, total: 3, errors: 1 });
-  assert.equal(cell.trials[3].error_reason, "Sandbox stopped.");
+  assert.equal(cell.trials[3].score.value, null);
+  assert.equal(cell.trials[3].issue, "");
 });
 
 test("planned trials without a score are counted and marked on the board", () => {
@@ -85,7 +86,7 @@ test("planned trials without a score are counted and marked on the board", () =>
   // The drawer says the same in a banner for the scope it shows, and stays quiet for a single trial.
   const drawer = (selection: Parameters<typeof Detail>[0]["selection"]) => renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
   const token = { ...tasks[1], domain: "dapp-development" as const };
-  assert.ok(drawer({ agent, mode: "internet" }).includes('<p class="unscored-banner">3 trials have no score yet.</p><p>75% · 2/3 scored</p>'));
+  assert.ok(drawer({ agent, mode: "internet" }).includes('<p class="unscored-banner">3 trials have no score yet.</p><p>75% · 3 scored trials</p>'));
   assert.ok(!drawer({ agent, mode: "internet", pillar: "concepts" }).includes("unscored-banner"));
   assert.ok(drawer({ agent, mode: "internet", evaluation: token }).includes('<p class="unscored-banner">1 trial has no score yet.</p>'));
   assert.ok(!drawer({ agent, mode: "internet", evaluation: token, run: 1 }).includes("unscored-banner"));
@@ -194,7 +195,7 @@ test("the mode switch disables Internet + Skills, enables Model only, and retain
     data, selection: { evaluation, pillar: "concepts", agent, mode: "skills", run: 1 },
     onSelect: () => {},
   }));
-  assert.ok(panel.includes(">FAIL</span>"));
+  assert.ok(panel.includes('class="trial-heading-score">0%</span>'));
   assert.ok(panel.includes("The answer differs."));
   assert.deepEqual([data.tables.internet.pillars.concepts.cells[agentKey(agent)].score,
     data.tables.skills.pillars.concepts.cells[agentKey(agent)].score], [1, 0]);
@@ -216,7 +217,7 @@ test("list rows have one task button and Overall groups them under pillar headin
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, onSelect: () => {} }));
   assert.equal((panel.match(/class="eval-list-row"/g) ?? []).length, 2);
   assert.ok(panel.includes('<h3>Concepts</h3>') && panel.includes('<h3>Build</h3>'));
-  assert.ok(panel.includes('class="run-dot passed"') && panel.includes('class="heat-chip"'));
+  assert.ok(panel.includes('class="run-dot" data-state="full"') && panel.includes('class="heat-chip"'));
   const board = renderToStaticMarkup(createElement(Board, { data }));
   assert.equal((board.match(/aria-label="Which results"/g) ?? []).length, 1);
   assert.equal((board.match(/aria-label="Which task results"/g) ?? []).length, 1);
@@ -259,18 +260,18 @@ test("drawer domain scores average tasks then scored pillars and respect the sel
     row({ task_id: "concepts/overflow" }), row({ task_id: "concepts/overflow", trial: 2, ...failure }),
     row({ task_id: "concepts/overflow", trial: 3, ...error }), row({ mode: "vanilla", agent: null, ...failure })]);
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, domain: "security", onSelect: () => {} }));
-  assert.match(panel, /aria-pressed="false"><span>Dapp development<\/span><b>38%<\/b><small>2\/4 scored<\/small>/);
-  assert.match(panel, /aria-pressed="true"><span>Security<\/span><b>25%<\/b><small>1\/3 scored<\/small>/);
-  assert.ok(panel.includes('<p>25% · 3/7 scored</p>'));
+  assert.match(panel, /aria-pressed="false"><span>Dapp development<\/span><b>38%<\/b><small>4 scored trials<\/small>/);
+  assert.match(panel, /aria-pressed="true"><span>Security<\/span><b>25%<\/b><small>3 scored trials<\/small>/);
+  assert.ok(panel.includes('<p>25% · 7 scored trials</p>'));
   assert.deepEqual([...panel.matchAll(/class="eval-list-title"><b>([^<]+)/g)].map((match) => match[1]), ["Reentrancy", "Overflow"]);
   assert.ok(panel.includes('<h3>Concepts</h3>'));
   assert.ok(!panel.includes('<h3>Build</h3>'));
   const concepts = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet", pillar: "concepts" }, onSelect: () => {} }));
-  assert.match(concepts, /<span>Dapp development<\/span><b>75%<\/b><small>2\/3 scored<\/small>/);
+  assert.match(concepts, /<span>Dapp development<\/span><b>75%<\/b><small>3 scored trials<\/small>/);
   const build = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet", pillar: "build" }, onSelect: () => {} }));
   assert.match(build, /disabled=""><span>Security<\/span><small>No tasks yet<\/small>/);
   const vanilla = renderToStaticMarkup(createElement(Detail, { data, selection: { agent: { ...agent, agent: null }, mode: "vanilla" }, onSelect: () => {} }));
-  assert.match(vanilla, /<span>Dapp development<\/span><b>0%<\/b><small>0\/1 scored<\/small>/);
+  assert.match(vanilla, /<span>Dapp development<\/span><b>0%<\/b><small>1 scored trial<\/small>/);
   assert.match(vanilla, /<span>Security<\/span><small>No trials yet<\/small>/);
 });
 
@@ -282,11 +283,11 @@ test("unrun drawer domains and task rows show No trials yet and a dash, includin
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, domain: "security", onSelect: () => {} }));
   assert.match(panel, /aria-pressed="true"><span>Security<\/span><small>No trials yet<\/small>/);
   assert.ok(panel.includes('title="No trials yet">–</span>'));
-  assert.ok(panel.includes('title="1 errors; no scored trials">–</span>'));
+  assert.ok(panel.includes('title="1 error. No scored trials.">–</span>'));
   assert.ok(!panel.includes("0/0"));
   const matrix = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams("domain=security") }));
   assert.ok(matrix.includes('title="No trials yet">–</span>'));
-  assert.ok(matrix.includes('title="1 errors; no scored trials">–</span>'));
+  assert.ok(matrix.includes('title="1 error. No scored trials.\nTrial 1 · Error">–</span>'));
 });
 
 test("task details open the instruction and list one button per trial with compact counts", () => {
@@ -299,11 +300,11 @@ test("task details open the instruction and list one button per trial with compa
   assert.ok(panel.includes('<details class="prompt-disclosure" open=""><summary>Instruction</summary>'));
   assert.ok(panel.includes('<pre>How many wei equal one ether?</pre>'));
   assert.ok(panel.includes('<table class="runs-table">'));
-  for (const label of ["Trial", "Result", "Checks", "Time", "Tokens", "Cost"]) assert.ok(panel.includes(`<th scope="col">${label}</th>`));
+  for (const label of ["Trial", "Trial score", "Checks", "Time", "Tokens", "Cost"]) assert.ok(panel.includes(`<th scope="col">${label}</th>`));
   assert.equal((panel.match(/class="run-open"/g) ?? []).length, 3);
-  assert.ok(panel.includes('aria-label="Trial 2, FAIL, 1 of 2 checks passed, 8.0s, 7k tokens, $0.2500. Open trial."'));
-  assert.ok(panel.includes(">PASS</span>") && panel.includes(">FAIL</span>") && panel.includes(">ERROR</span>"));
-  assert.ok(panel.includes('<td>1/2</td>') && panel.includes('<td>7k</td>') && panel.includes('aria-hidden="true">›</td>'));
+  assert.ok(panel.includes('aria-label="Trial 2 · 0% · 1 of 2 passed. Open trial."'));
+  assert.match(panel, /data-state="full"[^>]*><\/span>100%.*data-state="zero"[^>]*><\/span>0%.*data-state="error"[^>]*><\/span>Not scored/s);
+  assert.ok(panel.includes('<td>1 of 2 passed</td>') && panel.includes('<td>7k</td>') && panel.includes('aria-hidden="true">›</td>'));
   assert.equal((panel.match(/open=""/g) ?? []).length, 1);
   assert.ok(!panel.includes('<ul class="checks">') && !panel.includes('class="run-row"'));
   assert.equal((panel.match(/class="back-button"/g) ?? []).length, 0);
@@ -317,26 +318,27 @@ test("trial details show the selected trial, failed reasons first, and a switche
   } }), row({ trial: 3, ...error })]);
   const selection = { evaluation, agent, mode: "internet" as const, fromList: true as const, run: 2 };
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
-  assert.match(panel, /<h1[^>]*>Trial 2 of 3[\s\S]*?>FAIL<\/span><\/h1>/);
+  assert.match(panel, /<h1[^>]*>Trial 2 of 3 <span class="trial-heading-score">0%<\/span><\/h1>/);
   assert.ok(panel.includes('<p>Units</p>') && panel.includes('title="model-a · agent-a · effort high"'));
-  assert.ok(panel.includes('aria-label="Trials"') && panel.includes('aria-pressed="true" aria-label="Trial 2: failed"'));
-  assert.ok(panel.includes('Trial 1 ✓') && panel.includes('Trial 2 ✗') && panel.includes('Trial 3 !'));
+  assert.ok(panel.includes('aria-label="Trials"') && panel.includes('aria-pressed="true" aria-label="Trial 2 · 0% · 1 of 2 passed"'));
+  assert.match(panel, /Trial 1 <span class="run-dot" data-state="full".*Trial 2 <span class="run-dot" data-state="zero".*Trial 3 <span class="run-dot" data-state="error"/s);
   assert.match(panel, /class="back-button"[\s\S]*?<\/svg>All trials/);
   assert.ok(panel.includes('<code>bad</code>') && panel.includes('<code>good</code>') && panel.includes("The answer differs."));
   assert.ok(panel.indexOf('<code>bad</code>') < panel.indexOf('<code>good</code>'));
   assert.ok(panel.includes("Test passed.") && !panel.includes("Cost source:") && !panel.includes('prompt-disclosure') && !panel.includes('aria-label="Agent modes"'));
-  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Checks</dt><dd>1 / 2</dd></div><div><dt>Tokens</dt><dd>7k</dd></div><div><dt>Cost</dt><dd>$0.2500</dd></div><div><dt>Time</dt><dd>8.0s</dd></div></dl>'));
-  assert.ok(panel.includes('<section class="verifier-verdict"><h3>Verifier checks</h3>'));
+  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Checks</dt><dd>1 of 2</dd></div><div><dt>Tokens</dt><dd>7k</dd></div><div><dt>Cost</dt><dd>$0.2500</dd></div><div><dt>Time</dt><dd>8.0s</dd></div></dl>'));
+  assert.ok(panel.includes('<h3>Checks <span>1 of 2</span></h3>'));
   assert.ok(panel.indexOf('class="run-switcher"') < panel.indexOf('class="run-stats"'));
   assert.ok(panel.indexOf('class="run-stats"') < panel.indexOf('class="verifier-verdict"'));
   assert.ok(panel.indexOf('class="verifier-verdict"') < panel.indexOf('class="trajectory-links"'));
   assert.ok(panel.includes('href="https://example.com/run.json" target="_blank" rel="noreferrer">Open trajectory ↗'));
   const passed = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: 1 }, onSelect: () => {} }));
-  assert.match(passed, /<h1[^>]*>Trial 1 of 3[\s\S]*?>PASS<\/span><\/h1>/);
+  assert.match(passed, /<h1[^>]*>Trial 1 of 3 <span class="trial-heading-score">100%<\/span><\/h1>/);
   assert.ok(passed.includes('<code>answer</code>') && passed.includes("The answer matches."));
   const errored = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: 3 }, onSelect: () => {} }));
-  assert.match(errored, /<h1[^>]*>Trial 3 of 3[\s\S]*?>ERROR<\/span><\/h1>/);
-  assert.ok(errored.includes("Sandbox stopped.") && errored.includes("No checks completed.") && errored.includes("This error does not enter the score."));
+  assert.match(errored, /<h1[^>]*>Trial 3 of 3 <span class="trial-heading-score">Not scored<\/span><\/h1>/);
+  assert.ok(errored.includes("This trial ended in an error, so it is left out of the score."));
+  assert.doesNotMatch(errored, /Sandbox stopped\.|class="verifier-verdict"/);
   const allRuns = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: undefined }, onSelect: () => {} }));
   assert.ok(allRuns.includes('<table class="runs-table">') && allRuns.includes('prompt-disclosure'));
   assert.match(allRuns, /class="back-button"[\s\S]*?<\/svg>All pillars/);
@@ -372,7 +374,7 @@ test("both results tables fall back to Internet for unavailable URL modes and op
     const bottom = html.slice(html.indexOf('id="evals"'));
     assert.ok(top.includes('class="row-label">Configuration<small>'));
     assert.ok(bottom.includes("<h2>Results by task</h2>"));
-    assert.ok(bottom.includes("1 of 1 trials passed. Open details."));
+    assert.ok(bottom.includes("Task score 100%. Open details."));
     assert.ok(top.includes("agent-a / model-a. 100%. Open details."));
     for (const section of [top, bottom]) assert.match(section, /aria-checked="true"[^>]*>Internet<\/button>/);
   }
