@@ -7,6 +7,8 @@ import { buildBoard, trialCost, agentKey, type Eval, type DisplayEval, type Row,
 import { currentRows, loadBoard, parseRows } from "../src/load";
 import { decodeSelection, encodeSelection } from "../src/selection";
 import { Configuration } from "../components/configuration";
+import { peers } from "../components/scores";
+import { taskHint } from "../components/trial-display";
 
 const evaluation: Eval & Pick<DisplayEval, "domain"> = {
   id: "concepts/units", hash: "current", instruction_hash: "current", environment_hash: "current", checks_hash: "current", title: "Units", pillar: "concepts",
@@ -282,8 +284,8 @@ test("unrun drawer domains and task rows show No trials yet and a dash, includin
   ], [row(), row({ task_id: "concepts/overflow", ...error })]);
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, domain: "security", onSelect: () => {} }));
   assert.match(panel, /aria-pressed="true"><span>Security<\/span><small>No trials yet<\/small>/);
-  assert.ok(panel.includes('title="No trials yet">–</span>'));
-  assert.ok(panel.includes('title="1 error. No scored trials.">–</span>'));
+  assert.ok(panel.includes('<span class="heat-chip" data-empty="true" title="No trials yet"><span>–</span></span>'));
+  assert.ok(panel.includes('<span class="heat-chip" data-empty="true" title="1 error. No scored trials."><span>–</span></span>'));
   assert.ok(!panel.includes("0/0"));
   const matrix = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams("domain=security") }));
   assert.ok(matrix.includes('title="No trials yet">–</span>'));
@@ -443,4 +445,46 @@ test("the board keeps a listed model and drops a retired model with a current ta
   const html = renderToStaticMarkup(createElement(Board, { data }));
   assert.ok(html.includes("agent-a / model-a. 100%. Open details."));
   assert.equal(html.includes("retired-model"), false);
+});
+
+test("tile colors and drawer chips compare each score with the best in its column or task row", () => {
+  const second = { ...agent, model: "model-b" }, third = { ...agent, model: "model-c" };
+  const buildTask: Eval = { ...evaluation, id: "build/vault", title: "Vault", pillar: "build", modes: ["internet"] };
+  // Concepts/Units: model-a 100%, model-b 50%, model-c 0%, model-d error only.
+  // Build/Vault:    model-a 50%,  model-b 75%, model-c 0%, model-d unrun.
+  // Overall:        model-a 75%,  model-b 63%, model-c 0%, model-d error only.
+  const data = buildBoard([evaluation, buildTask], [
+    row(),
+    row({ model: "model-b", trial: 1 }), row({ model: "model-b", trial: 2, ...failure }),
+    row({ model: "model-c", ...failure }), row({ model: "model-d", ...error }),
+    row({ task_id: buildTask.id, trial: 1 }), row({ task_id: buildTask.id, trial: 2, ...failure }),
+    ...[1, 2, 3].map((trial) => row({ task_id: buildTask.id, model: "model-b", trial })),
+    row({ task_id: buildTask.id, model: "model-b", trial: 4, ...failure }),
+    row({ task_id: buildTask.id, model: "model-c", ...failure }),
+  ]);
+  const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }));
+  const top = html.slice(html.indexOf('id="leaderboard"'), html.indexOf('id="evals"'));
+  const bottom = html.slice(html.indexOf('id="evals"'));
+  const tileFor = (section: string, label: string) => section.match(new RegExp(`<button class="(?:score|matrix)-cell"[^>]*aria-label="${label}[^>]*>`))?.[0];
+  // Overall: gap 12 -> 100 * exp(-12 / 28) = 65.1. Build/Vault: gap 25 -> 100 * exp(-25 / 28) = 40.9.
+  assert.match(tileFor(top, "Overall, agent-a / model-a\\.")!, /data-tone="leader"/);
+  assert.match(tileFor(top, "Overall, agent-a / model-b\\.")!, /data-tone="trail" style="--heat:65.1%"/);
+  assert.match(tileFor(top, "Overall, agent-a / model-c\\.")!, /data-tone="zero"/);
+  assert.match(tileFor(top, "Overall, agent-a / model-d\\.")!, /data-empty="true"[^>]*No scored trials\./);
+  assert.match(tileFor(top, "Build, agent-a / model-d\\.")!, /data-empty="true"[^>]*No trials yet\./);
+  // model-b wins Build & Vault (75%) even while trailing on Overall (63%).
+  assert.match(tileFor(top, "Build, agent-a / model-b\\.")!, /data-tone="leader"/);
+  assert.match(tileFor(top, "Build, agent-a / model-a\\.")!, /data-tone="trail" style="--heat:40.9%"/);
+  assert.match(tileFor(bottom, "Vault, agent-a / model-b\\.")!, /data-tone="leader"/);
+  assert.match(tileFor(bottom, "Vault, agent-a / model-a\\.")!, /data-tone="trail" style="--heat:40.9%"/);
+  assert.ok(bottom.includes('<span class="matrix-cell" data-empty="true" title="1 error. No scored trials.'));
+  const vaultCell = (model: Agent) => data.tables.internet.pillars.build.evals[0].cells[agentKey(model)];
+  const vaultPeers = peers(data.tables.internet.agents.map((value) => vaultCell(value).score));
+  assert.equal(taskHint(vaultCell(second), vaultPeers).split("\n")[0], "Best on this task");
+  assert.equal(taskHint(vaultCell(agent), vaultPeers).split("\n")[0], "\u221225 pts · best 75%");
+  const vaultChip = (model: Agent) => renderToStaticMarkup(createElement(Detail, { data, selection: { agent: model, mode: "internet", pillar: "build" }, onSelect: () => {} }))
+    .match(/<span class="heat-chip".*?<\/small><\/span>/)?.[0];
+  assert.equal(vaultChip(second), '<span class="heat-chip" data-empty="false" data-tone="leader"><span>75%</span><small class="heat-best">best</small></span>');
+  assert.equal(vaultChip(agent), '<span class="heat-chip" data-empty="false" data-tone="trail" style="--heat:40.9%"><span>50%</span><small class="heat-best">best 75%</small></span>');
+  assert.equal(vaultChip(third), '<span class="heat-chip" data-empty="false" data-tone="zero"><span>0%</span><small class="heat-best">best 75%</small></span>');
 });
