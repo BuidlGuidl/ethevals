@@ -13,7 +13,7 @@ import { Logo } from "../components/logo";
 import { ModeToggle } from "../components/mode-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { TooltipProvider } from "../components/ui/tooltip";
-import { Score, Hint, InfoHint, CornerMarks, unscored, formulas, heat, percent, money } from "../components/scores";
+import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money } from "../components/scores";
 import { entryLabels, TrialDot, TrialDots, TrialLegend, taskHint, trialHint, trialNote, trialScoreText, trialState } from "../components/trial-display";
 import { ignoringRefusals, updateQuery, useQuery } from "../components/url-state";
 import { ignoreRefusals, ignoresRefusals, isRefusedTrial, refusalLines, refusals, refusalStrip, refusedCount, retryRefusals, sentences, tableHasRefusals, taskRefusalLines } from "../src/refusals";
@@ -41,10 +41,12 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
     <section key={value} className={`pillar-${value}`}>{!pillar && <h3>{names[value]}</h3>}
       {entries.map((entry) => {
         const evaluation = evaluations[entry.id], cell = entry.cells[key];
+        const row = peers(table.agents.map((other) => entry.cells[agentKey(other)].score)), chip = tile(cell.score, row);
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
           <span className="eval-list-result">{cell.trials.length > 0 && <TrialDots trials={cell.trials} />}
-          <span className="heat-chip" data-empty={cell.score === null} style={heat(cell.score)} title={cell.score === null ? emptyLabel(cell) : undefined}>{percent(cell.score)}</span></span>
+          <span className="heat-chip" {...chip} title={cell.score === null ? emptyLabel(cell) : undefined}><span>{percent(cell.score)}</span>
+            {cell.score !== null && row.top !== null && <small className="heat-best">{chip["data-tone"] === "leader" ? "best" : `best ${row.top}%`}</small>}</span></span>
         </button>;
       })}
       {table.pillars[value].cells[key].state === "empty" && <p className="muted">No tasks yet for this mode.</p>}
@@ -235,6 +237,7 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
     return x === null ? y === null ? agentKey(a).localeCompare(agentKey(b)) : 1 : y === null ? -1 : (sort.ascending ? 1 : -1) * (x - y) || agentKey(a).localeCompare(agentKey(b));
   });
   const columns: [Sort, string][] = [["overall", "Overall"], ...pillars.map((pillar): [Sort, string] => [pillar, names[pillar]])];
+  const columnPeers = Object.fromEntries(columns.map(([key]) => [key, peers(table.agents.map((agent) => value(agent, key)))]));
   const matrixAgents = [...matrixTable.agents].sort((a, b) =>
     (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(b)].scores.overall ?? -1) -
     (data.tables[evalsMode === "vanilla" ? "vanilla" : "skills"].summaries[agentKey(a)].scores.overall ?? -1));
@@ -258,16 +261,19 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
             {columns.map(([key, name]) => <th key={key} scope="col" aria-sort={sort.key === key ? sort.ascending ? "ascending" : "descending" : "none"}>
               <button className="sort-button" onClick={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : false })}>{name}{sort.key === key && (sort.ascending ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}</button>
             </th>)}</tr></thead><tbody>{agents.map((agent) => <tr key={agentKey(agent)}><th scope="row" className="row-label"><Configuration agent={agent} /></th>
-              {columns.map(([key]) => <td key={key}>
-                <Score score={value(agent, key)} lift={mode === "skills" ? data.lifts[agentKey(agent)]?.[key] : undefined}
-                  formula={key === "overall" ? formulas.overall : formulas.pillar}
-                  label={`${key === "overall" ? "Overall" : names[key]}, ${agentLabel(agent)}`}
-                  empty={key !== "overall" && table.pillars[key].cells[agentKey(agent)].state === "empty" ? "No tasks yet" : "No trials yet"}
-                  missing={key === "overall" ? table.summaries[agentKey(agent)].missing : table.pillars[key].cells[agentKey(agent)].missing}
-                  onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} {...refusal(agent, key)} /></td>)}
+              {columns.map(([key]) => {
+                const summary = key === "overall" ? table.summaries[agentKey(agent)] : table.pillars[key].cells[agentKey(agent)];
+                return <td key={key}>
+                  <Score score={value(agent, key)} lift={mode === "skills" ? data.lifts[agentKey(agent)]?.[key] : undefined}
+                    peers={columnPeers[key]} best={key === "overall" ? "Best overall" : `Best in ${names[key]}`}
+                    label={`${key === "overall" ? "Overall" : names[key]}, ${agentLabel(agent)}`}
+                    empty={key !== "overall" && table.pillars[key].cells[agentKey(agent)].state === "empty" ? "No tasks yet" : summary.errors ? "No scored trials" : "No trials yet"}
+                    missing={summary.missing}
+                    onOpen={() => select({ agent, mode, pillar: key === "overall" ? undefined : key })} {...refusal(agent, key)} /></td>;
+              })}
             </tr>)}</tbody></table></div>{mode === "skills" && <div className="table-note">+pp is the change over Internet.</div>}</div> :
         <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current tasks. Browse the task catalog below.</p></div>}
-      <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on three pillars: Concepts, Build, and Act. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them.</div>
+      <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on three pillars: Concepts, Build, and Act. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them. Tile color shows how close a score is to the best score in its column.</div>
     </section>
     <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task</h2><p>See each configuration’s task scores by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />
@@ -279,21 +285,22 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
         <table className="matrix" role="table"><caption className="sr-only">Task scores by configuration</caption><thead role="rowgroup"><tr role="row"><th className="row-label" scope="col" role="columnheader">Task</th>
           {matrixAgents.map((agent) => <th key={agentKey(agent)} scope="col" role="columnheader"><Configuration agent={agent} /></th>)}</tr></thead>
           <tbody role="rowgroup">{matrixRows.filter(({ entries }) => entries.length).map(({ pillar, entries }) => <Fragment key={pillar}><tr className="pillar-band" role="row"><th scope="colgroup" colSpan={matrixAgents.length + 1} role="columnheader"><span className="band-label">{names[pillar]}<small>{entries.length} tasks</small></span></th></tr>
-            {entries.map((entry) => <tr role="row" key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
+            {entries.map((entry) => { const row = peers(matrixAgents.map((agent) => entry.cells[agentKey(agent)].score));
+              return <tr role="row" key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
               <th scope="row" className="row-label" role="rowheader"><span className="eval-title">{data.evaluations[entry.id].title}</span><small>{entry.id}</small></th>
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
                 return <td key={agentKey(agent)} role="cell"><span className="matrix-configuration" aria-hidden="true"><Configuration agent={agent} /></span>
                   {(() => {
                     const refusal = refusedCount([cell]) > 0 ? taskRefusalLines(cell, ignoring) : undefined;
                     if (cell.state === "na" || (cell.score === null && !refusal)) return <span className="matrix-cell" data-empty title={[emptyTrialLabel(cell), ...cell.trials.map(trialHint)].join("\n")}>–</span>;
-                    return <div className="score-wrap"><Hint text={taskHint(cell)}><button className="matrix-cell" style={heat(cell.score)} data-empty={cell.score === null || undefined}
+                    return <div className="score-wrap"><Hint text={taskHint(cell, row)}><button className="matrix-cell" {...tile(cell.score, row)}
                       aria-label={`${data.evaluations[entry.id].title}, ${agentLabel(agent)}. Task score ${percent(cell.score)}.${cell.missing ? ` ${unscored(cell.missing)}` : ""}${refusal ? ` ${sentences(refusal)}` : ""} Open details.`}
                       onClick={() => select({ evaluation: data.evaluations[entry.id], agent, mode: evalsMode })}>{percent(cell.score)}</button></Hint>
                       <CornerMarks missing={cell.score === null ? 0 : cell.missing} refusal={refusal} /></div>;
                   })()}</td>;
               })}
-            </tr>)}
-          </Fragment>)}</tbody></table></div><div className="table-note">Task scores average trial scores. Click a task score to see the instruction and trials.</div></div>
+            </tr>; })}
+          </Fragment>)}</tbody></table></div><div className="table-note">Task scores average trial scores. Tile color compares each score to the best on that task. Click a task score to see the instruction and trials.</div></div>
     </section>
     <noscript>Enable JavaScript to change modes and open trial details.</noscript>
   </main>

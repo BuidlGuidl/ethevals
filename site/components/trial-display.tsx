@@ -1,7 +1,7 @@
 import { AlertTriangle, ShieldBan } from "lucide-react";
 import type { EvalCell, Trial } from "../src/board";
 import { isRefusedTrial } from "../src/refusals";
-import { percent } from "./scores";
+import { percent, standing, type Peers } from "./scores";
 
 export const entryLabels: Readonly<Record<string, string>> = {
   compile: "Did not compile", answered: "No answer", no_answer: "No answer", report_written: "No report",
@@ -34,8 +34,8 @@ export function trialNote(trial: Trial): string {
 export const trialScoreText = ({ score, ignored }: Trial) => score.value === null ? "Not scored" : ignored ? "Ignored" : percent(score.value);
 export const trialHint = (trial: Trial) =>
   `Trial ${trial.trial} · ${trial.score.value === null || trial.ignored ? "" : `${trialScoreText(trial)} · `}${trialNote(trial)}`;
-export const taskHint = (cell: EvalCell) =>
-  [`Task score ${percent(cell.score)}`, ...cell.trials.map(trialHint)].join("\n");
+export const taskHint = (cell: EvalCell, peers: Peers) =>
+  [...cell.score === null ? [] : [standing(cell.score, peers, "Best on this task")], ...cell.trials.map(trialHint)].join("\n");
 
 export function TrialDot({ state, ignored }: { state: State; ignored?: boolean }) {
   return <span className="run-dot" data-state={state} data-ignored={ignored || undefined} aria-hidden="true">

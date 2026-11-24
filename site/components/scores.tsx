@@ -6,7 +6,30 @@ import { sentences } from "../src/refusals";
 export const percent = (score: number | null) => score === null ? "–" : `${Math.round(score * 100)}%`;
 export const money = (value: number | null, digits = 2) => value === null ? "–" : `$${value.toFixed(digits)}`;
 export const pp = (value: number | null) => value === null ? "–" : `${Math.round(value) > 0 ? "+" : ""}${Math.round(value)}pp`;
-export const heat = (score: number | null) => score === null ? undefined : { "--score": `${score * 100}%` } as CSSProperties;
+// Tile color and tooltip compare a score with the best score among its peers: a leaderboard column or a task row.
+// Both use rounded percentages, so two tiles showing the same number look the same.
+export type Peers = { top: number | null; tied: boolean };
+const whole = (score: number) => Math.round(score * 100);
+export function peers(scores: (number | null)[]): Peers {
+  const rounded = scores.filter((score) => score !== null).map(whole);
+  const top = rounded.length ? Math.max(...rounded) : null;
+  return { top, tied: top !== null && rounded.filter((value) => value === top).length > 1 };
+}
+export type Tone = "leader" | "trail" | "far" | "zero";
+export function tile(score: number | null, { top }: Peers): { "data-empty": boolean; "data-tone"?: Tone; style?: CSSProperties } {
+  if (score === null || top === null) return { "data-empty": true };
+  const value = whole(score), gap = top - value;
+  if (value === 0) return { "data-empty": false, "data-tone": "zero" };
+  if (gap === 0) return { "data-empty": false, "data-tone": "leader" };
+  const fade = 1 - Math.exp(-gap / 28);
+  return { "data-empty": false, "data-tone": gap > 50 ? "far" : "trail", style: { "--heat": `${((1 - fade) * 100).toFixed(1)}%` } as CSSProperties };
+}
+export function standing(score: number, { top, tied }: Peers, best: string): string {
+  if (!top) return "No model scored";
+  const gap = top - whole(score);
+  if (gap === 0) return tied ? "Tied for best" : best;
+  return `\u2212${gap} ${gap === 1 ? "pt" : "pts"} · best ${top}%`;
+}
 // One sentence per line, so a tooltip never runs ideas together.
 export const formulas = {
   overall: ["Overall averages pillar scores.", "Pillars without a score are skipped."],
@@ -46,16 +69,17 @@ export function CornerMarks({ missing = 0, refusal }: { missing?: number; refusa
   if (!missing && !refusal) return null;
   return <span className="corner-marks">{refusal && <RefusalMark lines={refusal} />}{missing > 0 && <Unscored count={missing} />}</span>;
 }
-export function Score({ score, lift, onOpen, label, formula, empty = "No trials yet", missing = 0, refusal, sub }: {
+export function Score({ score, lift, onOpen, label, peers, best, empty = "No trials yet", missing = 0, refusal, sub }: {
   score: number | null; lift?: number | null; onOpen: () => void; label: string;
-  formula: string[]; empty?: string; missing?: number;
+  peers: Peers; best: string; empty?: string; missing?: number;
   // Refusal lines show on the shield icon tooltip; `sub` adds a line under the score.
   refusal?: string[]; sub?: ReactNode;
 }) {
   const note = score !== null && missing > 0 ? unscored(missing) : "";
   const hasLift = lift !== undefined && lift !== null;
-  return <div className="score-wrap"><Hint text={[...formula, ...(hasLift ? formulas.lift : [])]}>
-    <button className="score-cell" data-empty={score === null} style={heat(score)} onClick={onOpen}
+  const hint = score === null ? [empty] : [standing(score, peers, best), ...(hasLift ? formulas.lift : [])];
+  return <div className="score-wrap"><Hint text={hint}>
+    <button className="score-cell" {...tile(score, peers)} onClick={onOpen}
       aria-label={`${label}. ${score === null ? empty : percent(score)}.${note && ` ${note}`}${refusal ? ` ${sentences(refusal)}` : ""} Open details.`}>
       <span>{percent(score)}</span>{sub}{hasLift && <small className={lift < 0 ? "negative" : "lift"}>{pp(lift)}</small>}
     </button>

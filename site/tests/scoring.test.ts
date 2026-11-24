@@ -73,9 +73,9 @@ test("leaderboard, Compare and matrix use percentages and the matrix hint lists 
   const data = buildBoard([governor], [row(governor, mixed), row(governor, full, { trial: 2, status: "error" })], false, 2);
   const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }));
   assert.match(html, /aria-label="Overall, agent-a \/ model-a\. 75%\./);
-  assert.match(html, /class="matrix-cell"[^>]*style="--score:75%"[^>]*>75%<\/button>/);
-  assert.equal(taskHint(data.tables.internet.pillars.build.evals[0].cells[agentKey(agent)]),
-    "Task score 75%\nTrial 1 · 75% · 3 of 4 passed\nTrial 2 · Error");
+  assert.match(html, /class="matrix-cell"[^>]*data-tone="leader"[^>]*>75%<\/button>/);
+  assert.equal(taskHint(data.tables.internet.pillars.build.evals[0].cells[agentKey(agent)], { top: 88, tied: false }),
+    "\u221213 pts · best 88%\nTrial 1 · 75% · 3 of 4 passed\nTrial 2 · Error");
   const comparison = renderToStaticMarkup(createElement(Compare, { data }));
   assert.equal((comparison.match(/>75%<\/span>/g) ?? []).length, 2);
 });
@@ -95,7 +95,7 @@ test("drawer uses all four trial dots, a percentage heading, and a dot-only scor
   assert.match(list, /class="trial-legend".*100%.*Some checks missed.*0%.*Error/s);
   // Stops use the board's icons, so the error mark is the warning triangle, not a square.
   assert.match(list, /class="trial-legend".*data-state="error"[^>]*><svg[^>]*lucide-triangle-alert[^>]*>.*?<\/svg><\/span> Error/s);
-  assert.match(list, /class="heat-chip"[^>]*>58%<\/span>/);
+  assert.match(list, /class="heat-chip"[^>]*><span>58%<\/span>/);
   assert.deepEqual([...list.split('class="run-dots"')[1].matchAll(/data-state="([^"]+)"/g)].map((match) => match[1]),
     ["full", "part", "zero", "error"]);
   assert.match(table, />100%<\/span>.*4 of 4 passed.*>75%<\/span>.*3 of 4 passed.*>0%<\/span>.*Gate check failed: quorum.*>Not scored<\/span>/s);
