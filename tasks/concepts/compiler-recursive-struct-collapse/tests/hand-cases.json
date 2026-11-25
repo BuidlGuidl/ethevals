@@ -1,0 +1,14 @@
+[
+  {"label": "target", "reply": "40", "passed": true},
+  {"label": "solution", "reply": "40. The overlapping storage copy wipes the second grandchild, so only Hackathons (40) survives.", "passed": true},
+  {"label": "markdown", "reply": "**40**", "passed": true},
+  {"label": "labelled", "reply": "**Answer:** 40", "passed": true},
+  {"label": "naive total", "reply": "65", "passed": false},
+  {"label": "naive with explanation", "reply": "65 — Hackathons (40) plus Bounties (25).", "passed": false},
+  {"label": "revised answer", "reply": "40. Final answer: 65", "passed": false},
+  {"label": "wrong first number", "reply": "65, though a compiler bug could make it 40.", "passed": false},
+  {"label": "zero", "reply": "0", "passed": false},
+  {"label": "with unit-like suffix", "reply": "400", "passed": false},
+  {"label": "empty", "reply": "", "passed": false},
+  {"label": "whitespace", "reply": " \n ", "passed": false}
+]

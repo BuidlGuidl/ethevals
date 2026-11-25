@@ -1,0 +1,12 @@
+[
+  {"label": "target", "reply": "0xfffffffffffffffffffffffffffffffffffffffe", "passed": true},
+  {"label": "checksummed", "reply": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfE", "passed": true},
+  {"label": "solution", "reply": "0xfffffffffffffffffffffffffffffffffffffffe — since Glamsterdam on Sepolia (EIP-7708) every ETH transfer emits an ERC-20-shaped Transfer log from the system address.", "passed": true},
+  {"label": "code formatted", "reply": "`0xfffffffffffffffffffffffffffffffffffffffe`", "passed": true},
+  {"label": "zero address", "reply": "0x0000000000000000000000000000000000000000", "passed": false},
+  {"label": "weth", "reply": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", "passed": false},
+  {"label": "system address of 4788 caller typo", "reply": "0xffffffffffffffffffffffffffffffffffffffff", "passed": false},
+  {"label": "too long", "reply": "0xfffffffffffffffffffffffffffffffffffffffe0", "passed": false},
+  {"label": "words only", "reply": "The system address.", "passed": false},
+  {"label": "empty", "reply": "", "passed": false}
+]

@@ -1,0 +1,12 @@
+[
+  {"label": "target", "reply": "204600", "passed": true},
+  {"label": "comma grouping", "reply": "204,600", "passed": true},
+  {"label": "solution", "reply": "204,600. Since Glamsterdam on Sepolia a transfer that creates the recipient account pays 183,600 state gas on top of 21,000.", "passed": true},
+  {"label": "markdown", "reply": "**204,600**", "passed": true},
+  {"label": "legacy new-account cost", "reply": "46000", "passed": false},
+  {"label": "legacy transfer", "reply": "21000", "passed": false},
+  {"label": "rpc estimate", "reply": "207391", "passed": false},
+  {"label": "rounded up", "reply": "210000", "passed": false},
+  {"label": "revised", "reply": "204,600. Final answer: 210,000", "passed": false},
+  {"label": "empty", "reply": "", "passed": false}
+]

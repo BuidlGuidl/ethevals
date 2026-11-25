@@ -1,0 +1,20 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/sepolia-faucet-gas-limit"
+description = "Check whether a model knows the gas a Sepolia ETH transfer to a new account needs since Glamsterdam."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "gas", "testnets", "glamsterdam", "payments"]
+
+[metadata]
+pillar = "concepts"
+area = "Payments"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 1024
