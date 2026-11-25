@@ -44,7 +44,6 @@ The judge fails replies that call 100,000 enough, only discuss what happens if a
 ## Why it matters
 
 Fixed callback gas limits are everywhere: VRF consumers, cross-chain receivers and keepers all pick a number that fit mainnet costs.
-Chainlink's own examples use 100,000.
 On Sepolia today any callback that creates storage can fail, and a consumer that waits for the callback stays stuck.
 The same break reaches mainnet when Glamsterdam ships.
 
