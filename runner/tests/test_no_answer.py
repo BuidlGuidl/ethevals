@@ -124,3 +124,38 @@ def test_no_answer_gets_one_immediate_retry(tmp_path, monkeypatch, bare, first, 
             "error", "no_answer" if second == "interrupted" else "RuntimeError")
         retry, = plan([task], config, [row], n_attempts=1)["missing"]
         assert (retry["trial"], retry["retry"], retry["worst_case_usd"]) == (1, 1, 0)
+
+
+@pytest.mark.parametrize(("error_type", "refused"), [("content_policy_violation", True), ("timeout", False)])
+def test_opencode_provider_block_is_a_refusal(tmp_path, monkeypatch, error_type, refused):
+    # OpenCode prints the provider's block as an error event and exits; Harbor names it an API error.
+    event = json.dumps({"type": "error", "sessionID": "ses_1", "error": {"name": "UnknownError", "data": {
+        "message": json.dumps({"code": 403, "message": "OTHER", "metadata": {"error_type": error_type}})}}})
+    config = load_job(job_config(tmp_path, "free"))
+    task = task_folder(tmp_path)
+    report = budget_check(plan([task], config, [], n_attempts=1), 0)
+    output = tmp_path / "out"
+    calls = []
+
+    async def blocked(job):
+        calls.append(job)
+        folder = job.job_dir / "trial"
+        recorded_trial(folder, task)
+        result_path = folder / "result.json"
+        result = json.loads(result_path.read_text())
+        result["finished_at"] = f"2026-11-25T10:00:0{len(calls)}+00:00"
+        result["exception_info"] = {
+            "exception_type": "ApiRateLimitError", "exception_traceback": "", "occurred_at": result["finished_at"],
+            "exception_message": f"Command failed (exit 1): opencode run\nstdout: {{\"type\":\"step_start\"}}\n{event}\n\nstderr: None"}
+        result_path.write_text(json.dumps(result))
+
+    monkeypatch.setattr(Job, "run", blocked)
+    assert asyncio.run(run(report, config, output, [])) is refused
+    row, = recover_rows(output)
+    if refused:
+        assert len(calls) == 2
+        assert (row["status"], row["rewards"], row["checks"], [entry["kind"] for entry in row["no_answer"]]) == (
+            "failed", {"reward": 0.0}, {"no_answer": {"passed": False, "reason": "No answer twice."}}, ["refused", "refused"])
+    else:
+        assert len(calls) == 1
+        assert (row["status"], row["error_kind"], row["no_answer"]) == ("error", "ApiRateLimitError", [])

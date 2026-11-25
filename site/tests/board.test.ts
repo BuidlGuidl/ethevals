@@ -112,7 +112,8 @@ test("planned trials without a score are counted and marked on the board", () =>
   // The drawer says the same in a banner for the scope it shows, and stays quiet for a single trial.
   const drawer = (selection: Parameters<typeof Detail>[0]["selection"]) => renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
   const token = { ...tasks[1], domain: "dapp-development" as const };
-  assert.ok(drawer({ agent, mode: "internet" }).includes('<p class="unscored-banner">3 trials have no score yet.</p><p>75% · 3 scored trials</p>'));
+  // Overall counts one Concepts task at 50% and two Build tasks at 100%; the Act task is Model only.
+  assert.ok(drawer({ agent, mode: "internet" }).includes('<p class="unscored-banner">3 trials have no score yet.</p><p>83% · 3 scored trials</p>'));
   assert.ok(!drawer({ agent, mode: "internet", pillar: "concepts" }).includes("unscored-banner"));
   assert.ok(drawer({ agent, mode: "internet", evaluation: token }).includes('<p class="unscored-banner">1 trial has no score yet.</p>'));
   assert.ok(!drawer({ agent, mode: "internet", evaluation: token, run: 1 }).includes("unscored-banner"));
@@ -276,7 +277,7 @@ test("the matrix shares the domain URL, counts matching tasks, and hides empty p
   assert.ok(vanilla.includes('<p class="eyebrow">2 tasks · Model only</p>'));
 });
 
-test("drawer domain scores average tasks then scored pillars and respect the selected pillar and mode", () => {
+test("drawer domain scores weight pillars by the domain's task count and respect the selected pillar and mode", () => {
   const tasks: Eval[] = [evaluation, { ...evaluation, id: "concepts/fees", title: "Fees" },
     { ...evaluation, id: "build/token", title: "Token", pillar: "build" },
     { ...evaluation, id: "concepts/reentrancy", title: "Reentrancy", area: "Audits" },
@@ -286,9 +287,11 @@ test("drawer domain scores average tasks then scored pillars and respect the sel
     row({ task_id: "concepts/overflow" }), row({ task_id: "concepts/overflow", trial: 2, ...failure }),
     row({ task_id: "concepts/overflow", trial: 3, ...error }), row({ mode: "vanilla", agent: null, ...failure })]);
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection: { agent, mode: "internet" }, domain: "security", onSelect: () => {} }));
-  assert.match(panel, /aria-pressed="false"><span>Dapp development<\/span><b>38%<\/b><small>4 scored trials<\/small>/);
+  // Dapp development: two Concepts tasks at 75% and one Build task at 0% give (2 × 75% + 1 × 0%) ÷ 3.
+  assert.match(panel, /aria-pressed="false"><span>Dapp development<\/span><b>50%<\/b><small>4 scored trials<\/small>/);
   assert.match(panel, /aria-pressed="true"><span>Security<\/span><b>25%<\/b><small>3 scored trials<\/small>/);
-  assert.ok(panel.includes('<p>25% · 7 scored trials</p>'));
+  // All domains: four Concepts tasks at 50% and one Build task at 0%.
+  assert.ok(panel.includes('<p>40% · 7 scored trials</p>'));
   assert.deepEqual([...panel.matchAll(/class="eval-list-title"><b>([^<]+)/g)].map((match) => match[1]), ["Reentrancy", "Overflow"]);
   assert.ok(panel.includes('<h3>Concepts</h3>'));
   assert.ok(!panel.includes('<h3>Build</h3>'));

@@ -56,7 +56,8 @@ The entry checks are `compile`, `answered`, `no_answer`, and `report_written`. T
 On an older row, ignore checks without a current tag and tags for checks the row lacks.
 If no checks count and no entry check failed, the saved trial status gives 100% for a pass and 0% for a fail.
 A task score averages its trial scores. Errors stay visible in the drawer and stay out of the average.
-A pillar score averages its task scores. Overall averages its pillar scores.
+A pillar score averages its task scores. Overall averages its pillar scores, each counted by its number of tasks, up to 25.
+The task count comes from the tasks in view, so every configuration gets the same weights.
 The task matrix tooltip lists the trials behind each task score.
 Tile color shows how far a score is from the best score in its leaderboard column or task row. Leaderboard and drawer leaders use a richer green fill with bold white text, and a 0% score is never shown as best.
 A score with planned trials that have no score yet shows an amber warning triangle in its corner.
