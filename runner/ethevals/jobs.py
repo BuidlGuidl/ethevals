@@ -93,8 +93,17 @@ def carried_rows(rows: list[dict], task: dict) -> list[dict]:
                       and (row.get("status") == "error" or row.get("checks_hash") in options["regrade_from"])])
 
 
-def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=False) -> dict:
+def final_fail(row: dict) -> bool:
+    """No answer twice is a fail whatever the checks say (ADR 0024)."""
+    return row.get("status") == "failed" and len(row.get("no_answer") or []) == 2
+
+
+def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=False, carried=False) -> dict:
     options = current.get("regrade", {})
+    # A carried row whose verdict is final moves onto the current hashes as it is, with no work, container, or judge.
+    carry = {"action": "regrade", "kind": "carry", "judge_required": False}
+    if carried and final_fail(row) and row.get("checks_hash") != current["checks_hash"]:
+        return carry
     named = row.get("checks_hash") in options.get("regrade_from", [])
     if row and any(row.get(key) != current[key] for key in ("instruction_hash", "environment_hash")):
         return {"action": "rerun", "reason": "The instruction or environment changed."}
@@ -125,7 +134,7 @@ def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=Fals
     if row and not recovery and (exception == "judge" or row.get("retry", -1) >= policy.max_retries
                 or exception in (policy.exclude_exceptions or set())
                 or policy.include_exceptions and exception not in policy.include_exceptions):
-        return {"action": "exhausted"}
+        return carry if carried else {"action": "exhausted"}
     return {"action": "retry", "recovery": recovery}
 
 
@@ -144,6 +153,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         if selected and set(selected) - available.keys():
             raise ValueError(f"Unknown {label}: {', '.join(sorted(set(selected) - available.keys()))}")
     prior = {trial_identity(row): row for row in previous}
+    carried = set()
     redo_entries = {tuple(entry[key] for key in REDO_KEYS): entry for entry in redo or []}
     missing, exhausted, selected, deferred, candidates = [], [], [], [], []
     ids, names = set(), set()
@@ -153,7 +163,9 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         task["regrade"] = regrade_options(path)
         # A row already on the current instruction always wins over a carried old row.
         for row in carried_rows(previous, task):
-            prior.setdefault(trial_identity(row), row)
+            if trial_identity(row) not in prior:
+                prior[trial_identity(row)] = row
+                carried.add(trial_identity(row))
         judges = task_judges(path)
         if task["id"] in ids:
             raise ValueError(f"Duplicate task ID: {task['id']}")
@@ -185,7 +197,8 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     row = prior.get(identity, {})
                     retry = row.get("retry", -1)
                     checks_changed = bool(row and row.get("checks_hash") != task["checks_hash"])
-                    decision = decide_saved_row(row, task, config.retry, retry_judge_error=retry_judge_error)
+                    decision = decide_saved_row(row, task, config.retry, retry_judge_error=retry_judge_error,
+                                                carried=identity in carried)
                     entry = redo_entries.get(tuple(metadata[key] for key in REDO_KEYS))
                     redone = bool(entry and row and row.get("completed_at") == entry["completed_at"])
                     if redone:

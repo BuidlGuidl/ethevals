@@ -1,5 +1,6 @@
 """Plan and execute checks against saved work."""
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -68,6 +69,8 @@ def regrade_options(path: Path) -> dict:
 
 def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], list[dict], list[dict]]:
     def prepare(item):
+        if item["kind"] == "carry":
+            return {**item, "saved_work": {}}, None, None
         try:
             work = fetch_work(item["source_row"], item["kind"], cache)
             if item["kind"] == "judge":
@@ -103,7 +106,11 @@ def run_regrades(items: list[dict], config, output: Path, previous: list[dict], 
         (job / "board.json").write_text(json.dumps(batch[0]) + "\n")
         (job / "regrade.json").write_text(json.dumps(batch, indent=2) + "\n")
         try:
-            if kind == "contract":
+            if kind == "carry":
+                for index in range(len(batch)):
+                    (job / str(index)).mkdir(exist_ok=True)
+                    (job / str(index) / "regrade-finished.json").write_text(json.dumps(datetime.now(timezone.utc).isoformat()))
+            elif kind == "contract":
                 for index, item in enumerate(batch):
                     destination = job / str(index)
                     if not (destination / "result.json").is_file():

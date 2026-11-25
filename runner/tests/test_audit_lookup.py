@@ -269,3 +269,27 @@ def test_a_changed_lookup_copy_asks_only_the_lookup_judge_again(tmp_path, monkey
     replay(tests, workspace=tmp_path, output=current / "changed/reward.json")
     assert calls == ["/lookup"]
 
+
+def test_old_rows_with_a_final_verdict_are_carried_as_they_are_with_no_work(tmp_path):
+    from ethevals.regrade import run_regrades
+
+    config, item, old = old_audit_row(tmp_path)
+    refused = {**old, "status": "failed", "checks": {"no_answer": {"passed": False, "reason": "No answer twice."}},
+               "no_answer": [{"stop_reason": "refusal"}, {"stop_reason": "refusal"}], "retry": 0,
+               "verifier_files": None, "verifier_url": "https://example.org/verifier-1.tar.gz",
+               "trajectory_url": "https://hub.example.org/trial/1"}
+    exhausted = {**old, "trial": 2, "status": "error", "error_kind": "NonZeroAgentExitCodeError", "retry": 1,
+                 "checks": {}, "verifier_files": None, "verifier_url": "https://example.org/verifier-2.tar.gz"}
+    report = plan([TASK], config, [refused, exhausted], n_attempts=2, saved_work=tmp_path / "cache")
+    assert [(entry["trial"], entry["kind"], entry["judge_required"]) for entry in report["regrades"]] == [
+        (1, "carry", False), (2, "carry", False)]
+    assert (report["missing"], report["deferred"], report["exhausted_errors"], report["worst_case_usd"]) == ([], [], [], 0)
+    rows = run_regrades(report["regrades"], config, tmp_path / "output", [refused, exhausted], {})
+    carried = {row["trial"]: row for row in rows if row["instruction_hash"] == item["instruction_hash"]}
+    for before in (refused, exhausted):
+        after = carried[before["trial"]]
+        assert {key: after[key] for key in ("status", "checks", "no_answer", "retry", "error_kind", "verifier_url", "trajectory_url", "completed_at")} == {
+            key: before.get(key) for key in ("status", "checks", "no_answer", "retry", "error_kind", "verifier_url", "trajectory_url", "completed_at")}
+        assert (after["checks_hash"], after["checks_generation"]) == (item["checks_hash"], 1)
+    next_plan = plan([TASK], config, rows, n_attempts=2, saved_work=tmp_path / "cache")
+    assert (next_plan["missing"], next_plan["regrades"], [row["trial"] for row in next_plan["exhausted_errors"]]) == ([], [], [2])

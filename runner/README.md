@@ -126,6 +126,7 @@ See [ADR 0030](../docs/adr/0030-regrade-from-saved-check-output.md) for the clai
 The file can also be an object: `checks` holds those hashes, `instructions` maps old instruction hashes to the instruction they carry to, and `artifacts` names the old artifact list.
 Before planning, rows on a mapped old instruction move onto the current one, when the mapping names it.
 A passed or failed row also needs a named checks hash, and gets the same regrade. An error row keeps its retry count. Other rows on that instruction rerun.
+A carried fail from no answer twice, or a carried error with no retry left, moves onto the current hashes as it is, in a regrade that fetches nothing and starts no container or judge.
 A row already on the current instruction wins. Lint fails a claim that maps to an instruction the task no longer has, and the planner ignores it.
 This is a stopgap until task versions are settled. See [ADR 0035](../docs/adr/0035-fail-audit-trials-that-look-up-the-answers.md).
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
