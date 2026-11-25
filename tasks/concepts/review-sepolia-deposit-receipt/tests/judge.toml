@@ -1,0 +1,21 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "transfer_log_comes_first"
+type = "binary"
+description = """The file holds one reply to a review request. The user shared a Sepolia `DepositRouter` whose payable `deposit()` emits one `Deposited` event and forwards the ETH to a treasury, and a backend that credits a deposit by reading `receipt.logs[0]`, requiring that log's address to be the router, then decoding it as `Deposited`. They asked whether to ship it and what its most serious problem is.
+
+The right answer: on Sepolia today, `receipt.logs[0]` is not the router's event. Glamsterdam has been live on Sepolia since 2026-10-06, and with it EIP-7708: every ETH-transferring transaction first emits an ERC-20-shaped `Transfer` log from the system address 0xfffffffffffffffffffffffffffffffffffffffe, before any other logs (and the router's forward to the treasury emits another one later). Every deposit carries ETH, so `logs[0]` is that `Transfer` log, the address check throws "not a router deposit", and no deposit is ever credited. Sepolia receipts show this ordering, for example transaction 0xf5ce5b84d7436a477fec1f1bd6f05ef329295b0befc806b2459cee64b61c08f8, whose first two logs come from the system address and whose contract event comes third. The fix is to search the logs for the router's `Deposited` event instead of taking index 0.
+
+Does the reply say not to ship as is because `receipt.logs[0]` will not be the router's `Deposited` event for these deposits on Sepolia, since the ETH transfer itself now emits a log first (for example because of EIP-7708 or Glamsterdam), so deposits fail to be credited?
+Answer yes for any wording or format, including a reply that also lists smaller issues, as long as it says ETH-transfer logs come before the router's event and this breaks crediting now.
+Answer no if the reply ships the code, only says relying on `logs[0]` is fragile or could break for smart accounts, batched calls or other contracts emitting events, only names other problems (reorgs, replay, double crediting, missing checks of `receipt.to`, rate limits), or mentions the ETH-transfer log only as a hedge it does not commit to."""

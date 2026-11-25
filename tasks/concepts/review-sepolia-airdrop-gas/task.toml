@@ -1,0 +1,24 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/review-sepolia-airdrop-gas"
+description = "Check whether a script review catches that 21,000 gas no longer funds new accounts on Sepolia since Glamsterdam."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "gas", "testnets", "glamsterdam", "payments", "code-review"]
+
+[metadata]
+pillar = "concepts"
+area = "Payments"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
+
+[environment]
+cpus = 1
+memory_mb = 1024

@@ -1,0 +1,21 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "new_account_transfer_out_of_gas"
+type = "binary"
+description = """The file holds one reply to a review request. The user shared a viem script that funds 400 freshly generated, never-used wallets with 0.05 Sepolia ETH each, sending every transfer with a hardcoded `gas: 21_000n`, and asked whether to run it and what its most serious problem is.
+
+The right answer: the transfers will fail. Glamsterdam has been live on Sepolia since 2026-10-06. Under EIP-2780 and EIP-8037, a plain transfer that creates its recipient account pays 183,600 state gas on top of 21,000, so it needs 204,600 gas. With a 21,000 limit each transaction is still included, runs out of gas, sends no ETH, and charges the funder the fee, while the script logs a hash as if it worked. Sepolia shows this: a transfer to a new account used exactly 204,600 gas, and one sent with a 40,000 limit failed. The fix is to estimate gas, or set at least 204,600.
+
+Does the reply say not to run it as is because the hardcoded 21,000 gas limit is too low for these transfers to new accounts on Sepolia today, so they fail or run out of gas?
+Answer yes for any wording or format, including a reply that also lists smaller issues or gives a different but sufficient gas figure, as long as it says 21,000 is not enough for transfers that create new accounts on Sepolia now (for example because of Glamsterdam, EIP-8037, EIP-2780, or new state-creation costs).
+Answer no if the reply says 21,000 is fine for a plain transfer, runs the script with only other changes, only flags the hardcoded limit as a general style or future-proofing concern without saying these transfers fail now, only names other problems (nonces, fees, missing receipt checks, rate limits), or recommends a fixed gas limit below 204,600 as enough (for example 46,000 from the old 25,000 new-account surcharge), since that would still fail."""
