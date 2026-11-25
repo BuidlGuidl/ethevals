@@ -138,8 +138,8 @@ def test_a_redo_entry_plans_one_fresh_trial_until_a_newer_row_lands(tmp_path):
 
 def test_the_plan_lists_redo_entries_that_match_no_saved_row(tmp_path):
     task, config, row = saved_trial(tmp_path)
-    typo = redo_entry(row, completed_at="2026-01-01T00:00:00Z")
-    report = plan([task], config, [row], n_attempts=1,
+    typo = redo_entry({**row, "trial": 2}, completed_at="2026-01-01T00:00:00Z")
+    report = plan([task], config, [row, {**row, "trial": 2}], n_attempts=2,
                   redo=[redo_entry(row), typo, redo_entry({**row, "task_id": "concepts/other"})])
     assert (len(report["missing"]), report["redo_unmatched"]) == (1, [typo])
 
@@ -268,3 +268,4 @@ def test_a_changed_lookup_copy_asks_only_the_lookup_judge_again(tmp_path, monkey
     (current / "judge-inputs-lookup.json").write_text('{"trajectory.txt": "new"}\n')
     replay(tests, workspace=tmp_path, output=current / "changed/reward.json")
     assert calls == ["/lookup"]
+
