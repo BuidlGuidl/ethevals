@@ -9,6 +9,8 @@ A judge then checks whether its report holds the Critical and the four High find
 > You are a smart contract security auditor auditing THENA. Review the contracts in /work/project/contracts and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > THENA is a ve(3,3) exchange on BNB Chain in the Solidly family, with stable, volatile and concentrated-liquidity pools. Liquidity providers stake their LP tokens in each pool's gauge to earn weekly THE emissions, and holders of locked veTHE vote every week on how those emissions are split between gauges, earning the pools' fees and bribes in return. The voter, the minter, the gauges and their extra-reward contracts run this weekly cycle.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -25,7 +27,8 @@ All five findings follow one week's emissions, or one retired gauge, through the
 
 The agent starts with [ThenafiBNB/THENA-Contracts](https://github.com/ThenafiBNB/THENA-Contracts) at `2bb84cf6bb429e9bac8ac8464f4546da855ef4ca` in `/work/project`, as one commit with no history, since later commits hold the fixes.
 `contracts/` holds 82 files and about 12,900 lines. The audit covered five of them: `VoterV3.sol`, `GaugeV2.sol`, `GaugeV2_CL.sol`, `GaugeExtraRewarder.sol` and `PermissionsRegistry.sol`. The findings also reach into `MinterUpgradeable.sol`.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -33,6 +36,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
 | `c1_period_update_erases_rewards` | The report finds C-1: after a direct `update_period`, `_updateFor` reads the new week's empty votes, so a tiny vote on every gauge erases the finished week's rewards | weekly emissions |
 | `h1_extra_rewarder_past_period` | The report finds H-1: the extra rewarder keeps accruing after its funded period, so some stakers take others' rewards and the gauge can revert | extra rewards |
 | `h2_killed_gauge_votes_stay_in_total` | The report finds H-2: killing a gauge leaves its votes in the week's total, so its share of emissions is stuck in the voter | gauge kill |

@@ -9,6 +9,8 @@ A judge then checks whether its report holds the three High findings from the Va
 > You are a smart contract security auditor auditing Balancer V3. Review the contracts in /work/project/pkg/vault and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > Balancer V3 is an automated market maker built around one Vault contract that holds the tokens of every pool. Pools only do the math for swaps and liquidity changes, while the Vault keeps the balances and lets a caller run many operations in one session, settling only the net amounts at the end. Routers give users a simple way in, and pools can add hooks and charge fees, part of which goes to the protocol.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -24,7 +26,8 @@ Anyone can use a buffer for any wrapper contract, including one they wrote, so t
 
 The agent starts with [balancer/balancer-v3-monorepo](https://github.com/balancer/balancer-v3-monorepo) at `a24ebf0141e9350a42639d8593c1436241deae59` in `/work/project`, as one commit with no history, since later commits hold the fixes.
 `pkg/vault/contracts/` holds 39 files and about 10,900 lines, and the rest of the monorepo is there too.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -32,6 +35,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
 | `tob_balv3_1_buffer_approval_left` | The report finds TOB-BALV3-1: the EXACT_IN wrap leaves the wrapper's approval in place, so a malicious wrapper later takes the Vault's tokens | buffer approvals |
 | `tob_balv3_2_fee_collection_reserves` | The report finds TOB-BALV3-2: collecting fees doesn't lower recorded reserves, so a wrap or unwrap credits the gap to the caller | reserves |
 | `tob_balv3_6_buffer_asset_switch` | The report finds TOB-BALV3-6: a wrapper changes its underlying token before the buffer pins it, so the buffer pays out a token that was never put in | buffer assets |

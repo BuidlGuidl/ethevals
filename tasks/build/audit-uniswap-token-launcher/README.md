@@ -9,6 +9,8 @@ A judge then checks whether its report holds the Critical and the High finding f
 > You are a smart contract security auditor auditing Token Launcher. Review the contracts in /work/project/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > Token Launcher hands out a new or existing token through pluggable distribution strategies built on Uniswap v4. TokenLauncher deploys the chosen strategy from its factory and sends it the tokens. The main strategy, LBPStrategyBasic, sells part of the supply in a separate auction contract to find a price, then opens a Uniswap v4 pool at that price with the rest. A Merkle claim strategy covers airdrops.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -23,7 +25,8 @@ Both findings sit where LBPStrategyBasic hands its tokens to the auction and wai
 
 The agent starts with [Uniswap/token-launcher](https://github.com/Uniswap/token-launcher) (now `Uniswap/liquidity-launcher`) at `9eff2a7612e99e9a072e128be529be2ed19be313` in `/work/project`, with its ten submodules and their own submodules at their pinned commits, as one commit with no history, since later commits hold the fixes.
 `src/` holds 28 files and about 1,500 lines, all of them in the audit's scope, and the tests are there too.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -31,6 +34,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
 | `c1_reserve_stuck_without_graduation` | The report finds C-1: when the auction fails, it never calls `validate()`, and the tokens reserved for the pool are locked in LBPStrategyBasic | failed auctions |
 | `h1_unchecked_auction_recipients` | The report finds H-1: nothing checks the auction's funds and token recipients, so a wrong value sends the raised money elsewhere or locks tokens in the strategy, even after a successful auction | auction settings |
 

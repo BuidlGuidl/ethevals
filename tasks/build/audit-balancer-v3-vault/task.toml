@@ -1,5 +1,5 @@
 schema_version = "1.3"
-artifacts = ["/workspace/findings.md"]
+artifacts = ["/workspace/findings.md", "/logs/agent/trajectory.json"]
 
 [task]
 name = "buidlguidl/audit-balancer-v3-vault"
@@ -13,6 +13,7 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
+no_audit_lookup = "gate"
 tob_balv3_1_buffer_approval_left = "judgment"
 tob_balv3_2_fee_collection_reserves = "judgment"
 tob_balv3_6_buffer_asset_switch = "judgment"
@@ -23,6 +24,7 @@ timeout_sec = 3600
 [verifier]
 environment_mode = "separate"
 user = "root"
+timeout_sec = 1800
 
 [verifier.env]
 CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"

@@ -1,5 +1,5 @@
 schema_version = "1.3"
-artifacts = ["/workspace/findings.md"]
+artifacts = ["/workspace/findings.md", "/logs/agent/trajectory.json"]
 
 [task]
 name = "buidlguidl/audit-onchainid"
@@ -13,6 +13,7 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
+no_audit_lookup = "gate"
 c1_batch_calldata_targets = "judgment"
 h1_queued_factory_call = "judgment"
 h2_key_registry_target = "judgment"
@@ -23,6 +24,7 @@ timeout_sec = 3600
 [verifier]
 environment_mode = "separate"
 user = "root"
+timeout_sec = 1800
 
 [verifier.env]
 CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"

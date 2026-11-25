@@ -9,6 +9,8 @@ A judge then checks whether its report holds the eight High and Medium findings 
 > You are a smart contract security auditor auditing CAP. Review the contracts in /work/project/contracts and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > CAP is a stablecoin protocol. Users deposit stablecoins into a vault to mint cUSD, and can stake cUSD in StakedCap to earn the protocol's yield. Borrowers, called agents, borrow the vault's reserves through the Lender, and restakers back each agent's loans with collateral delegated through Symbiotic. Idle reserves earn yield in outside vaults, and a fee auction sells that yield for cUSD.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -25,7 +27,8 @@ The eight findings spread over the whole protocol, and several only show once th
 
 The agent starts with [cap-labs-dev/cap-contracts](https://github.com/cap-labs-dev/cap-contracts) at `56819219e935470271a03d4e3415fcbe810e6b0b` in `/work/project`, with its six submodules (forge-std, LayerZero and others) and their own submodules at their pinned commits, as one commit with no history, since later commits hold the fixes.
 `contracts/` holds 107 files and about 7,900 lines, more than half of them interfaces, storage layouts and deploy helpers, and the tests are there too.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 Several findings sit close to others in the review, such as the three front-running findings and the review's lower-severity fee auction and notify findings, so the questions for those findings say which neighbour does not count.
@@ -34,6 +37,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
 | `tob_cap_4_notify_timer_reset` | The report finds TOB-CAP-4: anyone can call `notify()` with 1 wei to restart StakedCap's vesting, so stakers' locked yield keeps being pushed back | staking yield |
 | `tob_cap_5_balance_tracking` | The report finds TOB-CAP-5: tokens sent straight to the vault let a burn push tracked supply below borrows, so borrowing the asset stops | vault accounting |
 | `tob_cap_12_vault_adapter_rate` | The report finds TOB-CAP-12: anyone can call the rate adapter with a fake vault and inflate a real asset's interest rate | interest rates |

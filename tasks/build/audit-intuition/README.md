@@ -9,6 +9,8 @@ A judge then checks whether its report holds the five Medium findings from [Trai
 > You are a smart contract security auditor auditing Intuition. Review the contracts in /work/project/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > Intuition is a protocol for making claims onchain. Anyone can create an atom, which stores a piece of data such as a URI, or a triple, which links three atoms as subject, predicate and object, and every atom and triple has its own vault where users deposit ETH for shares. EthMultiVault holds all the vaults and most of the logic behind an upgradeable proxy, and each atom can deploy its own ERC-4337 wallet.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -26,7 +28,8 @@ All five findings are in the bookkeeping of `EthMultiVault`, where a deposit pay
 The agent starts with [0xIntuition/intuition-tob-audit](https://github.com/0xIntuition/intuition-tob-audit) at `8e80c751600c481164415f7a7f225217cc164ad2` in `/work/project`, with its pinned submodules, as one commit with no history, since later commits hold the fixes.
 That is the first of the two commits the review names. The second, `edc4584`, already fixes TOB-INTUITION-6.
 `src/` holds 7 files, about 2,000 lines. The review covered `EthMultiVault.sol`, `AtomWallet.sol` and `IntuitionProxy.sol`, and nearly all the logic sits in `EthMultiVault.sol`. The repo ships no tests or scripts at this commit.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -34,6 +37,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
 | `tob_intuition_6_create_atom_protocol_fee` | The report finds TOB-INTUITION-6: creating an atom pays the protocol fee out but still credits it to the vault | fees |
 | `tob_intuition_10_triple_hash_collision` | The report finds TOB-INTUITION-10: triple ids hash packed variable-length atom data, so an attacker can squat on a triple's id | identifiers |
 | `tob_intuition_12_atom_equity_base` | The report finds TOB-INTUITION-12: a triple deposit computes the atoms' share on two different amounts, so part of it belongs to no vault | share accounting |

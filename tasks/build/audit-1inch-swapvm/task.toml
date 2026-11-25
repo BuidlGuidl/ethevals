@@ -1,5 +1,5 @@
 schema_version = "1.3"
-artifacts = ["/workspace/findings.md"]
+artifacts = ["/workspace/findings.md", "/logs/agent/trajectory.json"]
 
 [task]
 name = "buidlguidl/audit-1inch-swapvm"
@@ -13,6 +13,7 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
+no_audit_lookup = "gate"
 c1_pegged_solve_precision = "judgment"
 c2_concentrate_shared_liquidity = "judgment"
 c3_pegged_axis_mismatch = "judgment"
@@ -25,6 +26,7 @@ timeout_sec = 3600
 [verifier]
 environment_mode = "separate"
 user = "root"
+timeout_sec = 1800
 
 [verifier.env]
 CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"

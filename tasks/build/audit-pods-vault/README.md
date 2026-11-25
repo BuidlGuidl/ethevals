@@ -9,6 +9,8 @@ A judge then checks whether its report holds the three Critical and three High f
 > You are a smart contract security auditor auditing Pods Finance. Review the contracts in /work/project/contracts and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > Pods Finance's stETH volatility vault holds depositors' stETH and puts part of each week's staking yield into ETH options, so the principal stays in the vault. It follows ERC-4626 and works in rounds: a deposit waits in a queue and becomes shares after the round ends. A configuration contract keeps each vault's settings, an adapter takes ETH and swaps it to stETH through Curve, and a migration contract moves holders into a newer vault.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -27,7 +29,8 @@ Each takes a careful look at one piece of it.
 
 The agent starts with [pods-finance/yield-contracts](https://github.com/pods-finance/yield-contracts) at `9389ab46e9ecdd1ea1fd7228c9d9c6821c00f057` in `/work/project`, as one commit with no history, since later commits hold the fixes.
 `contracts/` holds the 13 files the audit covered, about 1,350 lines, plus 8 mocks, and the Hardhat tests and scripts are there too.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -35,6 +38,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
 | `c1_deposit_queue_gas_lock` | The report finds C-1: rebuilding the queue on every removal lets dust deposits push processing and refunds past the block gas limit, so every queued deposit is stuck | deposit queue |
 | `c2_processed_deposits_double_count` | The report finds C-2: deposits processed by an earlier call are counted twice, so later depositors in the round get too few shares | share pricing |
 | `c3_withdraw_rounds_shares_down` | The report finds C-3: `withdraw` rounds the burned shares down, so repeated small withdrawals drain the vault | rounding |

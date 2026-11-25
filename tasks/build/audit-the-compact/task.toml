@@ -1,5 +1,5 @@
 schema_version = "1.3"
-artifacts = ["/workspace/findings.md"]
+artifacts = ["/workspace/findings.md", "/logs/agent/trajectory.json"]
 
 [task]
 name = "buidlguidl/audit-the-compact"
@@ -13,6 +13,7 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
+no_audit_lookup = "gate"
 h1_emissary_slot_ignores_sponsor = "judgment"
 h2_exogenous_claim_element_skipped = "judgment"
 
@@ -22,6 +23,7 @@ timeout_sec = 3600
 [verifier]
 environment_mode = "separate"
 user = "root"
+timeout_sec = 1800
 
 [verifier.env]
 CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"

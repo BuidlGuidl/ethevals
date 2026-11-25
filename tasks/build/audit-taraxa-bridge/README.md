@@ -9,6 +9,8 @@ A judge then checks whether its report holds two of the High findings from [Trai
 > You are a smart contract security auditor auditing the Taraxa bridge. Review the contracts in /work/project/src and /work/project/lib/beacon-light-client/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > The Taraxa bridge moves tokens between Ethereum and the Taraxa chain. Each chain runs a light client of the other: on Ethereum, TaraClient follows Taraxa's pillar blocks, and on Taraxa, EthClient builds on the beacon chain light client to follow Ethereum. A bridge contract on each side applies the other side's finalized state changes, and connector contracts lock, release, mint and burn the tokens.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -23,7 +25,8 @@ Both findings are in the bridge, not the beacon chain light client: one in how T
 The agent starts with [Taraxa-project/bridge](https://github.com/Taraxa-project/bridge) at `f82dd87c7e23358c74f7dc37451ca61110b60942` in `/work/project`, with its submodules at their pinned commits, as one commit with no history, since later commits hold the fixes.
 One submodule is the review's second target, [Taraxa-project/beacon-light-client](https://github.com/Taraxa-project/beacon-light-client), pinned at `b2eafadf37e466f7cbed3c5b1ca0a917f152137a`, the commit the review names, so one checkout covers both repos.
 `src/` holds the bridge's 29 files and `lib/beacon-light-client/src/` the light client's 23. The review covered the bridge in full and the light client on a best-effort basis.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -31,6 +34,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
 | `tob_tara_4_duplicate_signatures` | The report finds TOB-TARA-4: `getSignaturesWeight` counts a repeated signature again, so a pillar block without a majority can be finalized | light client |
 | `tob_tara_6_apply_state_reentrancy` | The report finds TOB-TARA-6: `applyState` can be re-entered through a token with transfer hooks, so a recipient is paid again and the epoch runs ahead | bridge settlement |
 

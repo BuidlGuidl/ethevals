@@ -64,6 +64,17 @@ def test_audit_tasks_share_one_judge_opening():
             f'{task}: tests/judge.toml must use the shared judge opening')
 
 
+def test_audit_tasks_share_one_lookup_gate():
+    import tomllib
+    source = ROOT / 'tasks/build/audit-the-compact/tests'
+    for task in sorted((ROOT / 'tasks/build').glob('audit-*')):
+        for name in ('test.sh', 'lookup-prompt.md', 'judge_trajectory.py'):
+            file = task / 'tests' / name
+            assert file.read_bytes() == (source / name).read_bytes(), f'{file}: copy the lookup gate from {source / name}'
+        # The lookup judge reads the trajectory, which the separate verifier gets only as a declared artifact.
+        assert '/logs/agent/trajectory.json' in tomllib.loads((task / 'task.toml').read_text())['artifacts'], task
+
+
 def test_page_rewardkit_private_calls_have_the_expected_version():
     installed = importlib.metadata.version('harbor-rewardkit')
     assert installed == '0.2.3', (
