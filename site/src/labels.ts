@@ -27,6 +27,7 @@ const models = new Map([
   ["openrouter/deepseek/deepseek-v4.1-flash-1017", "DeepSeek V4.1 Flash"],
   ["openrouter/x-ai/grok-4.7", "Grok 4.7"],
   ["openrouter/google/gemini-4-argon", "Gemini 4 Argon"],
+  ["openrouter/google/gemini-4-neon", "Gemini 4 Neon"],
 ]);
 const providers = new Map([
   ["anthropic", "claude"], ["openai", "openai"], ["openrouter", "openrouter"],

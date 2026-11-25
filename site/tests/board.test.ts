@@ -430,6 +430,7 @@ test("configurations show one agent logo beside the name, or one provider logo f
     ["openrouter/deepseek/deepseek-v4.1-flash-1017", "opencode", "openrouter", "opencode", "DeepSeek V4.1 Flash"],
     ["openrouter/x-ai/grok-4.7", "opencode", "openrouter", "opencode", "Grok 4.7"],
     ["openrouter/google/gemini-4-argon", "opencode", "openrouter", "opencode", "Gemini 4 Argon"],
+    ["openrouter/google/gemini-4-neon", "opencode", "openrouter", "opencode", "Gemini 4 Neon"],
   ]) {
     const html = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent, effort: null } }));
     assert.ok(html.match(/<b>([\s\S]*?)<\/b>/)?.[1].includes(`src="/logos/${icon}.svg"`));
