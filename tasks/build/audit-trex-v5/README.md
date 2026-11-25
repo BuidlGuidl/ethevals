@@ -33,7 +33,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `h1_cross_domain_identity_rebind` | The report finds H-1: through a shared identity storage, an agent of one domain rebinds a holder of another domain's token and moves its balance with `identityTransfer` | identity storage and roles |
 
 ## Why it matters

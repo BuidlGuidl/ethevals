@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 h1_optimism_anchor_game_slot = "judgment"
 h2_linea_child_to_parent_mpt = "judgment"
 h3_zksync_returns_publisher = "judgment"

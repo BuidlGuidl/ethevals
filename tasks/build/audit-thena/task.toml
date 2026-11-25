@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 c1_period_update_erases_rewards = "judgment"
 h1_extra_rewarder_past_period = "judgment"
 h2_killed_gauge_votes_stay_in_total = "judgment"

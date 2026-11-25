@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 tob_cap_12_vault_adapter_rate = "judgment"
 tob_cap_13_fee_auction_zero_assets = "judgment"
 tob_cap_14_health_vs_slashable = "judgment"

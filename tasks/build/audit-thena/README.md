@@ -36,7 +36,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `c1_period_update_erases_rewards` | The report finds C-1: after a direct `update_period`, `_updateFor` reads the new week's empty votes, so a tiny vote on every gauge erases the finished week's rewards | weekly emissions |
 | `h1_extra_rewarder_past_period` | The report finds H-1: the extra rewarder keeps accruing after its funded period, so some stakers take others' rewards and the gauge can revert | extra rewards |
 | `h2_killed_gauge_votes_stay_in_total` | The report finds H-2: killing a gauge leaves its votes in the week's total, so its share of emissions is stuck in the voter | gauge kill |

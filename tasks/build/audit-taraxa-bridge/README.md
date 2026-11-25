@@ -34,7 +34,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `tob_tara_4_duplicate_signatures` | The report finds TOB-TARA-4: `getSignaturesWeight` counts a repeated signature again, so a pillar block without a majority can be finalized | light client |
 | `tob_tara_6_apply_state_reentrancy` | The report finds TOB-TARA-6: `applyState` can be re-entered through a token with transfer hooks, so a recipient is paid again and the epoch runs ahead | bridge settlement |
 

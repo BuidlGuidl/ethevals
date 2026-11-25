@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 tob_tara_4_duplicate_signatures = "judgment"
 tob_tara_6_apply_state_reentrancy = "judgment"
 

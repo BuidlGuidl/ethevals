@@ -36,7 +36,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `tob_aut_5_stale_crl` | The report finds TOB-AUT-5: the chain check uses a CRL without checking that it is current or from the right issuer, so a revoked certificate still validates | revocation lists |
 | `tob_aut_6_root_crl_early_exit` | The report finds TOB-AUT-6: an extra root certificate makes the chain check stop early and skip the root CA's CRL, so a revoked CA certificate still signs quotes that pass | chain building |
 | `tob_aut_7_zk_timestamp` | The report finds TOB-AUT-7: the zero-knowledge path never checks the time the proof was made for, so a proof built on an expired certificate passes | zero-knowledge path |

@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 c1_deposit_queue_gas_lock = "judgment"
 c2_processed_deposits_double_count = "judgment"
 c3_withdraw_rounds_shares_down = "judgment"

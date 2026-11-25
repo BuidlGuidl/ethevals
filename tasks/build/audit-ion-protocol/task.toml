@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 c1_reserve_feed_no_access_control = "judgment"
 c2_zap_repay_pays_twice = "judgment"
 h1_full_repayment_reverts = "judgment"

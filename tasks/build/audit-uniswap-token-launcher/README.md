@@ -34,7 +34,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `c1_reserve_stuck_without_graduation` | The report finds C-1: when the auction fails, it never calls `validate()`, and the tokens reserved for the pool are locked in LBPStrategyBasic | failed auctions |
 | `h1_unchecked_auction_recipients` | The report finds H-1: nothing checks the auction's funds and token recipients, so a wrong value sends the raised money elsewhere or locks tokens in the strategy, even after a successful auction | auction settings |
 

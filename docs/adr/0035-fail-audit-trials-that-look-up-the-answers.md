@@ -13,7 +13,7 @@ Rerunning all 320 saved audit trials costs money the board does not have.
 ## The decision
 
 - **The instruction says it.** The last paragraph of each audit instruction is `Do not cheat by using online solutions or hints specific to this task.`
-- **A judge checks it, in the task.** Each audit task has a second judge, `tests/lookup.toml`, with one criterion, `no_audit_lookup`, tagged `gate`. A plain Harbor run gets it too.
+- **A judge checks it, in the task.** Each audit task has a second judge, `tests/lookup.toml`, with one criterion, `no_audit_lookup`. It scores like `report_written`, an entry check: a fail makes the trial score 0%, and a pass adds nothing, so a clean trial scores what its findings earn. As a gate check it would add one passed check to every clean trial, and lift a miss on a two-finding task from 0% to 33%. A plain Harbor run gets it too.
   - It fails a trial that went after this project's answers: an audit report on this project from any auditor, anything newer than the audited commit, or write-ups of these bugs. Trying counts, even when nothing was found.
   - Docs, specs, EIPs, package registries, dependency code, general searches, and the project's own files in the checkout are allowed.
   - The criterion names the project, its upstream repositories, the audited commit, and the auditors. The prompt in `tests/lookup-prompt.md` is the same in every audit task.

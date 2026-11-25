@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 c1_pegged_solve_precision = "judgment"
 c2_concentrate_shared_liquidity = "judgment"
 c3_pegged_axis_mismatch = "judgment"

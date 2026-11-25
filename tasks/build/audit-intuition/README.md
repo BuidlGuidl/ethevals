@@ -37,7 +37,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `tob_intuition_6_create_atom_protocol_fee` | The report finds TOB-INTUITION-6: creating an atom pays the protocol fee out but still credits it to the vault | fees |
 | `tob_intuition_10_triple_hash_collision` | The report finds TOB-INTUITION-10: triple ids hash packed variable-length atom data, so an attacker can squat on a triple's id | identifiers |
 | `tob_intuition_12_atom_equity_base` | The report finds TOB-INTUITION-12: a triple deposit computes the atoms' share on two different amounts, so part of it belongs to no vault | share accounting |

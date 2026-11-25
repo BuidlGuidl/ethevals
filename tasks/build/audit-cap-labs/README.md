@@ -37,7 +37,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `tob_cap_4_notify_timer_reset` | The report finds TOB-CAP-4: anyone can call `notify()` with 1 wei to restart StakedCap's vesting, so stakers' locked yield keeps being pushed back | staking yield |
 | `tob_cap_5_balance_tracking` | The report finds TOB-CAP-5: tokens sent straight to the vault let a burn push tracked supply below borrows, so borrowing the asset stops | vault accounting |
 | `tob_cap_12_vault_adapter_rate` | The report finds TOB-CAP-12: anyone can call the rate adapter with a fake vault and inflate a real asset's interest rate | interest rates |

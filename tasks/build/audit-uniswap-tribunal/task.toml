@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 h1_settle_or_register_native_balance = "judgment"
 h2_supplemental_curve_check_inverted = "judgment"
 

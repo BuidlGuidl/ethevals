@@ -34,7 +34,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `h1_emissary_slot_ignores_sponsor` | The report finds H-1: the emissary storage slot leaves out the sponsor, so anyone can set the emissary for every sponsor with the same lock tag and approve claims on their funds | emissaries |
 | `h2_exogenous_claim_element_skipped` | The report finds H-2: an out-of-range chain index leaves the current element out of a multichain claim hash, and the witness fills its place, so an attacker claims with their own arbiter and amounts | multichain claims |
 

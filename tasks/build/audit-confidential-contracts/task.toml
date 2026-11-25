@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 c1_transfer_and_call_refund = "judgment"
 h1_vesting_released_overflow = "judgment"
 

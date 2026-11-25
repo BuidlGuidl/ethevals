@@ -150,7 +150,7 @@ A check on something an experienced Ethereum developer gets right without being 
 _Avoid_: optional check, gotcha
 
 **Entry check**:
-A check that only shows something was handed in: `compile`, `answered`, `no_answer`, or `report_written`. A failed one makes the trial score 0%, and a passed one stays out of the count. Authors don't tag it.
+A check that only shows something was handed in: `compile`, `answered`, `no_answer`, or `report_written`. On an audit task, `no_audit_lookup`, which shows the agent didn't go after the published answers, is one too. A failed one makes the trial score 0%, and a passed one stays out of the count. Authors don't tag it.
 
 **Reward**:
 Harbor's result for a trial, written by RewardKit. `reward` is 1 only when every check passes. A task can add other reward keys. The board shows the trial score, not the reward.

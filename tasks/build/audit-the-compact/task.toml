@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 h1_emissary_slot_ignores_sponsor = "judgment"
 h2_exogenous_claim_element_skipped = "judgment"
 

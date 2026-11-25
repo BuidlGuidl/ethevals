@@ -52,7 +52,7 @@ The leaderboard, Compare, and the task matrix show percentages.
 A failed gate check or entry check sets the trial score to 0%.
 Otherwise, the trial score divides the checks passed by the gate and judgment checks in the row.
 Concepts trials count their answer check and score 100% or 0%.
-The entry checks are `compile`, `answered`, `no_answer`, and `report_written`. They stay out of the count.
+The entry checks are `compile`, `answered`, `no_answer`, `report_written`, and `no_audit_lookup`. They stay out of the count.
 On an older row, ignore checks without a current tag and tags for checks the row lacks.
 If no checks count and no entry check failed, the saved trial status gives 100% for a pass and 0% for a fail.
 A task score averages its trial scores. Errors stay visible in the drawer and stay out of the average.

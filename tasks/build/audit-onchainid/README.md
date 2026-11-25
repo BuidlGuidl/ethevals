@@ -34,7 +34,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `c1_batch_calldata_targets` | The report finds C-1: the validator and the account read different targets from the same batch calldata, so an ACTION key can make the identity call itself and take MANAGEMENT | batch decoding |
 | `h1_queued_factory_call` | The report finds H-1: approving a queued request skips the factory guard that auto-approval has, so an ACTION key can revoke the identity's wallet links | queued approvals |
 | `h2_key_registry_target` | The report finds H-2: the queued path treats the key registry as an ordinary target, so where the validator is not also an executor, an ACTION key can add a MANAGEMENT key | key registry |

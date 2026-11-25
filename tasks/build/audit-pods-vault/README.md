@@ -38,7 +38,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `c1_deposit_queue_gas_lock` | The report finds C-1: rebuilding the queue on every removal lets dust deposits push processing and refunds past the block gas limit, so every queued deposit is stuck | deposit queue |
 | `c2_processed_deposits_double_count` | The report finds C-2: deposits processed by an earlier call are counted twice, so later depositors in the round get too few shares | share pricing |
 | `c3_withdraw_rounds_shares_down` | The report finds C-3: `withdraw` rounds the burned shares down, so repeated small withdrawals drain the vault | rounding |

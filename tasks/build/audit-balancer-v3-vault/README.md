@@ -35,7 +35,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `tob_balv3_1_buffer_approval_left` | The report finds TOB-BALV3-1: the EXACT_IN wrap leaves the wrapper's approval in place, so a malicious wrapper later takes the Vault's tokens | buffer approvals |
 | `tob_balv3_2_fee_collection_reserves` | The report finds TOB-BALV3-2: collecting fees doesn't lower recorded reserves, so a wrap or unwrap credits the gap to the caller | reserves |
 | `tob_balv3_6_buffer_asset_switch` | The report finds TOB-BALV3-6: a wrapper changes its underlying token before the buffer pins it, so the buffer pays out a token that was never put in | buffer assets |

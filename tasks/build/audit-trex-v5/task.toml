@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 h1_cross_domain_identity_rebind = "judgment"
 
 [agent]

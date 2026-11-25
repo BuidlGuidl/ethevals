@@ -33,7 +33,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `c1_transfer_and_call_refund` | The report finds C-1: a recipient moves the tokens on in its callback and returns false, so the refund moves nothing and the function reports zero though the sender lost the tokens | confidential token |
 | `h1_vesting_released_overflow` | The report finds H-1: the encrypted released counter wraps around, so the owner can cycle tokens back in and vest ahead of schedule | vesting wallet |
 

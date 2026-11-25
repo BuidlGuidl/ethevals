@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 c1_reserve_stuck_without_graduation = "judgment"
 h1_unchecked_auction_recipients = "judgment"
 

@@ -35,7 +35,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `h1_optimism_anchor_game_slot` | The report finds H-1: the Optimism ParentToChildProver reads the anchor game from slot 3, but the deployed registry keeps it in slot 2, so routes that don't end on L1 can't prove OP-chain state | Optimism |
 | `h2_linea_child_to_parent_mpt` | The report finds H-2: the Linea ChildToParentProver proves Linea storage with Merkle Patricia proofs and keccak, but Linea uses a Sparse Merkle Tree with MiMC, so routes through the Linea buffer revert | Linea |
 | `h3_zksync_returns_publisher` | The report finds H-3: the ZKsync ParentToChildProver returns the message's publisher instead of the broadcaster contract, so the Receiver ties messages to the wrong broadcaster | ZKsync |

@@ -34,7 +34,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `h1_settle_or_register_native_balance` | The report finds H-1: `settleOrRegister` forwards Tribunal's whole ETH balance, so 1 wei sent by anyone makes The Compact reject every ERC-20 batch deposit | deposits into The Compact |
 | `h2_supplemental_curve_check_inverted` | The report finds H-2: `applySupplementalPriceCurve` counts a matching scaling direction as an error, so valid curves revert and invalid ones pass | price curves |
 

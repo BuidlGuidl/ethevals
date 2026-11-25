@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 tob_aut_5_stale_crl = "judgment"
 tob_aut_6_root_crl_early_exit = "judgment"
 tob_aut_7_zk_timestamp = "judgment"

@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 tob_intuition_10_triple_hash_collision = "judgment"
 tob_intuition_12_atom_equity_base = "judgment"
 tob_intuition_13_atom_equity_protocol_fee = "judgment"

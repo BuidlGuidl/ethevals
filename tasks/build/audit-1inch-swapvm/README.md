@@ -37,7 +37,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `c1_pegged_solve_precision` | The report finds C-1: the pegged curve's quadratic solver cancels to nothing for small curve settings, so the maker pays out more than the curve allows | curve math |
 | `c2_concentrate_shared_liquidity` | The report finds C-2: a multi-token concentrated order keeps one liquidity value that each pair overwrites, so a three-swap cycle makes a profit | concentrated liquidity |
 | `c3_pegged_axis_mismatch` | The report finds C-3: the pegged curve normalizes balances by token order instead of swap direction, so reverse swaps pay out far too much | curve math |

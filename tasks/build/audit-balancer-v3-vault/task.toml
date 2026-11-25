@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 tob_balv3_1_buffer_approval_left = "judgment"
 tob_balv3_2_fee_collection_reserves = "judgment"
 tob_balv3_6_buffer_asset_switch = "judgment"

@@ -13,7 +13,6 @@ area = "Audits"
 modes = ["internet"]
 
 [metadata.checks]
-no_audit_lookup = "gate"
 c1_batch_calldata_targets = "judgment"
 h1_queued_factory_call = "judgment"
 h2_key_registry_target = "judgment"

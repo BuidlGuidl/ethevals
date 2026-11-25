@@ -37,7 +37,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
-| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. A gate check: a fail scores the trial 0% | lookups |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `c1_reserve_feed_no_access_control` | The report finds C-1: anyone can call `ReserveFeed.setExchangeRate`, so anyone can falsify the rate liquidations use | reserve oracle |
 | `c2_zap_repay_pays_twice` | The report finds C-2: `zapRepay` names the caller as the payer, so the caller pays twice and the wrapped WETH is stuck in the zapper | ETH helper |
 | `h1_full_repayment_reverts` | The report finds H-1: `repayAndWithdraw` converts a WETH amount to normalized debt at execution time, so full repayments revert | flash handlers |
