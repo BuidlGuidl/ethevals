@@ -59,8 +59,12 @@ def replay(tests_dir, *, workspace="/app", output="/logs/verifier/reward.json", 
         judge = reward.judge
         files = [*getattr(judge, "files", []), *([judge.atif_trajectory] if getattr(judge, "atif_trajectory", None) else [])]
         if getattr(judge, "agent", None):
-            previous_inputs = source / "saved-verifier/judge-inputs.json"
-            current_inputs = Path(os.environ.get("REWARDKIT_LOG_DIR", "/logs/verifier")) / "judge-inputs.json"
+            # A judge whose inputs are prepared on their own has its own manifest, judge-inputs-<name>.json.
+            manifest = "judge-inputs.json"
+            if (Path(os.environ.get("REWARDKIT_LOG_DIR", "/logs/verifier")) / f"judge-inputs-{reward.name}.json").is_file():
+                manifest = f"judge-inputs-{reward.name}.json"
+            previous_inputs = source / "saved-verifier" / manifest
+            current_inputs = Path(os.environ.get("REWARDKIT_LOG_DIR", "/logs/verifier")) / manifest
             if not previous_inputs.is_file() or not current_inputs.is_file() or previous_inputs.read_bytes() != current_inputs.read_bytes():
                 changed = True
         for filename in files:
@@ -114,9 +118,6 @@ def check_one():
     else:
         if not Path("/judge/submission").is_dir() and Path("/logs/verifier/judge-inputs").is_dir():
             from agent_judge import prepare, environment
-            if Path("/tests/judge_trajectory.py").is_file():
-                from judge_trajectory import main as copy_trajectory
-                copy_trajectory()
             home = prepare(list(Path("/logs/verifier/judge-inputs").iterdir()))
             clean = environment(home)
             os.environ.clear()

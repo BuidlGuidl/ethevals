@@ -306,7 +306,7 @@ Save judge inputs, transcripts, and program versions in `/logs/verifier`, withou
 File judges copy the file judge variant from [treasury sale's tests](../tasks/act/treasury-eth-sale/tests).
 Page judges copy the page judge variant from [swap page's tests](../tasks/build/swap-page/tests).
 Each variant has `judge-settings.json`, `agent_judge.py`, and `install_judge.py`.
-Audit tasks also copy `test.sh`, `judge-prompt.md`, `lookup-prompt.md`, and `judge_trajectory.py` from [The Compact audit's tests](../tasks/build/audit-the-compact/tests).
+Audit tasks copy the audit judge variant, `test.sh`, `judge-prompt.md`, and `lookup-prompt.md` from [The Compact audit's tests](../tasks/build/audit-the-compact/tests). Its `agent_judge.py` also writes the lookup judge's copy of the trajectory, and its `judge-settings.json` keeps judges out of `/logs/agent`.
 Their `lookup.toml` names the project, its upstream repositories, the audited commit, and the auditors, and its `no_audit_lookup` check is an entry check: a fail scores the trial 0%, and a pass adds nothing.
 It fails a trial that went after the published answers ([ADR 0035](adr/0035-fail-audit-trials-that-look-up-the-answers.md)).
 Its judge reads a copy of the trajectory with only tool calls and their outputs, so the task lists `/logs/agent/trajectory.json` in `artifacts`.

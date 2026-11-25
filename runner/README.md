@@ -108,6 +108,8 @@ Concepts regrades run the task's real tests through RewardKit in its verifier im
 Rows for one task share a container.
 Unchanged judge criteria and inputs keep their saved results.
 A criteria or prompt template change, judge program, model, or effort change, or changed file input asks the judge again.
+A judge's files are its criteria, its prompt template, and `tests/agent_judge.py`. A change to only those plans a judge regrade.
+An agent judge's inputs are compared through `judge-inputs.json`, or through `judge-inputs-<judge>.json` when the task prepares that judge's inputs on their own.
 A judge that declares MCP servers needs a live session.
 A judge-only change uses a workspace regrade when available, and otherwise reruns those trials.
 Judge-only regrades reuse saved inputs and keep the other checks.
@@ -116,13 +118,15 @@ It is a JSON array of `sha256:` hashes, read without running task code.
 For those hashes, a regrade runs the task's `test.sh` with saved check output and trajectory.
 It starts no chain, workspace, or agent container.
 Judges with unchanged criteria, settings, and inputs keep their saved results, and the others are asked again.
+That reuse needs tests that run the `rewardkit` command, as the audits and the treasury sale do. The voting page runs RewardKit from Python and asks its judge again.
 The tests use `ETHEVALS_REGRADE_ITEM` to skip live steps and keep saved evidence.
 This takes precedence over the task's normal regrade kind.
 Instruction, environment, and artifact changes still rerun trials.
 See [ADR 0030](../docs/adr/0030-regrade-from-saved-check-output.md) for the claim's review and removal rules.
-The file can also be an object: `checks` holds those hashes, `instructions` names old instruction hashes, and `artifacts` names the old artifact list.
-A passed or failed row on a named instruction and a named checks hash gets the same regrade, and its new row carries the current instruction hash.
-An error row on a named instruction keeps its retry count. Other rows on that instruction rerun.
+The file can also be an object: `checks` holds those hashes, `instructions` maps old instruction hashes to the instruction they carry to, and `artifacts` names the old artifact list.
+Before planning, rows on a mapped old instruction move onto the current one, when the mapping names it.
+A passed or failed row also needs a named checks hash, and gets the same regrade. An error row keeps its retry count. Other rows on that instruction rerun.
+A row already on the current instruction wins. Lint fails a claim that maps to an instruction the task no longer has, and the planner ignores it.
 This is a stopgap until task versions are settled. See [ADR 0035](../docs/adr/0035-fail-audit-trials-that-look-up-the-answers.md).
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
 Other Build tasks that save all of `/workspace` run a fresh Harbor trial with a saved-work agent.
@@ -142,6 +146,7 @@ Copy the first seven values from the trial's row.
 While the current row keeps that `completed_at`, the plan lists one fresh trial for it under `missing`, with the reason.
 The fresh trial replaces the row, and the entry is then satisfied, so later CI runs plan nothing for it.
 Add entries in a pull request. The merge to `main` starts the CI run, and its "Record trial results" pull request shows the new rows.
+The plan lists entries whose `completed_at` matches no saved row under `redo_unmatched`, and CI prints them: they are mistyped or already redone.
 Remove satisfied entries in a later pull request.
 `--redo` selects another file.
 
