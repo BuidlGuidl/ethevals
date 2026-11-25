@@ -136,6 +136,15 @@ The plan lists each rerun and its reason.
 Other fetch errors defer the regrade until the next CI run and reserve nothing.
 A failed regrade leaves the saved row unchanged and fails its CI job.
 
+[redo.json](redo.json) is the redo list: saved trials to run again, each with a reason.
+An entry names `task_id`, `agent`, `model`, `effort`, `mode`, `trial`, the row's `completed_at`, and a `reason`.
+Copy the first seven values from the trial's row.
+While the current row keeps that `completed_at`, the plan lists one fresh trial for it under `missing`, with the reason.
+The fresh trial replaces the row, and the entry is then satisfied, so later CI runs plan nothing for it.
+Add entries in a pull request. The merge to `main` starts the CI run, and its "Record trial results" pull request shows the new rows.
+Remove satisfied entries in a later pull request.
+`--redo` selects another file.
+
 To inspect a check fix locally, run:
 
 ```sh

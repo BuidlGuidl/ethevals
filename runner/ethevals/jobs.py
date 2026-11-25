@@ -63,6 +63,23 @@ def write_catalog(paths: list[Path], output: Path) -> None:
     (output / "catalog.json").write_text(json.dumps(catalog, indent=2) + "\n")
 
 
+REDO_KEYS = ("task_id", "agent", "model", "effort", "mode", "trial")
+
+
+def read_redo(path: Path) -> list[dict]:
+    """Read the redo list: saved trials to run once more, each named by its row's completed_at."""
+    entries = json.loads(path.read_text()) if path.is_file() else []
+    keys = {*REDO_KEYS, "completed_at", "reason"}
+    if not isinstance(entries, list) or any(
+            not isinstance(entry, dict) or set(entry) != keys
+            or any(not isinstance(entry[key], str) or not entry[key].strip() for key in ("task_id", "model", "mode", "completed_at", "reason"))
+            or type(entry["trial"]) is not int for entry in entries):
+        raise ValueError(f"{path}: each entry needs {', '.join(sorted(keys))}, with a finished trial's completed_at")
+    if len({tuple(entry[key] for key in REDO_KEYS) for entry in entries}) != len(entries):
+        raise ValueError(f"{path}: a trial is listed twice")
+    return entries
+
+
 def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=False) -> dict:
     options = current.get("regrade", {})
     named = row.get("checks_hash") in options.get("regrade_from", [])
@@ -108,7 +125,7 @@ def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=Fals
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,
          models=None, modes=None, n_attempts=None, trial=None,
          skills_pack: SkillsPack | None = None, retry_judge_error=False, saved_work: Path | None = None,
-         regrades_only=False) -> dict:
+         regrades_only=False, redo: list[dict] | None = None) -> dict:
     if retry_judge_error and trial is None:
         raise ValueError("--retry-judge-error requires --trial with one task, agent, and mode")
     modes = modes or config.modes
@@ -120,6 +137,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         if selected and set(selected) - available.keys():
             raise ValueError(f"Unknown {label}: {', '.join(sorted(set(selected) - available.keys()))}")
     prior = {trial_identity(row): row for row in previous}
+    redo_entries = {tuple(entry[key] for key in REDO_KEYS): entry for entry in redo or []}
     missing, exhausted, selected, deferred, candidates = [], [], [], [], []
     ids, names = set(), set()
     combinations = 0
@@ -160,6 +178,10 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     retry = row.get("retry", -1)
                     checks_changed = bool(row and row.get("checks_hash") != task["checks_hash"])
                     decision = decide_saved_row(row, task, config.retry, retry_judge_error=retry_judge_error)
+                    entry = redo_entries.get(tuple(metadata[key] for key in REDO_KEYS))
+                    redo = bool(entry and row and row.get("completed_at") == entry["completed_at"])
+                    if redo:
+                        decision = {"action": "rerun", "reason": f"On the redo list: {entry['reason']}"}
                     if decision["action"] == "keep":
                         continue
                     if decision["action"] == "exhausted":
@@ -170,7 +192,8 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                             "agent_version": agent.version, "harbor_version": config.harbor_version,
                             "paid_by": agent.paid_by,
                             "judge": judge, "judge_paid_by": config.judge.paid_by if judge else None}
-                    item["checks_generation"] = row.get("checks_generation", 0) + int(checks_changed)
+                    # A redo row must replace the saved row it redoes.
+                    item["checks_generation"] = row.get("checks_generation", 0) + int(checks_changed or redo)
                     judge_calls = sum(j.judge.samples * (len(j.criterion) + 1
                                       if j.judge.mode == "individual" else 1) for j in judges.values())
                     judge_reserve = config.judge.cost_limit_usd * judge_calls * 3 if config.judge.paid_by == "api_key" else 0.0

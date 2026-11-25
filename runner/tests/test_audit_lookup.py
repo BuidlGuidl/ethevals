@@ -5,10 +5,11 @@ from pathlib import Path
 import pytest
 
 from ethevals.job_config import JudgeSettings, load_job
-from ethevals.jobs import plan
+from ethevals.jobs import plan, read_redo
 from ethevals.trial_rows import fold_rows, recover_regrades, results_row, trial_identity
 from support import recorded_trial
 from test_jobs import job_config
+from test_regrade import saved_trial
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK = ROOT / "tasks/build/audit-the-compact"
@@ -77,6 +78,37 @@ def test_a_regraded_old_row_carries_the_current_instruction_and_needs_nothing_mo
     assert trial_identity(row) == trial_identity(item) != trial_identity(old)
     rows = fold_rows([old], [row])
     assert plan([TASK], config, rows, n_attempts=1, saved_work=tmp_path / "cache")["missing"] == []
+
+
+def redo_entry(row, **changes):
+    return {**{key: row[key] for key in ("task_id", "agent", "model", "effort", "mode", "trial", "completed_at")},
+            "reason": "Looked up the published report.", **changes}
+
+
+def test_a_redo_entry_plans_one_fresh_trial_until_a_newer_row_lands(tmp_path):
+    task, config, row = saved_trial(tmp_path)
+    row = {**row, "retry": 1}
+    report = plan([task], config, [row, {**row, "trial": 2}], n_attempts=2, redo=[redo_entry(row)])
+    redo, = report["missing"]
+    assert (redo["trial"], redo["retry"], redo["rerun_reason"]) == (1, 0, "On the redo list: Looked up the published report.")
+    fresh = {**row, "retry": redo["retry"], "checks_generation": redo["checks_generation"],
+             "completed_at": "2026-12-01T00:00:00+00:00"}
+    rows = fold_rows([row, {**row, "trial": 2}], [fresh])
+    assert fresh in rows
+    assert plan([task], config, rows, n_attempts=2, redo=[redo_entry(row)])["missing"] == []
+
+
+def test_the_redo_list_needs_a_finished_trial(tmp_path):
+    _, _, row = saved_trial(tmp_path)
+    path = tmp_path / "redo.json"
+    path.write_text(json.dumps([redo_entry(row, completed_at=None)]))
+    with pytest.raises(ValueError, match="completed_at"):
+        read_redo(path)
+    path.write_text(json.dumps([redo_entry(row)] * 2))
+    with pytest.raises(ValueError, match="twice"):
+        read_redo(path)
+    assert read_redo(tmp_path / "absent.json") == []
+    assert isinstance(read_redo(ROOT / "runner/redo.json"), list)
 
 
 def test_the_lookup_copy_keeps_tool_calls_and_outputs_and_drops_messages_and_reasoning(tmp_path):
