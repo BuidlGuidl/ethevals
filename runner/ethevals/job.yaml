@@ -44,6 +44,9 @@ models:
   gemini-4-argon:
     name: openrouter/google/gemini-4-argon
     effort: high
+  gemini-4-neon:
+    name: openrouter/google/gemini-4-neon
+    effort: high
 agents:
   vanilla-opus-5.5:
     name: ethevals.vanilla:VanillaAgent
@@ -133,6 +136,20 @@ agents:
     modes: [vanilla]
     paid_by: api_key
     cost_limit_usd: 2.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+  vanilla-gemini-4-neon:
+    name: ethevals.vanilla:VanillaAgent
+    version: 0.1.0
+    model: gemini-4-neon
+    modes: [vanilla]
+    paid_by: api_key
+    cost_limit_usd: 2.0
+    kwargs:
+      completion:
+        extra_body:
+          # OpenRouter tries Google AI Studio's flex tier first, then falls back to the standard endpoints.
+          provider: &neon-flex-first {order: [google-ai-studio/flex]}
     env:
       OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
   claude-code-opus-5.5:
@@ -263,6 +280,28 @@ agents:
     modes: [internet, skills]
     paid_by: api_key
     cost_limit_usd: 20.0
+    env:
+      OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
+      EXA_API_KEY: '${EXA_API_KEY:-}'
+      # OpenCode 1.x caps each model call at 32k tokens (ADR 0015).
+      # Harbor 0.24.0 redacts TOKEN values; the plus sign keeps that off JSON numbers.
+      OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'
+  opencode-gemini-4-neon:
+    name: opencode
+    import_path: ethevals.opencode:OpenCode
+    version: 1.18.33
+    model: gemini-4-neon
+    modes: [internet, skills]
+    paid_by: api_key
+    cost_limit_usd: 20.0
+    kwargs:
+      opencode_config:
+        provider:
+          openrouter:
+            models:
+              google/gemini-4-neon:
+                options:
+                  provider: *neon-flex-first
     env:
       OPENROUTER_API_KEY: '${OPENROUTER_API_KEY:-}'
       EXA_API_KEY: '${EXA_API_KEY:-}'
