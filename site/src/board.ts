@@ -86,14 +86,28 @@ export interface BoardData {
   counts: { evals: number; agents: number; runs: number };
 }
 
-export function overallScore(scores: (number | null)[]): number | null {
+export function meanScore(scores: (number | null)[]): number | null {
   const scored = scores.filter((score): score is number => score !== null);
   return scored.length ? scored.reduce((sum, score) => sum + score, 0) / scored.length : null;
 }
 
+// Each pillar counts by its number of tasks, up to this cap (ADR 0035). At 25 tasks per pillar it is the plain average.
+export const pillarTaskCap = 25;
+
+// Overall from pillar scores. `tasks` counts the pillar's tasks in the view, the same for every configuration.
+// Pillars without a score are skipped.
+export function weightedOverall(parts: { score: number | null; tasks: number }[]): number | null {
+  const scored = parts.filter((part): part is { score: number; tasks: number } => part.score !== null);
+  const weight = scored.reduce((sum, part) => sum + Math.min(part.tasks, pillarTaskCap), 0);
+  return weight ? scored.reduce((sum, part) => sum + Math.min(part.tasks, pillarTaskCap) * part.score, 0) / weight : null;
+}
+
+// Tasks in a pillar row that apply to the table's mode.
+export const pillarTasks = (row: PillarRow, key: string) => row.evals.filter((entry) => entry.cells[key].state !== "na").length;
+
 export function scoreSummary(cells: Counts[]): Counts {
   return {
-    score: overallScore(cells.map((cell) => cell.score)),
+    score: meanScore(cells.map((cell) => cell.score)),
     passed: cells.reduce((sum, cell) => sum + cell.passed, 0),
     total: cells.reduce((sum, cell) => sum + cell.total, 0),
     errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
@@ -149,7 +163,7 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[], attempts: number): 
   });
   return {
     state: !evaluation.modes.includes(mode) ? "na" : scored.length ? "score" : "pending",
-    score: overallScore(trials.map((trial) => trial.score.value)),
+    score: meanScore(trials.map((trial) => trial.score.value)),
     passed, total: scored.length, errors: rows.length - scored.length,
     missing: evaluation.modes.includes(mode) ? Math.max(0, attempts - scored.length) : 0,
     trials,
@@ -169,7 +183,8 @@ export function configurationSummary(rows: Table["pillars"], key: string): Confi
   const summary = scoreSummary(pillars.map((pillar) => rows[pillar].cells[key]));
   const trials = pillars.flatMap((pillar) => rows[pillar].evals.flatMap((entry) => entry.cells[key].trials));
   const scored = trials.filter((trial) => trial.status !== "error");
-  const scores: ConfigurationSummary["scores"] = { overall: summary.score, concepts: null, build: null, act: null };
+  const overall = weightedOverall(pillars.map((pillar) => ({ score: rows[pillar].cells[key].score, tasks: pillarTasks(rows[pillar], key) })));
+  const scores: ConfigurationSummary["scores"] = { overall, concepts: null, build: null, act: null };
   for (const pillar of pillars) scores[pillar] = rows[pillar].cells[key].score;
   return {
     scores, costPerPass: costPerPass(trials),
@@ -224,9 +239,9 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false, attem
       const internet = tables.internet.pillars[pillar].evals;
       const skills = tables.skills.pillars[pillar].evals;
       const paired = internet.map((entry, index) => skillLift(skills[index].cells[key].score, entry.cells[key].score));
-      lift[pillar] = overallScore(paired);
+      lift[pillar] = meanScore(paired);
     }
-    lift.overall = overallScore(pillars.map((pillar) => lift[pillar]));
+    lift.overall = weightedOverall(pillars.map((pillar) => ({ score: lift[pillar], tasks: pillarTasks(tables.internet.pillars[pillar], key) })));
     lifts[key] = lift;
   }
   return {

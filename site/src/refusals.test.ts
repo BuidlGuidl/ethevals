@@ -31,12 +31,14 @@ const board = buildBoard([concepts, x, y, z], [
 ]);
 
 test("ignoring refusals drops refused trials, then recomputes task, pillar and Overall scores", () => {
-  assert.deepEqual(board.tables.internet.summaries[key].scores, { overall: (1 + 1 / 3) / 2, concepts: 1, build: 1 / 3, act: null });
+  // Overall counts one Concepts task and three Build tasks.
+  assert.deepEqual(board.tables.internet.summaries[key].scores, { overall: (1 * 1 + 3 * (1 / 3)) / 4, concepts: 1, build: 1 / 3, act: null });
   const ignored = ignoreRefusals(board).tables.internet;
   const cells = ignored.pillars.build.evals.map((entry) => entry.cells[key].score);
   // Task y has no scored trial left, so it leaves the Build average like an unrun task.
   assert.deepEqual(cells, [1, null, 0.5]);
-  assert.deepEqual(ignored.summaries[key].scores, { overall: (1 + 0.75) / 2, concepts: 1, build: 0.75, act: null });
+  // Build keeps its weight of three tasks: weights come from the task list, not from the scored tasks.
+  assert.deepEqual(ignored.summaries[key].scores, { overall: (1 * 1 + 3 * 0.75) / 4, concepts: 1, build: 0.75, act: null });
   assert.equal(ignored.pillars.build.cells[key].scoredEvals, 2);
 });
 
@@ -52,7 +54,7 @@ test("refusal lines state skipped tasks without raw trial counts, while drawer b
     ["Safety refusals ignored", "All 3 Build tasks still scored"]);
   assert.equal(drawerRefusalBanner(buildInfo, false), "3 refused trials (scored as 0%).");
   assert.equal(drawerRefusalBanner(buildInfo, true), "3 refused trials ignored. 1 of 3 Build tasks skipped.");
-  assert.equal(refusals(ignored, key, "overall").without, 0.875);
+  assert.equal(refusals(ignored, key, "overall").without, (1 * 1 + 3 * 0.75) / 4);
   assert.equal(refusals(ignored, key, "concepts").refused, 0);
   const [xIgnored, yIgnored] = ignored.pillars.build.evals.map((entry) => entry.cells[key]);
   assert.deepEqual(taskRefusalLines(board.tables.internet.pillars.build.evals[1].cells[key], false), ["2 refused trials (scored as 0%)"]);

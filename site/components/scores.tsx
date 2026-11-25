@@ -3,6 +3,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { AlertTriangle, Info, ShieldBan } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { sentences } from "../src/refusals";
+import { pillarTaskCap } from "../src/board";
 export const percent = (score: number | null) => score === null ? "–" : `${Math.round(score * 100)}%`;
 export const money = (value: number | null, digits = 2) => value === null ? "–" : `$${value.toFixed(digits)}`;
 export const pp = (value: number | null) => value === null ? "–" : `${Math.round(value) > 0 ? "+" : ""}${Math.round(value)}pp`;
@@ -32,9 +33,9 @@ export function standing(score: number, { top, tied }: Peers, best: string): str
 }
 // One sentence per line, so a tooltip never runs ideas together.
 export const formulas = {
-  overall: ["Overall averages pillar scores.", "Pillars without a score are skipped."],
+  overall: [`Each pillar counts by its number of tasks, up to ${pillarTaskCap}.`, "Pillars without a score are skipped."],
   pillar: ["Pillar scores average task scores.", "Tasks without a score are skipped."],
-  lift: ["Lift = mean change over tasks scored in both modes for the same configuration, in percentage points.", "Overall averages paired pillar lifts."],
+  lift: ["Lift = mean change over tasks scored in both modes for the same configuration, in percentage points.", `Overall weights pillar lifts by task count, up to ${pillarTaskCap}.`],
 };
 export const unscored = (count: number) => `${count} ${count === 1 ? "trial has" : "trials have"} no score yet.`;
 // A string splits on newlines; each line shows on its own row.
