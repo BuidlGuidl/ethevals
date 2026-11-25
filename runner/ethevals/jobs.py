@@ -64,18 +64,25 @@ def write_catalog(paths: list[Path], output: Path) -> None:
 
 
 def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=False) -> dict:
-    if row and any(row.get(key) != current[key] for key in ("instruction_hash", "environment_hash")):
+    options = current.get("regrade", {})
+    named = row.get("checks_hash") in options.get("regrade_from", [])
+    # tests/regrade-from.json can name an old instruction whose saved trials still stand.
+    carried = bool(row) and row.get("instruction_hash") != current["instruction_hash"] and (
+        row.get("instruction_hash") in options.get("regrade_instructions", [])
+        and row.get("environment_hash") == current["environment_hash"])
+    if row and not carried and any(row.get(key) != current[key] for key in ("instruction_hash", "environment_hash")):
         return {"action": "rerun", "reason": "The instruction or environment changed."}
     if row.get("status") in {"passed", "failed"}:
+        if carried and not named:
+            return {"action": "rerun", "reason": "The instruction changed."}
         if row.get("checks_hash") == current["checks_hash"]:
             return {"action": "keep"}
         before, after = row.get("checks_inputs", {}), current["checks_inputs"]
         changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
-        if "@artifacts" in changed:
+        if "@artifacts" in changed and not (named and before.get("@artifacts") == options.get("regrade_artifacts")):
             return {"action": "rerun", "reason": "The saved work lacks the changed artifacts."}
-        options = current["regrade"]
         judges = set(options["judge_files"])
-        if row.get("checks_hash") in options.get("regrade_from", []):
+        if named:
             return {"action": "regrade", "kind": "evidence", "judge_required": bool(judges)}
         if judges and changed <= judges | {"@judge"}:
             if options.get("live_judge"):
@@ -147,7 +154,9 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     if identity in selected:
                         raise ValueError("Selected agent settings produce duplicate trial identities")
                     selected.append(identity)
-                    row = prior.get(identity, {})
+                    row = prior.get(identity) or next(
+                        (prior[old] for old in (trial_identity({**metadata, "instruction_hash": value})
+                                                for value in task["regrade"]["regrade_instructions"]) if old in prior), {})
                     retry = row.get("retry", -1)
                     checks_changed = bool(row and row.get("checks_hash") != task["checks_hash"])
                     decision = decide_saved_row(row, task, config.retry, retry_judge_error=retry_judge_error)

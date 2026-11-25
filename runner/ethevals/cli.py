@@ -113,7 +113,7 @@ def main(argv=None) -> int:
                 upload_hub(args.output, config)
                 write_rows(args.output / "rows.jsonl", fold_rows(read_rows(args.output / "rows.jsonl"), recover_rows(args.output)))
             if args.command == "regrade":
-                old = {jobs.trial_identity(row): row for row in previous}
+                old = {jobs.trial_identity(item): item["source_row"] for item in report["regrades"]}
                 selected = {tuple(identity) for identity in report["selected"]}
                 for row in read_rows(args.output / "rows.jsonl"):
                     identity = jobs.trial_identity(row)

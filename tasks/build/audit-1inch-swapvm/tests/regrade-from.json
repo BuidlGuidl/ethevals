@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "sha256:4774d0684426c080043587008fb1a669964a437cd05c0a4c68ee17f31cc438b8"
+  ],
+  "instructions": [
+    "sha256:43ed96194feb82a78ab09803f49d3145388a9b57e7ac5c0c07d225d29e4fe049"
+  ],
+  "artifacts": [
+    "/workspace/findings.md"
+  ]
+}

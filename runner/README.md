@@ -81,6 +81,7 @@ The `[metadata.checks]` table stays outside the instruction, environment, and ch
 It counts toward Harbor's whole-folder task hash.
 Unknown files and settings count as environment inputs.
 A changed instruction or environment hash reruns every selected mode.
+A task can name old instructions whose saved trials still stand. See [Regrade saved work](#regrade-saved-work).
 A changed checks hash plans a regrade, or a rerun when the saved work cannot support the changed checks.
 The board requires current instruction and environment hashes, plus the skills hash in skills mode.
 It keeps the saved result while its checks hash is behind.
@@ -113,11 +114,16 @@ Judge-only regrades reuse saved inputs and keep the other checks.
 `tests/regrade-from.json` can name old checks hashes whose saved code records still stand.
 It is a JSON array of `sha256:` hashes, read without running task code.
 For those hashes, a regrade runs the task's `test.sh` with saved check output and trajectory.
-It starts no chain, workspace, or agent container and asks every current judge again.
+It starts no chain, workspace, or agent container.
+Judges with unchanged criteria, settings, and inputs keep their saved results, and the others are asked again.
 The tests use `ETHEVALS_REGRADE_ITEM` to skip live steps and keep saved evidence.
 This takes precedence over the task's normal regrade kind.
 Instruction, environment, and artifact changes still rerun trials.
 See [ADR 0030](../docs/adr/0030-regrade-from-saved-check-output.md) for the claim's review and removal rules.
+The file can also be an object: `checks` holds those hashes, `instructions` names old instruction hashes, and `artifacts` names the old artifact list.
+A passed or failed row on a named instruction and a named checks hash gets the same regrade, and its new row carries the current instruction hash.
+An error row on a named instruction keeps its retry count. Other rows on that instruction rerun.
+This is a stopgap until task versions are settled. See [ADR 0035](../docs/adr/0035-fail-audit-trials-that-look-up-the-answers.md).
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
 Other Build tasks that save all of `/workspace` run a fresh Harbor trial with a saved-work agent.
 See [ADR 0029](../docs/adr/0029-regrade-pages-from-saved-work.md).

@@ -110,6 +110,9 @@ def check_one():
     else:
         if not Path("/judge/submission").is_dir() and Path("/logs/verifier/judge-inputs").is_dir():
             from agent_judge import prepare, environment
+            if Path("/tests/judge_trajectory.py").is_file():
+                from judge_trajectory import main as copy_trajectory
+                copy_trajectory()
             home = prepare(list(Path("/logs/verifier/judge-inputs").iterdir()))
             clean = environment(home)
             os.environ.clear()
@@ -139,7 +142,8 @@ def batch():
         item_file.write_text(json.dumps(item))
         environment = {**os.environ, "ETHEVALS_REGRADE_ITEM": str(item_file), "ETHEVALS_REGRADE_SOURCE": str(destination),
                        "PYTHON_DOTENV_DISABLED": "1"}
-        if item["kind"] == "concepts":
+        # Judges whose criteria and inputs are unchanged keep their saved answers.
+        if item["kind"] in {"concepts", "evidence"}:
             wrapper = Path("/regrade-bin/rewardkit")
             wrapper.parent.mkdir(exist_ok=True)
             wrapper.write_text("#!/bin/sh\nexec python3 /regrade.py check\n")

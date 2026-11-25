@@ -36,12 +36,19 @@ def regrade_options(path: Path) -> dict:
         kind = "workspace"
     judges = task_judges(path)
     statement = path / "tests/regrade-from.json"
-    regrade_from = json.loads(statement.read_text()) if statement.is_file() else []
-    if not isinstance(regrade_from, list) or any(not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
-                                                 for value in regrade_from):
-        raise ValueError(f"{statement}: expected an array of SHA256 checks hashes")
+    claim = json.loads(statement.read_text()) if statement.is_file() else []
+    claim = {"checks": claim} if isinstance(claim, list) else claim
+    hashes = lambda value: isinstance(value, list) and all(
+        isinstance(item, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", item) for item in value)
+    if (not isinstance(claim, dict) or set(claim) - {"checks", "instructions", "artifacts"}
+            or not hashes(claim.get("checks")) or not hashes(claim.get("instructions", []))
+            or "artifacts" in claim and not (isinstance(claim["artifacts"], list)
+                                             and all(isinstance(item, (str, dict)) for item in claim["artifacts"]))):
+        raise ValueError(f"{statement}: expected an array of SHA256 checks hashes, "
+                         "or an object with checks, and optional instructions and artifacts")
     return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in judges],
-            "regrade_from": regrade_from,
+            "regrade_from": claim["checks"], "regrade_instructions": claim.get("instructions", []),
+            "regrade_artifacts": claim.get("artifacts"),
             "live_judge": any(judge.judge.mcp_servers for judge in judges.values())}
 
 
