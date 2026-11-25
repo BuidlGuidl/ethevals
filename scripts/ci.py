@@ -76,6 +76,9 @@ def plan_trials(args, run_args):
     for row in report["missing"]:
         if row.get("rerun_reason"):
             print(f"Rerun {row['task_id']}, {row['model']}, {row['mode']}, trial {row['trial']}: {row['rerun_reason']}", file=sys.stderr)
+    for entry in report.get("redo_unmatched", []):
+        print(f"Redo entry matched no saved row: {entry['task_id']}, {entry['model']}, {entry['mode']}, "
+              f"trial {entry['trial']}, {entry['completed_at']}. It is mistyped or already redone.", file=sys.stderr)
     deferred_regrades = 0
     for row in report.get("deferred", []):
         if row.get("defer_reason"):

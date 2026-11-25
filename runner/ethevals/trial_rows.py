@@ -134,7 +134,7 @@ def recover_regrades(output: Path) -> list[dict]:
                 continue
             judge_costs = [detail.get("usage", {}).get("cost_usd") for detail in details
                            if detail.get("kind") in {"llm", "agent", "jev"}]
-            row = {**old, **{key: item[key] for key in ("instruction_hash", "checks_hash", "checks_inputs", "checks_generation")},
+            row = {**old, **{key: item[key] for key in ("checks_hash", "checks_inputs", "checks_generation")},
                    **verdict(rewards, checks, old.get("no_answer", [])),
                    "verifier_files": str((folder / "verifier").resolve()), "verifier_url": None,
                    "trajectory_file": str((folder / "agent/trajectory.json").resolve()),

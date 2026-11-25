@@ -80,18 +80,25 @@ def read_redo(path: Path) -> list[dict]:
     return entries
 
 
+def carried_rows(rows: list[dict], task: dict) -> list[dict]:
+    """Move saved rows onto the current instruction when the task's claim carries their old instruction to it.
+
+    Passed and failed rows need a named checks hash, so they get an evidence regrade. Error rows keep their retry count.
+    """
+    options = task["regrade"]
+    sources = {old for old, new in options["regrade_instructions"].items() if new == task["instruction_hash"]}
+    return fold_rows([{**row, "instruction_hash": task["instruction_hash"]} for row in rows
+                      if row.get("task_id") == task["id"] and row.get("instruction_hash") in sources
+                      and row.get("environment_hash") == task["environment_hash"]
+                      and (row.get("status") == "error" or row.get("checks_hash") in options["regrade_from"])])
+
+
 def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=False) -> dict:
     options = current.get("regrade", {})
     named = row.get("checks_hash") in options.get("regrade_from", [])
-    # tests/regrade-from.json can name an old instruction whose saved trials still stand.
-    carried = bool(row) and row.get("instruction_hash") != current["instruction_hash"] and (
-        row.get("instruction_hash") in options.get("regrade_instructions", [])
-        and row.get("environment_hash") == current["environment_hash"])
-    if row and not carried and any(row.get(key) != current[key] for key in ("instruction_hash", "environment_hash")):
+    if row and any(row.get(key) != current[key] for key in ("instruction_hash", "environment_hash")):
         return {"action": "rerun", "reason": "The instruction or environment changed."}
     if row.get("status") in {"passed", "failed"}:
-        if carried and not named:
-            return {"action": "rerun", "reason": "The instruction changed."}
         if row.get("checks_hash") == current["checks_hash"]:
             return {"action": "keep"}
         before, after = row.get("checks_inputs", {}), current["checks_inputs"]
@@ -144,6 +151,9 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
     for path in paths:
         task = task_entry(path, config)
         task["regrade"] = regrade_options(path)
+        # A row already on the current instruction always wins over a carried old row.
+        for row in carried_rows(previous, task):
+            prior.setdefault(trial_identity(row), row)
         judges = task_judges(path)
         if task["id"] in ids:
             raise ValueError(f"Duplicate task ID: {task['id']}")
@@ -172,15 +182,13 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     if identity in selected:
                         raise ValueError("Selected agent settings produce duplicate trial identities")
                     selected.append(identity)
-                    row = prior.get(identity) or next(
-                        (prior[old] for old in (trial_identity({**metadata, "instruction_hash": value})
-                                                for value in task["regrade"]["regrade_instructions"]) if old in prior), {})
+                    row = prior.get(identity, {})
                     retry = row.get("retry", -1)
                     checks_changed = bool(row and row.get("checks_hash") != task["checks_hash"])
                     decision = decide_saved_row(row, task, config.retry, retry_judge_error=retry_judge_error)
                     entry = redo_entries.get(tuple(metadata[key] for key in REDO_KEYS))
-                    redo = bool(entry and row and row.get("completed_at") == entry["completed_at"])
-                    if redo:
+                    redone = bool(entry and row and row.get("completed_at") == entry["completed_at"])
+                    if redone:
                         decision = {"action": "rerun", "reason": f"On the redo list: {entry['reason']}"}
                     if decision["action"] == "keep":
                         continue
@@ -193,7 +201,7 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                             "paid_by": agent.paid_by,
                             "judge": judge, "judge_paid_by": config.judge.paid_by if judge else None}
                     # A redo row must replace the saved row it redoes.
-                    item["checks_generation"] = row.get("checks_generation", 0) + int(checks_changed or redo)
+                    item["checks_generation"] = row.get("checks_generation", 0) + int(checks_changed or redone)
                     judge_calls = sum(j.judge.samples * (len(j.criterion) + 1
                                       if j.judge.mode == "individual" else 1) for j in judges.values())
                     judge_reserve = config.judge.cost_limit_usd * judge_calls * 3 if config.judge.paid_by == "api_key" else 0.0
@@ -240,7 +248,11 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
             missing.append({**item["rerun"], "rerun_reason": item["rerun_reason"]})
     if regrades_only:
         missing, selected = [], [trial_identity(item) for item in regrades]
-    return {"missing": missing, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
+    # An entry whose completed_at no saved row has was mistyped, or its trial was already redone.
+    saved = {(tuple(row.get(key) for key in REDO_KEYS), row.get("completed_at")) for row in previous}
+    unmatched = [entry for entry in redo or [] if entry["task_id"] in ids
+                 and (tuple(entry[key] for key in REDO_KEYS), entry["completed_at"]) not in saved]
+    return {"missing": missing, "redo_unmatched": unmatched, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
             "regrades": regrades, "regrade_trials": len(regrades),
             "worst_case_usd": round(sum(row["worst_case_usd"] for row in [*missing, *regrades]), 8),
             "selected": [identity for identity in selected if identity not in deferred_ids]}

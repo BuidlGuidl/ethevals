@@ -22,6 +22,24 @@ from .task_hashes import digest
 from .trial_rows import fold_rows, write_rows, recover_regrades
 
 
+def read_claim(path: Path) -> dict:
+    """Read tests/regrade-from.json: an array of old checks hashes, or an object that also maps
+    old instruction hashes to the instruction they carry to, and names the old artifact list."""
+    statement = path / "tests/regrade-from.json"
+    claim = json.loads(statement.read_text()) if statement.is_file() else []
+    claim = {"checks": claim} if isinstance(claim, list) else claim
+    sha = lambda value: isinstance(value, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", value)
+    instructions = claim.get("instructions", {}) if isinstance(claim, dict) else None
+    if (not isinstance(claim, dict) or set(claim) - {"checks", "instructions", "artifacts"}
+            or not isinstance(claim.get("checks"), list) or not all(map(sha, claim["checks"]))
+            or not isinstance(instructions, dict) or not all(sha(old) and sha(new) for old, new in instructions.items())
+            or "artifacts" in claim and not (isinstance(claim["artifacts"], list)
+                                             and all(isinstance(item, (str, dict)) for item in claim["artifacts"]))):
+        raise ValueError(f"{statement}: expected an array of SHA256 checks hashes, or an object with checks, "
+                         "and optional instructions (old hash to current hash) and artifacts")
+    return claim
+
+
 def regrade_options(path: Path) -> dict:
     task = Task(path)
     kind = "concepts" if path.parent.name == "concepts" else None
@@ -35,19 +53,15 @@ def regrade_options(path: Path) -> dict:
             for entry in normalize_artifact_entries(task.config.artifacts)):
         kind = "workspace"
     judges = task_judges(path)
-    statement = path / "tests/regrade-from.json"
-    claim = json.loads(statement.read_text()) if statement.is_file() else []
-    claim = {"checks": claim} if isinstance(claim, list) else claim
-    hashes = lambda value: isinstance(value, list) and all(
-        isinstance(item, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", item) for item in value)
-    if (not isinstance(claim, dict) or set(claim) - {"checks", "instructions", "artifacts"}
-            or not hashes(claim.get("checks")) or not hashes(claim.get("instructions", []))
-            or "artifacts" in claim and not (isinstance(claim["artifacts"], list)
-                                             and all(isinstance(item, (str, dict)) for item in claim["artifacts"]))):
-        raise ValueError(f"{statement}: expected an array of SHA256 checks hashes, "
-                         "or an object with checks, and optional instructions and artifacts")
-    return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in judges],
-            "regrade_from": claim["checks"], "regrade_instructions": claim.get("instructions", []),
+    claim = read_claim(path)
+    # A judge's files are its criteria, its prompt template, and the helper that prepares its inputs.
+    files = {file.relative_to(path).as_posix() for file in judges}
+    files |= {(file.parent / judge.judge.prompt_template).relative_to(path).as_posix()
+              for file, judge in judges.items() if judge.judge.prompt_template}
+    if judges and (path / "tests/agent_judge.py").is_file():
+        files.add("tests/agent_judge.py")
+    return {"kind": kind, "judge_files": sorted(files),
+            "regrade_from": claim["checks"], "regrade_instructions": claim.get("instructions", {}),
             "regrade_artifacts": claim.get("artifacts"),
             "live_judge": any(judge.judge.mcp_servers for judge in judges.values())}
 

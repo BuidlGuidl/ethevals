@@ -2,9 +2,9 @@
   "checks": [
     "sha256:df61f8f9d113be6462ada332e1f7601a7c21bee149b750a30e959f4f97551553"
   ],
-  "instructions": [
-    "sha256:fa4c88a710d6483ebca6a7a9f294b0f61860932c6794dc815bb35391d33c1df0"
-  ],
+  "instructions": {
+    "sha256:fa4c88a710d6483ebca6a7a9f294b0f61860932c6794dc815bb35391d33c1df0": "sha256:1108906ea5b4f7a139c2db9c6861f8e73678da3d19c318ca57baf372851a6e3a"
+  },
   "artifacts": [
     "/workspace/findings.md"
   ]

@@ -131,7 +131,7 @@ def main(argv=None) -> int:
             return 0
         if args.command in {"lint", "free-check"}:
             from harbor.models.task.task import Task
-            from .harbor_tasks import lint_task
+            from .harbor_tasks import lint_claim, lint_task
             from .job_config import load_job
             config = load_job(args.config)
             paths = args.tasks or sorted(path.parent for path in Path("tasks").rglob("task.toml"))
@@ -140,6 +140,7 @@ def main(argv=None) -> int:
             names = set()
             for path in paths:
                 lint_task(path, config)
+                lint_claim(path)
                 name = Task(path).name
                 if name in names:
                     raise ValueError(f"Duplicate task name: {name}")
