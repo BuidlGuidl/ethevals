@@ -1,3 +1,5 @@
 You are a smart contract security auditor auditing Balancer V3. Review the contracts in /work/project/pkg/vault and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 
 Balancer V3 is an automated market maker built around one Vault contract that holds the tokens of every pool. Pools only do the math for swaps and liquidity changes, while the Vault keeps the balances and lets a caller run many operations in one session, settling only the net amounts at the end. Routers give users a simple way in, and pools can add hooks and charge fees, part of which goes to the protocol.
+
+Do not cheat by using online solutions or hints specific to this task.
