@@ -400,7 +400,9 @@ def test_rewardkit_reuses_a_judge_and_asks_again_only_for_changed_criteria_or_in
                                      '    return {"score": False, "reasoning": "Old check."}\n')
     (tests / "reward.toml").write_text('[[reward]]\nname = "reward"\naggregation = "all-pass"\n')
     judge = tests / "judge.toml"
-    judge.write_text('[judge]\njudge = "openai/gpt-5"\nguard = "flag"\n'
+    prompt = tests / "prompt.md"
+    prompt.write_text("Judge the reply.\n{criteria}\n")
+    judge.write_text('[judge]\njudge = "openai/gpt-5"\nguard = "flag"\nprompt_template = "prompt.md"\n'
                      f'atif-trajectory = "{current_trajectory}"\n[scoring]\naggregation = "all-pass"\n'
                      '[[criterion]]\nname = "explained"\ntype = "binary"\ndescription = "Was the unit explained?"\n')
     calls = []
@@ -413,7 +415,8 @@ def test_rewardkit_reuses_a_judge_and_asks_again_only_for_changed_criteria_or_in
     monkeypatch.setattr(litellm, "acompletion", fake_judge)
     rewardkit_run(tests, workspace=tmp_path, output=source / "saved-verifier/reward.json")
     assert read_reward(source / "saved-verifier")[0] == {"reward": 0.0}
-    inputs = {"tests/judge.toml": digest(judge.read_text()), "@judge": {"model": "openai/gpt-5", "effort": None}}
+    inputs = {"tests/judge.toml": digest(judge.read_text()), "tests/prompt.md": digest(prompt.read_text()),
+              "@judge": {"model": "openai/gpt-5", "effort": None}}
     item = {"source_row": {"checks_inputs": inputs}, "checks_inputs": dict(inputs), "judge_required": False}
     item_file = tmp_path / "item.json"
     monkeypatch.setenv("ETHEVALS_REGRADE_ITEM", str(item_file))
@@ -442,6 +445,14 @@ def test_rewardkit_reuses_a_judge_and_asks_again_only_for_changed_criteria_or_in
     item_file.write_text(json.dumps(item))
     replay(tests, workspace=tmp_path, output=tmp_path / "new-input/reward.json")
     assert (len(calls), read_reward(tmp_path / "new-input")[0]) == (3, {"reward": 1.0})
+    # A change to the judge's prompt template alone asks the judge again.
+    shutil.copyfile(current_trajectory, trajectory)
+    item["source_row"]["checks_inputs"] = dict(item["checks_inputs"])
+    prompt.write_text("Judge the reply strictly.\n{criteria}\n")
+    item["checks_inputs"]["tests/prompt.md"] = digest(prompt.read_text())
+    item_file.write_text(json.dumps(item))
+    replay(tests, workspace=tmp_path, output=tmp_path / "new-prompt/reward.json")
+    assert len(calls) == 4
 
 
 def test_a_regrade_replaces_an_old_retry_without_changing_the_original_model_cost(tmp_path):

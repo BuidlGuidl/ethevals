@@ -107,7 +107,7 @@ The planner lists regrades under `regrades` and agent trials under `missing`.
 Concepts regrades run the task's real tests through RewardKit in its verifier image.
 Rows for one task share a container.
 Unchanged judge criteria and inputs keep their saved results.
-A criteria change, judge program, model, or effort change, or changed file input asks the judge again.
+A criteria or prompt template change, judge program, model, or effort change, or changed file input asks the judge again.
 A judge that declares MCP servers needs a live session.
 A judge-only change uses a workspace regrade when available, and otherwise reruns those trials.
 Judge-only regrades reuse saved inputs and keep the other checks.

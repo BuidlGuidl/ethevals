@@ -8,6 +8,7 @@ import runpy
 import shutil
 import subprocess
 import sys
+import tomllib
 
 sys.path.insert(0, "/opt")
 
@@ -51,7 +52,10 @@ def replay(tests_dir, *, workspace="/app", output="/logs/verifier/reward.json", 
             pending.append(reward)
             continue
         name = "tests/" + reward.name + ".toml"
-        changed = old_inputs.get(name) != new_inputs.get(name) or old_inputs.get("@judge") != new_inputs.get("@judge")
+        spec = Path(tests_dir) / (reward.name + ".toml")
+        template = tomllib.loads(spec.read_text()).get("judge", {}).get("prompt_template") if spec.is_file() else None
+        keys = [name, "@judge", *(["tests/" + template] if template else [])]
+        changed = any(old_inputs.get(key) != new_inputs.get(key) for key in keys)
         judge = reward.judge
         files = [*getattr(judge, "files", []), *([judge.atif_trajectory] if getattr(judge, "atif_trajectory", None) else [])]
         if getattr(judge, "agent", None):
