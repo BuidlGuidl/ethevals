@@ -5,6 +5,9 @@ from pathlib import Path
 from .images.target_checks import final_reply
 
 
+# HACK: Harbor 0.24.0 turns some OpenCode content-filter messages into AgentSafetyRefusalError, but not
+# OpenRouter's 403 content_policy_violation event. Delete this function and its call in trial_rows.py
+# once Harbor recognizes that event.
 def blocked_by_provider(message: str) -> bool:
     """OpenCode reports a provider's safety block as an error event; Harbor reads it as an API error."""
     for line in message.splitlines():

@@ -35,7 +35,7 @@ def results_row(folder: Path, metadata: dict, *, trajectory_url: str | None = No
         raise ValueError(f"{folder / 'lock.json'}: task digest differs from the plan")
     result = TrialResult.model_validate_json((folder / "result.json").read_text())
     error = result.exception_info
-    if error and blocked_by_provider(error.exception_message):
+    if error and blocked_by_provider(error.exception_message):  # HACK until Harbor recognizes the event; see no_answer.py
         error = error.model_copy(update={"exception_type": "AgentSafetyRefusalError"})
     timed_out = error is not None and error.exception_type == "AgentTimeoutError"
     timeout = re.fullmatch(r"(?:Agent|Verifier) execution timed out after ([0-9.eE+-]+) seconds", error.exception_message) if (
