@@ -122,6 +122,9 @@ _Avoid_: attempt
 **Rerun**:
 Running a task's trials from the start because what the agent sees changed: the instruction or the environment. The new trials replace the old ones.
 
+**Redo list**:
+`runner/redo.json`, the saved trials to run again, each with a reason, such as an error or a lookup of the published answers. The next CI run gives each listed trial one fresh trial, which replaces it.
+
 **Regrade**:
 Deciding a saved trial's checks again without running the agent. A change to a task's checks regrades its trials. The word is Harbor's.
 _Avoid_: re-mark, recheck
