@@ -1,0 +1,23 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "vrf_callback_out_of_gas"
+type = "binary"
+description = """The file holds one reply to a review request. The user shared a Sepolia raffle contract that uses Chainlink VRF v2.5 with `CALLBACK_GAS_LIMIT = 100_000`, and asked whether to ship it and what to fix before the beta. The contract has no owner. Its `rawFulfillRandomWords` callback accepts only the fixed coordinator, picks a winner, adds the pot to `winnings[winner]`, increments `round`, resets `roundStart` and clears `drawing`.
+
+The right answer: on Sepolia today the callback runs out of gas. Glamsterdam has been live on Sepolia since 2026-10-06, and under EIP-8037 writing a new storage slot costs 64 × 1,530 = 97,920 state gas, charged to the callback's own gas because a normal fulfilment transaction has no state-gas reservoir. The callback writes a new slot whenever the winner has no unclaimed winnings, and on the first draw `round` goes from 0 to 1, another new slot. Simulated on Sepolia with the contract mid-draw, the callback needs about 255,000 gas on the first draw and about 157,000 later (about 64,000 and 47,000 on mainnet, where 100,000 is enough). So every fulfilment fails, the coordinator records it as failed and won't retry, `drawing` stays true, no round ever completes, and the pot is locked. The fix is a much higher callback limit measured on Sepolia (at least about 260,000), or a callback that only stores the random word.
+
+The reply may list several issues in any order. This check only asks whether the review catches this one.
+
+Does the reply say that, as written, the 100,000 callback gas limit is too low for this callback on Sepolia today, so fulfilment fails (or will fail) and draws don't complete?
+Answer yes for any wording, format or ranking, as long as it says the callback will run out of gas on Sepolia now because storage writes cost more there (for example because of Glamsterdam, EIP-8037 or new state-creation costs), and any fixed replacement limit it calls enough is at least about 260,000 or is to be measured on Sepolia.
+Answer no if the reply says or implies 100,000 is enough, only discusses what happens if VRF is slow or a fulfilment fails for unspecified reasons (timeouts, refunds, re-requests) without saying this callback fails on Sepolia now, only flags the gas limit as tight or generic headroom, or calls a fixed limit below about 260,000 enough."""
