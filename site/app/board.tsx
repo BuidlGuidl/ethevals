@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowDown, ArrowUp, Check, X, AlertTriangle, ShieldBan } from "lucide-react";
 import { agentLabel, modeHints, names, modeNames, unwrapPrompt } from "../src/labels";
-import { pillars, agentKey, scoreSummary, emptyTrialLabel, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Trial, type Agent } from "../src/board";
+import { pillars, agentKey, scoreSummary, weightedOverall, pillarTaskCap, emptyTrialLabel, type BoardData, type Table, type DisplayEval as Eval, type Pillar, type Mode, type Trial, type Agent } from "../src/board";
 import { domains, domainNames, type Domain } from "../src/areas";
 import { DomainFilter, selectDomain } from "../components/domain-filter";
 import { decodeSelection, encodeSelection, type Selection } from "../src/selection";
@@ -169,10 +169,11 @@ export function Detail({ selection, data, domain, onSelect }: {
         {domains.map((option) => {
           const cells = pillars.filter((value) => !pillar || value === pillar).map((value) => table.pillars[value].evals
             .filter((entry) => data.evaluations[entry.id].domain === option && entry.cells[key].state !== "na").map((entry) => entry.cells[key]));
-          const tasks = cells.flat().length, score = scoreSummary(cells.map(scoreSummary));
+          const tasks = cells.flat().length, total = scoreSummary(cells.flat()).total;
+          const score = weightedOverall(cells.map((group) => ({ score: scoreSummary(group).score, tasks: group.length })));
           return <button type="button" key={option} aria-pressed={domain === option} disabled={!tasks && domain !== option} onClick={() => selectDomain(domain, option)}>
             <span>{domainNames[option]}</span>
-            {!tasks ? <small>No tasks yet</small> : score.score === null ? <small>No trials yet</small> : <><b>{percent(score.score)}</b><small>{scoredTrials(score.total)}</small></>}
+            {!tasks ? <small>No tasks yet</small> : score === null ? <small>No trials yet</small> : <><b>{percent(score)}</b><small>{scoredTrials(total)}</small></>}
           </button>;
         })}
       </div>}
@@ -273,7 +274,7 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
               })}
             </tr>)}</tbody></table></div>{mode === "skills" && <div className="table-note">+pp is the change over Internet.</div>}</div> :
         <div className="empty"><h3>{mode === "vanilla" ? "No model trials yet" : "No agent trials yet"}</h3><p>No published results match the current tasks. Browse the task catalog below.</p></div>}
-      <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on three pillars: Concepts, Build, and Act. Overall is the average of the pillar scores. Click a pillar cell to see its tasks and every trial behind them. Tile color shows how close a score is to the best score in its column.</div>
+      <div className="read-note" id="scoring"><b>How to read it:</b> Each row is an agent or a model, scored on three pillars: Concepts, Build, and Act. Overall averages the pillar scores, each counted by its number of tasks, up to {pillarTaskCap}. Click a pillar cell to see its tasks and every trial behind them. Tile color shows how close a score is to the best score in its column.</div>
     </section>
     <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task</h2><p>See each configuration’s task scores by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />

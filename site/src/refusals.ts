@@ -1,4 +1,4 @@
-import { agentKey, configurationSummary, overallScore, pillarCell, pillars, type BoardData, type EvalCell, type Pillar, type Table, type Trial } from "./board";
+import { agentKey, configurationSummary, meanScore, pillarCell, pillars, type BoardData, type EvalCell, type Pillar, type Table, type Trial } from "./board";
 import { names } from "./labels";
 
 type RefusalTrial = Pick<Trial, "score" | "no_answer">;
@@ -32,7 +32,7 @@ function ignoreCell(cell: EvalCell): EvalCell {
   return {
     ...cell, trials, total,
     passed: cell.passed - refused.filter((trial) => trial.status === "passed").length,
-    score: overallScore(trials.filter((trial) => !trial.ignored).map((trial) => trial.score.value)),
+    score: meanScore(trials.filter((trial) => !trial.ignored).map((trial) => trial.score.value)),
     state: cell.state === "score" && !total ? "pending" : cell.state,
   };
 }
