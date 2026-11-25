@@ -52,6 +52,8 @@ def parse_args(argv=None):
         command.add_argument("--rows", type=Path, default=Path("results/rows.jsonl"), help="Rows used to find missing trials.")
         command.add_argument("--budget", type=float, help="USD admission budget. Every agent trial requires an explicit budget.")
         command.add_argument("--redo", type=Path, default=Path("runner/redo.json"), help="Saved trials to run once more.")
+    parsers["regrade"].add_argument("--recheck", action="store_true",
+                                    help="Decide the selected saved passes and fails again with the current checks.")
     parsers["export-hf"].add_argument("--hf-repo")
     parsers["export-hf"].add_argument("--license", help="HF dataset license identifier. Unset means undecided.")
     publisher = parsers["publish-logs"]
@@ -89,6 +91,7 @@ def main(argv=None) -> int:
                 retry_judge_error=args.retry_judge_error,
                 saved_work=args.output / "saved-work",
                 regrades_only=args.command == "regrade", redo=jobs.read_redo(args.redo),
+                recheck=getattr(args, "recheck", False),
             ), args.budget, required=args.command in {"run", "regrade"})
             if args.command == "plan":
                 print(json.dumps(report, indent=2))

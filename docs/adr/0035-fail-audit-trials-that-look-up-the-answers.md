@@ -8,7 +8,7 @@ Audit agents work with the web.
 On the 16 audit tasks, 16 of DeepSeek V4.1 Flash's 17 passes came from the published audit report or the upstream fix commits.
 On `audit-the-compact`, both of its trials downloaded the OpenZeppelin and Spearbit reports from the project's upstream `audits/` folder.
 The instruction never said not to, and no check looked.
-Rerunning all 320 saved audit trials costs money the board does not have.
+Rerunning all 320 saved audit trials costs money the board does not have, and re-checking them all on CI costs Claude plan time.
 
 ## The decision
 
@@ -20,10 +20,10 @@ Rerunning all 320 saved audit trials costs money the board does not have.
 - **The judge reads the trajectory, not the model's words.** The task declares `/logs/agent/trajectory.json` as an artifact, so Harbor copies it into the separate verifier. The audit variant of `tests/agent_judge.py` writes a copy with only the tool calls, as JSON, and their outputs, from embedded subagent trajectories too. The agent's messages and reasoning are left out. The judge searches it with read tools, no web, and no access to `/logs/agent`.
 - **No trajectory is an error, never a fail.** A missing, empty, or invalid trajectory, or one that continues in another file, removes the reward, as a judge crash does.
 - **Tuning the lookup judge re-checks; it doesn't rerun.** A judge's files are its criteria, its prompt template, and `tests/agent_judge.py`, which prepares its inputs. A change to only those plans a judge regrade. The copy's hash goes in `judge-inputs-lookup.json`, so a changed copy asks the lookup judge again, and the findings judges keep their answers.
-- **Saved audit trials stay.** `tests/regrade-from.json` can be an object. `checks` holds the old checks hashes, as in [ADR 0030](0030-regrade-from-saved-check-output.md). `instructions` maps each old instruction hash to the instruction hash it carries to, and `artifacts` names the old artifact list. Before planning, a saved row on a mapped old instruction moves onto the current instruction, if the mapping names it and the environment is the same. A passed or failed row also needs a named checks hash, and it is regraded from its saved trajectory and findings, with the new check. An error row keeps its retry count. A carried row whose verdict is final, a fail from no answer twice or an error with no retry left, moves onto the current hashes as it is: the same status, history, retry count, and published links, with no saved work fetched, no container, and no judge. A row already on the current instruction always wins. A later instruction edit makes the mapping stale: the planner ignores it and reruns, and lint fails until the claim is removed or updated.
-- **Unchanged judges keep their answers in that regrade.** A judge whose criteria, settings, and inputs did not change keeps its saved result, as in other regrades. This replaces ADR 0030's rule that an evidence regrade asks every judge again, for tasks whose tests run the `rewardkit` command, as the audits and the treasury sale do. The voting page runs RewardKit from Python and still asks its judge again.
+- **Saved audit trials carry over, unchecked by CI.** `tests/regrade-from.json` can be an object whose `instructions` maps each old instruction hash to the instruction hash it carries to. Before planning, a saved row on a mapped old instruction moves onto the current instruction, if the mapping names it and the environment is the same. A carried pass or fail, or a carried error with no retry left, moves onto the current hashes as it is: the same status, checks, history, retry count, and published links, with no saved work fetched, no container, and no judge. It has no `no_audit_lookup` result. A carried error with a retry left keeps its retry count. A row already on the current instruction always wins. A later instruction edit makes the mapping stale: the planner ignores it and reruns, and lint fails until the claim is removed or updated.
+- **The saved trials were screened locally.** Before merge, the task's own lookup judge re-checked the saved audit trials with `ethevals regrade --recheck`, which decides selected saved passes and fails again with the current checks and keeps unchanged judges' answers. The flagged trials are listed in `runner/redo.json` with their reasons. The rest carry over as they were.
 - **The redo list reruns single trials.** `runner/redo.json` lists saved trials to run again, each with a reason. An entry names the trial and its row's `completed_at`. While the current row still has that `completed_at`, the planner plans one fresh trial for it. Once a newer trial lands, the entry is satisfied. The plan lists entries that match no saved row under `redo_unmatched`. A pull request adds entries, and the merge runs them through the normal CI run.
-- **Flagged old trials go on the redo list.** Their agents were never told the rule, so a failed gate on a regraded old trial is not a result. They show 0 on the board until their reruns land.
+- **Flagged old trials go on the redo list.** Their agents were never told the rule, so a lookup on an old trial is not a result. The merge reruns them, and their old results stay on the board until the reruns land.
 - This replaces [ADR 0025](0025-regrade-when-only-the-checks-change.md)'s rule that one fail is never regraded or rerun on its own. A trial on the redo list is rerun on its own, and the pull request names why.
 
 ## Considered options
@@ -36,8 +36,7 @@ Rerunning all 320 saved audit trials costs money the board does not have.
 
 ## Known gaps
 
-- `instructions` and `artifacts` are a stopgap until task versions are settled in [issue #125](https://github.com/BuidlGuidl/ethevals/issues/125).
-- The regrade asks the lookup judge about every saved audit row, on the Claude plan.
-- Flagged trials read 0 between the regrade and their reruns.
+- `instructions` is a stopgap until task versions are settled in [issue #125](https://github.com/BuidlGuidl/ethevals/issues/125).
+- CI never checks a carried old trial for lookups. Only the local screen did, and an unflagged lookup stays on the board.
 - A redo entry needs a finished trial's `completed_at`. An unfinished error keeps its normal retry.
 - The judge decides what counts as going after the answers. A search that names the project but finds only docs is its call.

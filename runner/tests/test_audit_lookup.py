@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TASK = ROOT / "tasks/build/audit-the-compact"
 CLAIM = json.loads((TASK / "tests/regrade-from.json").read_text())
 OLD_INSTRUCTION, = CLAIM["instructions"]
+OLD_CHECKS = "sha256:c5f002184baf5c069e3b87597a793d34aabf573e653240c99fb2fd7dd23ed244"
 
 
 def helper():
@@ -34,35 +35,33 @@ def old_audit_row(tmp_path):
     item, = plan([TASK], config, [], n_attempts=1)["missing"]
     recorded_trial(tmp_path / "saved", TASK)
     row = results_row(tmp_path / "saved", item)
-    row.update(status="passed", instruction_hash=OLD_INSTRUCTION, checks_hash=CLAIM["checks"][0],
+    row.update(status="passed", instruction_hash=OLD_INSTRUCTION, checks_hash=OLD_CHECKS,
                checks_inputs={"tests/test.sh": "old", "@artifacts": ["/workspace/findings.md"]})
     return config, item, row
 
 
-def test_old_audit_rows_regrade_with_the_gate_and_errors_keep_their_retry(tmp_path):
+def test_old_audit_rows_carry_over_unchecked_and_errors_keep_their_retry(tmp_path):
     config, item, row = old_audit_row(tmp_path)
     error = {**row, "trial": 3, "status": "error", "error_kind": "execution", "retry": 0}
     report = plan([TASK], config, [row, {**row, "trial": 2, "status": "failed"}, error],
                   n_attempts=3, saved_work=tmp_path / "cache")
     assert [(entry["trial"], entry["kind"], entry["judge_required"], entry["instruction_hash"])
-            for entry in report["regrades"]] == [(1, "evidence", True, item["instruction_hash"]),
-                                                 (2, "evidence", True, item["instruction_hash"])]
+            for entry in report["regrades"]] == [(1, "carry", False, item["instruction_hash"]),
+                                                 (2, "carry", False, item["instruction_hash"])]
     assert [(entry["trial"], entry["retry"], entry.get("rerun_reason")) for entry in report["missing"]] == [(3, 1, None)]
+    assert report["worst_case_usd"] == 0
 
 
-def test_old_audit_rows_without_a_named_checks_hash_get_fresh_trials(tmp_path):
+def test_a_local_recheck_decides_saved_passes_and_fails_again_with_the_current_checks(tmp_path):
     config, _, row = old_audit_row(tmp_path)
-    report = plan([TASK], config, [{**row, "checks_hash": "sha256:" + "1" * 64}], n_attempts=1,
-                  saved_work=tmp_path / "cache")
-    assert (report["regrade_trials"], [(entry["retry"], entry.get("rerun_reason")) for entry in report["missing"]]) == (
-        0, [(0, None)])
-
-
-def test_old_audit_rows_rerun_when_the_claim_does_not_name_their_artifacts(tmp_path):
-    config, _, row = old_audit_row(tmp_path)
-    report = plan([TASK], config, [{**row, "checks_inputs": {"@artifacts": ["/workspace"]}}], n_attempts=1,
-                  saved_work=tmp_path / "cache")
-    assert [entry["rerun_reason"] for entry in report["missing"]] == ["The saved work lacks the changed artifacts."]
+    refused = {**row, "trial": 2, "status": "failed", "no_answer": [{}, {}]}
+    error = {**row, "trial": 3, "status": "error", "error_kind": "execution", "retry": 1}
+    report = plan([TASK], config, [row, refused, error], n_attempts=3, saved_work=tmp_path / "cache",
+                  regrades_only=True, recheck=True)
+    assert [(entry["trial"], entry["kind"], entry["judge_required"]) for entry in report["regrades"]] == [
+        (1, "recheck", True)]
+    with pytest.raises(ValueError, match="regrade command"):
+        plan([TASK], config, [row], n_attempts=1, recheck=True)
 
 
 def edited_task(tmp_path, name, line):
@@ -92,30 +91,6 @@ def test_a_row_on_the_current_instruction_wins_over_the_carried_old_row_and_its_
               "checks_generation": 1, "retry": 0}
     report = plan([TASK], config, [old, redone], n_attempts=1, redo=[redo_entry(old)], saved_work=tmp_path / "cache")
     assert (report["missing"], report["regrades"]) == ([], [])
-
-
-def test_a_regraded_old_row_carries_the_current_instruction_and_needs_nothing_more(tmp_path):
-    config, _, old = old_audit_row(tmp_path)
-    item, = plan([TASK], config, [old], n_attempts=1, saved_work=tmp_path / "cache")["regrades"]
-    job = tmp_path / "output/jobs/regrade"
-    verifier = job / "0/verifier"
-    verifier.mkdir(parents=True)
-    (job / "0/agent").mkdir()
-    (job / "0/agent/trajectory.json").write_bytes(Path(old["trajectory_file"]).read_bytes())
-    (job / "regrade.json").write_text(json.dumps([item]))
-    (job / "0/regrade-finished.json").write_text(json.dumps("2026-11-25T12:00:00Z"))
-    judge = {"agent": "claude-code", "model": config.judge.model, "reasoning_effort": config.judge.effort}
-    (verifier / "reward.json").write_text('{"reward": 0.0}')
-    (verifier / "reward-details.json").write_text(json.dumps({
-        "report": {"kind": "programmatic", "criteria": [{"name": "report_written", "value": 1, "reasoning": "A report."}]},
-        "lookup": {"kind": "agent", "judge": judge, "criteria": [
-            {"name": "no_audit_lookup", "value": 0, "raw": "no", "reasoning": "Step 9 downloads the audit report."}]}}))
-    row, = recover_regrades(tmp_path / "output")
-    assert (row["status"], row["checks"]["no_audit_lookup"]["passed"], row["instruction_hash"]) == (
-        "failed", False, item["instruction_hash"])
-    assert trial_identity(row) == trial_identity(item) != trial_identity(old)
-    rows = fold_rows([old], [row])
-    assert plan([TASK], config, rows, n_attempts=1, saved_work=tmp_path / "cache")["missing"] == []
 
 
 def redo_entry(row, **changes):
@@ -270,7 +245,7 @@ def test_a_changed_lookup_copy_asks_only_the_lookup_judge_again(tmp_path, monkey
     assert calls == ["/lookup"]
 
 
-def test_old_rows_with_a_final_verdict_are_carried_as_they_are_with_no_work(tmp_path):
+def test_carried_rows_keep_their_verdict_and_links_and_need_nothing_more(tmp_path):
     from ethevals.regrade import run_regrades
 
     config, item, old = old_audit_row(tmp_path)
@@ -280,16 +255,18 @@ def test_old_rows_with_a_final_verdict_are_carried_as_they_are_with_no_work(tmp_
                "trajectory_url": "https://hub.example.org/trial/1"}
     exhausted = {**old, "trial": 2, "status": "error", "error_kind": "NonZeroAgentExitCodeError", "retry": 1,
                  "checks": {}, "verifier_files": None, "verifier_url": "https://example.org/verifier-2.tar.gz"}
-    report = plan([TASK], config, [refused, exhausted], n_attempts=2, saved_work=tmp_path / "cache")
+    passed = {**old, "trial": 3, "verifier_files": None, "verifier_url": "https://example.org/verifier-3.tar.gz",
+              "trajectory_url": "https://hub.example.org/trial/3"}
+    report = plan([TASK], config, [refused, exhausted, passed], n_attempts=3, saved_work=tmp_path / "cache")
     assert [(entry["trial"], entry["kind"], entry["judge_required"]) for entry in report["regrades"]] == [
-        (1, "carry", False), (2, "carry", False)]
+        (1, "carry", False), (2, "carry", False), (3, "carry", False)]
     assert (report["missing"], report["deferred"], report["exhausted_errors"], report["worst_case_usd"]) == ([], [], [], 0)
-    rows = run_regrades(report["regrades"], config, tmp_path / "output", [refused, exhausted], {})
+    rows = run_regrades(report["regrades"], config, tmp_path / "output", [refused, exhausted, passed], {})
     carried = {row["trial"]: row for row in rows if row["instruction_hash"] == item["instruction_hash"]}
-    for before in (refused, exhausted):
+    for before in (refused, exhausted, passed):
         after = carried[before["trial"]]
         assert {key: after[key] for key in ("status", "checks", "no_answer", "retry", "error_kind", "verifier_url", "trajectory_url", "completed_at")} == {
             key: before.get(key) for key in ("status", "checks", "no_answer", "retry", "error_kind", "verifier_url", "trajectory_url", "completed_at")}
         assert (after["checks_hash"], after["checks_generation"]) == (item["checks_hash"], 1)
-    next_plan = plan([TASK], config, rows, n_attempts=2, saved_work=tmp_path / "cache")
+    next_plan = plan([TASK], config, rows, n_attempts=3, saved_work=tmp_path / "cache")
     assert (next_plan["missing"], next_plan["regrades"], [row["trial"] for row in next_plan["exhausted_errors"]]) == ([], [], [2])

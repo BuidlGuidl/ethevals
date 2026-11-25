@@ -117,17 +117,17 @@ Judge-only regrades reuse saved inputs and keep the other checks.
 It is a JSON array of `sha256:` hashes, read without running task code.
 For those hashes, a regrade runs the task's `test.sh` with saved check output and trajectory.
 It starts no chain, workspace, or agent container.
-Judges with unchanged criteria, settings, and inputs keep their saved results, and the others are asked again.
-That reuse needs tests that run the `rewardkit` command, as the audits and the treasury sale do. The voting page runs RewardKit from Python and asks its judge again.
+It asks every current judge again.
 The tests use `ETHEVALS_REGRADE_ITEM` to skip live steps and keep saved evidence.
 This takes precedence over the task's normal regrade kind.
 Instruction, environment, and artifact changes still rerun trials.
 See [ADR 0030](../docs/adr/0030-regrade-from-saved-check-output.md) for the claim's review and removal rules.
-The file can also be an object: `checks` holds those hashes, `instructions` maps old instruction hashes to the instruction they carry to, and `artifacts` names the old artifact list.
+The file can also be an object: `checks` holds those hashes, and `instructions` maps old instruction hashes to the instruction they carry to.
 Before planning, rows on a mapped old instruction move onto the current one, when the mapping names it.
-A passed or failed row also needs a named checks hash, and gets the same regrade. An error row keeps its retry count. Other rows on that instruction rerun.
-A carried fail from no answer twice, or a carried error with no retry left, moves onto the current hashes as it is, in a regrade that fetches nothing and starts no container or judge.
+A carried pass or fail, or a carried error with no retry left, moves onto the current hashes as it is, in a regrade that fetches nothing and starts no container or judge.
+A carried error with a retry left keeps its retry count.
 A row already on the current instruction wins. Lint fails a claim that maps to an instruction the task no longer has, and the planner ignores it.
+The saved audit trials were screened locally before they carried over, and the flagged ones are in the redo list.
 This is a stopgap until task versions are settled. See [ADR 0035](../docs/adr/0035-fail-audit-trials-that-look-up-the-answers.md).
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
 Other Build tasks that save all of `/workspace` run a fresh Harbor trial with a saved-work agent.
@@ -150,6 +150,11 @@ Add entries in a pull request. The merge to `main` starts the CI run, and its "R
 The plan lists entries whose `completed_at` matches no saved row under `redo_unmatched`, and CI prints them: they are mistyped or already redone.
 Remove satisfied entries in a later pull request.
 `--redo` selects another file.
+
+To screen saved trials locally with the current checks, add `--recheck` to `ethevals regrade`.
+It decides each selected saved pass and fail again by running the task's `test.sh` on its saved output and trajectory.
+Judges with unchanged criteria, settings, and inputs keep their saved answers, and the others are asked.
+Pass a rows file with only the rows to screen. CI never runs it.
 
 To inspect a check fix locally, run:
 

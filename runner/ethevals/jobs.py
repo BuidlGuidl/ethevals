@@ -81,28 +81,20 @@ def read_redo(path: Path) -> list[dict]:
 
 
 def carried_rows(rows: list[dict], task: dict) -> list[dict]:
-    """Move saved rows onto the current instruction when the task's claim carries their old instruction to it.
-
-    Passed and failed rows need a named checks hash, so they get an evidence regrade. Error rows keep their retry count.
-    """
+    """Move saved rows onto the current instruction when the task's claim carries their old instruction to it."""
     options = task["regrade"]
     sources = {old for old, new in options["regrade_instructions"].items() if new == task["instruction_hash"]}
     return fold_rows([{**row, "instruction_hash": task["instruction_hash"]} for row in rows
                       if row.get("task_id") == task["id"] and row.get("instruction_hash") in sources
-                      and row.get("environment_hash") == task["environment_hash"]
-                      and (row.get("status") == "error" or row.get("checks_hash") in options["regrade_from"])])
-
-
-def final_fail(row: dict) -> bool:
-    """No answer twice is a fail whatever the checks say (ADR 0024)."""
-    return row.get("status") == "failed" and len(row.get("no_answer") or []) == 2
+                      and row.get("environment_hash") == task["environment_hash"]])
 
 
 def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=False, carried=False) -> dict:
     options = current.get("regrade", {})
-    # A carried row whose verdict is final moves onto the current hashes as it is, with no work, container, or judge.
+    # A carried pass or fail, or a carried error with no retry left, moves onto the current hashes as it is,
+    # with no saved work, container, or judge. A carried error with a retry left keeps its retry count.
     carry = {"action": "regrade", "kind": "carry", "judge_required": False}
-    if carried and final_fail(row) and row.get("checks_hash") != current["checks_hash"]:
+    if carried and row.get("status") in {"passed", "failed"}:
         return carry
     named = row.get("checks_hash") in options.get("regrade_from", [])
     if row and any(row.get(key) != current[key] for key in ("instruction_hash", "environment_hash")):
@@ -112,7 +104,7 @@ def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=Fals
             return {"action": "keep"}
         before, after = row.get("checks_inputs", {}), current["checks_inputs"]
         changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
-        if "@artifacts" in changed and not (named and before.get("@artifacts") == options.get("regrade_artifacts")):
+        if "@artifacts" in changed:
             return {"action": "rerun", "reason": "The saved work lacks the changed artifacts."}
         judges = set(options["judge_files"])
         if named:
@@ -141,7 +133,9 @@ def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=Fals
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,
          models=None, modes=None, n_attempts=None, trial=None,
          skills_pack: SkillsPack | None = None, retry_judge_error=False, saved_work: Path | None = None,
-         regrades_only=False, redo: list[dict] | None = None) -> dict:
+         regrades_only=False, redo: list[dict] | None = None, recheck=False) -> dict:
+    if recheck and not regrades_only:
+        raise ValueError("--recheck only works with the regrade command")
     if retry_judge_error and trial is None:
         raise ValueError("--retry-judge-error requires --trial with one task, agent, and mode")
     modes = modes or config.modes
@@ -203,6 +197,11 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     redone = bool(entry and row and row.get("completed_at") == entry["completed_at"])
                     if redone:
                         decision = {"action": "rerun", "reason": f"On the redo list: {entry['reason']}"}
+                    if recheck:
+                        # A local screen decides saved passes and fails again with the current checks.
+                        if row.get("status") not in {"passed", "failed"} or len(row.get("no_answer") or []) == 2:
+                            continue
+                        decision = {"action": "regrade", "kind": "recheck", "judge_required": bool(judges)}
                     if decision["action"] == "keep":
                         continue
                     if decision["action"] == "exhausted":

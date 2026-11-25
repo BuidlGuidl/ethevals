@@ -148,13 +148,13 @@ def batch():
         environment = {**os.environ, "ETHEVALS_REGRADE_ITEM": str(item_file), "ETHEVALS_REGRADE_SOURCE": str(destination),
                        "PYTHON_DOTENV_DISABLED": "1"}
         # Judges whose criteria and inputs are unchanged keep their saved answers.
-        if item["kind"] in {"concepts", "evidence"}:
+        if item["kind"] in {"concepts", "recheck"}:
             wrapper = Path("/regrade-bin/rewardkit")
             wrapper.parent.mkdir(exist_ok=True)
             wrapper.write_text("#!/bin/sh\nexec python3 /regrade.py check\n")
             wrapper.chmod(0o755)
             environment["PATH"] = str(wrapper.parent) + ":" + os.environ["PATH"]
-        if item["kind"] in {"concepts", "evidence"}:
+        if item["kind"] in {"concepts", "evidence", "recheck"}:
             command = ["sh", "/tests/test.sh"]
         else:
             script = Path("/tests/test.sh").read_text()
