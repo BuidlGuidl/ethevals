@@ -21,6 +21,8 @@ import { RefusalStrip, RefusalSwitch } from "../components/refusal-controls";
 import { repo } from "../src/repo";
 import { readMode } from "../src/modes";
 import { checkKind } from "../src/scoring";
+import { rowCost, type RowCost } from "../components/cost-prototype/cost";
+import { dearestTask, DrawerCost, HeaderCost, LabelCost, readVariant, TaskCost, VariantPicker, type Variant } from "../components/cost-prototype/variants";
 
 type Sort = "overall" | Pillar;
 
@@ -28,10 +30,12 @@ const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFr
 const tokens = (value: number) => tokenFormat.format(value).toLowerCase();
 const duration = (trial: Trial) => trial.total_seconds === null ? "–" : `${trial.total_seconds.toFixed(1)}s`;
 
-function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
+function EvalList({ table, evaluations, agent, pillar, domain, onEval, variant = "none", cost }: {
   table: Table; evaluations: BoardData["evaluations"]; agent: Agent; pillar?: Pillar; domain?: Domain; onEval: (evaluation: Eval) => void;
+  variant?: Variant; cost?: RowCost;
 }) {
   const key = agentKey(agent);
+  const dearest = cost ? dearestTask(cost, pillars.filter((value) => !pillar || pillar === value).flatMap((value) => table.pillars[value].evals.map((entry) => entry.id))) : 0;
   const groups = pillars.filter((value) => !pillar || pillar === value).map((value) => ({
     value, entries: table.pillars[value].evals.filter((entry) => entry.cells[key].state !== "na"
       && (!domain || evaluations[entry.id].domain === domain)),
@@ -44,7 +48,7 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
         const row = peers(table.agents.map((other) => entry.cells[agentKey(other)].score)), chip = tile(cell.score, row);
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
-          <span className="eval-list-result">{cell.trials.length > 0 && <TrialDots trials={cell.trials} />}
+          <span className="eval-list-result">{cost && <TaskCost variant={variant} value={cost.byTask[entry.id]} max={dearest} />}{cell.trials.length > 0 && <TrialDots trials={cell.trials} />}
           <span className="heat-chip" {...chip} title={cell.score === null ? emptyLabel(cell) : undefined}><span>{percent(cell.score)}</span>
             {cell.score !== null && row.top !== null && <small className="heat-best">{chip["data-tone"] === "leader" ? "best" : `best ${row.top}%`}</small>}</span></span>
         </button>;
@@ -136,8 +140,8 @@ function RunView({ evaluation, trial, trials, onRun }: { evaluation: Eval; trial
   </>;
 }
 
-export function Detail({ selection, data, domain, onSelect }: {
-  selection: Selection; data: BoardData; domain?: Domain; onSelect: (selection: Selection) => void;
+export function Detail({ selection, data, domain, onSelect, variant = "none" }: {
+  selection: Selection; data: BoardData; domain?: Domain; onSelect: (selection: Selection) => void; variant?: Variant;
 }) {
   const { evaluation, pillar, agent, mode, fromList } = selection;
   const table = data.tables[mode], key = agentKey(agent), summary = table.summaries[key];
@@ -153,6 +157,7 @@ export function Detail({ selection, data, domain, onSelect }: {
   const missing = trial ? 0 : evaluation ? cell?.missing ?? 0 : scope.missing;
   const ignoring = ignoresRefusals(table);
   const info = refusals(table, key, pillar ?? "overall");
+  const cost = variant === "none" ? undefined : rowCost(table, key);
   const refusalBanner = trial ? undefined : evaluation ? cell && refusedCount([cell]) > 0 ? sentences(taskRefusalLines(cell, ignoring)) : undefined
     : !info.refused ? undefined : drawerRefusalBanner(info, ignoring);
   return <TooltipProvider delayDuration={200}><div className="detail-body">
@@ -163,7 +168,8 @@ export function Detail({ selection, data, domain, onSelect }: {
       <Configuration agent={agent} /><p className="muted">{modeNames[mode]}</p>
       {missing > 0 && <p className="unscored-banner">{unscored(missing)}</p>}
       {refusalBanner && <p className="refusal-banner"><ShieldBan size={14} aria-hidden="true" />{refusalBanner}</p>}
-      {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scoredTrials(scope.total)}</p>}
+      {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scoredTrials(scope.total)}{cost && <HeaderCost variant={variant} cost={cost} pillar={pillar} />}</p>}
+      {!evaluation && cost && <DrawerCost variant={variant} cost={cost} pillar={pillar} />}
       {!evaluation && summary.scores[pillar ?? "overall"] === null && <p className="muted">{pillar && table.pillars[pillar].cells[key].state === "empty" ? "No tasks yet" : "No trials yet"}</p>}
       {!evaluation && <div className="domain-scores" role="group" aria-label="Filter by domain">
         {domains.map((option) => {
@@ -183,7 +189,7 @@ export function Detail({ selection, data, domain, onSelect }: {
         <ArrowLeft size={14} />{pillar ? names[pillar] : "All pillars"}</button>}
     {trial && evaluation ? <RunView evaluation={evaluation} trial={trial} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
       evaluation ? <EvalView evaluation={evaluation} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
-      <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar} domain={domain}
+      <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar} domain={domain} variant={variant} cost={cost}
         onEval={(value) => onSelect({ ...selection, evaluation: value, fromList: true })} />}
   </div></TooltipProvider>;
 }
@@ -203,6 +209,7 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
   const mode = readMode(query.get("mode"));
   const evalsMode = readMode(query.get("evals"));
   const domain = domains.find((value) => value === query.get("domain"));
+  const variant = readVariant(query.get("variant"));
   const [sort, setSort] = useState<{ key: Sort; ascending: boolean }>({ key: "overall", ascending: false });
   const pushed = useRef(false);
   const opener = useRef<HTMLElement | null>(null);
@@ -237,6 +244,8 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
     const x = value(a, sort.key), y = value(b, sort.key);
     return x === null ? y === null ? agentKey(a).localeCompare(agentKey(b)) : 1 : y === null ? -1 : (sort.ascending ? 1 : -1) * (x - y) || agentKey(a).localeCompare(agentKey(b));
   });
+  const costs = useMemo(() => Object.fromEntries(table.agents.map((agent) => [agentKey(agent), rowCost(table, agentKey(agent))])), [table]);
+  const dearestRow = Math.max(0, ...Object.values(costs).map((cost) => cost.total));
   const columns: [Sort, string][] = [["overall", "Overall"], ...pillars.map((pillar): [Sort, string] => [pillar, names[pillar]])];
   const columnPeers = Object.fromEntries(columns.map(([key]) => [key, peers(table.agents.map((agent) => value(agent, key)))]));
   const matrixAgents = [...matrixTable.agents].sort((a, b) =>
@@ -261,7 +270,7 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
           <thead><tr><th scope="col" className="row-label">{mode === "vanilla" ? "Model" : "Configuration"}<small>model · agent</small></th>
             {columns.map(([key, name]) => <th key={key} scope="col" aria-sort={sort.key === key ? sort.ascending ? "ascending" : "descending" : "none"}>
               <button className="sort-button" onClick={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : false })}>{name}{sort.key === key && (sort.ascending ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}</button>
-            </th>)}</tr></thead><tbody>{agents.map((agent) => <tr key={agentKey(agent)}><th scope="row" className="row-label"><Configuration agent={agent} /></th>
+            </th>)}</tr></thead><tbody>{agents.map((agent) => <tr key={agentKey(agent)}><th scope="row" className="row-label"><Configuration agent={agent} cost={variant === "none" ? undefined : <LabelCost variant={variant} cost={costs[agentKey(agent)]} max={dearestRow} />} /></th>
               {columns.map(([key]) => {
                 const summary = key === "overall" ? table.summaries[agentKey(agent)] : table.pillars[key].cells[agentKey(agent)];
                 return <td key={key}>
@@ -308,7 +317,8 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
     <Sheet open={selection !== null} onOpenChange={(open) => { if (!open) close(); }}>
       {selection && <SheetContent>
         <SheetTitle className="sr-only">Task and trial details</SheetTitle><SheetDescription className="sr-only">Scores, instructions, checks, costs and trajectories.</SheetDescription>
-        <Detail selection={selection} data={data} domain={domain} onSelect={select} /></SheetContent>}
+        <Detail selection={selection} data={data} domain={domain} onSelect={select} variant={variant} /></SheetContent>}
     </Sheet>
+    <VariantPicker variant={variant} />
   </TooltipProvider>;
 }
