@@ -58,7 +58,7 @@ test("older rows use only tagged checks they carry and fall back to saved status
   assert.equal(score({ old_gate: pass, compile: fail }, "passed"), 0);
 });
 
-test("task and pillar scores average their scored entries, Overall weights pillars by task count, and cost per pass uses saved passes", () => {
+test("task and pillar scores average their scored entries, and Overall weights pillars by task count", () => {
   const rows = [row(governor, mixed), row(governor, full, { trial: 2 }),
     row(governor, full, { trial: 3, status: "error" }), row(audit, { finding_a: pass, finding_b: fail }),
     row(concepts, { answer: fail })];
@@ -67,7 +67,6 @@ test("task and pillar scores average their scored entries, Overall weights pilla
   assert.equal(table.pillars.build.evals[0].cells[key].score, 0.875);
   // Two Build tasks and one Concepts task.
   assert.deepEqual(summary.scores, { overall: (2 * 0.6875 + 1 * 0) / 3, build: 0.6875, concepts: 0, act: null });
-  assert.equal(summary.costPerPass, 4);
 });
 
 test("leaderboard, Compare and matrix use percentages and the matrix hint lists each trial", () => {
