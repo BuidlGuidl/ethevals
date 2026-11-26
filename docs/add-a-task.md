@@ -73,6 +73,7 @@ Add `[agent].timeout_sec` or `[verifier].timeout_sec` only when your task needs 
 For a Build or Act task, list each check by the name the verifier reports under `[metadata.checks]`.
 Use `"gate"` for a gate check that tests a requirement in the instruction.
 Use `"judgment"` for a judgment check that tests what an experienced Ethereum developer does without being told.
+If a check tests both something the instruction asks for and a detail it leaves out, tag it `"gate"`.
 Leave entry checks out of the table. Their names are `compile`, `answered`, `no_answer`, and `report_written`.
 Leave out the whole table for Concepts tasks.
 A trial that does nothing must score 0%, so the starting files have to fail a gate check or an entry check. The free check tests this.
