@@ -33,9 +33,12 @@ export interface Agent {
 }
 
 export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind"
-  | "total_tokens" | "total_seconds" | "cost_source" | "limit" | "paid_by" | "no_answer"> & {
+  | "total_seconds" | "cost_source" | "limit" | "paid_by" | "no_answer"> & {
   // What the agent spent at API prices. The judge's cost is left out.
   cost: number | null;
+  // The agent's input and output tokens, cached input included. Null with the cost: a row records both or neither,
+  // and a missing count is saved as 0, so only the missing cost tells "unknown" from a real zero.
+  tokens: number | null;
   score: TrialScore;
   // Set on a refused trial while the board ignores refusals. It stays listed but leaves the averages.
   ignored?: true;
@@ -52,8 +55,8 @@ interface Counts {
   missing: number;
   // What the trials cost, errors and refusals included. Null when no trial has a price.
   cost: number | null;
-  // The agent's input and output tokens, cached input included, over the same trials as cost.
-  tokens: number;
+  // The agent's input and output tokens, cached input included, over the same trials as cost. Null with the cost.
+  tokens: number | null;
 }
 export interface EvalCell extends Counts {
   state: "score" | "na" | "pending";
@@ -81,7 +84,7 @@ export interface ConfigurationSummary {
   errors: number;
   missing: number;
   cost: number | null;
-  tokens: number;
+  tokens: number | null;
   // Some trial ran on a plan, so its cost is what the API would have charged.
   plan: boolean;
 }
@@ -119,15 +122,15 @@ export function scoreSummary(cells: Counts[]): Counts {
     total: cells.reduce((sum, cell) => sum + cell.total, 0),
     errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
     missing: cells.reduce((sum, cell) => sum + cell.missing, 0),
-    cost: totalCost(cells.map((cell) => cell.cost)),
-    tokens: cells.reduce((sum, cell) => sum + cell.tokens, 0),
+    cost: knownTotal(cells.map((cell) => cell.cost)),
+    tokens: knownTotal(cells.map((cell) => cell.tokens)),
   };
 }
 
-// Adds known costs. Null only when none is known.
-export function totalCost(costs: (number | null)[]): number | null {
-  const known = costs.filter((cost): cost is number => cost !== null);
-  return known.length ? known.reduce((sum, cost) => sum + cost, 0) : null;
+// Adds known costs or token counts. Null only when none is known.
+export function knownTotal(values: (number | null)[]): number | null {
+  const known = values.filter((value): value is number => value !== null);
+  return known.length ? known.reduce((sum, value) => sum + value, 0) : null;
 }
 
 export function emptyTrialLabel(cell: EvalCell): string {
@@ -157,12 +160,12 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[], attempts: number): 
     return {
       trial: row.trial, status: row.status, score,
       checks: errored ? {} : row.checks, error_kind: errored ? null : row.error_kind,
-      total_tokens: row.total_tokens, total_seconds: row.total_seconds,
+      total_seconds: row.total_seconds,
       cost_source: row.cost_source,
       paid_by: row.paid_by,
       no_answer: errored ? undefined : row.no_answer,
       limit: errored ? null : row.limit,
-      cost: row.model_cost_usd, issue: errored ? "" : (row.error_reason ?? (row.limit
+      cost: row.model_cost_usd, tokens: row.model_cost_usd === null ? null : row.total_tokens, issue: errored ? "" : (row.error_reason ?? (row.limit
         ? [...new Set(Object.values(row.checks).filter((check) => !check.passed).map((check) => check.reason))].join(" ")
         : "")),
       trajectoryUrl: row.trajectory_url,
@@ -173,8 +176,8 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[], attempts: number): 
     score: meanScore(trials.map((trial) => trial.score.value)),
     passed, total: scored.length, errors: rows.length - scored.length,
     missing: evaluation.modes.includes(mode) ? Math.max(0, attempts - scored.length) : 0,
-    cost: totalCost(trials.map((trial) => trial.cost)),
-    tokens: trials.reduce((sum, trial) => sum + trial.total_tokens, 0),
+    cost: knownTotal(trials.map((trial) => trial.cost)),
+    tokens: knownTotal(trials.map((trial) => trial.tokens)),
     trials,
   };
 }
@@ -196,7 +199,7 @@ export function configurationSummary(rows: Table["pillars"], key: string): Confi
   const scores: ConfigurationSummary["scores"] = { overall, concepts: null, build: null, act: null };
   for (const pillar of pillars) scores[pillar] = rows[pillar].cells[key].score;
   return {
-    scores, medianTokens: median(scored.map((trial) => trial.total_tokens)),
+    scores, medianTokens: median(scored.map((trial) => trial.tokens)),
     passed: summary.passed, total: summary.total, errors: summary.errors, missing: summary.missing,
     cost: summary.cost, tokens: summary.tokens, plan: trials.some((trial) => trial.paid_by === "plan"),
   };

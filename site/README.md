@@ -76,6 +76,7 @@ Compare shows Overall and pillar scores for up to five configurations.
 Every configuration label shows a cost and a token count on a line under the effort, covering the trials under it: the row on the leaderboard, Compare and matrix headers, the pillar, task, or trial in the drawer. The drawer task list shows both for each task.
 A trial's cost is what the agent spent at API prices, even when a plan paid. The judge's cost is left out. Errored and refused trials count, and filters never change a cost.
 Tokens are the agent's input and output tokens, cached input included. The judge's tokens are left out, and the same trials count.
+A trial without a recorded cost has unknown tokens too, so a label, task list row, or trials table shows "–" for both.
 
 The drawer task list shows one dot per trial for 100%, some checks missed, 0%, or error.
 The trials table shows the trial score, followed by the check count or the reason a gate check or entry check stopped the trial score at 0%.

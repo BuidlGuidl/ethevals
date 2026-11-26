@@ -101,8 +101,9 @@
   .configuration small + small { @apply mt-0.5; }
   .configuration b { @apply font-semibold text-[13px]; }
   .configuration-icon { @apply inline-block shrink-0 align-middle; width: 14px; height: 14px; }
-  .configuration-cost { @apply whitespace-nowrap text-ink; }
-  .configuration-cost.has-hint { cursor: help; }
+  .spend-cost, .spend-tokens { @apply whitespace-nowrap; }
+  .configuration .spend-cost { @apply text-ink; }
+  .spend-cost.has-hint { cursor: help; }
   .task-cost { @apply text-xs tabular-nums text-muted; }
   .leaderboard { table-layout: fixed; min-width: 1110px; }
   .config-col { width: 256px; }

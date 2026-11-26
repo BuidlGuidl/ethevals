@@ -28,6 +28,11 @@ function row(overrides: Partial<Row> = {}): Row {
   };
 }
 
+// The text a reader sees on the first label's cost and token line, and on each drawer task list row.
+const strip = (html: string) => html.replace(/<[^>]*>/g, "");
+const spend = (html: string) => { const line = html.match(/class="configuration">[\s\S]*?<\/small><small>([\s\S]*?)<\/small>/)?.[1]; return line === undefined ? undefined : strip(line); };
+const taskSpends = (html: string) => [...html.matchAll(/class="task-cost">((?:<span[^>]*>[^<]*<\/span>|[^<])*)<\/span>/g)].map((match) => strip(match[1]));
+
 function getCell(evaluation: Eval, agent: Agent, mode: "internet" | "vanilla", rows: Row[]) {
   return buildBoard([evaluation], rows).tables[mode].pillars[evaluation.pillar].evals[0].cells[agentKey(agent)];
 }
@@ -214,14 +219,14 @@ test("the knowledge table and its panel data include only declared vanilla tasks
     [row({ mode: "vanilla", agent: null })]);
   assert.deepEqual(board.tables.vanilla.pillars.concepts.evals.map((entry) => entry.id), ["concepts/units"]);
   assert.deepEqual(board.tables.vanilla.pillars.build.cells['["model-a",null,"high"]'],
-    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, tokens: 0, scoredEvals: 0 });
+    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, tokens: null, scoredEvals: 0 });
   assert.equal(board.tables.internet.pillars.build.evals[0].id, "build/token");
 });
 
 test("a pillar with no declared tasks for a mode differs from an unsupported task", () => {
   const board = buildBoard([evaluation, { ...evaluation, id: "build/check", pillar: "build", modes: ["vanilla"] }], [row()]);
   assert.deepEqual(board.tables.internet.pillars.act.cells[agentKey(agent)],
-    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, tokens: 0, scoredEvals: 0 });
+    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, tokens: null, scoredEvals: 0 });
   assert.equal(board.tables.internet.pillars.build.cells[agentKey(agent)].state, "empty");
   assert.equal(board.tables.internet.pillars.build.evals[0].cells[agentKey(agent)].state, "na");
   assert.equal(board.tables.internet.pillars.concepts.cells[agentKey(agent)].score, 1);
@@ -247,26 +252,58 @@ test("the board labels null effort as the provider default", () => {
 });
 
 test("each label shows what the agents spent on the trials under it, errors and refusals included, judges left out", () => {
-  const build: Eval = { ...evaluation, id: "build/mint", title: "Mint", pillar: "build", modes: ["internet"] };
-  // Agent costs only. Units: 0.25 + a refused trial 0.5 = 0.75. Mint: an error 1 + 2 = 3. Row: 3.75.
-  const rows = [row({ model_cost_usd: 0.25, judge_cost_usd: 0.5 }),
-    row({ trial: 2, model_cost_usd: 0.5, judge_cost_usd: null, ...noAnswerTwice("refused") }),
-    row({ task_id: "build/mint", status: "error", model_cost_usd: 1, judge_cost_usd: null }),
-    row({ task_id: "build/mint", trial: 2, status: "failed", model_cost_usd: 2, judge_cost_usd: 0.25 })];
+  // Mint is a security task, so the dapp-development filter hides it from the matrix.
+  const build: Eval = { ...evaluation, id: "build/mint", title: "Mint", pillar: "build", area: "Audits", modes: ["internet"] };
+  // Agent costs and tokens only. Units: 0.25 + a refused trial 0.5 = 0.75, 100 + 200 tokens.
+  // Mint: an error 1 + 2 = 3, 1,000 + 2,000 tokens. Row: 3.75 and 3,300 tokens.
+  const rows = [row({ model_cost_usd: 0.25, judge_cost_usd: 0.5, total_tokens: 100 }),
+    row({ trial: 2, model_cost_usd: 0.5, judge_cost_usd: null, total_tokens: 200, ...noAnswerTwice("refused") }),
+    row({ task_id: "build/mint", status: "error", model_cost_usd: 1, judge_cost_usd: null, total_tokens: 1000 }),
+    row({ task_id: "build/mint", trial: 2, status: "failed", model_cost_usd: 2, judge_cost_usd: 0.25, total_tokens: 2000 })];
   const data = buildBoard([evaluation, build], rows);
-  const label = (html: string) => html.match(/class="configuration-cost[^"]*"[^>]*>([^<]*)</)?.[1];
-  const drawer = (selection: Omit<Selection, "agent" | "mode">) => label(renderToStaticMarkup(createElement(Detail, {
-    data, selection: { agent, mode: "internet", ...selection }, onSelect: () => {} })));
-  assert.equal(label(renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }))), "$3.75");
-  assert.equal(drawer({}), "$3.75");
-  assert.equal(drawer({ pillar: "build" }), "$3.00");
-  assert.equal(drawer({ pillar: "concepts" }), "$0.75");
-  assert.equal(drawer({ evaluation: data.evaluations["concepts/units"] }), "$0.75");
-  assert.equal(drawer({ evaluation: data.evaluations["build/mint"], run: 2 }), "$2.00");
-  // Ignoring refusals changes scores, not what the trials cost.
-  const ignored = ignoreRefusals(data).tables.internet;
-  assert.equal(ignored.summaries[agentKey(agent)].cost, 3.75);
-  assert.equal(ignored.pillars.concepts.cells[agentKey(agent)].cost, 0.75);
+  const board = (query: string) => renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams(query) }));
+  const drawer = (selection: Omit<Selection, "agent" | "mode">, source = data) => spend(renderToStaticMarkup(createElement(Detail, {
+    data: source, selection: { agent, mode: "internet", ...selection }, domain: "dapp-development", onSelect: () => {} })));
+  // Ignoring refusals and filtering by domain change scores and rows, not what the trials spent.
+  for (const query of ["", "refusals=ignore", "domain=dapp-development"]) {
+    const html = board(query);
+    assert.equal(spend(html), "$3.75 · 3.3K tok", query);
+    assert.equal(spend(html.slice(html.indexOf('id="evals"'))), "$3.75 · 3.3K tok", query);
+  }
+  for (const source of [data, ignoreRefusals(data)]) {
+    assert.equal(drawer({}, source), "$3.75 · 3.3K tok");
+    assert.equal(drawer({ pillar: "build" }, source), "$3.00 · 3K tok");
+    assert.equal(drawer({ pillar: "concepts" }, source), "$0.75 · 300 tok");
+    assert.equal(drawer({ evaluation: data.evaluations["concepts/units"] }, source), "$0.75 · 300 tok");
+    assert.equal(drawer({ evaluation: data.evaluations["build/mint"], run: 2 }, source), "$2.00 · 2K tok");
+  }
+  assert.deepEqual(taskSpends(renderToStaticMarkup(createElement(Detail, {
+    data, selection: { agent, mode: "internet", pillar: "build" }, onSelect: () => {} }))), ["$3.00 · 3K tok"]);
+});
+
+test("unknown usage reads as one dash on the label, the drawer task list and the trials table, and a real zero stays", () => {
+  // Units' only trial has no recorded cost, and the runner saved its missing token count as 0.
+  // Mint's trial really cost $0 and used no tokens. Swap has no trials yet.
+  const mint: Eval = { ...evaluation, id: "concepts/mint", title: "Mint" };
+  const swap: Eval = { ...evaluation, id: "concepts/swap", title: "Swap" };
+  const data = buildBoard([evaluation, mint, swap], [row({ model_cost_usd: null, total_tokens: 0, ...noAnswerTwice("refused") }),
+    row({ task_id: "concepts/mint", status: "error", model_cost_usd: 0, total_tokens: 0 })], false, 1);
+  const detail = (selection: Omit<Selection, "agent" | "mode">) => renderToStaticMarkup(createElement(Detail, {
+    data, selection: { agent, mode: "internet", ...selection }, onSelect: () => {} }));
+  const units = detail({ evaluation: data.evaluations["concepts/units"] });
+  assert.equal(spend(units), "–");
+  assert.equal(spend(detail({ evaluation: data.evaluations["concepts/units"], run: 1 })), "–");
+  assert.equal(spend(detail({ evaluation: data.evaluations["concepts/swap"] })), "–");
+  assert.equal(spend(detail({ pillar: "act" })), "–");
+  // Trials table: time, tokens, cost.
+  assert.match(units, /<td>8\.0s<\/td><td>–<\/td><td>–<\/td>/);
+  const zero = detail({ evaluation: data.evaluations["concepts/mint"] });
+  assert.equal(spend(zero), "$0 · 0 tok");
+  assert.match(zero, /<td>8\.0s<\/td><td>0<\/td><td>\$0<\/td>/);
+  const list = detail({ pillar: "concepts" });
+  assert.deepEqual(taskSpends(list), ["–", "$0 · 0 tok", "–"]);
+  assert.equal(spend(list), "$0 · 0 tok");
+  for (const html of [units, detail({ evaluation: data.evaluations["concepts/swap"] })]) assert.ok(!html.includes("0 tok"));
 });
 
 test("costs show whole dollars from $10, cents from $1, and two significant digits below", () => {
@@ -421,7 +458,7 @@ test("trial details show the selected trial, failed reasons first, and a switche
   assert.ok(panel.includes('<code>bad</code>') && panel.includes('<code>good</code>') && panel.includes("The answer differs."));
   assert.ok(panel.indexOf('<code>bad</code>') < panel.indexOf('<code>good</code>'));
   assert.ok(panel.includes("Test passed.") && !panel.includes("Cost source:") && !panel.includes('prompt-disclosure') && !panel.includes('aria-label="Agent modes"'));
-  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Time</dt><dd>8.0s</dd></div></dl>') && panel.includes(" · 7K tok</small>"));
+  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Time</dt><dd>8.0s</dd></div></dl>') && spend(panel) === "$0.20 · 7K tok");
   assert.ok(panel.includes('<h3>Checks <span>1 of 2</span></h3>'));
   assert.ok(panel.indexOf('class="run-switcher"') < panel.indexOf('class="run-stats"'));
   assert.ok(panel.indexOf('class="run-stats"') < panel.indexOf('class="verifier-verdict"'));

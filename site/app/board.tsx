@@ -13,7 +13,7 @@ import { Logo } from "../components/logo";
 import { ModeToggle } from "../components/mode-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { TooltipProvider } from "../components/ui/tooltip";
-import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money, tokens } from "../components/scores";
+import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money, tokens, Spend } from "../components/scores";
 import { entryLabels, notRunTrials, TrialDot, TrialDots, TrialLegend, taskHint, trialHint, trialNote, trialScoreText, trialState } from "../components/trial-display";
 import { ignoringRefusals, updateQuery, useQuery } from "../components/url-state";
 import { drawerRefusalBanner, ignoreRefusals, ignoresRefusals, isRefusedTrial, refusalLines, refusals, refusalStrip, refusedCount, retryRefusals, sentences, tableHasRefusals, taskRefusalLines } from "../src/refusals";
@@ -42,7 +42,7 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
         const row = peers(table.agents.map((other) => entry.cells[agentKey(other)].score)), chip = tile(cell.score, row);
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
-          <span className="eval-list-result">{cell.cost !== null && <span className="task-cost">{money(cell.cost)} · {tokens(cell.tokens)} tok</span>}{cell.trials.length > 0 && <TrialDots trials={cell.trials} />}
+          <span className="eval-list-result"><span className="task-cost"><Spend cost={cell.cost} tokens={cell.tokens} /></span>{cell.trials.length > 0 && <TrialDots trials={cell.trials} />}
           <span className="heat-chip" {...chip} title={cell.score === null ? emptyLabel(cell) : undefined}><span>{percent(cell.score)}</span>
             {cell.score !== null && row.top !== null && <small className="heat-best">{chip["data-tone"] === "leader" ? "best" : `best ${row.top}%`}</small>}</span></span>
         </button>;
@@ -69,7 +69,7 @@ function EvalView({ evaluation, trials, notRun, onRun }: { evaluation: Eval; tri
             aria-label={`${trialHint(trial)}. Open trial.`}>Trial {trial.trial}</button></td>
             <td><span className="trial-score"><TrialDot state={trialState(trial)} ignored={trial.ignored} />{trialScoreText(trial)}</span></td>
             <td className={isRefusedTrial(trial) ? "refusal-text" : trial.score.value !== null && trial.score.stop ? "negative" : undefined}>{trial.score.value === null ? "–" : trialNote(trial)}</td>
-            <td>{duration(trial)}</td><td>{tokens(trial.total_tokens)}</td><td>{money(trial.cost)}</td><td aria-hidden="true">›</td></tr>)}</tbody></table>
+            <td>{duration(trial)}</td><td>{tokens(trial.tokens)}</td><td>{money(trial.cost)}</td><td aria-hidden="true">›</td></tr>)}</tbody></table>
       </div></div> : <p>No trials yet.</p>}
     </section>
   </>;
@@ -165,7 +165,7 @@ export function Detail({ selection, data, domain, onSelect }: {
     </> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
       {trial && <p>{evaluation!.title}</p>}
       <Configuration agent={agent} cost={trial ? trial.cost : evaluation ? cell?.cost ?? null : scope.cost}
-        tokens={trial ? trial.total_tokens : evaluation ? cell?.tokens ?? 0 : scope.tokens} plan={summary.plan} /><p className="muted">{modeNames[mode]}</p>
+        tokens={trial ? trial.tokens : evaluation ? cell?.tokens ?? null : scope.tokens} plan={summary.plan} /><p className="muted">{modeNames[mode]}</p>
       {missing > 0 && <p className="unscored-banner">{unscored(missing)}</p>}
       {refusalBanner && <p className="refusal-banner"><ShieldBan size={14} aria-hidden="true" />{refusalBanner}</p>}
       {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scoredTrials(scope.total)}</p>}

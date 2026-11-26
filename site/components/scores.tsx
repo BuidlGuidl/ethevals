@@ -12,7 +12,14 @@ const dollars = usd({ maximumFractionDigits: 0 }), cents = usd({ minimumFraction
 export const money = (value: number | null) => value === null ? "–" : value === 0 ? "$0"
   : value >= 9.995 ? dollars.format(value) : value >= 0.995 ? cents.format(value) : small.format(Number(value.toPrecision(2)));
 const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
-export const tokens = (value: number) => tokenFormat.format(value);
+export const tokens = (value: number | null) => value === null ? "–" : tokenFormat.format(value);
+// What the trials under a label spent, as "$61 · 81.9M tok". Cost and tokens are known together or not at all,
+// and unknown reads as one "–". Each half keeps its number and unit together, so a narrow line breaks before the dot.
+export function Spend({ cost, tokens: count, note }: { cost: number | null; tokens: number | null; note?: string }) {
+  if (cost === null || count === null) return <span className="spend-cost">–</span>;
+  const amount = <span className={note ? "spend-cost has-hint" : "spend-cost"} tabIndex={note ? 0 : undefined}>{money(cost)}</span>;
+  return <>{note ? <Hint text={note}>{amount}</Hint> : amount} <span className="spend-tokens">· {tokens(count)} tok</span></>;
+}
 export const pp = (value: number | null) => value === null ? "–" : `${Math.round(value) > 0 ? "+" : ""}${Math.round(value)}pp`;
 // Tile color and tooltip compare a score with the best score among its peers: a leaderboard column or a task row.
 // Both use rounded percentages, so two tiles showing the same number look the same.
