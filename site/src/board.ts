@@ -33,8 +33,8 @@ export interface Agent {
 }
 
 export type Trial = Pick<Row, "trial" | "status" | "checks" | "error_kind"
-  | "total_tokens" | "total_seconds" | "model_cost_usd" | "judge_cost_usd"
-  | "cost_source" | "limit" | "paid_by" | "no_answer"> & {
+  | "total_tokens" | "total_seconds" | "cost_source" | "limit" | "paid_by" | "no_answer"> & {
+  // What the agent spent at API prices. The judge's cost is left out.
   cost: number | null;
   score: TrialScore;
   // Set on a refused trial while the board ignores refusals. It stays listed but leaves the averages.
@@ -154,12 +154,11 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[], attempts: number): 
       trial: row.trial, status: row.status, score,
       checks: errored ? {} : row.checks, error_kind: errored ? null : row.error_kind,
       total_tokens: row.total_tokens, total_seconds: row.total_seconds,
-      model_cost_usd: row.model_cost_usd, judge_cost_usd: row.judge_cost_usd,
       cost_source: row.cost_source,
       paid_by: row.paid_by,
       no_answer: errored ? undefined : row.no_answer,
       limit: errored ? null : row.limit,
-      cost: trialCost(row), issue: errored ? "" : (row.error_reason ?? (row.limit
+      cost: row.model_cost_usd, issue: errored ? "" : (row.error_reason ?? (row.limit
         ? [...new Set(Object.values(row.checks).filter((check) => !check.passed).map((check) => check.reason))].join(" ")
         : "")),
       trajectoryUrl: row.trajectory_url,
@@ -257,9 +256,4 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false, attem
       ...(evaluation.checks && { checks: evaluation.checks }),
     }])),
   };
-}
-
-// Agent plus judge. A missing part counts as 0; the cost is unknown only when both are missing.
-export function trialCost(row: Pick<Row, "model_cost_usd" | "judge_cost_usd">): number | null {
-  return totalCost([row.model_cost_usd, row.judge_cost_usd]);
 }

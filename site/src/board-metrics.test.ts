@@ -60,7 +60,7 @@ test("the board publishes summaries, costs and paired lifts for each configurati
     { ...base, mode: "skills", skills_hash: "pack" }, { ...base, mode: "skills", skills_hash: "pack", task_id: "build/b", task_hash: "b", instruction_hash: "b", environment_hash: "b", checks_hash: "b" }]);
   assert.deepEqual(board.tables.internet.summaries['["m","h",null]'], {
     scores: { overall: 0.5, concepts: 1, act: null, build: 0 },
-    medianTokens: 100, passed: 1, total: 2, errors: 0, missing: 0, cost: 181, plan: false,
+    medianTokens: 100, passed: 1, total: 2, errors: 0, missing: 0, cost: 1, plan: false,
   });
   assert.deepEqual(board.lifts['["m","h",null]'], { overall: 50, concepts: 0, act: null, build: 100 });
   assert.deepEqual(board.counts, { evals: 2, agents: 1, runs: 4 });

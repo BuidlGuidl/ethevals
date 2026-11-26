@@ -74,7 +74,7 @@ The mode controls select Internet or Model only. Internet + Skills is marked com
 Different agents, models, and efforts stay separate.
 Compare shows Overall and pillar scores for up to five configurations.
 Every configuration label shows a cost after the effort, covering the trials under it: the row on the leaderboard, Compare and matrix headers, the pillar, task, or trial in the drawer.
-A trial's cost adds agent and judge API prices, even when a plan paid. Errored and refused trials count, and filters never change a cost.
+A trial's cost is what the agent spent at API prices, even when a plan paid. The judge's cost is left out. Errored and refused trials count, and filters never change a cost.
 
 The drawer task list shows one dot per trial for 100%, some checks missed, 0%, or error.
 The trials table shows the trial score, followed by the check count or the reason a gate check or entry check stopped the trial score at 0%.
