@@ -25,6 +25,8 @@ export default function Compare({ data: base }: { data: BoardData }) {
     const info = refusals(ignored.tables[mode], agentKey(agent), scope);
     return info.refused ? refusalLines(info, ignoring) : undefined;
   };
+  // Each label stands for its whole row, so it shows the row's total.
+  const rowCost = (agent: Agent) => ({ cost: table.summaries[agentKey(agent)].cost, plan: table.summaries[agentKey(agent)].plan });
   const keys = table.agents.map(agentKey);
   const defaults = [...table.agents].sort((a, b) => (table.summaries[agentKey(b)].scores.overall ?? -1) - (table.summaries[agentKey(a)].scores.overall ?? -1)).slice(0, 3).map(agentKey);
   const chosen = query.has("pick") ? parseSelection(query.get("pick"), keys) : defaults;
@@ -44,11 +46,11 @@ export default function Compare({ data: base }: { data: BoardData }) {
       <ToggleGroup type="multiple" className="configuration-picks grid border-0" value={chosen}
       onValueChange={(values) => { if (values.length <= 5) updateQuery({ pick: JSON.stringify(values) }); }} aria-label="Configurations to compare">
       {table.agents.map((agent) => <ToggleGroupItem key={agentKey(agent)} value={agentKey(agent)} className="justify-start text-left data-[state=on]:bg-accent/10 data-[state=on]:text-ink data-[state=on]:border-accent" disabled={!chosen.includes(agentKey(agent)) && chosen.length >= 5}>
-        <Configuration agent={agent} /></ToggleGroupItem>)}
+        <Configuration agent={agent} {...rowCost(agent)} /></ToggleGroupItem>)}
     </ToggleGroup></details>}
     {selected.length ? <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Configuration comparison">
       <table className="comparison"><caption className="sr-only">Compare scores for selected configurations</caption><thead><tr><th scope="col">Score</th>
-        {selected.map((agent) => <th scope="col" key={agentKey(agent)}><Configuration agent={agent} /></th>)}</tr></thead>
+        {selected.map((agent) => <th scope="col" key={agentKey(agent)}><Configuration agent={agent} {...rowCost(agent)} /></th>)}</tr></thead>
         <tbody>{metrics.map((metric) => {
           const values = selected.map(metric.value), scored = values.filter((value): value is number => value !== null);
           const best = Math.max(...scored);

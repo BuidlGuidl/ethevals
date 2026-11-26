@@ -72,7 +72,8 @@ A trial that answered on the retry after a safety refusal keeps its score; only 
 The mode controls select Internet or Model only. Internet + Skills is marked coming soon.
 Different agents, models, and efforts stay separate.
 Compare shows Overall and pillar scores for up to five configurations.
-Cost adds agent and judge API prices, even when a plan paid.
+Every configuration label shows a cost after the effort, covering the trials under it: the row on the leaderboard, Compare and matrix headers, the pillar, task, or trial in the drawer.
+A trial's cost adds agent and judge API prices, even when a plan paid. Errored and refused trials count, and filters never change a cost.
 
 The drawer task list shows one dot per trial for 100%, some checks missed, 0%, or error.
 The trials table shows the trial score, followed by the check count or the reason a gate check or entry check stopped the trial score at 0%.

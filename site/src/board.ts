@@ -50,6 +50,8 @@ interface Counts {
   errors: number;
   // Planned trials without a score: errors and trials not run yet.
   missing: number;
+  // What the trials cost, errors and refusals included. Null when no trial has a price.
+  cost: number | null;
 }
 export interface EvalCell extends Counts {
   state: "score" | "na" | "pending";
@@ -71,12 +73,14 @@ export interface Table {
 }
 export interface ConfigurationSummary {
   scores: Record<Pillar | "overall", number | null>;
-  costPerPass: number | null;
   medianTokens: number | null;
   passed: number;
   total: number;
   errors: number;
   missing: number;
+  cost: number | null;
+  // Some trial ran on a plan, so its cost is what the API would have charged.
+  plan: boolean;
 }
 export interface BoardData {
   demo: boolean;
@@ -112,18 +116,18 @@ export function scoreSummary(cells: Counts[]): Counts {
     total: cells.reduce((sum, cell) => sum + cell.total, 0),
     errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
     missing: cells.reduce((sum, cell) => sum + cell.missing, 0),
+    cost: totalCost(cells.map((cell) => cell.cost)),
   };
+}
+
+// Adds known costs. Null only when none is known.
+export function totalCost(costs: (number | null)[]): number | null {
+  const known = costs.filter((cost): cost is number => cost !== null);
+  return known.length ? known.reduce((sum, cost) => sum + cost, 0) : null;
 }
 
 export function emptyTrialLabel(cell: EvalCell): string {
   return cell.state === "na" ? "Not applicable" : cell.errors ? `${cell.errors} ${cell.errors === 1 ? "error" : "errors"}. No scored trials.` : "No trials yet";
-}
-
-export function costPerPass(trials: Pick<Trial, "status" | "model_cost_usd">[]): number | null {
-  const scored = trials.filter((trial) => trial.status !== "error");
-  const passed = scored.filter((trial) => trial.status === "passed").length;
-  if (!passed || scored.some((trial) => trial.model_cost_usd === null)) return null;
-  return scored.reduce((sum, trial) => sum + trial.model_cost_usd!, 0) / passed;
 }
 
 export function skillLift(skills: number | null, internet: number | null): number | null {
@@ -166,6 +170,7 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[], attempts: number): 
     score: meanScore(trials.map((trial) => trial.score.value)),
     passed, total: scored.length, errors: rows.length - scored.length,
     missing: evaluation.modes.includes(mode) ? Math.max(0, attempts - scored.length) : 0,
+    cost: totalCost(trials.map((trial) => trial.cost)),
     trials,
   };
 }
@@ -187,9 +192,9 @@ export function configurationSummary(rows: Table["pillars"], key: string): Confi
   const scores: ConfigurationSummary["scores"] = { overall, concepts: null, build: null, act: null };
   for (const pillar of pillars) scores[pillar] = rows[pillar].cells[key].score;
   return {
-    scores, costPerPass: costPerPass(trials),
-    medianTokens: median(scored.map((trial) => trial.total_tokens)),
+    scores, medianTokens: median(scored.map((trial) => trial.total_tokens)),
     passed: summary.passed, total: summary.total, errors: summary.errors, missing: summary.missing,
+    cost: summary.cost, plan: trials.some((trial) => trial.paid_by === "plan"),
   };
 }
 
@@ -254,7 +259,7 @@ export function buildBoard(evaluations: Eval[], rows: Row[], demo = false, attem
   };
 }
 
+// Agent plus judge. A missing part counts as 0; the cost is unknown only when both are missing.
 export function trialCost(row: Pick<Row, "model_cost_usd" | "judge_cost_usd">): number | null {
-  return row.model_cost_usd === null || row.judge_cost_usd === null
-    ? null : row.model_cost_usd + row.judge_cost_usd;
+  return totalCost([row.model_cost_usd, row.judge_cost_usd]);
 }

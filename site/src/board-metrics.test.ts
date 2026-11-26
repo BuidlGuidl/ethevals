@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildBoard, costPerPass, skillLift, type Eval, type Row } from "./board";
+import { buildBoard, skillLift, type Eval, type Row } from "./board";
 
 const task = (id: string, pillar: Eval["pillar"]): Eval => ({ id, hash: "h", instruction_hash: "h", environment_hash: "h", checks_hash: "h",
   title: id, pillar, description: "", instruction: "", modes: ["internet", "skills"] });
@@ -40,16 +40,6 @@ test("Overall weights come from the task list, not from the tasks a configuratio
   assert.equal(overall(evals, rows, "partial"), 25 / 28);
 });
 
-test("cost per pass includes failed model spend, excludes errors and judge spend", () => {
-  assert.equal(costPerPass([
-    { status: "passed", model_cost_usd: 0.2 }, { status: "passed", model_cost_usd: 0.3 },
-    { status: "failed", model_cost_usd: 0.5 }, { status: "error", model_cost_usd: 50 },
-  ]), 0.5);
-  assert.equal(costPerPass([{ status: "failed", model_cost_usd: 1 }]), null);
-  assert.equal(costPerPass([{ status: "passed", model_cost_usd: null }]), null);
-  assert.equal(costPerPass([{ status: "passed", model_cost_usd: 0 }]), 0);
-});
-
 test("lift is the signed skills minus Internet score in percentage points", () => {
   assert.equal(skillLift(0.75, 0.5), 25);
   assert.equal(skillLift(0.25, 0.5), -25);
@@ -70,7 +60,7 @@ test("the board publishes summaries, costs and paired lifts for each configurati
     { ...base, mode: "skills", skills_hash: "pack" }, { ...base, mode: "skills", skills_hash: "pack", task_id: "build/b", task_hash: "b", instruction_hash: "b", environment_hash: "b", checks_hash: "b" }]);
   assert.deepEqual(board.tables.internet.summaries['["m","h",null]'], {
     scores: { overall: 0.5, concepts: 1, act: null, build: 0 },
-    costPerPass: 1, medianTokens: 100, passed: 1, total: 2, errors: 0, missing: 0,
+    medianTokens: 100, passed: 1, total: 2, errors: 0, missing: 0, cost: 181, plan: false,
   });
   assert.deepEqual(board.lifts['["m","h",null]'], { overall: 50, concepts: 0, act: null, build: 100 });
   assert.deepEqual(board.counts, { evals: 2, agents: 1, runs: 4 });

@@ -39,6 +39,8 @@ export const modelLabel = (id: string) => models.get(id) ?? id;
 export const programLabel = (id: string) => programs.get(id)?.label ?? id;
 export const agentLabel = (agent: Agent) => agent.agent
   ? `${programLabel(agent.agent)} / ${modelLabel(agent.model)}` : modelLabel(agent.model);
+// The tooltip on every cost. Return undefined to show costs without one.
+export const costNote = (plan: boolean): string | undefined => plan ? "At API prices, paid by plan" : "Paid with an API key";
 export const agentDetails = (agent: Agent) => [agent.model, agent.agent, `effort ${agent.effort ?? "provider default"}`].filter(Boolean).join(" · ");
 export const modelLogo = (id: string) => providers.get(id.split("/")[0]);
 export const agentLogo = (agent: Agent) => agent.agent
