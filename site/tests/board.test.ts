@@ -3,7 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Board, { Detail, Results } from "../app/board";
-import { buildBoard, trialCost, agentKey, type Eval, type DisplayEval, type Row, type Agent } from "../src/board";
+import { buildBoard, agentKey, type Eval, type DisplayEval, type Row, type Agent } from "../src/board";
 import { currentRows, loadBoard, parseRows } from "../src/load";
 import { decodeSelection, encodeSelection, type Selection } from "../src/selection";
 import { ignoreRefusals } from "../src/refusals";
@@ -246,16 +246,9 @@ test("the board labels null effort as the provider default", () => {
   assert.ok(html.includes("agent-a · effort medium · "));
 });
 
-test("a trial costs agent plus judge, a missing part counting as 0", () => {
-  assert.equal(trialCost(row()), 0.25);
-  assert.equal(trialCost(row({ judge_cost_usd: null })), 0.2);
-  assert.equal(trialCost(row({ model_cost_usd: null })), 0.05);
-  assert.equal(trialCost(row({ model_cost_usd: null, judge_cost_usd: null })), null);
-});
-
-test("each label shows the cost of the trials under it, errors and refusals included", () => {
+test("each label shows what the agents spent on the trials under it, errors and refusals included, judges left out", () => {
   const build: Eval = { ...evaluation, id: "build/mint", title: "Mint", pillar: "build", modes: ["internet"] };
-  // Units: 0.75 + a refused trial without a judge 0.5 = 1.25. Mint: an error without a judge 1 + 2.25 = 3.25. Row: 4.5.
+  // Agent costs only. Units: 0.25 + a refused trial 0.5 = 0.75. Mint: an error 1 + 2 = 3. Row: 3.75.
   const rows = [row({ model_cost_usd: 0.25, judge_cost_usd: 0.5 }),
     row({ trial: 2, model_cost_usd: 0.5, judge_cost_usd: null, ...noAnswerTwice("refused") }),
     row({ task_id: "build/mint", status: "error", model_cost_usd: 1, judge_cost_usd: null }),
@@ -264,16 +257,16 @@ test("each label shows the cost of the trials under it, errors and refusals incl
   const label = (html: string) => html.match(/class="configuration-cost[^"]*"[^>]*>([^<]*)</)?.[1];
   const drawer = (selection: Omit<Selection, "agent" | "mode">) => label(renderToStaticMarkup(createElement(Detail, {
     data, selection: { agent, mode: "internet", ...selection }, onSelect: () => {} })));
-  assert.equal(label(renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }))), "$4.50");
-  assert.equal(drawer({}), "$4.50");
-  assert.equal(drawer({ pillar: "build" }), "$3.25");
-  assert.equal(drawer({ pillar: "concepts" }), "$1.25");
-  assert.equal(drawer({ evaluation: data.evaluations["concepts/units"] }), "$1.25");
-  assert.equal(drawer({ evaluation: data.evaluations["build/mint"], run: 1 }), "$1.00");
+  assert.equal(label(renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }))), "$3.75");
+  assert.equal(drawer({}), "$3.75");
+  assert.equal(drawer({ pillar: "build" }), "$3.00");
+  assert.equal(drawer({ pillar: "concepts" }), "$0.75");
+  assert.equal(drawer({ evaluation: data.evaluations["concepts/units"] }), "$0.75");
+  assert.equal(drawer({ evaluation: data.evaluations["build/mint"], run: 2 }), "$2.00");
   // Ignoring refusals changes scores, not what the trials cost.
   const ignored = ignoreRefusals(data).tables.internet;
-  assert.equal(ignored.summaries[agentKey(agent)].cost, 4.5);
-  assert.equal(ignored.pillars.concepts.cells[agentKey(agent)].cost, 1.25);
+  assert.equal(ignored.summaries[agentKey(agent)].cost, 3.75);
+  assert.equal(ignored.pillars.concepts.cells[agentKey(agent)].cost, 0.75);
 });
 
 test("costs show whole dollars from $10, cents from $1, and two significant digits below", () => {

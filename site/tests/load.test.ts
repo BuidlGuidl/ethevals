@@ -102,7 +102,7 @@ test("loader accepts v8 rows, ignores unused metadata, and skips older rows", (t
   writeFileSync(f.rows, JSON.stringify({ ...paid, retry: 1,
     model_metered_usd: 9, grader_metered_usd: 8, agent_version: "1.0", images: { default: "image:1" } }));
   const cell = loadBoard({}, f.site).tables.internet.pillars.concepts.evals[0].cells['["model-a","agent-a","high"]'];
-  assert.deepEqual([cell.score, cell.total, cell.trials[0].cost], [1, 1, 0.25]);
+  assert.deepEqual([cell.score, cell.total, cell.trials[0].cost], [1, 1, 0.2]);
   assert.equal("retry" in cell.trials[0], false);
   assert.equal("model_metered_usd" in cell.trials[0], false);
   assert.deepEqual(parseRows(JSON.stringify({ ...paid, schema_version: 7 }) + "\n" + JSON.stringify(paid), "rows.jsonl", []), [paid]);
