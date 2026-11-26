@@ -1504,6 +1504,25 @@ If a run gives the wrong reward, `free-check` stops and names that trial's `resu
 Give Docker at least 7 GiB for a task with a chain.
 For a fork task, set `MAINNET_RPC_URL` first.
 
+### Run each route through the verifier
+
+The free check shows that your solution passes and untouched work fails.
+It doesn't show that each check catches the mistake you wrote it for.
+If your task has a judgment check, or a gate check an agent could fail while its work looks right, script the routes an agent could take.
+Run each one against the same setup and verifier, with no model:
+
+- Your solution's route must pass.
+- Every other route that does what the instruction asks must pass.
+- Each wrong route an agent could plausibly take must fail, on the check you wrote for it.
+
+To run a route, put it in `solution/solve.sh` and run `free-check`.
+A wrong route stops `free-check` at the oracle run, and that trial's `verifier/reward-details.json` names the check that failed.
+Restore your solution before you commit.
+
+A valid route that fails means a check is narrower than the instruction.
+A wrong route that passes means a check misses its mistake, or the setup lets the route through.
+`free-check` skips criteria, so only a paid trial shows whether a criterion catches its route.
+
 ## Open the pull request
 
 Run the free checks that CI runs. They need Docker, Node.js 22 or later, and pnpm 9.14.2:
@@ -1517,6 +1536,14 @@ env -u OPENROUTER_API_KEY -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_AU
 
 Git ignores folders named `lib`, `out`, and `cache`, so don't use those names in a task.
 If your task forks a network, a maintainer runs the [fork check](#task-on-a-mainnet-fork) after reviewing it.
+
+Put your evidence in the pull request body:
+
+- the free check's oracle and nop rewards
+- one row per route you ran, with its result and the check that failed
+- one row per trial you ran, with the agent, the result, the check that failed, and why
+
+The Evidence section of [#134](https://github.com/BuidlGuidl/ethevals/pull/134) is an example.
 
 After merge, CI runs your task on every agent and model within the maintainers' budget, publishes each trial on [Harbor Hub](https://hub.harborframework.com/organizations/buidlguidl), and opens a pull request with the results.
 Your task folder goes to the [Hugging Face dataset](https://huggingface.co/datasets/buidlguidl/ethevals-test).
