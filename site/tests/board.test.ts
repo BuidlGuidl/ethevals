@@ -28,6 +28,16 @@ function row(overrides: Partial<Row> = {}): Row {
   };
 }
 
+// The text a reader sees on the first label's cost and token line, and on each drawer task list row.
+const strip = (html: string) => html.replace(/<[^>]*>/g, "");
+const spend = (html: string) => {
+  // Stop at the next label, so a label without its line can't borrow the next one's.
+  const label = html.match(/class="configuration">(?:(?!class="configuration")[\s\S])*/)?.[0];
+  const line = label?.match(/<\/small><small>([\s\S]*?)<\/small>/)?.[1];
+  return line === undefined ? undefined : strip(line);
+};
+const taskSpends = (html: string) => [...html.matchAll(/class="task-cost">((?:<span[^>]*>[^<]*<\/span>|[^<])*)<\/span>/g)].map((match) => strip(match[1]));
+
 function getCell(evaluation: Eval, agent: Agent, mode: "internet" | "vanilla", rows: Row[]) {
   return buildBoard([evaluation], rows).tables[mode].pillars[evaluation.pillar].evals[0].cells[agentKey(agent)];
 }
@@ -214,14 +224,14 @@ test("the knowledge table and its panel data include only declared vanilla tasks
     [row({ mode: "vanilla", agent: null })]);
   assert.deepEqual(board.tables.vanilla.pillars.concepts.evals.map((entry) => entry.id), ["concepts/units"]);
   assert.deepEqual(board.tables.vanilla.pillars.build.cells['["model-a",null,"high"]'],
-    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, scoredEvals: 0 });
+    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, tokens: null, scoredEvals: 0 });
   assert.equal(board.tables.internet.pillars.build.evals[0].id, "build/token");
 });
 
 test("a pillar with no declared tasks for a mode differs from an unsupported task", () => {
   const board = buildBoard([evaluation, { ...evaluation, id: "build/check", pillar: "build", modes: ["vanilla"] }], [row()]);
   assert.deepEqual(board.tables.internet.pillars.act.cells[agentKey(agent)],
-    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, scoredEvals: 0 });
+    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, tokens: null, scoredEvals: 0 });
   assert.equal(board.tables.internet.pillars.build.cells[agentKey(agent)].state, "empty");
   assert.equal(board.tables.internet.pillars.build.evals[0].cells[agentKey(agent)].state, "na");
   assert.equal(board.tables.internet.pillars.concepts.cells[agentKey(agent)].score, 1);
@@ -242,31 +252,76 @@ test("the table and panel both label an empty pillar as No tasks yet", () => {
 test("the board labels null effort as the provider default", () => {
   const data = buildBoard([evaluation], [row({ effort: null }), row({ effort: "medium" })]);
   const html = renderToStaticMarkup(createElement(Board, { data }));
-  assert.ok(html.includes("agent-a · effort provider default · "));
-  assert.ok(html.includes("agent-a · effort medium · "));
+  assert.ok(html.includes("agent-a · effort provider default</small>"));
+  assert.ok(html.includes("agent-a · effort medium</small>"));
 });
 
 test("each label shows what the agents spent on the trials under it, errors and refusals included, judges left out", () => {
-  const build: Eval = { ...evaluation, id: "build/mint", title: "Mint", pillar: "build", modes: ["internet"] };
-  // Agent costs only. Units: 0.25 + a refused trial 0.5 = 0.75. Mint: an error 1 + 2 = 3. Row: 3.75.
-  const rows = [row({ model_cost_usd: 0.25, judge_cost_usd: 0.5 }),
-    row({ trial: 2, model_cost_usd: 0.5, judge_cost_usd: null, ...noAnswerTwice("refused") }),
-    row({ task_id: "build/mint", status: "error", model_cost_usd: 1, judge_cost_usd: null }),
-    row({ task_id: "build/mint", trial: 2, status: "failed", model_cost_usd: 2, judge_cost_usd: 0.25 })];
+  // Mint is a security task, so the dapp-development filter hides it from the matrix.
+  const build: Eval = { ...evaluation, id: "build/mint", title: "Mint", pillar: "build", area: "Audits", modes: ["internet"] };
+  // Agent costs and tokens only. Units: 0.25 + a refused trial 0.5 = 0.75, 100 + 200 tokens.
+  // Mint: an error 1 + 2 = 3, 1,000 + 2,000 tokens. Row: 3.75 and 3,300 tokens.
+  const rows = [row({ model_cost_usd: 0.25, judge_cost_usd: 0.5, total_tokens: 100 }),
+    row({ trial: 2, model_cost_usd: 0.5, judge_cost_usd: null, total_tokens: 200, ...noAnswerTwice("refused") }),
+    row({ task_id: "build/mint", status: "error", model_cost_usd: 1, judge_cost_usd: null, total_tokens: 1000 }),
+    row({ task_id: "build/mint", trial: 2, status: "failed", model_cost_usd: 2, judge_cost_usd: 0.25, total_tokens: 2000 })];
   const data = buildBoard([evaluation, build], rows);
-  const label = (html: string) => html.match(/class="configuration-cost[^"]*"[^>]*>([^<]*)</)?.[1];
-  const drawer = (selection: Omit<Selection, "agent" | "mode">) => label(renderToStaticMarkup(createElement(Detail, {
-    data, selection: { agent, mode: "internet", ...selection }, onSelect: () => {} })));
-  assert.equal(label(renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }))), "$3.75");
-  assert.equal(drawer({}), "$3.75");
-  assert.equal(drawer({ pillar: "build" }), "$3.00");
-  assert.equal(drawer({ pillar: "concepts" }), "$0.75");
-  assert.equal(drawer({ evaluation: data.evaluations["concepts/units"] }), "$0.75");
-  assert.equal(drawer({ evaluation: data.evaluations["build/mint"], run: 2 }), "$2.00");
-  // Ignoring refusals changes scores, not what the trials cost.
-  const ignored = ignoreRefusals(data).tables.internet;
-  assert.equal(ignored.summaries[agentKey(agent)].cost, 3.75);
-  assert.equal(ignored.pillars.concepts.cells[agentKey(agent)].cost, 0.75);
+  const board = (query: string) => renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams(query) }));
+  const drawer = (selection: Omit<Selection, "agent" | "mode">, source = data) => spend(renderToStaticMarkup(createElement(Detail, {
+    data: source, selection: { agent, mode: "internet", ...selection }, domain: "dapp-development", onSelect: () => {} })));
+  // Ignoring refusals and filtering by domain change scores and rows, not what the trials spent.
+  for (const query of ["", "refusals=ignore", "domain=dapp-development"]) {
+    const html = board(query);
+    assert.equal(spend(html), "$3.75 · 3.3K tok", query);
+    assert.equal(spend(html.slice(html.indexOf('id="evals"'))), "$3.75 · 3.3K tok", query);
+  }
+  for (const source of [data, ignoreRefusals(data)]) {
+    assert.equal(drawer({}, source), "$3.75 · 3.3K tok");
+    assert.equal(drawer({ pillar: "build" }, source), "$3.00 · 3K tok");
+    assert.equal(drawer({ pillar: "concepts" }, source), "$0.75 · 300 tok");
+    assert.equal(drawer({ evaluation: data.evaluations["concepts/units"] }, source), "$0.75 · 300 tok");
+    assert.equal(drawer({ evaluation: data.evaluations["build/mint"], run: 2 }, source), "$2.00 · 2K tok · 8.0s");
+  }
+  assert.deepEqual(taskSpends(renderToStaticMarkup(createElement(Detail, {
+    data, selection: { agent, mode: "internet", pillar: "build" }, onSelect: () => {} }))), ["$3.00 · 3K tok"]);
+});
+
+test("unknown usage reads as one dash on the label, the drawer task list and the trials table, and a real zero stays", () => {
+  // Units' only trial has no recorded cost, and the runner saved its missing token count as 0.
+  // Mint's trial really cost $0 and used no tokens. Swap has no trials yet.
+  const mint: Eval = { ...evaluation, id: "concepts/mint", title: "Mint" };
+  const swap: Eval = { ...evaluation, id: "concepts/swap", title: "Swap" };
+  const data = buildBoard([evaluation, mint, swap], [row({ model_cost_usd: null, total_tokens: 0, ...noAnswerTwice("refused") }),
+    row({ task_id: "concepts/mint", status: "error", model_cost_usd: 0, total_tokens: 0 })], false, 1);
+  const detail = (selection: Omit<Selection, "agent" | "mode">) => renderToStaticMarkup(createElement(Detail, {
+    data, selection: { agent, mode: "internet", ...selection }, onSelect: () => {} }));
+  const units = detail({ evaluation: data.evaluations["concepts/units"] });
+  assert.equal(spend(units), "–");
+  assert.equal(spend(detail({ evaluation: data.evaluations["concepts/units"], run: 1 })), "– · 8.0s");
+  assert.equal(spend(detail({ evaluation: data.evaluations["concepts/swap"] })), "–");
+  assert.equal(spend(detail({ pillar: "act" })), "–");
+  // Trials table: time, tokens, cost.
+  assert.match(units, /<td>8\.0s<\/td><td>–<\/td><td>–<\/td>/);
+  const zero = detail({ evaluation: data.evaluations["concepts/mint"] });
+  assert.equal(spend(zero), "$0 · 0 tok");
+  assert.match(zero, /<td>8\.0s<\/td><td>0<\/td><td>\$0<\/td>/);
+  const list = detail({ pillar: "concepts" });
+  assert.deepEqual(taskSpends(list), ["–", "$0 · 0 tok", "–"]);
+  assert.equal(spend(list), "$0 · 0 tok");
+  for (const html of [units, detail({ evaluation: data.evaluations["concepts/swap"] })]) assert.ok(!html.includes("0 tok"));
+});
+
+test("only the trial view's label adds the trial's time, in the trials table's format, and leaves an unknown time off", () => {
+  const data = buildBoard([evaluation], [row({ model_cost_usd: 0.44, total_tokens: 1_600_000, total_seconds: 369.6 }),
+    row({ trial: 2, model_cost_usd: null, total_seconds: 86.5 }), row({ trial: 3, total_seconds: null })]);
+  const detail = (run?: number) => renderToStaticMarkup(createElement(Detail, {
+    data, selection: { evaluation, agent, mode: "internet", run }, onSelect: () => {} }));
+  assert.equal(spend(detail(1)), "$0.44 · 1.6M tok · 369.6s");
+  assert.equal(spend(detail(2)), "– · 86.5s");
+  assert.equal(spend(detail(3)), "$0.20 · 100 tok");
+  const task = detail();
+  assert.equal(spend(task), "$0.64 · 1.6M tok");
+  assert.match(task, /<td>369\.6s<\/td>.*<td>86\.5s<\/td>.*<td>–<\/td><td>100<\/td>/s);
 });
 
 test("costs show whole dollars from $10, cents from $1, and two significant digits below", () => {
@@ -399,7 +454,7 @@ test("task details open the instruction and list one button per trial with compa
   assert.equal((panel.match(/class="run-open"/g) ?? []).length, 3);
   assert.ok(panel.includes('aria-label="Trial 2 · 0% · 1 of 2 passed. Open trial."'));
   assert.match(panel, /data-state="full"[^>]*><\/span>100%.*data-state="zero"[^>]*><\/span>0%.*data-state="error"[^>]*><svg[^>]*lucide-triangle-alert[^>]*>.*?<\/svg><\/span>Not scored/s);
-  assert.ok(panel.includes('<td>1 of 2 passed</td>') && panel.includes('<td>7k</td>') && panel.includes('aria-hidden="true">›</td>'));
+  assert.ok(panel.includes('<td>1 of 2 passed</td>') && panel.includes('<td>7K</td>') && panel.includes('aria-hidden="true">›</td>'));
   assert.equal((panel.match(/open=""/g) ?? []).length, 1);
   assert.ok(!panel.includes('<ul class="checks">') && !panel.includes('class="run-row"'));
   assert.equal((panel.match(/class="back-button"/g) ?? []).length, 0);
@@ -414,17 +469,17 @@ test("trial details show the selected trial, failed reasons first, and a switche
   const selection = { evaluation, agent, mode: "internet" as const, fromList: true as const, run: 2 };
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
   assert.match(panel, /<h1[^>]*>Trial 2 of 3 <span class="trial-heading-score">0%<\/span><\/h1>/);
-  assert.ok(panel.includes('<p>Units</p>') && panel.includes("agent-a · effort high · "));
+  assert.ok(panel.includes('<p>Units</p>') && panel.includes("agent-a · effort high</small>"));
   assert.ok(panel.includes('aria-label="Trials"') && panel.includes('aria-pressed="true" aria-label="Trial 2 · 0% · 1 of 2 passed"'));
   assert.match(panel, /Trial 1 <span class="run-dot" data-state="full".*Trial 2 <span class="run-dot" data-state="zero".*Trial 3 <span class="run-dot" data-state="error"/s);
   assert.match(panel, /class="back-button"[\s\S]*?<\/svg>All trials/);
   assert.ok(panel.includes('<code>bad</code>') && panel.includes('<code>good</code>') && panel.includes("The answer differs."));
   assert.ok(panel.indexOf('<code>bad</code>') < panel.indexOf('<code>good</code>'));
   assert.ok(panel.includes("Test passed.") && !panel.includes("Cost source:") && !panel.includes('prompt-disclosure') && !panel.includes('aria-label="Agent modes"'));
-  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Tokens</dt><dd>7k</dd></div><div><dt>Time</dt><dd>8.0s</dd></div></dl>'));
+  assert.equal(spend(panel), "$0.20 · 7K tok · 8.0s");
   assert.ok(panel.includes('<h3>Checks <span>1 of 2</span></h3>'));
-  assert.ok(panel.indexOf('class="run-switcher"') < panel.indexOf('class="run-stats"'));
-  assert.ok(panel.indexOf('class="run-stats"') < panel.indexOf('class="verifier-verdict"'));
+  // The checks follow the trial switcher, with no time box between them.
+  assert.ok(!panel.includes(">Time<") && panel.indexOf('class="run-switcher"') < panel.indexOf('class="verifier-verdict"'));
   assert.ok(panel.indexOf('class="verifier-verdict"') < panel.indexOf('class="trajectory-links"'));
   assert.ok(panel.includes('href="https://example.com/run.json" target="_blank" rel="noreferrer">Open trajectory ↗'));
   const passed = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: 1 }, onSelect: () => {} }));
@@ -501,10 +556,10 @@ test("configurations show one agent logo beside the name, or one provider logo f
     ["openrouter/google/gemini-4-argon", "opencode", "openrouter", "opencode", "Gemini 4 Argon"],
     ["openrouter/google/gemini-4-neon", "opencode", "openrouter", "opencode", "Gemini 4 Neon"],
   ]) {
-    const html = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent, effort: null }, cost: null, plan: false }));
+    const html = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent, effort: null }, cost: null, tokens: null, plan: false }));
     assert.ok(html.match(/<b>([\s\S]*?)<\/b>/)?.[1].includes(`src="/logos/${icon}.svg"`));
     assert.equal((html.match(/<img /g) ?? []).length, 1);
-    const bare = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent: null, effort: null }, cost: null, plan: false }));
+    const bare = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent: null, effort: null }, cost: null, tokens: null, plan: false }));
     assert.ok(bare.match(/<b>([\s\S]*?)<\/b>/)?.[1].includes(`src="/logos/${provider}.svg"`));
     assert.equal((bare.match(/<img /g) ?? []).length, 1);
     if (label) {
