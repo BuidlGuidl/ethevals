@@ -26,7 +26,7 @@ export default function Compare({ data: base }: { data: BoardData }) {
     return info.refused ? refusalLines(info, ignoring) : undefined;
   };
   // Each label stands for its whole row, so it shows the row's total.
-  const rowCost = (agent: Agent) => ({ cost: table.summaries[agentKey(agent)].cost, plan: table.summaries[agentKey(agent)].plan });
+  const rowCost = (agent: Agent) => ({ cost: table.summaries[agentKey(agent)].cost, tokens: table.summaries[agentKey(agent)].tokens, plan: table.summaries[agentKey(agent)].plan });
   const keys = table.agents.map(agentKey);
   const defaults = [...table.agents].sort((a, b) => (table.summaries[agentKey(b)].scores.overall ?? -1) - (table.summaries[agentKey(a)].scores.overall ?? -1)).slice(0, 3).map(agentKey);
   const chosen = query.has("pick") ? parseSelection(query.get("pick"), keys) : defaults;

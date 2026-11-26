@@ -214,14 +214,14 @@ test("the knowledge table and its panel data include only declared vanilla tasks
     [row({ mode: "vanilla", agent: null })]);
   assert.deepEqual(board.tables.vanilla.pillars.concepts.evals.map((entry) => entry.id), ["concepts/units"]);
   assert.deepEqual(board.tables.vanilla.pillars.build.cells['["model-a",null,"high"]'],
-    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, scoredEvals: 0 });
+    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, tokens: 0, scoredEvals: 0 });
   assert.equal(board.tables.internet.pillars.build.evals[0].id, "build/token");
 });
 
 test("a pillar with no declared tasks for a mode differs from an unsupported task", () => {
   const board = buildBoard([evaluation, { ...evaluation, id: "build/check", pillar: "build", modes: ["vanilla"] }], [row()]);
   assert.deepEqual(board.tables.internet.pillars.act.cells[agentKey(agent)],
-    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, scoredEvals: 0 });
+    { state: "empty", score: null, passed: 0, total: 0, errors: 0, missing: 0, cost: null, tokens: 0, scoredEvals: 0 });
   assert.equal(board.tables.internet.pillars.build.cells[agentKey(agent)].state, "empty");
   assert.equal(board.tables.internet.pillars.build.evals[0].cells[agentKey(agent)].state, "na");
   assert.equal(board.tables.internet.pillars.concepts.cells[agentKey(agent)].score, 1);
@@ -242,8 +242,8 @@ test("the table and panel both label an empty pillar as No tasks yet", () => {
 test("the board labels null effort as the provider default", () => {
   const data = buildBoard([evaluation], [row({ effort: null }), row({ effort: "medium" })]);
   const html = renderToStaticMarkup(createElement(Board, { data }));
-  assert.ok(html.includes("agent-a · effort provider default · "));
-  assert.ok(html.includes("agent-a · effort medium · "));
+  assert.ok(html.includes("agent-a · effort provider default</small>"));
+  assert.ok(html.includes("agent-a · effort medium</small>"));
 });
 
 test("each label shows what the agents spent on the trials under it, errors and refusals included, judges left out", () => {
@@ -399,7 +399,7 @@ test("task details open the instruction and list one button per trial with compa
   assert.equal((panel.match(/class="run-open"/g) ?? []).length, 3);
   assert.ok(panel.includes('aria-label="Trial 2 · 0% · 1 of 2 passed. Open trial."'));
   assert.match(panel, /data-state="full"[^>]*><\/span>100%.*data-state="zero"[^>]*><\/span>0%.*data-state="error"[^>]*><svg[^>]*lucide-triangle-alert[^>]*>.*?<\/svg><\/span>Not scored/s);
-  assert.ok(panel.includes('<td>1 of 2 passed</td>') && panel.includes('<td>7k</td>') && panel.includes('aria-hidden="true">›</td>'));
+  assert.ok(panel.includes('<td>1 of 2 passed</td>') && panel.includes('<td>7K</td>') && panel.includes('aria-hidden="true">›</td>'));
   assert.equal((panel.match(/open=""/g) ?? []).length, 1);
   assert.ok(!panel.includes('<ul class="checks">') && !panel.includes('class="run-row"'));
   assert.equal((panel.match(/class="back-button"/g) ?? []).length, 0);
@@ -414,14 +414,14 @@ test("trial details show the selected trial, failed reasons first, and a switche
   const selection = { evaluation, agent, mode: "internet" as const, fromList: true as const, run: 2 };
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
   assert.match(panel, /<h1[^>]*>Trial 2 of 3 <span class="trial-heading-score">0%<\/span><\/h1>/);
-  assert.ok(panel.includes('<p>Units</p>') && panel.includes("agent-a · effort high · "));
+  assert.ok(panel.includes('<p>Units</p>') && panel.includes("agent-a · effort high</small>"));
   assert.ok(panel.includes('aria-label="Trials"') && panel.includes('aria-pressed="true" aria-label="Trial 2 · 0% · 1 of 2 passed"'));
   assert.match(panel, /Trial 1 <span class="run-dot" data-state="full".*Trial 2 <span class="run-dot" data-state="zero".*Trial 3 <span class="run-dot" data-state="error"/s);
   assert.match(panel, /class="back-button"[\s\S]*?<\/svg>All trials/);
   assert.ok(panel.includes('<code>bad</code>') && panel.includes('<code>good</code>') && panel.includes("The answer differs."));
   assert.ok(panel.indexOf('<code>bad</code>') < panel.indexOf('<code>good</code>'));
   assert.ok(panel.includes("Test passed.") && !panel.includes("Cost source:") && !panel.includes('prompt-disclosure') && !panel.includes('aria-label="Agent modes"'));
-  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Tokens</dt><dd>7k</dd></div><div><dt>Time</dt><dd>8.0s</dd></div></dl>'));
+  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Time</dt><dd>8.0s</dd></div></dl>') && panel.includes(" · 7K tok</small>"));
   assert.ok(panel.includes('<h3>Checks <span>1 of 2</span></h3>'));
   assert.ok(panel.indexOf('class="run-switcher"') < panel.indexOf('class="run-stats"'));
   assert.ok(panel.indexOf('class="run-stats"') < panel.indexOf('class="verifier-verdict"'));
@@ -501,10 +501,10 @@ test("configurations show one agent logo beside the name, or one provider logo f
     ["openrouter/google/gemini-4-argon", "opencode", "openrouter", "opencode", "Gemini 4 Argon"],
     ["openrouter/google/gemini-4-neon", "opencode", "openrouter", "opencode", "Gemini 4 Neon"],
   ]) {
-    const html = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent, effort: null }, cost: null, plan: false }));
+    const html = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent, effort: null }, cost: null, tokens: 0, plan: false }));
     assert.ok(html.match(/<b>([\s\S]*?)<\/b>/)?.[1].includes(`src="/logos/${icon}.svg"`));
     assert.equal((html.match(/<img /g) ?? []).length, 1);
-    const bare = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent: null, effort: null }, cost: null, plan: false }));
+    const bare = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent: null, effort: null }, cost: null, tokens: 0, plan: false }));
     assert.ok(bare.match(/<b>([\s\S]*?)<\/b>/)?.[1].includes(`src="/logos/${provider}.svg"`));
     assert.equal((bare.match(/<img /g) ?? []).length, 1);
     if (label) {

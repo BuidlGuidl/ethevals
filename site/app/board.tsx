@@ -13,7 +13,7 @@ import { Logo } from "../components/logo";
 import { ModeToggle } from "../components/mode-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { TooltipProvider } from "../components/ui/tooltip";
-import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money } from "../components/scores";
+import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money, tokens } from "../components/scores";
 import { entryLabels, notRunTrials, TrialDot, TrialDots, TrialLegend, taskHint, trialHint, trialNote, trialScoreText, trialState } from "../components/trial-display";
 import { ignoringRefusals, updateQuery, useQuery } from "../components/url-state";
 import { drawerRefusalBanner, ignoreRefusals, ignoresRefusals, isRefusedTrial, refusalLines, refusals, refusalStrip, refusedCount, retryRefusals, sentences, tableHasRefusals, taskRefusalLines } from "../src/refusals";
@@ -24,8 +24,6 @@ import { checkKind } from "../src/scoring";
 
 type Sort = "overall" | Pillar;
 
-const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
-const tokens = (value: number) => tokenFormat.format(value).toLowerCase();
 const duration = (trial: Trial) => trial.total_seconds === null ? "–" : `${trial.total_seconds.toFixed(1)}s`;
 
 function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
@@ -44,7 +42,7 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
         const row = peers(table.agents.map((other) => entry.cells[agentKey(other)].score)), chip = tile(cell.score, row);
         return <button key={entry.id} className="eval-list-row" onClick={() => onEval(evaluation)}>
           <span className="eval-list-title"><b>{evaluation.title}</b><small>{evaluation.id}</small></span>
-          <span className="eval-list-result">{cell.cost !== null && <span className="task-cost">{money(cell.cost)}</span>}{cell.trials.length > 0 && <TrialDots trials={cell.trials} />}
+          <span className="eval-list-result">{cell.cost !== null && <span className="task-cost">{money(cell.cost)} · {tokens(cell.tokens)} tok</span>}{cell.trials.length > 0 && <TrialDots trials={cell.trials} />}
           <span className="heat-chip" {...chip} title={cell.score === null ? emptyLabel(cell) : undefined}><span>{percent(cell.score)}</span>
             {cell.score !== null && row.top !== null && <small className="heat-best">{chip["data-tone"] === "leader" ? "best" : `best ${row.top}%`}</small>}</span></span>
         </button>;
@@ -120,7 +118,7 @@ function RunView({ evaluation, trial, trials, onRun }: { evaluation: Eval; trial
       aria-pressed={run.trial === trial.trial} aria-label={trialHint(run)} onClick={() => onRun(run.trial)}>
       Trial {run.trial} <TrialDot state={trialState(run)} ignored={run.ignored} /></button>)}</div>
     <dl className="run-stats">{[
-      ["Tokens", tokens(trial.total_tokens)], ["Time", duration(trial)],
+      ["Time", duration(trial)],
     ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {score.value === null ? <p className="trial-error">
       <AlertTriangle size={14} aria-hidden="true" />This trial ended in an error, so it is left out of the score.
@@ -166,7 +164,8 @@ export function Detail({ selection, data, domain, onSelect }: {
       Trial {trial.trial} of {trials.length} <span className="trial-heading-score">{trialScoreText(trial)}</span>
     </> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
       {trial && <p>{evaluation!.title}</p>}
-      <Configuration agent={agent} cost={trial ? trial.cost : evaluation ? cell?.cost ?? null : scope.cost} plan={summary.plan} /><p className="muted">{modeNames[mode]}</p>
+      <Configuration agent={agent} cost={trial ? trial.cost : evaluation ? cell?.cost ?? null : scope.cost}
+        tokens={trial ? trial.total_tokens : evaluation ? cell?.tokens ?? 0 : scope.tokens} plan={summary.plan} /><p className="muted">{modeNames[mode]}</p>
       {missing > 0 && <p className="unscored-banner">{unscored(missing)}</p>}
       {refusalBanner && <p className="refusal-banner"><ShieldBan size={14} aria-hidden="true" />{refusalBanner}</p>}
       {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scoredTrials(scope.total)}</p>}
@@ -267,7 +266,7 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
           <thead><tr><th scope="col" className="row-label">{mode === "vanilla" ? "Model" : "Configuration"}<small>model · agent</small></th>
             {columns.map(([key, name]) => <th key={key} scope="col" aria-sort={sort.key === key ? sort.ascending ? "ascending" : "descending" : "none"}>
               <button className="sort-button" onClick={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : false })}>{name}{sort.key === key && (sort.ascending ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}</button>
-            </th>)}</tr></thead><tbody>{agents.map((agent) => <tr key={agentKey(agent)}><th scope="row" className="row-label"><Configuration agent={agent} cost={table.summaries[agentKey(agent)].cost} plan={table.summaries[agentKey(agent)].plan} /></th>
+            </th>)}</tr></thead><tbody>{agents.map((agent) => <tr key={agentKey(agent)}><th scope="row" className="row-label"><Configuration agent={agent} cost={table.summaries[agentKey(agent)].cost} tokens={table.summaries[agentKey(agent)].tokens} plan={table.summaries[agentKey(agent)].plan} /></th>
               {columns.map(([key]) => {
                 const summary = key === "overall" ? table.summaries[agentKey(agent)] : table.pillars[key].cells[agentKey(agent)];
                 return <td key={key}>
@@ -290,13 +289,13 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
       </div>
       <div className="table-shell"><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Task matrix. Scroll for more tasks and configurations.">
         <table className="matrix" role="table"><caption className="sr-only">Task scores by configuration</caption><thead role="rowgroup"><tr role="row"><th className="row-label" scope="col" role="columnheader">Task</th>
-          {matrixAgents.map((agent) => <th key={agentKey(agent)} scope="col" role="columnheader"><Configuration agent={agent} cost={matrixTable.summaries[agentKey(agent)].cost} plan={matrixTable.summaries[agentKey(agent)].plan} /></th>)}</tr></thead>
+          {matrixAgents.map((agent) => <th key={agentKey(agent)} scope="col" role="columnheader"><Configuration agent={agent} cost={matrixTable.summaries[agentKey(agent)].cost} tokens={matrixTable.summaries[agentKey(agent)].tokens} plan={matrixTable.summaries[agentKey(agent)].plan} /></th>)}</tr></thead>
           <tbody role="rowgroup">{matrixRows.filter(({ entries }) => entries.length).map(({ pillar, entries }) => <Fragment key={pillar}><tr className="pillar-band" role="row"><th scope="colgroup" colSpan={matrixAgents.length + 1} role="columnheader"><span className="band-label">{names[pillar]}<small>{entries.length} tasks</small></span></th></tr>
             {entries.map((entry) => { const row = peers(matrixAgents.map((agent) => entry.cells[agentKey(agent)].score));
               return <tr role="row" key={entry.id} id={`eval-${entry.id.replaceAll("/", "-")}`}>
               <th scope="row" className="row-label" role="rowheader"><span className="eval-title">{data.evaluations[entry.id].title}</span><small>{entry.id}</small></th>
               {matrixAgents.map((agent) => { const cell = entry.cells[agentKey(agent)];
-                return <td key={agentKey(agent)} role="cell"><span className="matrix-configuration" aria-hidden="true"><Configuration agent={agent} cost={cell.cost} plan={matrixTable.summaries[agentKey(agent)].plan} /></span>
+                return <td key={agentKey(agent)} role="cell"><span className="matrix-configuration" aria-hidden="true"><Configuration agent={agent} cost={cell.cost} tokens={cell.tokens} plan={matrixTable.summaries[agentKey(agent)].plan} /></span>
                   {(() => {
                     const refusal = refusedCount([cell]) > 0 ? taskRefusalLines(cell, ignoring) : undefined;
                     if (cell.state === "na" || (cell.score === null && !refusal)) return <span className="matrix-cell" data-empty title={[emptyTrialLabel(cell), ...cell.trials.map(trialHint)].join("\n")}>–</span>;

@@ -52,6 +52,8 @@ interface Counts {
   missing: number;
   // What the trials cost, errors and refusals included. Null when no trial has a price.
   cost: number | null;
+  // The agent's input and output tokens, cached input included, over the same trials as cost.
+  tokens: number;
 }
 export interface EvalCell extends Counts {
   state: "score" | "na" | "pending";
@@ -79,6 +81,7 @@ export interface ConfigurationSummary {
   errors: number;
   missing: number;
   cost: number | null;
+  tokens: number;
   // Some trial ran on a plan, so its cost is what the API would have charged.
   plan: boolean;
 }
@@ -117,6 +120,7 @@ export function scoreSummary(cells: Counts[]): Counts {
     errors: cells.reduce((sum, cell) => sum + cell.errors, 0),
     missing: cells.reduce((sum, cell) => sum + cell.missing, 0),
     cost: totalCost(cells.map((cell) => cell.cost)),
+    tokens: cells.reduce((sum, cell) => sum + cell.tokens, 0),
   };
 }
 
@@ -170,6 +174,7 @@ function evalCell(evaluation: Eval, mode: Mode, rows: Row[], attempts: number): 
     passed, total: scored.length, errors: rows.length - scored.length,
     missing: evaluation.modes.includes(mode) ? Math.max(0, attempts - scored.length) : 0,
     cost: totalCost(trials.map((trial) => trial.cost)),
+    tokens: trials.reduce((sum, trial) => sum + trial.total_tokens, 0),
     trials,
   };
 }
@@ -193,7 +198,7 @@ export function configurationSummary(rows: Table["pillars"], key: string): Confi
   return {
     scores, medianTokens: median(scored.map((trial) => trial.total_tokens)),
     passed: summary.passed, total: summary.total, errors: summary.errors, missing: summary.missing,
-    cost: summary.cost, plan: trials.some((trial) => trial.paid_by === "plan"),
+    cost: summary.cost, tokens: summary.tokens, plan: trials.some((trial) => trial.paid_by === "plan"),
   };
 }
 

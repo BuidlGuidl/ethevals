@@ -98,6 +98,7 @@
   thead .row-label { @apply bg-tint; }
   .row-label small, .configuration small { @apply mt-1 block text-[10px] font-normal text-muted; }
   .configuration { @apply block; }
+  .configuration small + small { @apply mt-0.5; }
   .configuration b { @apply font-semibold text-[13px]; }
   .configuration-icon { @apply inline-block shrink-0 align-middle; width: 14px; height: 14px; }
   .configuration-cost { @apply whitespace-nowrap text-ink; }

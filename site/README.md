@@ -73,15 +73,16 @@ A trial that answered on the retry after a safety refusal keeps its score; only 
 The mode controls select Internet or Model only. Internet + Skills is marked coming soon.
 Different agents, models, and efforts stay separate.
 Compare shows Overall and pillar scores for up to five configurations.
-Every configuration label shows a cost after the effort, covering the trials under it: the row on the leaderboard, Compare and matrix headers, the pillar, task, or trial in the drawer.
+Every configuration label shows a cost and a token count on a line under the effort, covering the trials under it: the row on the leaderboard, Compare and matrix headers, the pillar, task, or trial in the drawer. The drawer task list shows both for each task.
 A trial's cost is what the agent spent at API prices, even when a plan paid. The judge's cost is left out. Errored and refused trials count, and filters never change a cost.
+Tokens are the agent's input and output tokens, cached input included. The judge's tokens are left out, and the same trials count.
 
 The drawer task list shows one dot per trial for 100%, some checks missed, 0%, or error.
 The trials table shows the trial score, followed by the check count or the reason a gate check or entry check stopped the trial score at 0%.
 The trial view groups Gate checks and Judgment checks under headings with counts and info notes. Concepts has one Checks group.
 Each group lists failed checks first, then passed checks, each with its reason.
 A failed entry check appears above the groups. Passed entry checks stay out of the view, and so does a refused trial's no-answer check, since its refusal note says it.
-The trial view also shows tokens, elapsed time, and payment source. Its cost is on the configuration label.
+The trial view also shows elapsed time and payment source. Its cost and tokens are on the configuration label.
 An errored trial says "Not scored" and explains why it stays out of the score.
 Its trajectory link opens the row's `trajectory_url`.
 Harbor Hub links say "Open full trial on Harbor Hub" and open the public trial page.

@@ -11,6 +11,8 @@ const dollars = usd({ maximumFractionDigits: 0 }), cents = usd({ minimumFraction
   small = usd({ minimumFractionDigits: 2, maximumFractionDigits: 6 });
 export const money = (value: number | null) => value === null ? "–" : value === 0 ? "$0"
   : value >= 9.995 ? dollars.format(value) : value >= 0.995 ? cents.format(value) : small.format(Number(value.toPrecision(2)));
+const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+export const tokens = (value: number) => tokenFormat.format(value);
 export const pp = (value: number | null) => value === null ? "–" : `${Math.round(value) > 0 ? "+" : ""}${Math.round(value)}pp`;
 // Tile color and tooltip compare a score with the best score among its peers: a leaderboard column or a task row.
 // Both use rounded percentages, so two tiles showing the same number look the same.
