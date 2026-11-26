@@ -109,6 +109,11 @@
   .config-col { width: 256px; }
   .score-col { width: 142px; }
   .leaderboard tbody td { @apply p-1; }
+  /* The leaderboard names the model larger, and its tiles stretch to the row the label sets. */
+  .leaderboard .configuration b { font-size: 16px; }
+  .leaderboard .configuration-icon { width: 16px; height: 16px; }
+  .leaderboard tbody td { height: 1px; }
+  .leaderboard .score-wrap, .leaderboard .score-cell { height: 100%; }
   .sort-button { @apply inline-flex items-center gap-1.5; }
   .sort-button:hover { @apply text-ink; }
   th[aria-sort="ascending"], th[aria-sort="descending"] { box-shadow: inset 0 -2px 0 var(--color-accent); @apply text-ink; }
@@ -435,6 +440,8 @@
   .score-col { width: 110px; }
   .leaderboard .row-label { padding-inline: 10px; }
   .configuration b { font-size: 12px; }
+  .leaderboard .configuration b { font-size: 14px; }
+  .leaderboard .configuration-icon { width: 14px; height: 14px; }
   .score-cell { min-height: 58px; font-size: 19px; }
   .matrix .row-label { padding: 8px 10px; }
   .matrix .row-label small { display: none; }
