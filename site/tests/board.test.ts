@@ -198,8 +198,8 @@ test("the table and panel both label an empty pillar as No tasks yet", () => {
 test("the board labels null effort as the provider default", () => {
   const data = buildBoard([evaluation], [row({ effort: null }), row({ effort: "medium" })]);
   const html = renderToStaticMarkup(createElement(Board, { data }));
-  assert.ok(html.includes('title="model-a · agent-a · effort provider default"'));
-  assert.ok(html.includes('title="model-a · agent-a · effort medium"'));
+  assert.ok(html.includes("agent-a · effort provider default · "));
+  assert.ok(html.includes("agent-a · effort medium · "));
 });
 
 test("a trial costs agent plus judge, a missing part counting as 0", () => {
@@ -217,7 +217,7 @@ test("each label shows the cost of the trials under it, errors and refusals incl
     row({ task_id: "build/mint", status: "error", model_cost_usd: 1, judge_cost_usd: null }),
     row({ task_id: "build/mint", trial: 2, status: "failed", model_cost_usd: 2, judge_cost_usd: 0.25 })];
   const data = buildBoard([evaluation, build], rows);
-  const label = (html: string) => html.match(/class="configuration-cost"[^>]*>([^<]*)</)?.[1];
+  const label = (html: string) => html.match(/class="configuration-cost[^"]*"[^>]*>([^<]*)</)?.[1];
   const drawer = (selection: Omit<Selection, "agent" | "mode">) => label(renderToStaticMarkup(createElement(Detail, {
     data, selection: { agent, mode: "internet", ...selection }, onSelect: () => {} })));
   assert.equal(label(renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }))), "$4.50");
@@ -377,7 +377,7 @@ test("trial details show the selected trial, failed reasons first, and a switche
   const selection = { evaluation, agent, mode: "internet" as const, fromList: true as const, run: 2 };
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
   assert.match(panel, /<h1[^>]*>Trial 2 of 3 <span class="trial-heading-score">0%<\/span><\/h1>/);
-  assert.ok(panel.includes('<p>Units</p>') && panel.includes('title="model-a · agent-a · effort high"'));
+  assert.ok(panel.includes('<p>Units</p>') && panel.includes("agent-a · effort high · "));
   assert.ok(panel.includes('aria-label="Trials"') && panel.includes('aria-pressed="true" aria-label="Trial 2 · 0% · 1 of 2 passed"'));
   assert.match(panel, /Trial 1 <span class="run-dot" data-state="full".*Trial 2 <span class="run-dot" data-state="zero".*Trial 3 <span class="run-dot" data-state="error"/s);
   assert.match(panel, /class="back-button"[\s\S]*?<\/svg>All trials/);
