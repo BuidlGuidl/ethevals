@@ -73,7 +73,6 @@ Add `[agent].timeout_sec` or `[verifier].timeout_sec` only when your task needs 
 For a Build or Act task, list each check by the name the verifier reports under `[metadata.checks]`.
 Use `"gate"` for a gate check that tests a requirement in the instruction.
 Use `"judgment"` for a judgment check that tests what an experienced Ethereum developer does without being told.
-If a check tests both something the instruction asks for and a detail it leaves out, tag it `"gate"`.
 Leave entry checks out of the table. Their names are `compile`, `answered`, `no_answer`, and `report_written`.
 Leave out the whole table for Concepts tasks.
 A trial that does nothing must score 0%, so the starting files have to fail a gate check or an entry check. The free check tests this.
@@ -1505,24 +1504,13 @@ If a run gives the wrong reward, `free-check` stops and names that trial's `resu
 Give Docker at least 7 GiB for a task with a chain.
 For a fork task, set `MAINNET_RPC_URL` first.
 
-### Run each route through the verifier
+### Try the likely mistakes before trials
 
-The free check shows that your solution passes and untouched work fails.
-It doesn't show that each check catches the mistake you wrote it for.
-If your task has a judgment check, or a gate check an agent could fail while its work looks right, script the routes an agent could take.
-Run each one against the same setup and verifier, with no model:
-
-- Your solution's route must pass.
-- Every other route that does what the instruction asks must pass.
-- Each wrong route an agent could plausibly take must fail, on the check you wrote for it.
-
-To run a route, put it in `solution/solve.sh` and run `free-check`.
-A wrong route stops `free-check` at the oracle run, and that trial's `verifier/reward-details.json` names the check that failed.
+The free check doesn't try the mistakes an agent would make.
+If your task has a judgment check, or a check that work could fail while looking right, write each likely mistake as its own `solve.sh` and run `free-check`.
+Each mistake must fail on the check meant to catch it, and any other correct way to do the task must pass.
+`free-check` skips criteria, so only a paid trial tests those.
 Restore your solution before you commit.
-
-A valid route that fails means a check is narrower than the instruction.
-A wrong route that passes means a check misses its mistake, or the setup lets the route through.
-`free-check` skips criteria, so only a paid trial shows whether a criterion catches its route.
 
 ## Open the pull request
 
@@ -1540,8 +1528,7 @@ If your task forks a network, a maintainer runs the [fork check](#task-on-a-main
 
 Put your evidence in the pull request body:
 
-- the free check's oracle and nop rewards
-- one row per route you ran, with its result and the check that failed
+- one row per mistake or other correct way you scripted, with its result and the check that failed
 - one row per trial you ran, with the agent, the result, the check that failed, and why
 
 The Evidence section of [#134](https://github.com/BuidlGuidl/ethevals/pull/134) is an example.
