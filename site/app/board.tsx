@@ -14,7 +14,7 @@ import { ModeToggle } from "../components/mode-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { TooltipProvider } from "../components/ui/tooltip";
 import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money } from "../components/scores";
-import { entryLabels, TrialDot, TrialDots, TrialLegend, taskHint, trialHint, trialNote, trialScoreText, trialState } from "../components/trial-display";
+import { entryLabels, notRunTrials, TrialDot, TrialDots, TrialLegend, taskHint, trialHint, trialNote, trialScoreText, trialState } from "../components/trial-display";
 import { ignoringRefusals, updateQuery, useQuery } from "../components/url-state";
 import { drawerRefusalBanner, ignoreRefusals, ignoresRefusals, isRefusedTrial, refusalLines, refusals, refusalStrip, refusedCount, retryRefusals, sentences, tableHasRefusals, taskRefusalLines } from "../src/refusals";
 import { RefusalStrip, RefusalSwitch } from "../components/refusal-controls";
@@ -53,16 +53,21 @@ function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
     </section>)}{domain && !groups.some(({ entries }) => entries.length) && <p className="muted">No tasks yet for this domain and mode.</p>}</div>;
 }
 
-function EvalView({ evaluation, trials, onRun }: { evaluation: Eval; trials: Trial[]; onRun: (run: number) => void }) {
+function EvalView({ evaluation, trials, notRun, onRun }: { evaluation: Eval; trials: Trial[]; notRun: number[]; onRun: (run: number) => void }) {
+  // Saved trials and planned trials that never ran, in trial order.
+  const rows = [...trials.map((trial) => ({ trial: trial.trial, saved: trial })), ...notRun.map((trial) => ({ trial, saved: undefined }))]
+    .sort((a, b) => a.trial - b.trial);
   return <>
     <p>{evaluation.description}</p>
     <details className="prompt-disclosure" open><summary>Instruction</summary><pre>{unwrapPrompt(evaluation.instruction)}</pre>
     </details>
-    <section className="detail-section"><h3>Trials</h3>{trials.length ?
+    <section className="detail-section"><h3>Trials</h3>{rows.length ?
       <div className="table-shell"><div className="table-scroll" role="region" tabIndex={0} aria-label="Trials. Scroll horizontally for all columns.">
         <table className="runs-table"><caption className="sr-only">Trials for this task and configuration. Open a row for checks and trajectories.</caption>
           <thead><tr>{["Trial", "Trial score", "Checks", "Time", "Tokens", "Cost"].map((label) => <th scope="col" key={label}>{label}</th>)}<th scope="col"><span className="sr-only">Open trial</span></th></tr></thead>
-          <tbody>{trials.map((trial) => <tr key={trial.trial}><td><button className="run-open" onClick={() => onRun(trial.trial)}
+          <tbody>{rows.map(({ trial: number, saved: trial }) => !trial ? <tr key={number} className="not-run">
+            <td>Trial {number}</td><td>Not run yet</td>{[0, 1, 2, 3].map((index) => <td key={index}>–</td>)}<td aria-hidden="true" /></tr>
+            : <tr key={trial.trial}><td><button className="run-open" onClick={() => onRun(trial.trial)}
             aria-label={`${trialHint(trial)}. Open trial.`}>Trial {trial.trial}</button></td>
             <td><span className="trial-score"><TrialDot state={trialState(trial)} ignored={trial.ignored} />{trialScoreText(trial)}</span></td>
             <td className={isRefusedTrial(trial) ? "refusal-text" : trial.score.value !== null && trial.score.stop ? "negative" : undefined}>{trial.score.value === null ? "–" : trialNote(trial)}</td>
@@ -99,7 +104,9 @@ function CheckGroup({ label, note, checks }: { label: string; note?: string; che
 
 function RunView({ evaluation, trial, trials, onRun }: { evaluation: Eval; trial: Trial; trials: Trial[]; onRun: (run: number) => void }) {
   const checks = Object.entries(trial.checks);
-  const failedEntries = checks.filter(([name, check]) => !check.passed && checkKind(evaluation, name) === "entry");
+  // A refused trial's refusal note already says it gave no answer.
+  const failedEntries = checks.filter(([name, check]) => !check.passed && checkKind(evaluation, name) === "entry"
+    && !(name === "no_answer" && isRefusedTrial(trial)));
   const groups = (evaluation.pillar === "concepts"
     ? [{ kind: "concept", label: "Checks", note: undefined }]
     : [{ kind: "gate", label: "Gate checks", note: checkNotes.gate },
@@ -113,8 +120,7 @@ function RunView({ evaluation, trial, trials, onRun }: { evaluation: Eval; trial
       aria-pressed={run.trial === trial.trial} aria-label={trialHint(run)} onClick={() => onRun(run.trial)}>
       Trial {run.trial} <TrialDot state={trialState(run)} ignored={run.ignored} /></button>)}</div>
     <dl className="run-stats">{[
-      ["Checks", score.value !== null && score.total ? `${score.passed} of ${score.total}` : "–"],
-      ["Tokens", tokens(trial.total_tokens)], ["Cost", money(trial.cost)], ["Time", duration(trial)],
+      ["Tokens", tokens(trial.total_tokens)], ["Time", duration(trial)],
     ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {score.value === null ? <p className="trial-error">
       <AlertTriangle size={14} aria-hidden="true" />This trial ended in an error, so it is left out of the score.
@@ -129,7 +135,7 @@ function RunView({ evaluation, trial, trials, onRun }: { evaluation: Eval; trial
       {failedEntries.map(([name, check]) => <p key={name} className="entry-check"><X size={16} className="negative" aria-hidden="true" />
         <b>{entryLabels[name]}</b><small>{check.reason}</small></p>)}
       {groups.map((group) => <CheckGroup key={`${trial.trial}-${group.kind}`} {...group} />)}
-      {!failedEntries.length && !groups.length && <p className="muted">No checks counted.</p>}
+      {!failedEntries.length && !groups.length && !isRefusedTrial(trial) && <p className="muted">No checks counted.</p>}
     </div>}
     <p className="muted">{trial.paid_by === "free" ? "No model spend" : `Paid by ${trial.paid_by === "plan" ? "plan" : "API key"}`} · Cost at API prices</p>
     {trial.trajectoryUrl ? <div className="trajectory-links"><a className="button" href={trial.trajectoryUrl} target="_blank" rel="noreferrer">{trial.trajectoryUrl.startsWith("https://hub.harborframework.com/jobs/") ? "Open full trial on Harbor Hub ↗" : "Open trajectory ↗"}</a></div> : <p className="muted">Trajectory not published.</p>}
@@ -150,11 +156,11 @@ export function Detail({ selection, data, domain, onSelect }: {
     heading.current?.focus({ preventScroll: true });
   }, [evaluation?.id, runLevel]);
   const scope = pillar ? table.pillars[pillar].cells[key] : summary;
-  const missing = trial ? 0 : evaluation ? cell?.missing ?? 0 : scope.missing;
-  const ignoring = ignoresRefusals(table);
+  // Banners count trials rolled up out of sight. A task drawer lists each trial in its own row, so it has none.
+  const rolledUp = !evaluation;
+  const missing = rolledUp ? scope.missing : 0;
   const info = refusals(table, key, pillar ?? "overall");
-  const refusalBanner = trial ? undefined : evaluation ? cell && refusedCount([cell]) > 0 ? sentences(taskRefusalLines(cell, ignoring)) : undefined
-    : !info.refused ? undefined : drawerRefusalBanner(info, ignoring);
+  const refusalBanner = rolledUp && info.refused ? drawerRefusalBanner(info, ignoresRefusals(table)) : undefined;
   return <TooltipProvider delayDuration={200}><div className="detail-body">
     <header className="drawer-header"><h1 ref={heading} tabIndex={-1} className={trial ? "run-heading" : undefined}>{trial ? <>
       Trial {trial.trial} of {trials.length} <span className="trial-heading-score">{trialScoreText(trial)}</span>
@@ -182,7 +188,7 @@ export function Detail({ selection, data, domain, onSelect }: {
       : evaluation && fromList && <button className="back-button" onClick={() => onSelect({ agent, mode, pillar })}>
         <ArrowLeft size={14} />{pillar ? names[pillar] : "All pillars"}</button>}
     {trial && evaluation ? <RunView evaluation={evaluation} trial={trial} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
-      evaluation ? <EvalView evaluation={evaluation} trials={trials} onRun={(run) => onSelect({ ...selection, run })} /> :
+      evaluation ? <EvalView evaluation={evaluation} trials={trials} notRun={cell ? notRunTrials(cell) : []} onRun={(run) => onSelect({ ...selection, run })} /> :
       <EvalList table={table} evaluations={data.evaluations} agent={agent} pillar={pillar} domain={domain}
         onEval={(value) => onSelect({ ...selection, evaluation: value, fromList: true })} />}
   </div></TooltipProvider>;
@@ -279,7 +285,7 @@ export function Results({ data: base, query }: { data: BoardData; query: URLSear
     <section id="evals" className="results-section"><div className="section-head"><div><h2>Results by task</h2><p>See each configuration’s task scores by pillar.</p></div>
       <ModeToggle mode={evalsMode} onChange={(value) => updateQuery({ evals: value })} label="Which task results" />
       <a className="button" href={`${repo}/blob/main/docs/add-a-task.md`} target="_blank" rel="noreferrer">How to add a task ↗</a></div>
-      <div className="matrix-filters"><p className="eyebrow">{matrixRows.reduce((sum, { entries }) => sum + entries.length, 0)} tasks · {modeNames[evalsMode]}</p>
+      <div className="matrix-filters"><p className="eyebrow">{matrixRows.reduce((sum, { entries }) => sum + entries.length, 0)} tasks</p>
         <DomainFilter taskDomains={pillars.flatMap((pillar) => matrixTable.pillars[pillar].evals.map((entry) => data.evaluations[entry.id].domain))} domain={domain} />
       </div>
       <div className="table-shell"><div className="table-scroll matrix-scroll" role="region" tabIndex={0} aria-label="Task matrix. Scroll for more tasks and configurations.">

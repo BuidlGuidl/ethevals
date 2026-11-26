@@ -22,13 +22,21 @@ export function trialState(trial: Trial): State {
 export function trialNote(trial: Trial): string {
   const { score } = trial;
   if (score.value === null) return "Error";
-  if (isRefusedTrial(trial)) return trial.ignored ? "Refused (ignored)" : "Safety refusal";
+  // The score column already says "Ignored" for an ignored refusal.
+  if (isRefusedTrial(trial)) return trial.ignored ? "Refused" : "Safety refusal";
   if (score.stop?.kind === "entry") return entryLabels[score.stop.name];
   if (score.stop?.kind === "gate") {
     const { name, more } = score.stop;
     return `Gate check failed: ${checkName(name)}${more ? ` and ${more} more` : ""}`;
   }
   return score.total ? `${score.passed} of ${score.total} passed` : "No checks counted";
+}
+
+// Planned trial numbers with no saved trial. `missing` counts errors and trials not run, up to the job's attempts.
+export function notRunTrials({ trials, missing, errors }: Pick<EvalCell, "trials" | "missing" | "errors">): number[] {
+  const saved = new Set(trials.map((trial) => trial.trial)), numbers: number[] = [];
+  for (let number = 1; numbers.length < missing - errors; number++) if (!saved.has(number)) numbers.push(number);
+  return numbers;
 }
 
 export const trialScoreText = ({ score, ignored }: Trial) => score.value === null ? "Not scored" : ignored ? "Ignored" : percent(score.value);

@@ -68,11 +68,36 @@ test("refused trials get their own label and dot, and say when they are ignored"
     data, selection: { evaluation, agent, mode: "internet" }, onSelect: () => {} }));
   const counted = task(buildBoard([evaluation], rows));
   assert.match(counted, /data-state="refused"[^>]*><svg[^>]*lucide-shield-ban[^>]*>.*?<\/svg><\/span>0%<\/span><\/td><td class="refusal-text">Safety refusal<\/td>/);
-  assert.match(counted, /class="refusal-banner">.*1 refused trial \(scored as 0%\)\./);
   const ignored = task(ignoreRefusals(buildBoard([evaluation], rows)));
-  assert.match(ignored, /data-state="refused" data-ignored="true"[^>]*><svg[^>]*lucide-shield-ban[^>]*>.*?<\/svg><\/span>Ignored<\/span><\/td><td class="refusal-text">Refused \(ignored\)<\/td>/);
-  assert.match(ignored, /class="refusal-banner">.*1 refused trial ignored\./);
+  assert.match(ignored, /data-state="refused" data-ignored="true"[^>]*><svg[^>]*lucide-shield-ban[^>]*>.*?<\/svg><\/span>Ignored<\/span><\/td><td class="refusal-text">Refused<\/td>/);
   assert.doesNotMatch(task(buildBoard([evaluation], [row({ trial: 2 })])), /refusal|data-state="refused"/);
+});
+
+test("only the Overall and pillar drawers carry the refusal banner; the task drawer's rows say it", () => {
+  const rows = [row(noAnswerTwice("refused")), row({ trial: 2 })];
+  const drawer = (data: ReturnType<typeof buildBoard>, selection: Selection) =>
+    renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
+  for (const [data, banner] of [[buildBoard([evaluation], rows), "1 refused trial (scored as 0%)."],
+    [ignoreRefusals(buildBoard([evaluation], rows)), "1 refused trial ignored."]] as const) {
+    for (const selection of [{ agent, mode: "internet" }, { agent, mode: "internet", pillar: "concepts" }] as Selection[])
+      assert.match(drawer(data, selection), new RegExp(`class="refusal-banner">.*${banner.replace(/[().]/g, "\\$&")}`));
+    const task = drawer(data, { evaluation, agent, mode: "internet" });
+    assert.doesNotMatch(task, /refusal-banner/);
+    assert.match(task, /class="refusal-text">(Safety refusal|Refused)<\/td>/);
+  }
+});
+
+test("a refused trial view gives the refusal note without repeating it as a no-answer check", () => {
+  const view = (data: ReturnType<typeof buildBoard>) => renderToStaticMarkup(createElement(Detail, {
+    data, selection: { evaluation, agent, mode: "internet", run: 1 }, onSelect: () => {} }));
+  const refused = buildBoard([evaluation], [row(noAnswerTwice("refused"))]);
+  for (const data of [refused, ignoreRefusals(refused)]) {
+    const html = view(data);
+    assert.match(html, /class="refusal-note">/);
+    assert.doesNotMatch(html, /class="entry-check"|No answer twice\.|No checks counted/);
+  }
+  // An empty reply is not a refusal, so its no-answer check stays listed.
+  assert.match(view(buildBoard([evaluation], [row(noAnswerTwice("empty"))])), /class="entry-check">.*<b>No answer<\/b><small>No answer twice\.<\/small>/);
 });
 
 test("a trial answered on retry after a refusal keeps its score and says so in its trial view", () => {
@@ -109,14 +134,33 @@ test("planned trials without a score are counted and marked on the board", () =>
   assert.deepEqual([...page.matchAll(/class="unscored-info" role="img" aria-label="([^"]+)"/g)].map((match) => match[1]),
     ["3 trials have no score yet.", "3 trials have no score yet.", "1 trial has no score yet."]);
   assert.ok(page.includes('title="No trials yet">–</span>'));
-  // The drawer says the same in a banner for the scope it shows, and stays quiet for a single trial.
+  // The Overall drawer says the same in a banner. The task drawer and trial view list each trial instead.
   const drawer = (selection: Parameters<typeof Detail>[0]["selection"]) => renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
   const token = { ...tasks[1], domain: "dapp-development" as const };
   // Overall counts one Concepts task at 50% and two Build tasks at 100%; the Act task is Model only.
   assert.ok(drawer({ agent, mode: "internet" }).includes('<p class="unscored-banner">3 trials have no score yet.</p><p>83% · 3 scored trials</p>'));
   assert.ok(!drawer({ agent, mode: "internet", pillar: "concepts" }).includes("unscored-banner"));
-  assert.ok(drawer({ agent, mode: "internet", evaluation: token }).includes('<p class="unscored-banner">1 trial has no score yet.</p>'));
+  assert.ok(drawer({ agent, mode: "internet", pillar: "build" }).includes('<p class="unscored-banner">3 trials have no score yet.</p>'));
+  const task = drawer({ agent, mode: "internet", evaluation: token });
+  assert.ok(!task.includes("unscored-banner"));
+  assert.match(task, /Trial 2<\/button><\/td><td><span class="trial-score">.*?<\/span>Not scored<\/span>/);
   assert.ok(!drawer({ agent, mode: "internet", evaluation: token, run: 1 }).includes("unscored-banner"));
+  // The Page task never ran: both planned trials get a row that cannot be opened.
+  const page2 = drawer({ agent, mode: "internet", evaluation: { ...tasks[2], domain: "dapp-development" } });
+  assert.deepEqual([...page2.matchAll(/<tr class="not-run"><td>Trial (\d)<\/td><td>Not run yet<\/td>/g)].map((match) => match[1]), ["1", "2"]);
+  assert.ok(!page2.includes('class="run-open"'));
+});
+
+test("the task drawer lists a Not run yet row for each planned trial number without a saved trial", () => {
+  const data = buildBoard([evaluation], [row({ trial: 2 }), row({ trial: 4, ...error })], false, 5);
+  const html = renderToStaticMarkup(createElement(Detail, { data, selection: { evaluation, agent, mode: "internet" }, onSelect: () => {} }));
+  const order = [...html.matchAll(/<tr( class="not-run")?><td>(?:<button[^>]*>)?Trial (\d)/g)].map((match) => `${match[2]}${match[1] ? " not run" : ""}`);
+  assert.deepEqual(order, ["1 not run", "2", "3 not run", "4", "5 not run"]);
+  assert.equal((html.match(/class="run-open"/g) ?? []).length, 2);
+  // Without planned attempts nothing is listed as not run.
+  const unplanned = renderToStaticMarkup(createElement(Detail, { data: buildBoard([evaluation], [row({ trial: 2 })]),
+    selection: { evaluation, agent, mode: "internet" }, onSelect: () => {} }));
+  assert.doesNotMatch(unplanned, /Not run yet/);
 });
 
 test("unsupported, unrun, and failed cells have distinct states", () => {
@@ -198,8 +242,8 @@ test("the table and panel both label an empty pillar as No tasks yet", () => {
 test("the board labels null effort as the provider default", () => {
   const data = buildBoard([evaluation], [row({ effort: null }), row({ effort: "medium" })]);
   const html = renderToStaticMarkup(createElement(Board, { data }));
-  assert.ok(html.includes('title="model-a · agent-a · effort provider default"'));
-  assert.ok(html.includes('title="model-a · agent-a · effort medium"'));
+  assert.ok(html.includes("agent-a · effort provider default · "));
+  assert.ok(html.includes("agent-a · effort medium · "));
 });
 
 test("a trial costs agent plus judge, a missing part counting as 0", () => {
@@ -217,7 +261,7 @@ test("each label shows the cost of the trials under it, errors and refusals incl
     row({ task_id: "build/mint", status: "error", model_cost_usd: 1, judge_cost_usd: null }),
     row({ task_id: "build/mint", trial: 2, status: "failed", model_cost_usd: 2, judge_cost_usd: 0.25 })];
   const data = buildBoard([evaluation, build], rows);
-  const label = (html: string) => html.match(/class="configuration-cost"[^>]*>([^<]*)</)?.[1];
+  const label = (html: string) => html.match(/class="configuration-cost[^"]*"[^>]*>([^<]*)</)?.[1];
   const drawer = (selection: Omit<Selection, "agent" | "mode">) => label(renderToStaticMarkup(createElement(Detail, {
     data, selection: { agent, mode: "internet", ...selection }, onSelect: () => {} })));
   assert.equal(label(renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams() }))), "$4.50");
@@ -294,7 +338,7 @@ test("the matrix shares the domain URL, counts matching tasks, and hides empty p
     const html = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams(query) }));
     const matrix = html.slice(html.indexOf('id="evals"'));
     assert.deepEqual([...matrix.matchAll(/class="eval-title">([^<]+)/g)].map((match) => match[1]), titles);
-    assert.ok(matrix.includes(`<p class="eyebrow">${count} tasks · Internet</p>`));
+    assert.ok(matrix.includes(`<p class="eyebrow">${count} tasks</p>`));
     assert.ok(html.includes('agent-a / model-a. 100%. Open details.'));
     if (query === "domain=security") {
       assert.match(matrix, /aria-pressed="true">Security <span>1<\/span>/);
@@ -303,7 +347,7 @@ test("the matrix shares the domain URL, counts matching tasks, and hides empty p
   }
   const vanilla = renderToStaticMarkup(createElement(Results, { data, query: new URLSearchParams("evals=vanilla") }));
   assert.match(vanilla, /class="badge border-dashed pointer-events-none"[^>]*disabled=""[^>]*>Security<\/button>/);
-  assert.ok(vanilla.includes('<p class="eyebrow">2 tasks · Model only</p>'));
+  assert.ok(vanilla.includes('<p class="eyebrow">2 tasks</p>'));
 });
 
 test("drawer domain scores weight pillars by the domain's task count and respect the selected pillar and mode", () => {
@@ -377,14 +421,14 @@ test("trial details show the selected trial, failed reasons first, and a switche
   const selection = { evaluation, agent, mode: "internet" as const, fromList: true as const, run: 2 };
   const panel = renderToStaticMarkup(createElement(Detail, { data, selection, onSelect: () => {} }));
   assert.match(panel, /<h1[^>]*>Trial 2 of 3 <span class="trial-heading-score">0%<\/span><\/h1>/);
-  assert.ok(panel.includes('<p>Units</p>') && panel.includes('title="model-a · agent-a · effort high"'));
+  assert.ok(panel.includes('<p>Units</p>') && panel.includes("agent-a · effort high · "));
   assert.ok(panel.includes('aria-label="Trials"') && panel.includes('aria-pressed="true" aria-label="Trial 2 · 0% · 1 of 2 passed"'));
   assert.match(panel, /Trial 1 <span class="run-dot" data-state="full".*Trial 2 <span class="run-dot" data-state="zero".*Trial 3 <span class="run-dot" data-state="error"/s);
   assert.match(panel, /class="back-button"[\s\S]*?<\/svg>All trials/);
   assert.ok(panel.includes('<code>bad</code>') && panel.includes('<code>good</code>') && panel.includes("The answer differs."));
   assert.ok(panel.indexOf('<code>bad</code>') < panel.indexOf('<code>good</code>'));
   assert.ok(panel.includes("Test passed.") && !panel.includes("Cost source:") && !panel.includes('prompt-disclosure') && !panel.includes('aria-label="Agent modes"'));
-  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Checks</dt><dd>1 of 2</dd></div><div><dt>Tokens</dt><dd>7k</dd></div><div><dt>Cost</dt><dd>$0.25</dd></div><div><dt>Time</dt><dd>8.0s</dd></div></dl>'));
+  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Tokens</dt><dd>7k</dd></div><div><dt>Time</dt><dd>8.0s</dd></div></dl>'));
   assert.ok(panel.includes('<h3>Checks <span>1 of 2</span></h3>'));
   assert.ok(panel.indexOf('class="run-switcher"') < panel.indexOf('class="run-stats"'));
   assert.ok(panel.indexOf('class="run-stats"') < panel.indexOf('class="verifier-verdict"'));

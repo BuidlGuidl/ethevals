@@ -64,8 +64,9 @@ A score with planned trials that have no score yet shows an amber warning triang
 The icon's tooltip gives the count, such as "18 trials have no score yet."
 It counts errors and trials that have not run, up to the job's `n_attempts` for each task in the selected mode.
 Overall, pillar scores, and task matrix cells carry it. A task without scored trials keeps its "–".
-The drawer shows the same sentence in an amber banner under the configuration, for the scores or the task it shows.
-A score with trials stopped by a safety refusal on both tries shows a purple shield, apart from the amber warning triangle. The drawer gives those trials their own dot and a purple banner.
+The Overall and pillar drawers show the same sentence in an amber banner under the configuration.
+The task drawer lists each trial instead, with a muted "Not run yet" row for each planned trial that has no saved trial.
+A score with trials stopped by a safety refusal on both tries shows a purple shield, apart from the amber warning triangle. The drawer gives those trials their own dot. The Overall and pillar drawers add a purple banner; the task drawer's rows say "Safety refusal", or "Refused" while refusals are ignored.
 The "Ignore refusals" switch at the right of the toolbar (`?refusals=ignore`) leaves those trials out of task, pillar, and Overall averages and re-sorts the leaderboard.
 While it is on, an affected score shows the score with refusals counted and, for a pillar, how many tasks still have a score.
 A trial that answered on the retry after a safety refusal keeps its score; only its trial view notes the refusal.
@@ -79,8 +80,8 @@ The drawer task list shows one dot per trial for 100%, some checks missed, 0%, o
 The trials table shows the trial score, followed by the check count or the reason a gate check or entry check stopped the trial score at 0%.
 The trial view groups Gate checks and Judgment checks under headings with counts and info notes. Concepts has one Checks group.
 Each group lists failed checks first, then passed checks, each with its reason.
-A failed entry check appears above the groups. Passed entry checks stay out of the view.
-The trial view also shows cost, payment source, tokens, and elapsed time.
+A failed entry check appears above the groups. Passed entry checks stay out of the view, and so does a refused trial's no-answer check, since its refusal note says it.
+The trial view also shows tokens, elapsed time, and payment source. Its cost is on the configuration label.
 An errored trial says "Not scored" and explains why it stays out of the score.
 Its trajectory link opens the row's `trajectory_url`.
 Harbor Hub links say "Open full trial on Harbor Hub" and open the public trial page.
