@@ -281,7 +281,7 @@
   .run-switcher button { @apply inline-flex min-h-9 items-center gap-2 bg-sheet px-3 py-2 text-xs; }
   .run-switcher button:hover { @apply bg-tint; }
   .run-switcher button[aria-pressed="true"] { @apply bg-tint text-ink shadow-[inset_0_-2px_var(--color-accent)]; }
-  .run-stats { @apply grid grid-cols-2 gap-px border border-border bg-border; }
+  .run-stats { @apply grid gap-px border border-border bg-border; }
   .run-stats > div { @apply min-w-0 bg-sheet px-3 py-3; }
   .run-stats dt { @apply text-[10px] uppercase tracking-[.06em] text-muted; }
   .run-stats dd { @apply mt-1 text-[17px] font-semibold; }
