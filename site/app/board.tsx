@@ -13,7 +13,7 @@ import { Logo } from "../components/logo";
 import { ModeToggle } from "../components/mode-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { TooltipProvider } from "../components/ui/tooltip";
-import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money, tokens, Spend } from "../components/scores";
+import { Score, Hint, InfoHint, CornerMarks, unscored, peers, tile, percent, money, tokens, elapsed, Spend } from "../components/scores";
 import { entryLabels, notRunTrials, TrialDot, TrialDots, TrialLegend, taskHint, trialHint, trialNote, trialScoreText, trialState } from "../components/trial-display";
 import { ignoringRefusals, updateQuery, useQuery } from "../components/url-state";
 import { drawerRefusalBanner, ignoreRefusals, ignoresRefusals, isRefusedTrial, refusalLines, refusals, refusalStrip, refusedCount, retryRefusals, sentences, tableHasRefusals, taskRefusalLines } from "../src/refusals";
@@ -23,8 +23,6 @@ import { readMode } from "../src/modes";
 import { checkKind } from "../src/scoring";
 
 type Sort = "overall" | Pillar;
-
-const duration = (trial: Trial) => trial.total_seconds === null ? "–" : `${trial.total_seconds.toFixed(1)}s`;
 
 function EvalList({ table, evaluations, agent, pillar, domain, onEval }: {
   table: Table; evaluations: BoardData["evaluations"]; agent: Agent; pillar?: Pillar; domain?: Domain; onEval: (evaluation: Eval) => void;
@@ -69,7 +67,7 @@ function EvalView({ evaluation, trials, notRun, onRun }: { evaluation: Eval; tri
             aria-label={`${trialHint(trial)}. Open trial.`}>Trial {trial.trial}</button></td>
             <td><span className="trial-score"><TrialDot state={trialState(trial)} ignored={trial.ignored} />{trialScoreText(trial)}</span></td>
             <td className={isRefusedTrial(trial) ? "refusal-text" : trial.score.value !== null && trial.score.stop ? "negative" : undefined}>{trial.score.value === null ? "–" : trialNote(trial)}</td>
-            <td>{duration(trial)}</td><td>{tokens(trial.tokens)}</td><td>{money(trial.cost)}</td><td aria-hidden="true">›</td></tr>)}</tbody></table>
+            <td>{elapsed(trial.total_seconds)}</td><td>{tokens(trial.tokens)}</td><td>{money(trial.cost)}</td><td aria-hidden="true">›</td></tr>)}</tbody></table>
       </div></div> : <p>No trials yet.</p>}
     </section>
   </>;
@@ -117,9 +115,6 @@ function RunView({ evaluation, trial, trials, onRun }: { evaluation: Eval; trial
     <div className="run-switcher" role="group" aria-label="Trials">{trials.map((run) => <button key={run.trial}
       aria-pressed={run.trial === trial.trial} aria-label={trialHint(run)} onClick={() => onRun(run.trial)}>
       Trial {run.trial} <TrialDot state={trialState(run)} ignored={run.ignored} /></button>)}</div>
-    <dl className="run-stats">{[
-      ["Time", duration(trial)],
-    ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {score.value === null ? <p className="trial-error">
       <AlertTriangle size={14} aria-hidden="true" />This trial ended in an error, so it is left out of the score.
     </p> : trial.issue && <p className="issue">{trial.error_kind ?? trial.limit?.type ?? "Trial"}: {trial.issue}</p>}
@@ -165,7 +160,7 @@ export function Detail({ selection, data, domain, onSelect }: {
     </> : evaluation?.title ?? (pillar ? names[pillar] : "All pillars")}</h1>
       {trial && <p>{evaluation!.title}</p>}
       <Configuration agent={agent} cost={trial ? trial.cost : evaluation ? cell?.cost ?? null : scope.cost}
-        tokens={trial ? trial.tokens : evaluation ? cell?.tokens ?? null : scope.tokens} plan={summary.plan} /><p className="muted">{modeNames[mode]}</p>
+        tokens={trial ? trial.tokens : evaluation ? cell?.tokens ?? null : scope.tokens} seconds={trial?.total_seconds} plan={summary.plan} /><p className="muted">{modeNames[mode]}</p>
       {missing > 0 && <p className="unscored-banner">{unscored(missing)}</p>}
       {refusalBanner && <p className="refusal-banner"><ShieldBan size={14} aria-hidden="true" />{refusalBanner}</p>}
       {!evaluation && <p>{percent(summary.scores[pillar ?? "overall"])} · {scoredTrials(scope.total)}</p>}

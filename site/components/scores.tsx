@@ -13,12 +13,15 @@ export const money = (value: number | null) => value === null ? "–" : value ==
   : value >= 9.995 ? dollars.format(value) : value >= 0.995 ? cents.format(value) : small.format(Number(value.toPrecision(2)));
 const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 export const tokens = (value: number | null) => value === null ? "–" : tokenFormat.format(value);
+export const elapsed = (seconds: number | null) => seconds === null ? "–" : `${seconds.toFixed(1)}s`;
 // What the trials under a label spent, as "$61 · 81.9M tok". Cost and tokens are known together or not at all,
-// and unknown reads as one "–". Each half keeps its number and unit together, so a narrow line breaks before the dot.
-export function Spend({ cost, tokens: count, note }: { cost: number | null; tokens: number | null; note?: string }) {
-  if (cost === null || count === null) return <span className="spend-cost">–</span>;
+// and unknown reads as one "–". A single trial's label adds its time, "$0.44 · 1.6M tok · 369.6s", unless that is unknown.
+// Each part keeps its number and unit together, so a narrow line breaks before a dot.
+export function Spend({ cost, tokens: count, seconds, note }: { cost: number | null; tokens: number | null; seconds?: number | null; note?: string }) {
+  const time = seconds == null ? null : <> <span className="spend-time">· {elapsed(seconds)}</span></>;
+  if (cost === null || count === null) return <><span className="spend-cost">–</span>{time}</>;
   const amount = <span className={note ? "spend-cost has-hint" : "spend-cost"} tabIndex={note ? 0 : undefined}>{money(cost)}</span>;
-  return <>{note ? <Hint text={note}>{amount}</Hint> : amount} <span className="spend-tokens">· {tokens(count)} tok</span></>;
+  return <>{note ? <Hint text={note}>{amount}</Hint> : amount} <span className="spend-tokens">· {tokens(count)} tok</span>{time}</>;
 }
 export const pp = (value: number | null) => value === null ? "–" : `${Math.round(value) > 0 ? "+" : ""}${Math.round(value)}pp`;
 // Tile color and tooltip compare a score with the best score among its peers: a leaderboard column or a task row.

@@ -83,7 +83,7 @@ The trials table shows the trial score, followed by the check count or the reaso
 The trial view groups Gate checks and Judgment checks under headings with counts and info notes. Concepts has one Checks group.
 Each group lists failed checks first, then passed checks, each with its reason.
 A failed entry check appears above the groups. Passed entry checks stay out of the view, and so does a refused trial's no-answer check, since its refusal note says it.
-The trial view also shows elapsed time and payment source. Its cost and tokens are on the configuration label.
+The trial view's configuration label adds the trial's elapsed time after its cost and tokens, and the view also shows the payment source.
 An errored trial says "Not scored" and explains why it stays out of the score.
 Its trajectory link opens the row's `trajectory_url`.
 Harbor Hub links say "Open full trial on Harbor Hub" and open the public trial page.

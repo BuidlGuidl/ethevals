@@ -280,7 +280,7 @@ test("each label shows what the agents spent on the trials under it, errors and 
     assert.equal(drawer({ pillar: "build" }, source), "$3.00 · 3K tok");
     assert.equal(drawer({ pillar: "concepts" }, source), "$0.75 · 300 tok");
     assert.equal(drawer({ evaluation: data.evaluations["concepts/units"] }, source), "$0.75 · 300 tok");
-    assert.equal(drawer({ evaluation: data.evaluations["build/mint"], run: 2 }, source), "$2.00 · 2K tok");
+    assert.equal(drawer({ evaluation: data.evaluations["build/mint"], run: 2 }, source), "$2.00 · 2K tok · 8.0s");
   }
   assert.deepEqual(taskSpends(renderToStaticMarkup(createElement(Detail, {
     data, selection: { agent, mode: "internet", pillar: "build" }, onSelect: () => {} }))), ["$3.00 · 3K tok"]);
@@ -297,7 +297,7 @@ test("unknown usage reads as one dash on the label, the drawer task list and the
     data, selection: { agent, mode: "internet", ...selection }, onSelect: () => {} }));
   const units = detail({ evaluation: data.evaluations["concepts/units"] });
   assert.equal(spend(units), "–");
-  assert.equal(spend(detail({ evaluation: data.evaluations["concepts/units"], run: 1 })), "–");
+  assert.equal(spend(detail({ evaluation: data.evaluations["concepts/units"], run: 1 })), "– · 8.0s");
   assert.equal(spend(detail({ evaluation: data.evaluations["concepts/swap"] })), "–");
   assert.equal(spend(detail({ pillar: "act" })), "–");
   // Trials table: time, tokens, cost.
@@ -309,6 +309,19 @@ test("unknown usage reads as one dash on the label, the drawer task list and the
   assert.deepEqual(taskSpends(list), ["–", "$0 · 0 tok", "–"]);
   assert.equal(spend(list), "$0 · 0 tok");
   for (const html of [units, detail({ evaluation: data.evaluations["concepts/swap"] })]) assert.ok(!html.includes("0 tok"));
+});
+
+test("only the trial view's label adds the trial's time, in the trials table's format, and leaves an unknown time off", () => {
+  const data = buildBoard([evaluation], [row({ model_cost_usd: 0.44, total_tokens: 1_600_000, total_seconds: 369.6 }),
+    row({ trial: 2, model_cost_usd: null, total_seconds: 86.5 }), row({ trial: 3, total_seconds: null })]);
+  const detail = (run?: number) => renderToStaticMarkup(createElement(Detail, {
+    data, selection: { evaluation, agent, mode: "internet", run }, onSelect: () => {} }));
+  assert.equal(spend(detail(1)), "$0.44 · 1.6M tok · 369.6s");
+  assert.equal(spend(detail(2)), "– · 86.5s");
+  assert.equal(spend(detail(3)), "$0.20 · 100 tok");
+  const task = detail();
+  assert.equal(spend(task), "$0.64 · 1.6M tok");
+  assert.match(task, /<td>369\.6s<\/td>.*<td>86\.5s<\/td>.*<td>–<\/td><td>100<\/td>/s);
 });
 
 test("costs show whole dollars from $10, cents from $1, and two significant digits below", () => {
@@ -463,10 +476,10 @@ test("trial details show the selected trial, failed reasons first, and a switche
   assert.ok(panel.includes('<code>bad</code>') && panel.includes('<code>good</code>') && panel.includes("The answer differs."));
   assert.ok(panel.indexOf('<code>bad</code>') < panel.indexOf('<code>good</code>'));
   assert.ok(panel.includes("Test passed.") && !panel.includes("Cost source:") && !panel.includes('prompt-disclosure') && !panel.includes('aria-label="Agent modes"'));
-  assert.ok(panel.includes('<dl class="run-stats"><div><dt>Time</dt><dd>8.0s</dd></div></dl>') && spend(panel) === "$0.20 · 7K tok");
+  assert.equal(spend(panel), "$0.20 · 7K tok · 8.0s");
   assert.ok(panel.includes('<h3>Checks <span>1 of 2</span></h3>'));
-  assert.ok(panel.indexOf('class="run-switcher"') < panel.indexOf('class="run-stats"'));
-  assert.ok(panel.indexOf('class="run-stats"') < panel.indexOf('class="verifier-verdict"'));
+  // The checks follow the trial switcher, with no time box between them.
+  assert.ok(!panel.includes(">Time<") && panel.indexOf('class="run-switcher"') < panel.indexOf('class="verifier-verdict"'));
   assert.ok(panel.indexOf('class="verifier-verdict"') < panel.indexOf('class="trajectory-links"'));
   assert.ok(panel.includes('href="https://example.com/run.json" target="_blank" rel="noreferrer">Open trajectory ↗'));
   const passed = renderToStaticMarkup(createElement(Detail, { data, selection: { ...selection, run: 1 }, onSelect: () => {} }));

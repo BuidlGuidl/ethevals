@@ -101,7 +101,7 @@
   .configuration small + small { @apply mt-0.5; }
   .configuration b { @apply font-semibold text-[13px]; }
   .configuration-icon { @apply inline-block shrink-0 align-middle; width: 14px; height: 14px; }
-  .spend-cost, .spend-tokens { @apply whitespace-nowrap; }
+  .spend-cost, .spend-tokens, .spend-time { @apply whitespace-nowrap; }
   .configuration .spend-cost { @apply text-ink; }
   .spend-cost.has-hint { cursor: help; }
   .task-cost { @apply text-xs tabular-nums text-muted; }
@@ -286,10 +286,6 @@
   .run-switcher button { @apply inline-flex min-h-9 items-center gap-2 bg-sheet px-3 py-2 text-xs; }
   .run-switcher button:hover { @apply bg-tint; }
   .run-switcher button[aria-pressed="true"] { @apply bg-tint text-ink shadow-[inset_0_-2px_var(--color-accent)]; }
-  .run-stats { @apply grid gap-px border border-border bg-border; }
-  .run-stats > div { @apply min-w-0 bg-sheet px-3 py-3; }
-  .run-stats dt { @apply text-[10px] uppercase tracking-[.06em] text-muted; }
-  .run-stats dd { @apply mt-1 text-[17px] font-semibold; }
   .trial-score { @apply inline-flex items-center gap-2 font-semibold; }
   .issue { @apply border border-amber/30 bg-amber/5 p-3; overflow-wrap: anywhere; }
   .trial-error { @apply flex items-start gap-2 border border-amber/30 bg-amber/5 p-3; }
@@ -419,8 +415,6 @@
   .runs-table th:first-child, .runs-table td:first-child { padding-left: 11px; }
   .runs-table th:last-child, .runs-table td:last-child { padding-right: 11px; }
   .runs-table :is(th, td):nth-child(n+4):nth-child(-n+6) { display: none; }
-  .run-stats > div { padding-inline: 8px; }
-  .run-stats dd { font-size: 14px; }
   .page { padding: 28px 18px; }
   .page.results-page { padding-bottom: 24px; }
   .results-page #evals { margin-bottom: 0; }
