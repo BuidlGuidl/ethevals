@@ -233,8 +233,8 @@ test("each label shows the cost of the trials under it, errors and refusals incl
 });
 
 test("costs show whole dollars from $10, cents from $1, and two significant digits below", () => {
-  assert.deepEqual([164.23, 10, 9.99, 2.934, 1, 0.3, 0.046, 0.023, 0].map(money),
-    ["$164", "$10", "$9.99", "$2.93", "$1.00", "$0.30", "$0.046", "$0.023", "$0"]);
+  assert.deepEqual([164.23, 10, 9.99, 2.934, 1, 0.3, 0.046, 0.023, 0.003, 0].map(money),
+    ["$164", "$10", "$9.99", "$2.93", "$1.00", "$0.30", "$0.046", "$0.023", "$0.003", "$0"]);
   assert.equal(money(null), "–");
 });
 

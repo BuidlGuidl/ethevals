@@ -8,9 +8,9 @@ export const percent = (score: number | null) => score === null ? "–" : `${Mat
 // Every cost on the site: whole dollars from $10, cents from $1, two significant digits below.
 const usd = (options: Intl.NumberFormatOptions) => new Intl.NumberFormat("en", { style: "currency", currency: "USD", ...options });
 const dollars = usd({ maximumFractionDigits: 0 }), cents = usd({ minimumFractionDigits: 2 }),
-  small = usd({ minimumSignificantDigits: 2, maximumSignificantDigits: 2 });
+  small = usd({ minimumFractionDigits: 2, maximumFractionDigits: 6 });
 export const money = (value: number | null) => value === null ? "–" : value === 0 ? "$0"
-  : (value >= 9.995 ? dollars : value >= 0.995 ? cents : small).format(value);
+  : value >= 9.995 ? dollars.format(value) : value >= 0.995 ? cents.format(value) : small.format(Number(value.toPrecision(2)));
 export const pp = (value: number | null) => value === null ? "–" : `${Math.round(value) > 0 ? "+" : ""}${Math.round(value)}pp`;
 // Tile color and tooltip compare a score with the best score among its peers: a leaderboard column or a task row.
 // Both use rounded percentages, so two tiles showing the same number look the same.
