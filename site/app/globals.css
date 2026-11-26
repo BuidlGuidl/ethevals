@@ -438,7 +438,9 @@
   .score-cell { min-height: 58px; font-size: 19px; }
   .matrix .row-label { padding: 8px 10px; }
   .matrix .row-label small { display: none; }
-  .comparison { table-layout: fixed; overflow-wrap: anywhere; }
+  /* Columns grow to fit a token total, so five configurations scroll sideways instead of overlapping. */
+  .comparison { overflow-wrap: anywhere; }
+  .comparison th:first-child { overflow-wrap: normal; }
   .comparison thead th, .comparison thead th:first-child, .comparison td, .comparison tbody th { min-width: 0; padding-inline: 4px; font-size: 10px; }
   .comparison .configuration b, .comparison tbody tr:first-child td { font-size: 11px; }
   .trial-legend { column-gap: 8px; font-size: 10px; }

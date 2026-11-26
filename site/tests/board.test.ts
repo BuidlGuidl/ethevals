@@ -30,7 +30,12 @@ function row(overrides: Partial<Row> = {}): Row {
 
 // The text a reader sees on the first label's cost and token line, and on each drawer task list row.
 const strip = (html: string) => html.replace(/<[^>]*>/g, "");
-const spend = (html: string) => { const line = html.match(/class="configuration">[\s\S]*?<\/small><small>([\s\S]*?)<\/small>/)?.[1]; return line === undefined ? undefined : strip(line); };
+const spend = (html: string) => {
+  // Stop at the next label, so a label without its line can't borrow the next one's.
+  const label = html.match(/class="configuration">(?:(?!class="configuration")[\s\S])*/)?.[0];
+  const line = label?.match(/<\/small><small>([\s\S]*?)<\/small>/)?.[1];
+  return line === undefined ? undefined : strip(line);
+};
 const taskSpends = (html: string) => [...html.matchAll(/class="task-cost">((?:<span[^>]*>[^<]*<\/span>|[^<])*)<\/span>/g)].map((match) => strip(match[1]));
 
 function getCell(evaluation: Eval, agent: Agent, mode: "internet" | "vanilla", rows: Row[]) {
@@ -538,10 +543,10 @@ test("configurations show one agent logo beside the name, or one provider logo f
     ["openrouter/google/gemini-4-argon", "opencode", "openrouter", "opencode", "Gemini 4 Argon"],
     ["openrouter/google/gemini-4-neon", "opencode", "openrouter", "opencode", "Gemini 4 Neon"],
   ]) {
-    const html = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent, effort: null }, cost: null, tokens: 0, plan: false }));
+    const html = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent, effort: null }, cost: null, tokens: null, plan: false }));
     assert.ok(html.match(/<b>([\s\S]*?)<\/b>/)?.[1].includes(`src="/logos/${icon}.svg"`));
     assert.equal((html.match(/<img /g) ?? []).length, 1);
-    const bare = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent: null, effort: null }, cost: null, tokens: 0, plan: false }));
+    const bare = renderToStaticMarkup(createElement(Configuration, { agent: { model, agent: null, effort: null }, cost: null, tokens: null, plan: false }));
     assert.ok(bare.match(/<b>([\s\S]*?)<\/b>/)?.[1].includes(`src="/logos/${provider}.svg"`));
     assert.equal((bare.match(/<img /g) ?? []).length, 1);
     if (label) {
