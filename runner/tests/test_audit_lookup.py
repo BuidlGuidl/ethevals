@@ -245,10 +245,11 @@ def test_a_changed_lookup_copy_asks_only_the_lookup_judge_again(tmp_path, monkey
     assert calls == ["/lookup"]
 
 
-def test_carried_rows_keep_their_verdict_and_links_and_need_nothing_more(tmp_path):
+def test_carried_rows_keep_their_verdict_links_and_cost_and_need_nothing_more(tmp_path):
     from ethevals.regrade import run_regrades
 
     config, item, old = old_audit_row(tmp_path)
+    old.update(model_cost_usd=4.4358, total_tokens=2254484, cost_source="harbor", paid_by="api_key")
     refused = {**old, "status": "failed", "checks": {"no_answer": {"passed": False, "reason": "No answer twice."}},
                "no_answer": [{"stop_reason": "refusal"}, {"stop_reason": "refusal"}], "retry": 0,
                "verifier_files": None, "verifier_url": "https://example.org/verifier-1.tar.gz",
@@ -265,8 +266,9 @@ def test_carried_rows_keep_their_verdict_and_links_and_need_nothing_more(tmp_pat
     carried = {row["trial"]: row for row in rows if row["instruction_hash"] == item["instruction_hash"]}
     for before in (refused, exhausted, passed):
         after = carried[before["trial"]]
-        assert {key: after[key] for key in ("status", "checks", "no_answer", "retry", "error_kind", "verifier_url", "trajectory_url", "completed_at")} == {
-            key: before.get(key) for key in ("status", "checks", "no_answer", "retry", "error_kind", "verifier_url", "trajectory_url", "completed_at")}
+        kept = ("status", "checks", "no_answer", "retry", "error_kind", "verifier_url", "trajectory_url", "completed_at",
+                "model_cost_usd", "total_tokens", "cost_source", "paid_by")
+        assert {key: after[key] for key in kept} == {key: before.get(key) for key in kept}
         assert (after["checks_hash"], after["checks_generation"]) == (item["checks_hash"], 1)
     next_plan = plan([TASK], config, rows, n_attempts=3, saved_work=tmp_path / "cache")
     assert (next_plan["missing"], next_plan["regrades"], [row["trial"] for row in next_plan["exhausted_errors"]]) == ([], [], [2])

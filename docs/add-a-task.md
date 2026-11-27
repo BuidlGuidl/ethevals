@@ -73,7 +73,7 @@ Add `[agent].timeout_sec` or `[verifier].timeout_sec` only when your task needs 
 For a Build or Act task, list each check by the name the verifier reports under `[metadata.checks]`.
 Use `"gate"` for a gate check that tests a requirement in the instruction.
 Use `"judgment"` for a judgment check that tests what an experienced Ethereum developer does without being told.
-Leave entry checks out of the table. Their names are `compile`, `answered`, `no_answer`, and `report_written`.
+Leave entry checks out of the table. Their names are `compile`, `answered`, `no_answer`, `report_written`, and, on audit tasks, `no_audit_lookup`.
 Leave out the whole table for Concepts tasks.
 A trial that does nothing must score 0%, so the starting files have to fail a gate check or an entry check. The free check tests this.
 Add no other key under `[metadata]`. Lint rejects it.
@@ -308,7 +308,7 @@ Page judges copy the page judge variant from [swap page's tests](../tasks/build/
 Each variant has `judge-settings.json`, `agent_judge.py`, and `install_judge.py`.
 Audit tasks copy the audit judge variant, `test.sh`, `judge-prompt.md`, and `lookup-prompt.md` from [The Compact audit's tests](../tasks/build/audit-the-compact/tests). Its `agent_judge.py` also writes the lookup judge's copy of the trajectory, and its `judge-settings.json` keeps judges out of `/logs/agent`.
 Their `lookup.toml` names the project, its upstream repositories, the audited commit, and the auditors, and its `no_audit_lookup` check is an entry check: a fail scores the trial 0%, and a pass adds nothing.
-It fails a trial that went after the published answers ([ADR 0035](adr/0035-fail-audit-trials-that-look-up-the-answers.md)).
+It fails a trial that went after the published answers ([ADR 0036](adr/0036-fail-audit-trials-that-look-up-the-answers.md)).
 Saved audit trials from before the check were screened locally by hand, with the same rule. The flagged ones are in `runner/redo.json` with their reasons, and the rest carry over unchecked by CI.
 Its judge reads a copy of the trajectory with only tool calls and their outputs, so the task lists `/logs/agent/trajectory.json` in `artifacts`.
 A runner test keeps every task's copies equal to its variant.

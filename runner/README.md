@@ -128,7 +128,7 @@ A carried pass or fail, or a carried error with no retry left, moves onto the cu
 A carried error with a retry left keeps its retry count.
 A row already on the current instruction wins. Lint fails a claim that maps to an instruction the task no longer has, and the planner ignores it.
 The saved audit trials were screened locally before they carried over, and the flagged ones are in the redo list.
-This is a stopgap until task versions are settled. See [ADR 0035](../docs/adr/0035-fail-audit-trials-that-look-up-the-answers.md).
+This is a stopgap until task versions are settled. See [ADR 0036](../docs/adr/0036-fail-audit-trials-that-look-up-the-answers.md).
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
 Other Build tasks that save all of `/workspace` run a fresh Harbor trial with a saved-work agent.
 See [ADR 0029](../docs/adr/0029-regrade-pages-from-saved-work.md).
