@@ -6,8 +6,8 @@ Since Glamsterdam went live on Sepolia, every transaction that sends ETH first e
 
 ## The instruction
 
-The instruction shares the router and the backend handler and asks: *"Would you ship it as is, and if not, what is the most serious problem?"*
-It names no fork, EIP or symptom.
+The instruction shares the router and the backend handler and asks: *"Would you ship it as is, and what would you fix before the beta?"*
+It names no fork, EIP or symptom, and it asks for no ranking.
 
 ## What it touches
 
@@ -35,9 +35,10 @@ A judge reads the question, the right answer and the final reply, and nothing el
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `answered` | The final reply isn't empty | reply |
-| `transfer_log_comes_first` | The judge finds the reply refuses to ship because the ETH transfer's own log comes before the router's event on Sepolia, so deposits aren't credited | Payments |
+| `transfer_log_comes_first` | The judge finds the review says the ETH transfer's own log comes before the router's event on Sepolia today, so deposits aren't credited | Payments |
 
-The judge fails replies that only call `logs[0]` fragile for smart accounts, batched calls or other contracts, only name other problems, or mention the transfer log as a hedge.
+The reply may list other issues in any order.
+The judge fails replies that say `logs[0]` is the router's event for a direct deposit, only call it fragile for smart accounts, batched calls or other contracts, only name other problems, or mention the transfer log as a hedge.
 
 ## Why it matters
 
@@ -54,14 +55,16 @@ Crediting is a single insert keyed on `(txHash, logIndex)`, so retries don't dou
 
 EIP-7708 was part of Glamsterdam's Sepolia activation on 2026-10-06. If a later fork changes the log order or the system address, the answer changes with it.
 
-Local screening on 2026-11-25, internet mode, on this version:
+Local screening on 2026-11-27, internet mode, on this version:
 
 | Model | Trial 1 | Trial 2 |
 | --- | --- | --- |
-| Opus 5.5 (Claude Code) | fail: blames smart accounts and batching | fail: says direct deposits work today |
-| GPT-6.2 Sol (Codex) | pass: names EIP-7708 and the system-address log | fail: puts reorgs first, says `logs[0]` works for a direct call |
+| Opus 5.5 (Claude Code) | fail: flags `logs[0]` only for smart wallets, bundles and batches | fail: says `Deposited` comes first today and only batched calls break it |
+| GPT-6.2 Sol (Codex) | fail: "a direct deposit through this router emits `Deposited` before the Safe’s receive log" | pass: names EIP-7708 and the protocol transfer log |
 
+The version screened on 2026-11-25 asked for the most serious problem and got the same split: Opus 0/2, GPT-6.2 Sol 1/2.
+Opus flagged `logs[0]` there too, for the wrong reason, which made a ranking check a close call, so the check now asks only whether the review catches the transfer log.
 Earlier drafts, with a vault holding balances, failed on both models in all 8 trials, and no reply mentioned EIP-7708.
 
 The judge is the board's judge, Claude Opus 5.5 at high effort ([ADR 0016](../../../docs/adr/0016-quizzes-with-explained-answers-use-a-judge.md)).
-`tests/hand-cases.json` holds the four screening replies and six written ones, each with its correct mark, and the judge must give each one its mark.
+`tests/hand-cases.json` holds the eight screening replies from both versions and eight written ones, each with its correct mark, and the judge must give each one its mark.

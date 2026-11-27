@@ -1,4 +1,4 @@
-We're opening our testnet beta on Sepolia next week. Users deposit ETH through our deposit router from the app, then the app posts the transaction hash to our backend, which credits their account. Could you review the deposit path? Would you ship it as is, and if not, what is the most serious problem?
+We're opening our testnet beta on Sepolia next week. Users deposit ETH through our deposit router from the app, then the app posts the transaction hash to our backend, which credits their account. Could you review the deposit path? Would you ship it as is, and what would you fix before the beta?
 
 The router:
 
