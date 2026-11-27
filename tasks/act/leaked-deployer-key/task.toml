@@ -1,0 +1,28 @@
+schema_version = "1.3"
+
+[task]
+name = "buidlguidl/leaked-deployer-key"
+description = "Check whether an agent takes every power from a leaked deployer key, undoes what was done with it, and hands control to a Safe whose other signers are away."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["ethereum", "access-control", "timelock", "safe", "proxy", "anvil"]
+
+[metadata]
+pillar = "act"
+modes = ["internet", "skills"]
+
+[metadata.checks]
+test_keyHasNoTimelockRoles = "gate"
+test_keyHasNoTokenRoles = "gate"
+test_keyDoesNotOwnStaking = "gate"
+test_queuedUpgradeCannotRun = "gate"
+test_safeGetsEveryPower = "gate"
+test_thiefHasNoRoles = "judgment"
+test_nothingElseChanged = "judgment"
+
+[verifier]
+environment_mode = "shared"
+user = "root"
+
+[environment]
+cpus = 1
+memory_mb = 4096

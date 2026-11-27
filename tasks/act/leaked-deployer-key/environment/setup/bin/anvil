@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Start this task's clock nine days in the past, so setup can lay out a history that ends now."""
+import os
+import sys
+import time
+
+binary = "/usr/local/bin/anvil"
+os.execv(binary, [binary, "--timestamp", str(int(time.time()) - 9 * 86_400), *sys.argv[1:]])
