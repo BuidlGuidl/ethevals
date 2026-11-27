@@ -32,11 +32,15 @@ Write the instruction the way a real user would send it: a developer asking for 
 
 Leave the rest to the agent. If every agent would build something incompatible, the instruction is too loose. If it lists every function and edge case, it becomes a spec, and a spec only tests instruction following.
 
-For every check, point to the sentence in the instruction that failing work breaks, read as a careful user would read it. If the person asking would say "that's not what I asked for", the check is fair even when hidden. If they would say "I should have asked for that", fix the instruction, not the check.
+Each check in a Build or Act task is a gate check or a judgment check, tagged in [`task.toml`](add-a-task.md#tasktoml).
+
+For a gate check, point to the sentence in the instruction that failing work breaks, read as a careful user would read it. If the person asking would say "that's not what I asked for", the check is fair even when hidden. If they would say "I should have asked for that", fix the instruction, not the check.
+
+For a judgment check, point to the real practice behind it: an incident, an audit finding, or what the standard library or the protocol's own app does. The instruction never mentions it. An experienced developer does it without being told, so the check is fair.
 
 ### The bar
 
-A task is worth keeping when either a frontier model fails it, or at least two open models fail it, for a real practical-Ethereum reason rather than a trick or ambiguous wording. The active agents and models live in [`runner/ethevals/job.yaml`](../runner/ethevals/job.yaml).
+A task is worth keeping when a frontier model misses a check, or at least two open models do, for a real practical-Ethereum reason rather than a trick or ambiguous wording. A missed judgment check counts even when every gate check passes. The active agents and models live in [`runner/ethevals/job.yaml`](../runner/ethevals/job.yaml).
 
 Only a trial proves whether a task meets this bar. A past incident or audit report is a good reason to try an idea, not proof that current models will fail it.
 
@@ -61,8 +65,9 @@ Before writing checks, scan the existing tasks in [`tasks/`](../tasks/) and [ope
 1. **Share the rough idea first.** Write a few lines on who is asking, what they want done, and where you expect agents to fail. Align on the idea with the team before building the full task.
 2. **Build the task folder.** Read [CONTEXT.md](../CONTEXT.md) for the repo's vocabulary and [Add a task](add-a-task.md) for the folder layout, sidecar chains, and verifier setup.
 3. **Run `free-check`.** Confirm lint passes, the oracle run passes every check, and the nop run fails.
-4. **Trial it on the models you have access to.** Run the task in internet mode on your frontier plans (ideally both Claude Code and Codex). If you also have OpenRouter access, run the open models from [`job.yaml`](../runner/ethevals/job.yaml) too for the strongest evidence. If you do not have OpenRouter keys, that is fine. Maintainers and CI can run those checks.
-5. **Read the trajectories before tuning.** Separate real failures in the agent's work from setup bugs, ambiguous instructions, or overly narrow checks. Fix the task when the failure is ours, then open the pull request. See [Plan and run](../runner/README.md#plan-and-run) for runner commands and budgets.
+4. **Try the likely mistakes before trials.** If the task has a judgment check, or a check that work could fail while looking right, script each likely mistake and confirm it fails on the check meant to catch it. Any other correct way should pass. [Add a task](add-a-task.md#try-the-likely-mistakes-before-trials) shows how.
+5. **Trial it on the models you have access to.** Run the task in internet mode on your frontier plans (ideally both Claude Code and Codex). If you also have OpenRouter access, run the open models from [`job.yaml`](../runner/ethevals/job.yaml) too for the strongest evidence. If you do not have OpenRouter keys, that is fine. Maintainers and CI can run those checks.
+6. **Read the trajectories before tuning.** Separate real failures in the agent's work from setup bugs, ambiguous instructions, or overly narrow checks. Fix the task when the failure is ours, then open the pull request with the evidence in its body, as [Add a task](add-a-task.md#open-the-pull-request) describes. See [Plan and run](../runner/README.md#plan-and-run) for runner commands and budgets.
 
 ## Optional map and resources
 

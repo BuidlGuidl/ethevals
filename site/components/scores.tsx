@@ -3,8 +3,26 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { AlertTriangle, Info, ShieldBan } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { sentences } from "../src/refusals";
+import { pillarTaskCap } from "../src/board";
 export const percent = (score: number | null) => score === null ? "–" : `${Math.round(score * 100)}%`;
-export const money = (value: number | null, digits = 2) => value === null ? "–" : `$${value.toFixed(digits)}`;
+// Every cost on the site: whole dollars from $10, cents from $1, two significant digits below.
+const usd = (options: Intl.NumberFormatOptions) => new Intl.NumberFormat("en", { style: "currency", currency: "USD", ...options });
+const dollars = usd({ maximumFractionDigits: 0 }), cents = usd({ minimumFractionDigits: 2 }),
+  small = usd({ minimumFractionDigits: 2, maximumFractionDigits: 6 });
+export const money = (value: number | null) => value === null ? "–" : value === 0 ? "$0"
+  : value >= 9.995 ? dollars.format(value) : value >= 0.995 ? cents.format(value) : small.format(Number(value.toPrecision(2)));
+const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+export const tokens = (value: number | null) => value === null ? "–" : tokenFormat.format(value);
+export const elapsed = (seconds: number | null) => seconds === null ? "–" : `${seconds.toFixed(1)}s`;
+// What the trials under a label spent, as "$61 · 81.9M tok". Cost and tokens are known together or not at all,
+// and unknown reads as one "–". A single trial's label adds its time, "$0.44 · 1.6M tok · 369.6s", unless that is unknown.
+// Each part keeps its number and unit together, so a narrow line breaks before a dot.
+export function Spend({ cost, tokens: count, seconds, note }: { cost: number | null; tokens: number | null; seconds?: number | null; note?: string }) {
+  const time = seconds == null ? null : <> <span className="spend-time">· {elapsed(seconds)}</span></>;
+  if (cost === null || count === null) return <><span className="spend-cost">–</span>{time}</>;
+  const amount = <span className={note ? "spend-cost has-hint" : "spend-cost"} tabIndex={note ? 0 : undefined}>{money(cost)}</span>;
+  return <>{note ? <Hint text={note}>{amount}</Hint> : amount} <span className="spend-tokens">· {tokens(count)} tok</span>{time}</>;
+}
 export const pp = (value: number | null) => value === null ? "–" : `${Math.round(value) > 0 ? "+" : ""}${Math.round(value)}pp`;
 // Tile color and tooltip compare a score with the best score among its peers: a leaderboard column or a task row.
 // Both use rounded percentages, so two tiles showing the same number look the same.
@@ -32,9 +50,9 @@ export function standing(score: number, { top, tied }: Peers, best: string): str
 }
 // One sentence per line, so a tooltip never runs ideas together.
 export const formulas = {
-  overall: ["Overall averages pillar scores.", "Pillars without a score are skipped."],
+  overall: [`Each pillar counts by its number of tasks, up to ${pillarTaskCap}.`, "Pillars without a score are skipped."],
   pillar: ["Pillar scores average task scores.", "Tasks without a score are skipped."],
-  lift: ["Lift = mean change over tasks scored in both modes for the same configuration, in percentage points.", "Overall averages paired pillar lifts."],
+  lift: ["Lift = mean change over tasks scored in both modes for the same configuration, in percentage points.", `Overall weights pillar lifts by task count, up to ${pillarTaskCap}.`],
 };
 export const unscored = (count: number) => `${count} ${count === 1 ? "trial has" : "trials have"} no score yet.`;
 // A string splits on newlines; each line shows on its own row.

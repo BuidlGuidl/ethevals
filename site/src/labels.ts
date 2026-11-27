@@ -27,6 +27,7 @@ const models = new Map([
   ["openrouter/deepseek/deepseek-v4.1-flash-1017", "DeepSeek V4.1 Flash"],
   ["openrouter/x-ai/grok-4.7", "Grok 4.7"],
   ["openrouter/google/gemini-4-argon", "Gemini 4 Argon"],
+  ["openrouter/google/gemini-4-neon", "Gemini 4 Neon"],
 ]);
 const providers = new Map([
   ["anthropic", "claude"], ["openai", "openai"], ["openrouter", "openrouter"],
@@ -38,7 +39,8 @@ export const modelLabel = (id: string) => models.get(id) ?? id;
 export const programLabel = (id: string) => programs.get(id)?.label ?? id;
 export const agentLabel = (agent: Agent) => agent.agent
   ? `${programLabel(agent.agent)} / ${modelLabel(agent.model)}` : modelLabel(agent.model);
-export const agentDetails = (agent: Agent) => [agent.model, agent.agent, `effort ${agent.effort ?? "provider default"}`].filter(Boolean).join(" · ");
+// The tooltip on every cost. Return undefined to show costs without one.
+export const costNote = (plan: boolean): string | undefined => plan ? "Priced at API rates, paid by plan" : "Priced at API rates";
 export const modelLogo = (id: string) => providers.get(id.split("/")[0]);
 export const agentLogo = (agent: Agent) => agent.agent
   ? programs.get(agent.agent)?.logo : modelLogo(agent.model);

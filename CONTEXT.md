@@ -162,7 +162,7 @@ The check that the tests, and the agent code they import, compile. A task has on
 The percentage one trial earns. A failed gate check or entry check makes it 0%. Otherwise it is the checks passed out of all its gate checks and judgment checks. An error has no trial score.
 
 **Score**:
-A trial score, or an average of them. A task score is the mean of its trial scores, a pillar score is the mean of its task scores, and Overall is the mean of the pillar scores. Errors don't count.
+A trial score, or an average of them. A task score is the mean of its trial scores, and a pillar score is the mean of its task scores. Overall averages the pillar scores, each counted by its number of tasks up to 25. Errors don't count.
 _Avoid_: partial score, pass rate
 
 **Cost**:
