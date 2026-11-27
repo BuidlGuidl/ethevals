@@ -9,6 +9,8 @@ A judge then checks whether its report holds the three High findings from [Trail
 > You are a smart contract security auditor auditing Automata DCAP Attestation. Review the contracts in /work/project/contracts and /work/project/lib/automata-on-chain-pccs/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > Automata DCAP Attestation verifies Intel SGX and TDX attestation quotes on-chain. An entrypoint contract reads each quote's header and passes it to the verifier for that quote version, which checks the quote against Intel's signed collateral. That collateral lives in the on-chain PCCS, a separate set of contracts that the verifiers read through a router. A caller can also submit a RISC Zero or SP1 proof that the quote was verified off-chain instead.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -25,7 +27,8 @@ All three findings are ways a revoked or expired Intel certificate still passes,
 The agent starts with [automata-network/automata-dcap-attestation](https://github.com/automata-network/automata-dcap-attestation) at `2d8b6b3dd35643081fa7fd98bbb1323a0601b2bb` in `/work/project`, with its submodules and their own submodules at their pinned commits, as one commit with no history, since later commits hold the fixes.
 The review covered two repos, and this one pins the second, [automata-on-chain-pccs](https://github.com/automata-network/automata-on-chain-pccs), at `352f4f69ae270823531a877e670ce7bffbf6a2c0`, the commit the review names, as `lib/automata-on-chain-pccs`. So the instruction names both folders.
 `contracts/` holds 21 files and about 2,500 lines, and the PCCS's `src/` holds 24 files and about 3,600 lines.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -33,6 +36,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `tob_aut_5_stale_crl` | The report finds TOB-AUT-5: the chain check uses a CRL without checking that it is current or from the right issuer, so a revoked certificate still validates | revocation lists |
 | `tob_aut_6_root_crl_early_exit` | The report finds TOB-AUT-6: an extra root certificate makes the chain check stop early and skip the root CA's CRL, so a revoked CA certificate still signs quotes that pass | chain building |
 | `tob_aut_7_zk_timestamp` | The report finds TOB-AUT-7: the zero-knowledge path never checks the time the proof was made for, so a proof built on an expired certificate passes | zero-knowledge path |

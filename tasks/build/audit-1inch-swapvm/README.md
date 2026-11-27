@@ -9,6 +9,8 @@ A judge then checks whether its report holds the three Critical and two High fin
 > You are a smart contract security auditor auditing SwapVM. Review the contracts in /work/project/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > SwapVM is 1inch's virtual machine for token swaps. A maker writes a program, bytecode that chains small instructions for balances, pricing curves, fees and limits, and either signs it or ships it through Aqua, 1inch's shared liquidity layer where makers keep their tokens in their own wallets. A taker runs the maker's program to work out the swap amounts and settle the trade, and a strategy contract builds a ready-made AMM program from these instructions.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -26,7 +28,8 @@ Each instruction runs the rest of the program inside it, and fee instructions ch
 
 The agent starts with [1inch/swap-vm](https://github.com/1inch/swap-vm) at `60172ba83234bacb793c11564fed3a806b6d3388` in `/work/project`, as one commit with no history, since later commits hold the fixes.
 `src/` holds 42 files, about 3,800 lines. The audit's SwapVM scope is 16 of them, and all five findings sit in `src/`. The tests are there too.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -34,6 +37,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `c1_pegged_solve_precision` | The report finds C-1: the pegged curve's quadratic solver cancels to nothing for small curve settings, so the maker pays out more than the curve allows | curve math |
 | `c2_concentrate_shared_liquidity` | The report finds C-2: a multi-token concentrated order keeps one liquidity value that each pair overwrites, so a three-swap cycle makes a profit | concentrated liquidity |
 | `c3_pegged_axis_mismatch` | The report finds C-3: the pegged curve normalizes balances by token order instead of swap direction, so reverse swaps pay out far too much | curve math |

@@ -9,6 +9,8 @@ A judge then checks whether its report holds the two High findings from [OpenZep
 > You are a smart contract security auditor auditing The Compact. Review the contracts in /work/project/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > The Compact is an ownerless ERC-6909 contract for resource locks. Holders deposit native tokens or ERC-20s into a lock and get an ERC-6909 token for it, and the allocator named in the lock must sign off on later transfers, withdrawals and claims. A sponsor who holds these tokens can sign or register a compact, which lets an arbiter pay the locked tokens out to claimants on one chain or across several.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -23,7 +25,8 @@ Both findings sit in hand-written assembly, where the Solidity reads correctly a
 
 The agent starts with [Uniswap/the-compact](https://github.com/Uniswap/the-compact) at `102fa069a9aaaf0323cbe05ce3a50183d81dec22` in `/work/project`, with its five library submodules (forge-std, permit2, solady, soledge and tstorish) at their pinned commits, as one commit with no history, since later commits hold the fixes.
 `src/` holds 60 files and about 9,000 lines, and the tests and deploy scripts are there too.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -31,6 +34,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `h1_emissary_slot_ignores_sponsor` | The report finds H-1: the emissary storage slot leaves out the sponsor, so anyone can set the emissary for every sponsor with the same lock tag and approve claims on their funds | emissaries |
 | `h2_exogenous_claim_element_skipped` | The report finds H-2: an out-of-range chain index leaves the current element out of a multichain claim hash, and the witness fills its place, so an attacker claims with their own arbiter and amounts | multichain claims |
 

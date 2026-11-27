@@ -10,25 +10,11 @@ ROOT = Path(__file__).resolve().parents[2]
 JUDGE_VARIANTS = {
     'file judge': ('act/treasury-eth-sale', [
         'act/treasury-eth-sale',
-        'build/audit-1inch-swapvm',
-        'build/audit-automata-dcap',
-        'build/audit-balancer-v3-vault',
-        'build/audit-broadcaster-provers',
-        'build/audit-cap-labs',
-        'build/audit-confidential-contracts',
-        'build/audit-intuition',
-        'build/audit-ion-protocol',
-        'build/audit-onchainid',
-        'build/audit-pods-vault',
-        'build/audit-taraxa-bridge',
-        'build/audit-the-compact',
-        'build/audit-thena',
-        'build/audit-trex-v5',
-        'build/audit-uniswap-token-launcher',
-        'build/audit-uniswap-tribunal',
         'build/voting-page',
         'concepts/governance-arbitrum-block-clock', 'concepts/smart-accounts-userop-hash-v08',
         'concepts/swaps-permit2-zero-expiration', 'concepts/wallet-atomic-ready', 'concepts/wallet-batch-status-600']),
+    # The audit variant also prepares the lookup judge's trajectory copy and keeps the judge out of /logs/agent.
+    'audit judge': ('build/audit-the-compact', sorted(f'build/{task.name}' for task in (ROOT / 'tasks/build').glob('audit-*'))),
     'page judge': ('build/swap-page', ['build/swap-page', 'build/aave-savings-page']),
 }
 
@@ -62,6 +48,17 @@ def test_audit_tasks_share_one_judge_opening():
         assert file.read_bytes() == source.read_bytes(), f'{file}: copy the judge opening from {source}'
         assert 'prompt_template = "judge-prompt.md"' in (task / 'tests/judge.toml').read_text(), (
             f'{task}: tests/judge.toml must use the shared judge opening')
+
+
+def test_audit_tasks_share_one_lookup_gate():
+    import tomllib
+    source = ROOT / 'tasks/build/audit-the-compact/tests'
+    for task in sorted((ROOT / 'tasks/build').glob('audit-*')):
+        for name in ('test.sh', 'lookup-prompt.md'):
+            file = task / 'tests' / name
+            assert file.read_bytes() == (source / name).read_bytes(), f'{file}: copy the lookup gate from {source / name}'
+        # The lookup judge reads the trajectory, which the separate verifier gets only as a declared artifact.
+        assert '/logs/agent/trajectory.json' in tomllib.loads((task / 'task.toml').read_text())['artifacts'], task
 
 
 def test_page_rewardkit_private_calls_have_the_expected_version():

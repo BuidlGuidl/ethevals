@@ -51,6 +51,9 @@ def parse_args(argv=None):
                              help="With --trial, admit one fresh execution after a judge error under the budget.")
         command.add_argument("--rows", type=Path, default=Path("results/rows.jsonl"), help="Rows used to find missing trials.")
         command.add_argument("--budget", type=float, help="USD admission budget. Every agent trial requires an explicit budget.")
+        command.add_argument("--redo", type=Path, default=Path("runner/redo.json"), help="Saved trials to run once more.")
+    parsers["regrade"].add_argument("--recheck", action="store_true",
+                                    help="Decide the selected saved passes and fails again with the current checks.")
     parsers["export-hf"].add_argument("--hf-repo")
     parsers["export-hf"].add_argument("--license", help="HF dataset license identifier. Unset means undecided.")
     publisher = parsers["publish-logs"]
@@ -87,7 +90,8 @@ def main(argv=None) -> int:
                 n_attempts=args.n_attempts, trial=args.trial, skills_pack=skills_pack,
                 retry_judge_error=args.retry_judge_error,
                 saved_work=args.output / "saved-work",
-                regrades_only=args.command == "regrade",
+                regrades_only=args.command == "regrade", redo=jobs.read_redo(args.redo),
+                recheck=getattr(args, "recheck", False),
             ), args.budget, required=args.command in {"run", "regrade"})
             if args.command == "plan":
                 print(json.dumps(report, indent=2))
@@ -113,7 +117,7 @@ def main(argv=None) -> int:
                 upload_hub(args.output, config)
                 write_rows(args.output / "rows.jsonl", fold_rows(read_rows(args.output / "rows.jsonl"), recover_rows(args.output)))
             if args.command == "regrade":
-                old = {jobs.trial_identity(row): row for row in previous}
+                old = {jobs.trial_identity(item): item["source_row"] for item in report["regrades"]}
                 selected = {tuple(identity) for identity in report["selected"]}
                 for row in read_rows(args.output / "rows.jsonl"):
                     identity = jobs.trial_identity(row)
@@ -130,7 +134,7 @@ def main(argv=None) -> int:
             return 0
         if args.command in {"lint", "free-check"}:
             from harbor.models.task.task import Task
-            from .harbor_tasks import lint_task
+            from .harbor_tasks import lint_claim, lint_task
             from .job_config import load_job
             config = load_job(args.config)
             paths = args.tasks or sorted(path.parent for path in Path("tasks").rglob("task.toml"))
@@ -139,6 +143,7 @@ def main(argv=None) -> int:
             names = set()
             for path in paths:
                 lint_task(path, config)
+                lint_claim(path)
                 name = Task(path).name
                 if name in names:
                     raise ValueError(f"Duplicate task name: {name}")

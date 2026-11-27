@@ -4,7 +4,7 @@ import type { Row } from "./rows";
 export const checkKinds = ["gate", "judgment"] as const;
 export type CheckTags = Record<string, (typeof checkKinds)[number]>;
 
-const entryChecks = new Set(["compile", "answered", "no_answer", "report_written"]);
+const entryChecks = new Set(["compile", "answered", "no_answer", "report_written", "no_audit_lookup"]);
 type ScoringTask = Pick<Eval, "pillar" | "checks">;
 
 export function checkKind(task: ScoringTask, name: string): "entry" | "concept" | "gate" | "judgment" | undefined {

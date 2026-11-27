@@ -9,6 +9,8 @@ A judge then checks whether its report holds the two High findings from [OpenZep
 > You are a smart contract security auditor auditing Tribunal. Review the contracts in /work/project/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > Tribunal settles cross-chain swaps on chains that order transactions by priority fee. A sponsor locks tokens in The Compact and signs a mandate listing the fills that may settle it, an adjuster co-signs which fill is live, and a filler executes that fill while Tribunal, acting as the arbiter, claims the locked tokens. Bridges and messaging layers inherit Tribunal to carry the result between chains, and ERC7683Tribunal adapts it to ERC-7683.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -23,7 +25,8 @@ One finding needs The Compact's code as well as Tribunal's, and the other is one
 The agent starts with [Uniswap/Tribunal](https://github.com/Uniswap/Tribunal) at `675141f538b001bc261f35f24844c36a56c8306d` in `/work/project`, with its submodules, as one commit with no history, since later commits hold the fixes.
 `src/` holds the 12 files the audit covered, about 2,250 lines, and the tests are there too.
 `lib/` holds forge-std, solady and The Compact at `c5c9ad7`, with The Compact's own submodules, so the agent can read the contract Tribunal deposits into.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -31,6 +34,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `h1_settle_or_register_native_balance` | The report finds H-1: `settleOrRegister` forwards Tribunal's whole ETH balance, so 1 wei sent by anyone makes The Compact reject every ERC-20 batch deposit | deposits into The Compact |
 | `h2_supplemental_curve_check_inverted` | The report finds H-2: `applySupplementalPriceCurve` counts a matching scaling direction as an error, so valid curves revert and invalid ones pass | price curves |
 

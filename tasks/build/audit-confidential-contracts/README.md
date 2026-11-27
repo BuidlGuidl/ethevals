@@ -9,6 +9,8 @@ A judge then checks whether its report holds the Critical and the High finding f
 > You are a smart contract security auditor auditing OpenZeppelin Confidential Contracts. Review the contracts in /work/project/contracts and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > OpenZeppelin Confidential Contracts is a Solidity library for the Zama fhEVM, where amounts and balances are kept as ciphertexts under fully homomorphic encryption and an off-chain coprocessor does the math on them. It offers a confidential fungible token with an ERC-20 wrapper and a voting extension, vesting wallets with a linear or cliff schedule that a factory deploys as clones, and confidential vote tracking with delegation and checkpoints.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -22,7 +24,8 @@ A transfer without enough balance moves zero, and an addition that overflows wra
 
 The agent starts with [OpenZeppelin/openzeppelin-confidential-contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) at `432762c667f68c34bb759838e460601d603300d5` in `/work/project`, with its OpenZeppelin Contracts submodules at their pinned commits, as one commit with no history, since later commits hold the fixes.
 `contracts/` holds 26 files and about 2,800 lines, mocks included. The audit covered 14 of them.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -30,6 +33,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `c1_transfer_and_call_refund` | The report finds C-1: a recipient moves the tokens on in its callback and returns false, so the refund moves nothing and the function reports zero though the sender lost the tokens | confidential token |
 | `h1_vesting_released_overflow` | The report finds H-1: the encrypted released counter wraps around, so the owner can cycle tokens back in and vest ahead of schedule | vesting wallet |
 

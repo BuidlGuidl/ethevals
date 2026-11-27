@@ -81,6 +81,7 @@ The `[metadata.checks]` table stays outside the instruction, environment, and ch
 It counts toward Harbor's whole-folder task hash.
 Unknown files and settings count as environment inputs.
 A changed instruction or environment hash reruns every selected mode.
+A task can name old instructions whose saved trials still stand. See [Regrade saved work](#regrade-saved-work).
 A changed checks hash plans a regrade, or a rerun when the saved work cannot support the changed checks.
 The board requires current instruction and environment hashes, plus the skills hash in skills mode.
 It keeps the saved result while its checks hash is behind.
@@ -106,18 +107,28 @@ The planner lists regrades under `regrades` and agent trials under `missing`.
 Concepts regrades run the task's real tests through RewardKit in its verifier image.
 Rows for one task share a container.
 Unchanged judge criteria and inputs keep their saved results.
-A criteria change, judge program, model, or effort change, or changed file input asks the judge again.
+A criteria or prompt template change, judge program, model, or effort change, or changed file input asks the judge again.
+A judge's files are its criteria, its prompt template, and `tests/agent_judge.py`. A change to only those plans a judge regrade.
+An agent judge's inputs are compared through `judge-inputs.json`, or through `judge-inputs-<judge>.json` when the task prepares that judge's inputs on their own.
 A judge that declares MCP servers needs a live session.
 A judge-only change uses a workspace regrade when available, and otherwise reruns those trials.
 Judge-only regrades reuse saved inputs and keep the other checks.
 `tests/regrade-from.json` can name old checks hashes whose saved code records still stand.
 It is a JSON array of `sha256:` hashes, read without running task code.
 For those hashes, a regrade runs the task's `test.sh` with saved check output and trajectory.
-It starts no chain, workspace, or agent container and asks every current judge again.
+It starts no chain, workspace, or agent container.
+It asks every current judge again.
 The tests use `ETHEVALS_REGRADE_ITEM` to skip live steps and keep saved evidence.
 This takes precedence over the task's normal regrade kind.
 Instruction, environment, and artifact changes still rerun trials.
 See [ADR 0030](../docs/adr/0030-regrade-from-saved-check-output.md) for the claim's review and removal rules.
+The file can also be an object: `checks` holds those hashes, and `instructions` maps old instruction hashes to the instruction they carry to.
+Before planning, rows on a mapped old instruction move onto the current one, when the mapping names it.
+A carried pass or fail, or a carried error with no retry left, moves onto the current hashes as it is, in a regrade that fetches nothing and starts no container or judge.
+A carried error with a retry left keeps its retry count.
+A row already on the current instruction wins. Lint fails a claim that maps to an instruction the task no longer has, and the planner ignores it.
+The saved audit trials were screened locally before they carried over, and the flagged ones are in the redo list.
+This is a stopgap until task versions are settled. See [ADR 0036](../docs/adr/0036-fail-audit-trials-that-look-up-the-answers.md).
 Contract Build tasks with separate verifiers and no sidecars use Harbor's `trial regrade` on saved trial files.
 Other Build tasks that save all of `/workspace` run a fresh Harbor trial with a saved-work agent.
 See [ADR 0029](../docs/adr/0029-regrade-pages-from-saved-work.md).
@@ -129,6 +140,21 @@ Saved work with no address, an HTTP 404 or 410, or expired CI artifacts plans a 
 The plan lists each rerun and its reason.
 Other fetch errors defer the regrade until the next CI run and reserve nothing.
 A failed regrade leaves the saved row unchanged and fails its CI job.
+
+[redo.json](redo.json) is the redo list: saved trials to run again, each with a reason.
+An entry names `task_id`, `agent`, `model`, `effort`, `mode`, `trial`, the row's `completed_at`, and a `reason`.
+Copy the first seven values from the trial's row.
+While the current row keeps that `completed_at`, the plan lists one fresh trial for it under `missing`, with the reason.
+The fresh trial replaces the row, and the entry is then satisfied, so later CI runs plan nothing for it.
+Add entries in a pull request. The merge to `main` starts the CI run, and its "Record trial results" pull request shows the new rows.
+The plan lists entries whose `completed_at` matches no saved row under `redo_unmatched`, and CI prints them: they are mistyped or already redone.
+Remove satisfied entries in a later pull request.
+`--redo` selects another file.
+
+To screen saved trials locally with the current checks, add `--recheck` to `ethevals regrade`.
+It decides each selected saved pass and fail again by running the task's `test.sh` on its saved output and trajectory.
+Judges with unchanged criteria, settings, and inputs keep their saved answers, and the others are asked.
+Pass a rows file with only the rows to screen. CI never runs it.
 
 To inspect a check fix locally, run:
 

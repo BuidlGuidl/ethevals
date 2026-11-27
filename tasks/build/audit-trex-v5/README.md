@@ -9,6 +9,8 @@ A judge then checks whether its report holds the one High finding from [OpenZepp
 > You are a smart contract security auditor auditing T-REX. Review the contracts in /work/project/contracts and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > T-REX implements ERC-3643 for permissioned security tokens: tokens reach only wallets linked to an ONCHAINID identity with the claims the token asks for, and each transfer must also pass the token's compliance rules. Each token comes as a suite of three parts: the token, a registry that maps wallets to identities and checks their claims, and a compliance contract that runs rule modules and tracks each identity's position in a ledger. Roles come from an AccessManager, a factory deploys suites behind beacon proxies, and the token follows positions on other chains through ERC-7786 messages.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -22,7 +24,8 @@ The finding only exists across two token suites, so reviewing one suite at a tim
 
 The agent starts with [T-REX-Network/T-REX](https://github.com/T-REX-Network/T-REX) at `4e7775e44a44166a74b2753a6562fa98e6ad2c41` in `/work/project`, as one commit with no history, since later commits hold the fixes.
 `contracts/` holds the 56 files the audit covered, about 12,700 lines. The tests, the Certora specs, the docs and the changelog are there too.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -30,6 +33,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `h1_cross_domain_identity_rebind` | The report finds H-1: through a shared identity storage, an agent of one domain rebinds a holder of another domain's token and moves its balance with `identityTransfer` | identity storage and roles |
 
 ## Why it matters

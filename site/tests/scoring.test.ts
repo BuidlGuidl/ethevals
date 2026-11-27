@@ -48,6 +48,15 @@ test("trial scores count gate and judgment checks after passing the entry and ga
   assert.equal(scoreTrial(governor, row(governor, full, { status: "error" })).value, null);
 });
 
+test("the audit lookup check scores like an entry check: a fail scores 0 and a pass adds nothing", () => {
+  const clean = { report_written: pass, no_audit_lookup: pass };
+  assert.deepEqual(scoreTrial(audit, row(audit, { ...clean, finding_a: fail, finding_b: fail })),
+    { value: 0, passed: 0, total: 2, stop: null });
+  assert.equal(scoreTrial(audit, row(audit, { ...clean, finding_a: pass, finding_b: fail })).value, 0.5);
+  const lookedUp = scoreTrial(audit, row(audit, { ...clean, no_audit_lookup: fail, finding_a: pass, finding_b: pass }));
+  assert.deepEqual([lookedUp.value, lookedUp.value !== null && lookedUp.stop], [0, { kind: "entry", name: "no_audit_lookup" }]);
+});
+
 test("older rows use only tagged checks they carry and fall back to saved status when none count", () => {
   const score = (checks: Row["checks"], status: Row["status"] = "failed") =>
     scoreTrial(governor, row(governor, checks, { checks_hash: "old", status })).value;

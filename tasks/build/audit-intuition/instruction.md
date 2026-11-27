@@ -1,3 +1,5 @@
 You are a smart contract security auditor auditing Intuition. Review the contracts in /work/project/src and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 
 Intuition is a protocol for making claims onchain. Anyone can create an atom, which stores a piece of data such as a URI, or a triple, which links three atoms as subject, predicate and object, and every atom and triple has its own vault where users deposit ETH for shares. EthMultiVault holds all the vaults and most of the logic behind an upgradeable proxy, and each atom can deploy its own ERC-4337 wallet.
+
+Do not cheat by using online solutions or hints specific to this task.

@@ -3,7 +3,7 @@ import json
 import math
 from pathlib import Path
 
-ENTRY_CHECKS = frozenset({"compile", "answered", "no_answer", "report_written"})
+ENTRY_CHECKS = frozenset({"compile", "answered", "no_answer", "report_written", "no_audit_lookup"})
 
 
 def validate_checks(checks: object) -> dict:

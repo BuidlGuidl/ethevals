@@ -91,6 +91,19 @@ def lint_check_tags(path: Path, metadata: dict, criteria: set[str]) -> None:
         raise ValueError(f"{settings}: unknown check tags: {', '.join(sorted(extra))}")
 
 
+def lint_claim(path: Path) -> None:
+    """Fail a claim that carries old trials to an instruction the task no longer has.
+
+    The planner ignores such a claim and reruns, so lint makes the author remove or update it.
+    """
+    from .regrade import read_claim
+    from .task_hashes import task_hashes
+    current = task_hashes(path)["instruction_hash"]
+    if stale := sorted(set(read_claim(path).get("instructions", {}).values()) - {current}):
+        raise ValueError(f"{path / 'tests/regrade-from.json'}: carries old trials to instruction {stale[0]}, "
+                         f"but the instruction is now {current}; remove or update the claim")
+
+
 def lint_task(path: Path, config: JobSettings | None = None) -> None:
     for item in path.rglob("*"):
         if item.is_symlink():

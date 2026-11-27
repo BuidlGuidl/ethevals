@@ -120,6 +120,11 @@ def recover_regrades(output: Path) -> list[dict]:
             old = item["source_row"]
             if error_file.is_file():
                 continue
+            if item["kind"] == "carry":
+                # The saved verdict, history, retry count, and published links stay as they are.
+                rows.append({**old, **{key: item[key] for key in ("checks_hash", "checks_inputs", "checks_generation")},
+                             "regraded_at": json.loads(finished.read_text())})
+                continue
             checked_at = (json.loads(finished.read_text()) if finished.is_file() else
                           json.loads((folder / "result.json").read_text()).get("finished_at"))
             try:

@@ -63,7 +63,40 @@ def write_catalog(paths: list[Path], output: Path) -> None:
     (output / "catalog.json").write_text(json.dumps(catalog, indent=2) + "\n")
 
 
-def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=False) -> dict:
+REDO_KEYS = ("task_id", "agent", "model", "effort", "mode", "trial")
+
+
+def read_redo(path: Path) -> list[dict]:
+    """Read the redo list: saved trials to run once more, each named by its row's completed_at."""
+    entries = json.loads(path.read_text()) if path.is_file() else []
+    keys = {*REDO_KEYS, "completed_at", "reason"}
+    if not isinstance(entries, list) or any(
+            not isinstance(entry, dict) or set(entry) != keys
+            or any(not isinstance(entry[key], str) or not entry[key].strip() for key in ("task_id", "model", "mode", "completed_at", "reason"))
+            or type(entry["trial"]) is not int for entry in entries):
+        raise ValueError(f"{path}: each entry needs {', '.join(sorted(keys))}, with a finished trial's completed_at")
+    if len({tuple(entry[key] for key in REDO_KEYS) for entry in entries}) != len(entries):
+        raise ValueError(f"{path}: a trial is listed twice")
+    return entries
+
+
+def carried_rows(rows: list[dict], task: dict) -> list[dict]:
+    """Move saved rows onto the current instruction when the task's claim carries their old instruction to it."""
+    options = task["regrade"]
+    sources = {old for old, new in options["regrade_instructions"].items() if new == task["instruction_hash"]}
+    return fold_rows([{**row, "instruction_hash": task["instruction_hash"]} for row in rows
+                      if row.get("task_id") == task["id"] and row.get("instruction_hash") in sources
+                      and row.get("environment_hash") == task["environment_hash"]])
+
+
+def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=False, carried=False) -> dict:
+    options = current.get("regrade", {})
+    # A carried pass or fail, or a carried error with no retry left, moves onto the current hashes as it is,
+    # with no saved work, container, or judge. A carried error with a retry left keeps its retry count.
+    carry = {"action": "regrade", "kind": "carry", "judge_required": False}
+    if carried and row.get("status") in {"passed", "failed"}:
+        return carry
+    named = row.get("checks_hash") in options.get("regrade_from", [])
     if row and any(row.get(key) != current[key] for key in ("instruction_hash", "environment_hash")):
         return {"action": "rerun", "reason": "The instruction or environment changed."}
     if row.get("status") in {"passed", "failed"}:
@@ -73,9 +106,8 @@ def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=Fals
         changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
         if "@artifacts" in changed:
             return {"action": "rerun", "reason": "The saved work lacks the changed artifacts."}
-        options = current["regrade"]
         judges = set(options["judge_files"])
-        if row.get("checks_hash") in options.get("regrade_from", []):
+        if named:
             return {"action": "regrade", "kind": "evidence", "judge_required": bool(judges)}
         if judges and changed <= judges | {"@judge"}:
             if options.get("live_judge"):
@@ -94,14 +126,16 @@ def decide_saved_row(row: dict, current: dict, policy, *, retry_judge_error=Fals
     if row and not recovery and (exception == "judge" or row.get("retry", -1) >= policy.max_retries
                 or exception in (policy.exclude_exceptions or set())
                 or policy.include_exceptions and exception not in policy.include_exceptions):
-        return {"action": "exhausted"}
+        return carry if carried else {"action": "exhausted"}
     return {"action": "retry", "recovery": recovery}
 
 
 def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents=None,
          models=None, modes=None, n_attempts=None, trial=None,
          skills_pack: SkillsPack | None = None, retry_judge_error=False, saved_work: Path | None = None,
-         regrades_only=False) -> dict:
+         regrades_only=False, redo: list[dict] | None = None, recheck=False) -> dict:
+    if recheck and not regrades_only:
+        raise ValueError("--recheck only works with the regrade command")
     if retry_judge_error and trial is None:
         raise ValueError("--retry-judge-error requires --trial with one task, agent, and mode")
     modes = modes or config.modes
@@ -113,12 +147,19 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
         if selected and set(selected) - available.keys():
             raise ValueError(f"Unknown {label}: {', '.join(sorted(set(selected) - available.keys()))}")
     prior = {trial_identity(row): row for row in previous}
+    carried = set()
+    redo_entries = {tuple(entry[key] for key in REDO_KEYS): entry for entry in redo or []}
     missing, exhausted, selected, deferred, candidates = [], [], [], [], []
     ids, names = set(), set()
     combinations = 0
     for path in paths:
         task = task_entry(path, config)
         task["regrade"] = regrade_options(path)
+        # A row already on the current instruction always wins over a carried old row.
+        for row in carried_rows(previous, task):
+            if trial_identity(row) not in prior:
+                prior[trial_identity(row)] = row
+                carried.add(trial_identity(row))
         judges = task_judges(path)
         if task["id"] in ids:
             raise ValueError(f"Duplicate task ID: {task['id']}")
@@ -150,7 +191,17 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                     row = prior.get(identity, {})
                     retry = row.get("retry", -1)
                     checks_changed = bool(row and row.get("checks_hash") != task["checks_hash"])
-                    decision = decide_saved_row(row, task, config.retry, retry_judge_error=retry_judge_error)
+                    decision = decide_saved_row(row, task, config.retry, retry_judge_error=retry_judge_error,
+                                                carried=identity in carried)
+                    entry = redo_entries.get(tuple(metadata[key] for key in REDO_KEYS))
+                    redone = bool(entry and row and row.get("completed_at") == entry["completed_at"])
+                    if redone:
+                        decision = {"action": "rerun", "reason": f"On the redo list: {entry['reason']}"}
+                    if recheck:
+                        # A local screen decides saved passes and fails again with the current checks.
+                        if row.get("status") not in {"passed", "failed"} or len(row.get("no_answer") or []) == 2:
+                            continue
+                        decision = {"action": "regrade", "kind": "recheck", "judge_required": bool(judges)}
                     if decision["action"] == "keep":
                         continue
                     if decision["action"] == "exhausted":
@@ -161,7 +212,8 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
                             "agent_version": agent.version, "harbor_version": config.harbor_version,
                             "paid_by": agent.paid_by,
                             "judge": judge, "judge_paid_by": config.judge.paid_by if judge else None}
-                    item["checks_generation"] = row.get("checks_generation", 0) + int(checks_changed)
+                    # A redo row must replace the saved row it redoes.
+                    item["checks_generation"] = row.get("checks_generation", 0) + int(checks_changed or redone)
                     judge_calls = sum(j.judge.samples * (len(j.criterion) + 1
                                       if j.judge.mode == "individual" else 1) for j in judges.values())
                     judge_reserve = config.judge.cost_limit_usd * judge_calls * 3 if config.judge.paid_by == "api_key" else 0.0
@@ -208,7 +260,11 @@ def plan(paths: list[Path], config: JobSettings, previous: list[dict], *, agents
             missing.append({**item["rerun"], "rerun_reason": item["rerun_reason"]})
     if regrades_only:
         missing, selected = [], [trial_identity(item) for item in regrades]
-    return {"missing": missing, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
+    # An entry whose completed_at no saved row has was mistyped, or its trial was already redone.
+    saved = {(tuple(row.get(key) for key in REDO_KEYS), row.get("completed_at")) for row in previous}
+    unmatched = [entry for entry in redo or [] if entry["task_id"] in ids
+                 and (tuple(entry[key] for key in REDO_KEYS), entry["completed_at"]) not in saved]
+    return {"missing": missing, "redo_unmatched": unmatched, "missing_trials": len(missing), "exhausted_errors": exhausted, "deferred": deferred,
             "regrades": regrades, "regrade_trials": len(regrades),
             "worst_case_usd": round(sum(row["worst_case_usd"] for row in [*missing, *regrades]), 8),
             "selected": [identity for identity in selected if identity not in deferred_ids]}

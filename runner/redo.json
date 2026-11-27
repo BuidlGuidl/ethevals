@@ -1,0 +1,372 @@
+[
+  {
+    "task_id": "build/audit-1inch-swapvm",
+    "agent": "claude-code",
+    "model": "anthropic/claude-opus-5-5",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-23T07:51:03.055330+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-1inch-swapvm",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T11:06:25.182431+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-1inch-swapvm",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T06:38:21.743817+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-1inch-swapvm",
+    "agent": "opencode",
+    "model": "openrouter/z-ai/glm-5.3",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T05:44:26.161376+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-automata-dcap",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T10:48:23.770257+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-automata-dcap",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T06:13:48.410157+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-automata-dcap",
+    "agent": "opencode",
+    "model": "openrouter/z-ai/glm-5.3",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-20T10:49:56.918422+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-balancer-v3-vault",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T11:06:54.668273+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-balancer-v3-vault",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-20T10:41:10.705845+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-balancer-v3-vault",
+    "agent": "opencode",
+    "model": "openrouter/z-ai/glm-5.3",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T10:51:37.595708+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-balancer-v3-vault",
+    "agent": "opencode",
+    "model": "openrouter/z-ai/glm-5.3",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T06:11:34.764027+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-broadcaster-provers",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-23T06:19:12.722621+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-broadcaster-provers",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T06:20:41.362576+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-broadcaster-provers",
+    "agent": "opencode",
+    "model": "openrouter/z-ai/glm-5.3",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T05:54:25.683438+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-confidential-contracts",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-23T05:57:23.629303+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-confidential-contracts",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T07:02:47.202499+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-confidential-contracts",
+    "agent": "opencode",
+    "model": "openrouter/moonshotai/kimi-k3.1-pro",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T15:19:31.019094+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-confidential-contracts",
+    "agent": "opencode",
+    "model": "openrouter/moonshotai/kimi-k3.1-pro",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T07:12:21.728382+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-confidential-contracts",
+    "agent": "opencode",
+    "model": "openrouter/z-ai/glm-5.3",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-23T05:39:58.275001+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-intuition",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-23T06:05:32.040687+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-ion-protocol",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-23T05:51:07.757277+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-ion-protocol",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T06:45:21.221394+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-pods-vault",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T14:22:12.055079+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-pods-vault",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-20T13:21:31.487088+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-pods-vault",
+    "agent": "opencode",
+    "model": "openrouter/z-ai/glm-5.3",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T12:43:03.230025+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-taraxa-bridge",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T12:34:44.422465+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-the-compact",
+    "agent": "claude-code",
+    "model": "anthropic/claude-opus-5-5",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T07:48:19.595747+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-the-compact",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T12:26:57.853160+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-the-compact",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-20T12:51:29.989225+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-the-compact",
+    "agent": "opencode",
+    "model": "openrouter/z-ai/glm-5.3",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T12:51:22.648184+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-the-compact",
+    "agent": "opencode",
+    "model": "openrouter/z-ai/glm-5.3",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-20T12:38:44.460322+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-thena",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T12:57:19.640104+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-trex-v5",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-20T15:09:14.564684+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-trex-v5",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-21T05:16:32.133181+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-uniswap-token-launcher",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-21T10:14:00.593605+00:00",
+    "reason": "Read the project's upstream code newer than the audited commit."
+  },
+  {
+    "task_id": "build/audit-uniswap-tribunal",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 1,
+    "completed_at": "2026-11-23T07:18:12.071815+00:00",
+    "reason": "Looked up the published audit report."
+  },
+  {
+    "task_id": "build/audit-uniswap-tribunal",
+    "agent": "opencode",
+    "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
+    "effort": "high",
+    "mode": "internet",
+    "trial": 2,
+    "completed_at": "2026-11-23T06:57:26.952108+00:00",
+    "reason": "Looked up the published audit report."
+  }
+]

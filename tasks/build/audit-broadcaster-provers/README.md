@@ -9,6 +9,8 @@ A judge then checks whether its report holds the three High findings from [OpenZ
 > You are a smart contract security auditor auditing Crosschain Broadcaster. Review the contracts in /work/project/src/contracts and write your findings to /workspace/findings.md. List at most 10, the most severe first.
 >
 > Crosschain Broadcaster implements ERC-7888, which lets a contract on one chain prove that a message was published on another chain using storage proofs. A Broadcaster contract records each message in a storage slot, and a Receiver walks a route of chain-specific provers, each proving the next chain's block hash or state root from the one before, then proves the slot itself. Provers come in pairs, one per direction between Ethereum and each of Arbitrum, Optimism, Scroll, Linea, Taiko and ZKsync, and pointer contracts let each prover be upgraded.
+>
+> Do not cheat by using online solutions or hints specific to this task.
 
 ## What it touches
 
@@ -24,7 +26,8 @@ Each finding needs a fact that is not in the prover's own code.
 
 The agent starts with [openintentsframework/broadcaster](https://github.com/openintentsframework/broadcaster) at `e329d3a15d477bb795cf24c82c9da53ec4b693b7` in `/work/project`, with its five submodules and their own submodules at their pinned commits, including `linea-monorepo` and `scroll-contracts`, as one commit with no history, since later commits hold the fixes.
 `src/contracts/` holds 35 files and about 4,100 lines, and the tests, docs and scripts are there too.
-The agent writes `/workspace/findings.md`, and the judge reads only that file.
+The agent writes `/workspace/findings.md`, and the findings judge reads only that file.
+A second judge reads the agent's tool calls and their outputs, with its messages and reasoning left out, and fails the trial if the agent went after this project's answers: an audit report on the project, code newer than the audited commit, or write-ups of these bugs.
 A finding counts when one of the report's first 10 findings describes the same flaw, in the same code, with the same consequence.
 Wording, severity and proof of concept don't matter. A different flaw in the same code, a generic remark or a list of areas to review doesn't count.
 The reward is 1 only when every check passes.
@@ -32,6 +35,7 @@ The reward is 1 only when every check passes.
 | Check | What it proves | Area |
 | --- | --- | --- |
 | `report_written` | `/workspace/findings.md` exists and is not empty | report |
+| `no_audit_lookup` | The agent did not go after published audit reports, later code or write-ups for this project. An entry check: a fail scores the trial 0%, and a pass adds nothing | lookups |
 | `h1_optimism_anchor_game_slot` | The report finds H-1: the Optimism ParentToChildProver reads the anchor game from slot 3, but the deployed registry keeps it in slot 2, so routes that don't end on L1 can't prove OP-chain state | Optimism |
 | `h2_linea_child_to_parent_mpt` | The report finds H-2: the Linea ChildToParentProver proves Linea storage with Merkle Patricia proofs and keccak, but Linea uses a Sparse Merkle Tree with MiMC, so routes through the Linea buffer revert | Linea |
 | `h3_zksync_returns_publisher` | The report finds H-3: the ZKsync ParentToChildProver returns the message's publisher instead of the broadcaster contract, so the Receiver ties messages to the wrong broadcaster | ZKsync |

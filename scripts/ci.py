@@ -76,6 +76,9 @@ def plan_trials(args, run_args):
     for row in report["missing"]:
         if row.get("rerun_reason"):
             print(f"Rerun {row['task_id']}, {row['model']}, {row['mode']}, trial {row['trial']}: {row['rerun_reason']}", file=sys.stderr)
+    for entry in report.get("redo_unmatched", []):
+        print(f"Redo entry matched no saved row: {entry['task_id']}, {entry['model']}, {entry['mode']}, "
+              f"trial {entry['trial']}, {entry['completed_at']}. It is mistyped or already redone.", file=sys.stderr)
     deferred_regrades = 0
     for row in report.get("deferred", []):
         if row.get("defer_reason"):
@@ -94,7 +97,7 @@ def plan_trials(args, run_args):
             batches.setdefault(key, []).append(row)
         for key, batch in batches.items():
             task_id, kind, judge_required = key[:3]
-            assets = len(batch) * (2 if kind in {"contract", "workspace"} else 1)
+            assets = len(batch) * (2 if kind in {"contract", "workspace"} else 0 if kind == "carry" else 1)
             if len(regrades) == 256 or asset_count + assets > 1000:
                 limit = "jobs" if len(regrades) == 256 else "assets"
                 print(f"Deferred regrade batch {task_id}: {len(batch)} rows; {limit} limit.", file=sys.stderr)
@@ -310,7 +313,7 @@ def hf_tag(sha):
 def job_images(plan, index, regrade):
     """Shared image tags that the task folders of one planned job name."""
     report = json.loads((plan / ("regrades.json" if regrade else "trials.json")).read_text())[index]
-    folders = {Path(item["task_path"]) for item in [*report["missing"], *report.get("regrades", [])]}
+    folders = {Path(item["task_path"]) for item in [*report["missing"], *report.get("regrades", [])] if item.get("kind") != "carry"}
     text = "\n".join(file.read_text(errors="replace") for folder in folders
                      for file in sorted(folder.rglob("*")) if file.is_file())
     return set(re.findall(r"ghcr\.io/buidlguidl/ethevals-[\w:.-]+", text))

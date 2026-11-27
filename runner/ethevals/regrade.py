@@ -1,5 +1,6 @@
 """Plan and execute checks against saved work."""
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -22,6 +23,22 @@ from .task_hashes import digest
 from .trial_rows import fold_rows, write_rows, recover_regrades
 
 
+def read_claim(path: Path) -> dict:
+    """Read tests/regrade-from.json: an array of old checks hashes, or an object with `checks`
+    and `instructions`, which maps old instruction hashes to the instruction they carry to."""
+    statement = path / "tests/regrade-from.json"
+    claim = json.loads(statement.read_text()) if statement.is_file() else []
+    claim = {"checks": claim} if isinstance(claim, list) else claim
+    sha = lambda value: isinstance(value, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", value)
+    if (not isinstance(claim, dict) or set(claim) - {"checks", "instructions"}
+            or not isinstance(claim.get("checks", []), list) or not all(map(sha, claim.get("checks", [])))
+            or not isinstance(claim.get("instructions", {}), dict)
+            or not all(sha(old) and sha(new) for old, new in claim.get("instructions", {}).items())):
+        raise ValueError(f"{statement}: expected an array of SHA256 checks hashes, or an object with "
+                         "checks and instructions (old hash to current hash)")
+    return claim
+
+
 def regrade_options(path: Path) -> dict:
     task = Task(path)
     kind = "concepts" if path.parent.name == "concepts" else None
@@ -35,18 +52,22 @@ def regrade_options(path: Path) -> dict:
             for entry in normalize_artifact_entries(task.config.artifacts)):
         kind = "workspace"
     judges = task_judges(path)
-    statement = path / "tests/regrade-from.json"
-    regrade_from = json.loads(statement.read_text()) if statement.is_file() else []
-    if not isinstance(regrade_from, list) or any(not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
-                                                 for value in regrade_from):
-        raise ValueError(f"{statement}: expected an array of SHA256 checks hashes")
-    return {"kind": kind, "judge_files": [file.relative_to(path).as_posix() for file in judges],
-            "regrade_from": regrade_from,
+    claim = read_claim(path)
+    # A judge's files are its criteria, its prompt template, and the helper that prepares its inputs.
+    files = {file.relative_to(path).as_posix() for file in judges}
+    files |= {(file.parent / judge.judge.prompt_template).relative_to(path).as_posix()
+              for file, judge in judges.items() if judge.judge.prompt_template}
+    if judges and (path / "tests/agent_judge.py").is_file():
+        files.add("tests/agent_judge.py")
+    return {"kind": kind, "judge_files": sorted(files),
+            "regrade_from": claim.get("checks", []), "regrade_instructions": claim.get("instructions", {}),
             "live_judge": any(judge.judge.mcp_servers for judge in judges.values())}
 
 
 def prepare_regrades(candidates: list[dict], cache: Path) -> tuple[list[dict], list[dict], list[dict]]:
     def prepare(item):
+        if item["kind"] == "carry":
+            return {**item, "saved_work": {}}, None, None
         try:
             work = fetch_work(item["source_row"], item["kind"], cache)
             if item["kind"] == "judge":
@@ -82,7 +103,11 @@ def run_regrades(items: list[dict], config, output: Path, previous: list[dict], 
         (job / "board.json").write_text(json.dumps(batch[0]) + "\n")
         (job / "regrade.json").write_text(json.dumps(batch, indent=2) + "\n")
         try:
-            if kind == "contract":
+            if kind == "carry":
+                for index in range(len(batch)):
+                    (job / str(index)).mkdir(exist_ok=True)
+                    (job / str(index) / "regrade-finished.json").write_text(json.dumps(datetime.now(timezone.utc).isoformat()))
+            elif kind == "contract":
                 for index, item in enumerate(batch):
                     destination = job / str(index)
                     if not (destination / "result.json").is_file():

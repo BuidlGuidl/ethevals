@@ -5,6 +5,7 @@ import { percent, standing, type Peers } from "./scores";
 
 export const entryLabels: Readonly<Record<string, string>> = {
   compile: "Did not compile", answered: "No answer", no_answer: "No answer", report_written: "No report",
+  no_audit_lookup: "Looked up the answers",
 };
 
 const checkName = (name: string) =>
