@@ -1,0 +1,57 @@
+[judge]
+judge = "claude-code"
+model = "anthropic/claude-opus-5-5"
+version = "2.1.321"
+cwd = "/judge"
+reasoning_effort = "high"
+guard = "flag"
+
+[scoring]
+aggregation = "all-pass"
+
+[[criterion]]
+name = "token_deploy_reverts"
+type = "binary"
+description = """The file holds one reply to this question:
+
+We set up a fresh Foundry repo for our governance token this week. `foundry.lock`:
+
+```json
+{
+  "lib/forge-std": {
+    "tag": {
+      "name": "v1.17.0",
+      "rev": "f3dae6e6ee381f25eb6a246f7da9b85c91a68219"
+    }
+  },
+  "lib/openzeppelin-contracts": {
+    "tag": {
+      "name": "v5.7.0",
+      "rev": "cab19933c33c2ad1d4c7a84864a3601dddfd16f3"
+    }
+  }
+}
+```
+
+`src/Token.sol`:
+
+```solidity
+contract Token is ERC20, ERC20Permit {
+    constructor(address treasury)
+        ERC20("Lantern Protocol Governance Token", "LPG")
+        ERC20Permit("Lantern Protocol Governance Token")
+    {
+        _mint(treasury, 10_000_000e18);
+    }
+}
+```
+
+Our frontend signs permits with the domain name `Lantern Protocol Governance Token` and version `1`. We deploy to mainnet tomorrow. Will the token accept those permit signatures? Answer, then explain in one or two sentences.
+
+The right answer, from OpenZeppelin Contracts 5.7.0, the release in the repo's `foundry.lock`:
+- The token never deploys. `ERC20Permit` passes its name to the `EIP712` constructor, which since 5.7.0 reverts with `StringTooLong` when the name is longer than 31 bytes.
+- `Lantern Protocol Governance Token` is 33 bytes, so the constructor reverts and there is no token to accept any signature.
+
+Does the reply say that deploying the token fails or reverts because the name is too long for the permit domain?
+Answer yes for any wording, including a reply that also says how to fix it or what older OpenZeppelin versions did, as long as it gives the failed deployment as the outcome for this repo.
+Answer no if the reply says the signatures are accepted, if it says they are rejected for another reason without saying the deployment reverts, if it only says a revert is possible on some versions without settling on it for this repo, or if it gives any other outcome."""

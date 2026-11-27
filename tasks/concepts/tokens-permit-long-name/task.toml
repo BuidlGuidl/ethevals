@@ -1,0 +1,24 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/tokens-permit-long-name"
+description = "Check whether a permit token with a name over 31 bytes is seen to fail at deployment on OpenZeppelin Contracts 5.7.0."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["tokens", "permit", "eip-712", "openzeppelin"]
+
+[metadata]
+pillar = "concepts"
+area = "Tokens"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
+
+[environment]
+cpus = 1
+memory_mb = 1024
