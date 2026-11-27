@@ -1,0 +1,24 @@
+schema_version = "1.3"
+artifacts = ["/logs/agent/trajectory.json"]
+
+[task]
+name = "buidlguidl/upgrades-proxy-empty-init-data"
+description = "Check whether a deploy script that creates a proxy first and initializes it second is still read as working on OpenZeppelin Contracts 5.7.0."
+authors = [{ name = "BuidlGuidl" }]
+keywords = ["upgrades", "proxy", "openzeppelin", "deploy-script"]
+
+[metadata]
+pillar = "concepts"
+area = "Upgrades"
+modes = ["vanilla", "internet", "skills"]
+
+[verifier]
+environment_mode = "separate"
+
+[verifier.env]
+CLAUDE_CODE_OAUTH_TOKEN = "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY:-}"
+
+[environment]
+cpus = 1
+memory_mb = 1024

@@ -1,0 +1,45 @@
+{
+  "note": "Replies the judge must mark correctly. 'want' is the correct mark: right passes the task, wrong fails it.",
+  "cases": [
+    {
+      "want": "right",
+      "label": "the solution's reply",
+      "reply": "No: the token never deploys. The lock file holds OpenZeppelin Contracts 5.7.0, where the EIP712 constructor behind ERC20Permit reverts with StringTooLong for a name over 31 bytes, and this name is 33 bytes."
+    },
+    {
+      "want": "right",
+      "label": "names the release",
+      "reply": "They won't, because there will be no token: since OpenZeppelin 5.7 the EIP712 constructor only takes names up to 31 bytes and this one is 33, so the deployment reverts with StringTooLong. Shorten the permit name."
+    },
+    {
+      "want": "right",
+      "label": "adds the old behaviour",
+      "reply": "The deployment itself reverts on current OpenZeppelin (name longer than 31 bytes, ShortStrings.StringTooLong), so there is nothing to sign against. Before 5.7 the long name fell back to storage and the signatures would have been accepted."
+    },
+    {
+      "want": "wrong",
+      "label": "accepted",
+      "reply": "Yes. The domain name and version match what ERC20Permit sets (the version is \"1\"), so the signatures verify."
+    },
+    {
+      "want": "wrong",
+      "label": "accepted, storage fallback",
+      "reply": "Yes. The name is longer than 31 bytes, so EIP712 keeps it in the storage fallback and not in an immutable. That costs a little more gas, and the domain separator is the same."
+    },
+    {
+      "want": "wrong",
+      "label": "only the domain fields",
+      "reply": "Only if the frontend also puts chainId 1 and the token address in the domain. With those, yes, they are accepted."
+    },
+    {
+      "want": "wrong",
+      "label": "hedges on the version",
+      "reply": "It depends on the OpenZeppelin version: some releases reject names over 31 bytes, others store them, and then the signatures are accepted."
+    },
+    {
+      "want": "wrong",
+      "label": "rejected for another reason",
+      "reply": "No. The signatures are rejected because the domain must use the token symbol, not the name."
+    }
+  ]
+}

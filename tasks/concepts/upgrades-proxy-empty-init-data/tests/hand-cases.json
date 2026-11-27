@@ -1,0 +1,45 @@
+{
+  "note": "Replies the judge must mark correctly. 'want' is the correct mark: right passes the task, wrong fails it.",
+  "cases": [
+    {
+      "want": "right",
+      "label": "the solution's reply",
+      "reply": "Nobody: the script reverts at `new ERC1967Proxy(address(impl), \"\")`. The lock file holds OpenZeppelin Contracts 5.7.0, where the proxy constructor reverts with ERC1967ProxyUninitialized on empty data, so no proxy is deployed and initialize never runs."
+    },
+    {
+      "want": "right",
+      "label": "names the release",
+      "reply": "No one. With the OpenZeppelin release in your lock file (5.7.0), `new ERC1967Proxy(impl, \"\")` reverts with ERC1967ProxyUninitialized, so the script fails before initialize and nothing is deployed at a proxy address. Pass the initialize call as the constructor data instead."
+    },
+    {
+      "want": "right",
+      "label": "adds the old behaviour",
+      "reply": "The script won't finish: on current OpenZeppelin the ERC1967Proxy constructor rejects empty init data, so there is no proxy and no owner. On releases before 5.6 the multisig would own it, with a front-running window."
+    },
+    {
+      "want": "wrong",
+      "label": "multisig",
+      "reply": "MULTISIG owns it: the proxy is deployed with empty data, then initialize sets the owner through __Ownable_init."
+    },
+    {
+      "want": "wrong",
+      "label": "multisig with front-run warning",
+      "reply": "The multisig, unless someone front-runs the separate initialize transaction, because the proxy is deployed uninitialized and anyone can call initialize first."
+    },
+    {
+      "want": "wrong",
+      "label": "front-runner",
+      "reply": "Whoever calls initialize first. On mainnet a bot will likely front-run the second transaction and take ownership."
+    },
+    {
+      "want": "wrong",
+      "label": "zero address",
+      "reply": "The zero address, because the proxy was created with empty data and the owner was never set."
+    },
+    {
+      "want": "wrong",
+      "label": "hedges on the version",
+      "reply": "It depends on the OpenZeppelin version: newer releases may reject empty data, older ones leave the multisig as owner."
+    }
+  ]
+}
